@@ -1,0 +1,13 @@
+[package]
+name = "claymore-cuda"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+cuda-driver = []
+
+[dependencies]
+claymore-core = { path = "../claymore-core" }
+thiserror.workspace = true
