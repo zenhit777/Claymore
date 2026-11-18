@@ -359,8 +359,18 @@ mod tests {
             expert_cache_target_bytes: 14 * gib,
             expert_cache_max_bytes: 16 * gib,
         };
-        let manager = CudaMemoryManager::new(0, budgets, EvictionPolicy::Lru).unwrap();
+        let mut manager = CudaMemoryManager::new(0, budgets, EvictionPolicy::Lru).unwrap();
         let (free, total) = manager.driver.memory_info().unwrap();
         assert!(free <= total);
+
+        let expected = b"clay";
+        manager.allocate_pinned("host", expected.len() as u64, 1).unwrap();
+        manager.allocate_device("device", expected.len() as u64, 1, false).unwrap();
+        manager.write_pinned("host", 0, expected, 2).unwrap();
+        manager.copy_h2d("host", "device", expected.len(), 3).unwrap();
+        manager.copy_d2h("device", "host", expected.len(), 4).unwrap();
+        assert_eq!(manager.read_pinned("host", 0, expected.len(), 5).unwrap(), expected);
+        manager.release("device", 6).unwrap();
+        manager.release("host", 6).unwrap();
     }
 }
