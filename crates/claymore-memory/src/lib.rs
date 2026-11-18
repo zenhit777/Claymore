@@ -423,3 +423,9 @@ mod tests {
         ));
     }
 }
+
+
+#[cfg(feature = "cuda-driver")]
+mod cuda;
+#[cfg(feature = "cuda-driver")]
+pub use cuda::{CudaMemoryError, CudaMemoryManager};
