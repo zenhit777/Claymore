@@ -11,6 +11,8 @@ Cette phase relie les décisions de la couche de politique `claymore-memory` aux
 - Les allocations VRAM vérifient aussi la mémoire libre remontée par le driver juste avant l'allocation.
 - Les buffers ont une opération `free()` explicite et faillible. Une erreur CUDA de libération ne doit pas être convertie en succès comptable.
 - Les copies H2D et D2H enregistrent un CUDA event sur le stream de transfert. Les deux allocations impliquées sont marquées en vol jusqu'à la synchronisation effective.
+- Le manager impose une horloge logique monotone : toute opération recevant un tick inférieur au précédent est rejetée.
+- `release` vérifie que `safe_after_tick <= tick` avant de libérer le buffer, afin d'éviter une divergence entre mémoire physique et comptabilité.
 - Si la synchronisation d'un event échoue, l'event reste suivi et les allocations restent non évictables.
 - La feature `claymore-memory/cuda-driver` active le backend optionnel. La feature équivalente du CLI la relaie.
 
@@ -28,7 +30,7 @@ La surface publique est disponible derrière `--features cuda-driver` :
 - `release(id, tick)`
 - `snapshot(host_total_bytes, host_available_bytes)`
 
-L'appelant doit appeler `wait_for_allocation` avant de lire un buffer pinned rempli par D2H. Les opérations de copie sont asynchrones ; les allocations restent possédées par le manager.
+`read_pinned` attend automatiquement la fin des transferts associés avant de retourner les octets. Les opérations de copie sont asynchrones ; les allocations restent possédées par le manager. Les ticks fournis à toutes les opérations du manager doivent être monotones et non décroissants.
 
 ## Limites explicites
 
@@ -58,4 +60,4 @@ cargo check -p claymore-memory --features cuda-driver
 cargo test -p claymore-memory --features cuda-driver -- --ignored
 ```
 
-Le test CUDA ignoré inclut un aller-retour H2D puis D2H avec vérification des octets. La validation sur cible devra compléter ces commandes par une tentative de libération avant event, une libération après event, une pression mémoire provoquant une éviction, une tentative de libération avant event, une libération après event, une pression mémoire provoquant une éviction, et une vérification de la comptabilité après chaque succès/échec. Les instructions opérationnelles destinées à OhMyPi seront préparées après validation de la PR, pas exécutées dans cette phase.
+Le test CUDA ignoré inclut un aller-retour H2D puis D2H avec vérification des octets. La validation sur cible devra compléter ces commandes par un scénario de pression mémoire provoquant une éviction et une vérification de la comptabilité après chaque succès ou échec.
