@@ -6,7 +6,7 @@
 > **Dépôt :** https://github.com/zenhit777/Claymore  
 > **Version de référence du workspace :** 0.5.0 (candidat PR #4)  
 > **État du document :** référence vivante, à mettre à jour à chaque jalon  
-> **Dernière mise à jour :** 18 novembre 2026
+> **Dernière mise à jour :** 19 novembre 2026
 
 ---
 
