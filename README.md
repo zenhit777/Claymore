@@ -19,19 +19,22 @@ The workspace is split into seven crates:
 - `claymore-scheduler`: work scheduling and prefetch policy
 - `claymore-model-gemma`: DiffusionGemma integration boundary
 - `claymore-model-clover`: Clover model integration boundary
-- `claymore-cuda`: optional CUDA Driver API backend (feature-gated)\n- `claymore-cli`: command-line interface and diagnostics
+- `claymore-cuda`: optional CUDA Driver API backend (feature-gated)
+- `claymore-cli`: command-line interface and diagnostics
 
 The optimization roadmap includes a memory orchestrator, adaptive expert cache, pinned host memory, asynchronous H2D/D2H transfers, event-safe eviction, predictive prefetch, telemetry, and specialized CUDA kernels.
 
 ## Important implementation status
 
-This repository is an early-stage runtime. The v0.3 memory crate now contains deterministic budget validation, allocation accounting, admission planning, LRU/LFU/adaptive eviction policy hooks, and an event-horizon safety check. These are host-side policies only: real CUDA allocation, pinned memory, asynchronous transfers, Candle model execution, and specialized kernels remain future work.
+This repository is an early-stage runtime. The v0.3 memory crate contains deterministic budget validation, allocation accounting, admission planning, LRU/LFU/adaptive eviction policy hooks, and an event-horizon safety check. These are host-side policies only: they do not yet orchestrate real CUDA allocation, pinned memory, asynchronous transfers, Candle model execution, or specialized kernels.
 
 The CUDA backend is opt-in and links directly to the NVIDIA Driver API. The default workspace build remains hardware-independent. The CUDA feature has not yet been compiled or exercised on the target WSL2 machine. Validate locally with:
 
 ```bash
 cargo fmt --all
-cargo test --workspace\ncargo run -p claymore-cli -- profile\ncargo run -p claymore-cli --features cuda-driver -- device
+cargo test --workspace --all-targets
+cargo run -p claymore-cli -- profile
+cargo run -p claymore-cli --features cuda-driver -- device
 ```
 
 ## Hardware profile
