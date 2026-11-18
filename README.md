@@ -41,4 +41,4 @@ cargo run -p claymore-cli --features cuda-driver -- device
 
 The initial RTX 5090 profile uses a soft VRAM budget of 26 GiB and a hard ceiling of 28 GiB, leaving safety headroom. Expert-cache targets are 14 GiB with a 16 GiB maximum, included within the model working-set budget rather than added on top.
 
-See `config/rtx5090-7950x3d.json` and the documentation as they are added.
+See [`config/rtx5090-7950x3d.json`](config/rtx5090-7950x3d.json) and the [consolidated project reference](docs/Claymore.md). The JSON profile is currently documentation/configuration data and is not loaded by the runtime.
