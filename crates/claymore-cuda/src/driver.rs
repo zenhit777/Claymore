@@ -247,7 +247,10 @@ impl DeviceBuffer {
     }
 
     /// Explicitly release the allocation and report driver failures to the caller.
-    pub fn free(&mut self) -> Result<(), CudaError> {
+    ///
+    /// # Safety
+    /// No in-flight CUDA operation may access this allocation.
+    pub unsafe fn free(&mut self) -> Result<(), CudaError> {
         if self.pointer == 0 {
             return Ok(());
         }
@@ -351,7 +354,10 @@ impl PinnedHostBuffer {
     }
 
     /// Explicitly release pinned memory and report driver failures.
-    pub fn free(&mut self) -> Result<(), CudaError> {
+    ///
+    /// # Safety
+    /// No in-flight CUDA operation may access this allocation.
+    pub unsafe fn free(&mut self) -> Result<(), CudaError> {
         if self.pointer.is_null() {
             return Ok(());
         }
