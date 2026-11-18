@@ -13,10 +13,7 @@ use claymore_cuda::{CudaDriver, CudaError, CudaEvent, CudaStream, DeviceBuffer, 
 
 const IN_FLIGHT: u64 = u64::MAX;
 
-fn validate_monotonic_tick(
-    previous: Option<u64>,
-    provided: u64,
-) -> Result<(), CudaMemoryError> {
+fn validate_monotonic_tick(previous: Option<u64>, provided: u64) -> Result<(), CudaMemoryError> {
     if let Some(previous) = previous {
         if provided < previous {
             return Err(CudaMemoryError::NonMonotonicTick { previous, provided });
