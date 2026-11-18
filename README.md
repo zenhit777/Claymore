@@ -25,7 +25,7 @@ The optimization roadmap includes a memory orchestrator, adaptive expert cache, 
 
 ## Important implementation status
 
-This repository is an early scaffold. The initial architecture and policy layer are not yet a complete Candle inference engine. Real model execution, CUDA allocator integration, asynchronous transfer implementation, and specialized kernels remain future work.
+This repository is an early-stage runtime. The v0.3 memory crate now contains deterministic budget validation, allocation accounting, admission planning, LRU/LFU/adaptive eviction policy hooks, and an event-horizon safety check. These are host-side policies only: real CUDA allocation, pinned memory, asynchronous transfers, Candle model execution, and specialized kernels remain future work.
 
 The initial scaffold has not yet been compiled or tested in this environment. Validate locally with:
 
