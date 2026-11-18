@@ -4,7 +4,7 @@
 >
 > **Projet :** Claymore  
 > **Dépôt :** https://github.com/zenhit777/Claymore  
-> **Version de référence du workspace :** 0.4.0  
+> **Version de référence du workspace :** 0.5.0 (candidat PR #4)  
 > **État du document :** référence vivante, à mettre à jour à chaque jalon  
 > **Dernière mise à jour :** 18 novembre 2026
 
@@ -320,6 +320,19 @@ Le crate `claymore-cuda` fournit un backend optionnel, activé par la feature `c
 
 Le build par défaut reste indépendant du matériel. La feature CUDA requiert une bibliothèque driver NVIDIA accessible dans l'environnement Linux/WSL2, généralement `libcuda.so.1` et un lien de développement utilisable par le linker.
 
+#### v0.5 — Adaptateur Memory ↔ CUDA (PR #4, branche non fusionnée)
+
+La branche de la PR #4 ajoute `CudaMemoryManager` dans `claymore-memory`, derrière la feature optionnelle `cuda-driver` :
+
+- allocations et libérations réelles de buffers VRAM et pinned host ;
+- exécution des plans d'admission et confirmation comptable après libération backend ;
+- transferts H2D/D2H associés à des CUDA events ;
+- protection des allocations jusqu'à la synchronisation des events ;
+- contrôle de la mémoire VRAM libre et accès borné aux buffers pinned ;
+- ticks logiques monotones imposés par le manager.
+
+**État :** code présent sur la branche de la PR #4, pas encore livré sur `main`. CI de la feature à valider ; aucune validation sur WSL2 / RTX 5090. L'adaptateur ne dispose pas encore d'un backend simulé pour des tests unitaires sans GPU.
+
 ### 7.2 Non livré à ce stade
 
 Les éléments suivants ne doivent pas être considérés comme fonctionnels de bout en bout :
@@ -328,8 +341,8 @@ Les éléments suivants ne doivent pas être considérés comme fonctionnels de 
 - application effective du budget souple VRAM de 26 Gio ;
 - enforcement de la cible/max du cache d'experts et de son inclusion dans un working set explicite ;
 - logique de scheduling, files de tâches et préchargement ;
-- raccordement du memory orchestrator aux allocations CUDA réelles ;
-- protection automatique de l'éviction par synchronisation des CUDA events ;
+- polling non bloquant des CUDA events et finalisation automatique des transferts terminés avant admission ;
+- tests unitaires de l'adaptateur Memory ↔ CUDA avec backend simulé ;
 - pool allocator VRAM, réutilisation de blocs et défragmentation ;
 - moteur de transfert piloté par le scheduler ;
 - prefetch prédictif intégré au cache d'experts ;
@@ -348,7 +361,7 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 - sélection du device par ordinal uniquement ;
 - pas de pool allocator, de défragmentation, de télémétrie ou d'éviction automatique ;
 - les appels de copie asynchrone imposent à l'appelant de conserver les buffers vivants et de synchroniser avant leur destruction ou réutilisation ;
-- les events CUDA ne sont pas encore connectés à la comptabilité du memory orchestrator ;
+- les CUDA events sont connectés aux transferts du `CudaMemoryManager` sur la branche PR #4 ; leur complétion est traitée par attente explicite, sans polling non bloquant ni finalisation automatique lors d'une admission ;
 - aucune validation runtime sur WSL2 / RTX 5090 n'est encore attestée par ce dépôt.
 
 La CI standard valide le build par défaut sans exiger un GPU. Le backend CUDA n'est pas encore relié à Candle. `CudaDriver::new` crée actuellement un contexte CUDA propre (`cuCtxCreate_v2`) ; l'interopérabilité avec le contexte primaire potentiellement utilisé par Candle/cudarc n'est pas établie et doit être vérifiée avant l'intégration M3/M5. Elle ne doit pas être interprétée comme une validation de la feature `cuda-driver` ni comme une validation matérielle sur RTX 5090.
@@ -393,12 +406,12 @@ Chaque moteur de modèle doit pouvoir préparer, exécuter et libérer ses état
 
 ## 8 bis. Couverture actuelle des exigences
 
-| Exigence | Statut sur `main` | Justification |
+| Exigence | Statut sur `main` / PR #4 | Justification |
 |---|---|---|
 | FR-01 — Configuration du runtime | **Non livré** | Le profil JSON existe, mais aucun chargeur ne l'applique ; la CLI utilise `SchedulerConfig::default()`. |
 | FR-02 — Gestion des budgets | **Partiel** | Comptabilité host-side et validation des budgets ; le budget souple VRAM n'est pas appliqué à l'admission. |
-| FR-03 — Admission et éviction | **Livré (host-side)** | Plan d'admission, candidats et confirmation explicite ; aucune libération CUDA intégrée. |
-| FR-04 — Sûreté asynchrone | **Non livré** | Le tick logique n'est pas relié aux CUDA events réels. |
+| FR-03 — Admission et éviction | **Partiel (PR #4)** | Adaptateur d'allocation/libération CUDA et confirmation après free sur la branche non fusionnée ; validation matérielle et tests simulés manquants. |
+| FR-04 — Sûreté asynchrone | **Partiel (PR #4)** | Events réels reliés aux transferts et allocations protégées jusqu'à synchronisation explicite ; pas de polling non bloquant, de backend simulé ni de validation GPU. |
 | FR-05 — Gestion des experts | **Non livré** | Getters/compteur seulement ; cible et maximum non appliqués à l'admission. |
 | FR-06 — Scheduling et prefetch | **Non livré** | Configuration seulement ; aucune logique de scheduling/prefetch. |
 | FR-07 — Diagnostics | **Partiel** | CLI de base et diagnostic device optionnel ; le profil JSON n'est pas chargé. |
@@ -448,7 +461,7 @@ Les jalons ci-dessous définissent l'ordre logique de réalisation. Les numéros
 | M0 | Fondation et scaffold | Workspace, crates, fichiers de configuration et CLI minimale livrés ; le profil matériel n'est pas chargé par le runtime |
 | M1 | Memory Orchestrator v0.3 | Livré sur `main` |
 | M2 | CUDA Driver Backend v0.4 | Livré sur `main`, validation matérielle à faire |
-| M3 | Intégration Memory ↔ CUDA v0.5 | Prochaine phase |
+| M3 | Intégration Memory ↔ CUDA v0.5 | Partiel — code sur PR #4, non fusionnée ; CI feature à valider, pas de test RTX 5090 |
 | M4 | Scheduler, transferts et expert cache | Planifié |
 | M5 | Intégration Candle et moteurs modèles | Planifié |
 | M6 | Optimisation, kernels et validation cible | Planifié |
@@ -505,7 +518,7 @@ Livré :
 
 ### M3 — Intégration Memory ↔ CUDA v0.5
 
-Spécification détaillée de l'implémentation candidate : [memory-cuda-integration-v0.5.md](memory-cuda-integration-v0.5.md). Le code est proposé dans une PR et ne sera considéré livré qu'après merge ; la validation RTX 5090 reste à effectuer.
+Spécification détaillée : [memory-cuda-integration-v0.5.md](memory-cuda-integration-v0.5.md). L'adaptateur `CudaMemoryManager` est implémenté sur la branche de la PR #4 (non fusionnée). Il est opt-in via `cuda-driver`, et n'a pas été validé sur RTX 5090.
 
 **Objectif :** faire du backend CUDA l'exécutant réel des décisions du memory orchestrator.
 
@@ -513,16 +526,16 @@ Travaux :
 - définir un adaptateur entre les IDs d'allocations du gestionnaire et les buffers CUDA ;
 - interroger la mémoire libre réelle avant admission ;
 - exécuter les plans d'allocation et d'éviction ;
-- introduire un objet de transfert en attente qui conserve l'ownership des buffers et de l'event ;
-- ne rendre une allocation évictable qu'après complétion réelle de l'event ;
+- conserver l'ownership des buffers et de l'event pendant les transferts asynchrones ;
+- ne rendre une allocation évictable qu'après synchronisation effective de tous les events qui la concernent ;
 - appeler la confirmation d'éviction uniquement après libération effective ;
 - valider l'appartenance des streams, events et buffers au même contexte CUDA ;
 - gérer explicitement les erreurs, les allocations nulles et les tailles invalides ;
 - éviter toute destruction d'un buffer encore utilisé par le GPU.
 
 Critères d'acceptation :
-- tests unitaires de l'adaptateur avec backend simulé ;
-- tests d'intégration CUDA sur cible ;
+- tests unitaires de l'adaptateur avec backend simulé (non implémentés à ce stade) ;
+- tests d'intégration CUDA sur cible (non exécutés à ce stade) ;
 - démonstration qu'une allocation en vol est protégée jusqu'à la complétion de son event ;
 - comptabilité identique à l'état réel après succès ou échec des opérations ;
 - aucun chemin d'erreur ne confirme une libération non réalisée.
@@ -651,7 +664,7 @@ Historique de référence :
 - **v0.3** : memory orchestrator host-side ;
 - **v0.4** : backend CUDA Driver API optionnel.
 
-La PR #1 (v0.3) et la PR #2 (v0.4) ont été fusionnées dans `main`. Le prochain jalon fonctionnel est v0.5, consacré à l'intégration réelle entre mémoire et CUDA.
+Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 propose v0.5.0 et l'adaptateur Memory ↔ CUDA ; elle reste ouverte et non fusionnée à la date de cette révision.
 
 Une PR ne doit pas être déclarée prête uniquement parce que le code existe : elle doit préciser si les tests couvrent le build par défaut, la feature CUDA, le matériel réel ou seulement un backend simulé.
 
