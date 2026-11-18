@@ -505,6 +505,8 @@ Livré :
 
 ### M3 — Intégration Memory ↔ CUDA v0.5
 
+Spécification détaillée de l'implémentation candidate : [memory-cuda-integration-v0.5.md](memory-cuda-integration-v0.5.md). Le code est proposé dans une PR et ne sera considéré livré qu'après merge ; la validation RTX 5090 reste à effectuer.
+
 **Objectif :** faire du backend CUDA l'exécutant réel des décisions du memory orchestrator.
 
 Travaux :
