@@ -725,9 +725,6 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 
 ---
 
-**Fin du document de référence Claymore.**
-
-
 ## 17. Références externes
 
 Les références exactes (URL et révision/commit) doivent être consignées avant de figer les choix d'implémentation. Elles ne sont pas reproduites ici tant que leur URL canonique et leur révision n'ont pas été vérifiées :
@@ -736,3 +733,6 @@ Les références exactes (URL et révision/commit) doivent être consignées ava
 - Strata (Niko1221) — URL/révision à compléter après vérification.
 - DiffusionGemma — dépôt Hugging Face et révision à compléter après vérification.
 - Clover-35B-A3B-preview — dépôt Hugging Face et révision à compléter après vérification.
+
+
+**Fin du document de référence Claymore.**
