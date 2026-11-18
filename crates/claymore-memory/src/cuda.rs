@@ -21,6 +21,10 @@ pub enum CudaMemoryError {
     UnknownAllocation(String),
     #[error("allocation {0} has the wrong memory tier")]
     WrongTier(String),
+    #[error("allocation size must be greater than zero")]
+    ZeroSizedAllocation,
+    #[error("CUDA reports only {free} free bytes; {requested} bytes were requested")]
+    InsufficientDeviceMemory { requested: u64, free: u64 },
 }
 
 pub struct CudaMemoryManager {
@@ -53,8 +57,11 @@ impl CudaMemoryManager {
 
     pub fn allocate_device(&mut self, id: impl Into<String>, bytes: u64, tick: u64, expert: bool) -> Result<(), CudaMemoryError> {
         let id = id.into();
+        if bytes == 0 { return Err(CudaMemoryError::ZeroSizedAllocation); }
         self.ensure_new_id(&id)?;
         self.make_room(MemoryTier::Vram, bytes, tick)?;
+        let (free, _) = self.driver.memory_info()?;
+        if bytes > free { return Err(CudaMemoryError::InsufficientDeviceMemory { requested: bytes, free }); }
         let buffer = self.driver.allocate(bytes)?;
         let allocation = Allocation { id: id.clone(), tier: MemoryTier::Vram, bytes, last_used_tick: tick, hit_count: 0, safe_after_tick: tick, expert };
         if let Err(error) = self.policy.record_allocation(allocation) { drop(buffer); return Err(error.into()); }
@@ -64,6 +71,7 @@ impl CudaMemoryManager {
 
     pub fn allocate_pinned(&mut self, id: impl Into<String>, bytes: u64, tick: u64) -> Result<(), CudaMemoryError> {
         let id = id.into();
+        if bytes == 0 { return Err(CudaMemoryError::ZeroSizedAllocation); }
         self.ensure_new_id(&id)?;
         self.make_room(MemoryTier::PinnedHost, bytes, tick)?;
         let buffer = self.driver.allocate_pinned(bytes)?;
@@ -104,7 +112,6 @@ impl CudaMemoryManager {
     }
 
     pub fn wait_for_allocation(&mut self, id: &str, tick: u64) -> Result<(), CudaMemoryError> {
-        let mut completed_ids = Vec::new();
         let mut index = 0;
         while index < self.pending.len() {
             let matches = self.pending[index].0.iter().any(|candidate| candidate == id);
@@ -113,14 +120,13 @@ impl CudaMemoryManager {
                 // every allocation it protects remain tracked and non-evictable.
                 self.pending[index].1.synchronize()?;
                 let (ids, _event) = self.pending.remove(index);
-                completed_ids.extend(ids);
+                for completed_id in ids {
+                    self.policy.mark_in_flight_until(&completed_id, tick)?;
+                }
             } else {
                 index += 1;
             }
         }
-        completed_ids.sort();
-        completed_ids.dedup();
-        for completed_id in completed_ids { self.policy.mark_in_flight_until(&completed_id, tick)?; }
         Ok(())
     }
 
