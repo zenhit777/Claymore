@@ -6,6 +6,7 @@ members = [
   "crates/claymore-scheduler",
   "crates/claymore-model-gemma",
   "crates/claymore-model-clover",
+  "crates/claymore-cuda",
   "crates/claymore-cli",
 ]
 
