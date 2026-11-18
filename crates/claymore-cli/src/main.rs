@@ -1,7 +1,9 @@
 use claymore_scheduler::SchedulerConfig;
 
 fn main() {
-    let command = std::env::args().nth(1).unwrap_or_else(|| "profile".to_owned());
+    let command = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "profile".to_owned());
     match command.as_str() {
         "profile" => {
             let config = SchedulerConfig::default();

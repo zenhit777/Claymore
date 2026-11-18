@@ -37,16 +37,18 @@ pub struct CudaRuntime;
 
 #[cfg(not(feature = "cuda-driver"))]
 impl CudaRuntime {
-    pub fn new() -> Result<Self, CudaError> { Err(CudaError::FeatureDisabled) }
+    pub fn new() -> Result<Self, CudaError> {
+        Err(CudaError::FeatureDisabled)
+    }
 }
 
 #[cfg(feature = "cuda-driver")]
 mod driver;
 
 #[cfg(feature = "cuda-driver")]
-pub use driver::{CudaDriver, CudaEvent, CudaStream, DeviceBuffer, PinnedHostBuffer};
-#[cfg(feature = "cuda-driver")]
 pub use driver::CudaRuntime;
+#[cfg(feature = "cuda-driver")]
+pub use driver::{CudaDriver, CudaEvent, CudaStream, DeviceBuffer, PinnedHostBuffer};
 
 #[cfg(test)]
 mod tests {
@@ -54,6 +56,9 @@ mod tests {
     #[test]
     fn disabled_backend_reports_actionable_error() {
         #[cfg(not(feature = "cuda-driver"))]
-        assert!(matches!(CudaRuntime::new(), Err(CudaError::FeatureDisabled)));
+        assert!(matches!(
+            CudaRuntime::new(),
+            Err(CudaError::FeatureDisabled)
+        ));
     }
 }

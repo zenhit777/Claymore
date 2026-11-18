@@ -29,16 +29,24 @@ pub struct MemoryBudgets {
 impl MemoryBudgets {
     pub fn validate(&self) -> Result<(), MemoryError> {
         if self.vram_soft_bytes > self.vram_hard_bytes {
-            return Err(MemoryError::InvalidBudget("soft VRAM budget exceeds hard limit"));
+            return Err(MemoryError::InvalidBudget(
+                "soft VRAM budget exceeds hard limit",
+            ));
         }
         if self.expert_cache_target_bytes > self.expert_cache_max_bytes {
-            return Err(MemoryError::InvalidBudget("expert cache target exceeds maximum"));
+            return Err(MemoryError::InvalidBudget(
+                "expert cache target exceeds maximum",
+            ));
         }
         if self.expert_cache_max_bytes > self.vram_hard_bytes {
-            return Err(MemoryError::InvalidBudget("expert cache maximum exceeds VRAM hard limit"));
+            return Err(MemoryError::InvalidBudget(
+                "expert cache maximum exceeds VRAM hard limit",
+            ));
         }
         if self.pinned_host_bytes > self.host_bytes {
-            return Err(MemoryError::InvalidBudget("pinned host budget exceeds host budget"));
+            return Err(MemoryError::InvalidBudget(
+                "pinned host budget exceeds host budget",
+            ));
         }
         Ok(())
     }
@@ -66,7 +74,9 @@ impl MemorySnapshot {
             return Err(MemoryError::InvalidSnapshot("free VRAM exceeds total VRAM"));
         }
         if self.host_available_bytes > self.host_total_bytes {
-            return Err(MemoryError::InvalidSnapshot("available host RAM exceeds total RAM"));
+            return Err(MemoryError::InvalidSnapshot(
+                "available host RAM exceeds total RAM",
+            ));
         }
         Ok(())
     }
@@ -106,9 +116,17 @@ pub enum MemoryError {
     #[error("allocation is still in flight: {0}")]
     AllocationBusy(String),
     #[error("request of {requested} bytes exceeds {tier:?} budget ({limit} bytes)")]
-    RequestTooLarge { tier: MemoryTier, requested: u64, limit: u64 },
+    RequestTooLarge {
+        tier: MemoryTier,
+        requested: u64,
+        limit: u64,
+    },
     #[error("not enough reclaimable memory in {tier:?}: need {needed} bytes, can reclaim {reclaimable} bytes")]
-    InsufficientReclaimable { tier: MemoryTier, needed: u64, reclaimable: u64 },
+    InsufficientReclaimable {
+        tier: MemoryTier,
+        needed: u64,
+        reclaimable: u64,
+    },
 }
 
 #[derive(Debug)]
@@ -121,7 +139,11 @@ pub struct MemoryOrchestrator {
 impl MemoryOrchestrator {
     pub fn new(budgets: MemoryBudgets, policy: EvictionPolicy) -> Result<Self, MemoryError> {
         budgets.validate()?;
-        Ok(Self { budgets, policy, allocations: HashMap::new() })
+        Ok(Self {
+            budgets,
+            policy,
+            allocations: HashMap::new(),
+        })
     }
 
     pub fn budgets(&self) -> MemoryBudgets {
@@ -129,7 +151,8 @@ impl MemoryOrchestrator {
     }
 
     pub fn usage_bytes(&self, tier: MemoryTier) -> u64 {
-        self.allocations.values()
+        self.allocations
+            .values()
             .filter(|a| a.tier == tier)
             .fold(0_u64, |sum, a| sum.saturating_add(a.bytes))
     }
@@ -144,7 +167,9 @@ impl MemoryOrchestrator {
             return Err(MemoryError::DuplicateAllocation(allocation.id));
         }
         let limit = self.budgets.limit_for(allocation.tier);
-        let projected = self.usage_bytes(allocation.tier).saturating_add(allocation.bytes);
+        let projected = self
+            .usage_bytes(allocation.tier)
+            .saturating_add(allocation.bytes);
         if projected > limit {
             return Err(MemoryError::InsufficientReclaimable {
                 tier: allocation.tier,
@@ -157,7 +182,9 @@ impl MemoryOrchestrator {
     }
 
     pub fn touch(&mut self, id: &str, tick: u64) -> Result<(), MemoryError> {
-        let allocation = self.allocations.get_mut(id)
+        let allocation = self
+            .allocations
+            .get_mut(id)
             .ok_or_else(|| MemoryError::AllocationNotFound(id.to_owned()))?;
         allocation.last_used_tick = tick;
         allocation.hit_count = allocation.hit_count.saturating_add(1);
@@ -165,8 +192,14 @@ impl MemoryOrchestrator {
     }
 
     /// Update the fence/event completion horizon reported by the backend.
-    pub fn mark_in_flight_until(&mut self, id: &str, safe_after_tick: u64) -> Result<(), MemoryError> {
-        let allocation = self.allocations.get_mut(id)
+    pub fn mark_in_flight_until(
+        &mut self,
+        id: &str,
+        safe_after_tick: u64,
+    ) -> Result<(), MemoryError> {
+        let allocation = self
+            .allocations
+            .get_mut(id)
             .ok_or_else(|| MemoryError::AllocationNotFound(id.to_owned()))?;
         allocation.safe_after_tick = safe_after_tick;
         Ok(())
@@ -183,46 +216,73 @@ impl MemoryOrchestrator {
     ) -> Result<AdmissionPlan, MemoryError> {
         let limit = self.budgets.limit_for(tier);
         if requested_bytes > limit {
-            return Err(MemoryError::RequestTooLarge { tier, requested: requested_bytes, limit });
+            return Err(MemoryError::RequestTooLarge {
+                tier,
+                requested: requested_bytes,
+                limit,
+            });
         }
         let current = self.usage_bytes(tier);
         let projected = current.saturating_add(requested_bytes);
         if projected <= limit {
             return Ok(AdmissionPlan {
-                tier, requested_bytes, evict_ids: Vec::new(),
-                projected_usage_bytes: projected, limit_bytes: limit,
+                tier,
+                requested_bytes,
+                evict_ids: Vec::new(),
+                projected_usage_bytes: projected,
+                limit_bytes: limit,
             });
         }
         let needed = projected - limit;
-        let mut candidates: Vec<&Allocation> = self.allocations.values()
+        let mut candidates: Vec<&Allocation> = self
+            .allocations
+            .values()
             .filter(|a| a.tier == tier && a.safe_after_tick <= now_tick)
             .collect();
-        candidates.sort_by(|a, b| self.eviction_key(a, now_tick).cmp(&self.eviction_key(b, now_tick)));
+        candidates.sort_by(|a, b| {
+            self.eviction_key(a, now_tick)
+                .cmp(&self.eviction_key(b, now_tick))
+        });
         let mut selected = Vec::new();
         let mut reclaimed = 0_u64;
         for candidate in candidates {
             selected.push(candidate.id.clone());
             reclaimed = reclaimed.saturating_add(candidate.bytes);
-            if reclaimed >= needed { break; }
+            if reclaimed >= needed {
+                break;
+            }
         }
         if reclaimed < needed {
-            return Err(MemoryError::InsufficientReclaimable { tier, needed, reclaimable: reclaimed });
+            return Err(MemoryError::InsufficientReclaimable {
+                tier,
+                needed,
+                reclaimable: reclaimed,
+            });
         }
         Ok(AdmissionPlan {
-            tier, requested_bytes, evict_ids: selected,
-            projected_usage_bytes: current.saturating_sub(reclaimed).saturating_add(requested_bytes),
+            tier,
+            requested_bytes,
+            evict_ids: selected,
+            projected_usage_bytes: current
+                .saturating_sub(reclaimed)
+                .saturating_add(requested_bytes),
             limit_bytes: limit,
         })
     }
 
     /// Confirm that the backend has actually freed an allocation.
     pub fn confirm_eviction(&mut self, id: &str, now_tick: u64) -> Result<Allocation, MemoryError> {
-        let allocation = self.allocations.get(id)
+        let allocation = self
+            .allocations
+            .get(id)
             .ok_or_else(|| MemoryError::AllocationNotFound(id.to_owned()))?;
         if allocation.safe_after_tick > now_tick {
             return Err(MemoryError::AllocationBusy(id.to_owned()));
         }
-        Ok(self.allocations.remove(id).expect("allocation was checked above"))
+        Ok(self
+            .allocations
+            .remove(id)
+            .expect("allocation was checked above"))
     }
 
     fn eviction_key(&self, allocation: &Allocation, now_tick: u64) -> (u64, u64, u64) {
@@ -233,13 +293,21 @@ impl MemoryOrchestrator {
             EvictionPolicy::Adaptive => {
                 // Prefer cold, old allocations. The tuple keeps ordering stable.
                 let recency_penalty = allocation.last_used_tick;
-                (0, allocation.hit_count.saturating_mul(2).saturating_add(recency_penalty / 8), allocation.bytes)
+                (
+                    0,
+                    allocation
+                        .hit_count
+                        .saturating_mul(2)
+                        .saturating_add(recency_penalty / 8),
+                    allocation.bytes,
+                )
             }
         }
     }
 
     pub fn expert_cache_usage_bytes(&self) -> u64 {
-        self.allocations.values()
+        self.allocations
+            .values()
             .filter(|a| a.expert && a.tier == MemoryTier::Vram)
             .fold(0_u64, |sum, a| sum.saturating_add(a.bytes))
     }
@@ -259,16 +327,24 @@ mod tests {
 
     fn budgets() -> MemoryBudgets {
         MemoryBudgets {
-            vram_soft_bytes: 80, vram_hard_bytes: 100,
-            host_bytes: 1_000, pinned_host_bytes: 200,
-            expert_cache_target_bytes: 60, expert_cache_max_bytes: 90,
+            vram_soft_bytes: 80,
+            vram_hard_bytes: 100,
+            host_bytes: 1_000,
+            pinned_host_bytes: 200,
+            expert_cache_target_bytes: 60,
+            expert_cache_max_bytes: 90,
         }
     }
 
     fn allocation(id: &str, bytes: u64, last_used_tick: u64, safe_after_tick: u64) -> Allocation {
         Allocation {
-            id: id.into(), tier: MemoryTier::Vram, bytes, last_used_tick,
-            hit_count: 1, safe_after_tick, expert: true,
+            id: id.into(),
+            tier: MemoryTier::Vram,
+            bytes,
+            last_used_tick,
+            hit_count: 1,
+            safe_after_tick,
+            expert: true,
         }
     }
 
@@ -276,7 +352,10 @@ mod tests {
     fn rejects_invalid_budget_relationships() {
         let mut invalid = budgets();
         invalid.vram_soft_bytes = 101;
-        assert!(matches!(invalid.validate(), Err(MemoryError::InvalidBudget(_))));
+        assert!(matches!(
+            invalid.validate(),
+            Err(MemoryError::InvalidBudget(_))
+        ));
     }
 
     #[test]
@@ -290,28 +369,43 @@ mod tests {
     #[test]
     fn lru_plan_selects_oldest_idle_allocation() {
         let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
-        manager.record_allocation(allocation("old", 60, 1, 0)).unwrap();
-        manager.record_allocation(allocation("new", 30, 9, 0)).unwrap();
+        manager
+            .record_allocation(allocation("old", 60, 1, 0))
+            .unwrap();
+        manager
+            .record_allocation(allocation("new", 30, 9, 0))
+            .unwrap();
         let plan = manager.plan_admission(MemoryTier::Vram, 30, 10).unwrap();
         assert_eq!(plan.evict_ids, vec!["old"]);
-        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 90, "planning must not mutate state");
+        assert_eq!(
+            manager.usage_bytes(MemoryTier::Vram),
+            90,
+            "planning must not mutate state"
+        );
     }
 
     #[test]
     fn in_flight_allocations_are_never_selected() {
         let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
-        manager.record_allocation(allocation("busy", 70, 1, 50)).unwrap();
+        manager
+            .record_allocation(allocation("busy", 70, 1, 50))
+            .unwrap();
         assert!(matches!(
             manager.plan_admission(MemoryTier::Vram, 40, 10),
             Err(MemoryError::InsufficientReclaimable { .. })
         ));
-        assert!(matches!(manager.confirm_eviction("busy", 10), Err(MemoryError::AllocationBusy(_))));
+        assert!(matches!(
+            manager.confirm_eviction("busy", 10),
+            Err(MemoryError::AllocationBusy(_))
+        ));
     }
 
     #[test]
     fn confirm_eviction_releases_accounted_capacity() {
         let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
-        manager.record_allocation(allocation("expert-1", 70, 1, 0)).unwrap();
+        manager
+            .record_allocation(allocation("expert-1", 70, 1, 0))
+            .unwrap();
         let removed = manager.confirm_eviction("expert-1", 1).unwrap();
         assert_eq!(removed.bytes, 70);
         assert_eq!(manager.usage_bytes(MemoryTier::Vram), 0);
@@ -320,7 +414,9 @@ mod tests {
     #[test]
     fn detects_duplicate_allocations() {
         let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
-        manager.record_allocation(allocation("same", 10, 0, 0)).unwrap();
+        manager
+            .record_allocation(allocation("same", 10, 0, 0))
+            .unwrap();
         assert!(matches!(
             manager.record_allocation(allocation("same", 10, 0, 0)),
             Err(MemoryError::DuplicateAllocation(_))
