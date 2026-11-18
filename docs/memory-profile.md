@@ -13,11 +13,13 @@ Initial planning values (GiB):
 - Allocator slack: 1
 - Expert cache target: 14; maximum: 16 (included in the 18 GiB working set)
 
-Host RAM planning:
-- Claymore budget: 88 GiB
-- Weight pool target: 64 GiB
-- Pinned-memory ceiling: 8 GiB
-- Staging/state: 16 GiB
-- System reserve: 24 GiB
+Host RAM planning (reference frame: 128 GiB physical machine):
+- Claymore budget: 88 GiB, made of three disjoint envelopes:
+  - Weight pool target: 64 GiB (tier `Host`)
+  - Staging/state: 16 GiB (tier `Host`)
+  - Pinned-memory ceiling: 8 GiB (tier `PinnedHost`)
+- System reserve: 24 GiB (outside the Claymore budget)
 
-These are nested planning budgets, not additive independent allocations. Measure actual usage on the target machine before raising limits.
+The `Host` tier limit is therefore 80 GiB (64 + 16) and the `PinnedHost` tier limit is 8 GiB, so the total never exceeds 88 GiB.
+
+In VRAM, the expert cache is nested inside the working set (not additive). In host RAM, the envelopes above are disjoint and add up to the Claymore budget. Measure actual usage on the target machine before raising limits. See `Claymore.md` sections 5 and 7.
