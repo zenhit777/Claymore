@@ -246,6 +246,15 @@ impl DeviceBuffer {
         self.len == 0
     }
 
+    /// Explicitly release the allocation and report driver failures to the caller.
+    pub fn free(mut self) -> Result<(), CudaError> {
+        self.context.activate()?;
+        // SAFETY: this object uniquely owns the live device allocation.
+        check(unsafe { cuMemFree_v2(self.pointer) }, "cuMemFree_v2")?;
+        self.pointer = 0;
+        Ok(())
+    }
+
     /// Enqueue pinned-host-to-device transfer.
     ///
     /// # Safety
@@ -308,7 +317,7 @@ impl DeviceBuffer {
 }
 impl Drop for DeviceBuffer {
     fn drop(&mut self) {
-        if self.context.activate().is_ok() {
+        if self.pointer != 0 && self.context.activate().is_ok() {
             // SAFETY: pointer is a live allocation owned by this object.
             unsafe {
                 let _ = cuMemFree_v2(self.pointer);
@@ -337,10 +346,19 @@ impl PinnedHostBuffer {
     pub unsafe fn as_mut_ptr(&mut self) -> *mut u8 {
         self.pointer.cast()
     }
+
+    /// Explicitly release pinned memory and report driver failures.
+    pub fn free(mut self) -> Result<(), CudaError> {
+        self.context.activate()?;
+        // SAFETY: this object uniquely owns the live pinned allocation.
+        check(unsafe { cuMemFreeHost(self.pointer) }, "cuMemFreeHost")?;
+        self.pointer = ptr::null_mut();
+        Ok(())
+    }
 }
 impl Drop for PinnedHostBuffer {
     fn drop(&mut self) {
-        if self.context.activate().is_ok() {
+        if !self.pointer.is_null() && self.context.activate().is_ok() {
             // SAFETY: pointer is a live pinned allocation owned by this object.
             unsafe {
                 let _ = cuMemFreeHost(self.pointer);
