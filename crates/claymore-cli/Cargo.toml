@@ -1,0 +1,11 @@
+[package]
+name = "claymore-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+claymore-core = { path = "../claymore-core" }
+claymore-memory = { path = "../claymore-memory" }
+claymore-scheduler = { path = "../claymore-scheduler" }
+serde_json.workspace = true
