@@ -660,7 +660,6 @@ Une PR ne doit pas être déclarée prête uniquement parce que le code existe :
 | Sujet | Risque / question | Décision ou traitement |
 |---|---|---|
 | Contexte CUDA / Candle | Le backend crée un contexte via `cuCtxCreate_v2`, alors que Candle/cudarc peut utiliser le contexte primaire ; les pointeurs ne sont pas interchangeables entre contextes | **Décision ouverte avant M3/M5** : vérifier le modèle de contexte Candle/cudarc retenu et choisir un contexte primaire partagé ou une stratégie d'interopérabilité explicitement supportée. Ne pas transmettre de pointeurs entre contextes sans preuve. |
-
 | Driver CUDA dans WSL2 | Bibliothèque ou lien linker absent | Vérifier `libcuda.so.1` et le linkage sur la cible |
 | Durée de vie async | Libération ou réutilisation prématurée | Ownership explicite et event de complétion |
 | Comptabilité mémoire | Écart entre état logique et mémoire réelle | Confirmer uniquement après succès backend |
