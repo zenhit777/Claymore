@@ -348,7 +348,7 @@ impl PinnedHostBuffer {
     }
 
     /// Explicitly release pinned memory and report driver failures.
-    pub fn free(mut self) -> Result<(), CudaError> {
+    pub fn free(&mut self) -> Result<(), CudaError> {
         self.context.activate()?;
         // SAFETY: this object uniquely owns the live pinned allocation.
         check(unsafe { cuMemFreeHost(self.pointer) }, "cuMemFreeHost")?;
