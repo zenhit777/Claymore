@@ -420,7 +420,7 @@ impl Drop for CudaMemoryManager {
         // Do not destroy buffers while queued DMA may still reference them.
         let mut safe_to_drop = self.transfer_stream.synchronize().is_ok();
         if !safe_to_drop {
-            safe_to_drop = true;
+            safe_to_drop = !self.pending.is_empty();
             for (_, event) in &self.pending {
                 if event.synchronize().is_err() {
                     safe_to_drop = false;
