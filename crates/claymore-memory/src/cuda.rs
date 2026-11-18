@@ -157,7 +157,9 @@ impl CudaMemoryManager {
         id: &str,
         offset: usize,
         data: &[u8],
+        tick: u64,
     ) -> Result<(), CudaMemoryError> {
+        self.wait_for_allocation(id, tick)?;
         let buffer = self.pinned.get_mut(id)
             .ok_or_else(|| CudaMemoryError::UnknownAllocation(id.to_owned()))?;
         let end = offset.checked_add(data.len()).ok_or(CudaMemoryError::BufferRangeOutOfBounds {
