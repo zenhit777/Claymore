@@ -1,0 +1,8 @@
+[package]
+name = "claymore-model-gemma"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+claymore-core = { path = "../claymore-core" }
