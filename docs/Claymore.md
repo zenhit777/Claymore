@@ -181,7 +181,9 @@ Le budget souple, le plafond dur et la réserve répondent à des objectifs diff
 | Staging et états | 16 Gio |
 | Réserve système | 24 Gio |
 
-Les enveloppes RAM hôte sont **disjointes** : 64 + 16 + 8 = 88 Gio. Le pool poids/experts et le staging/états utilisent le tier `Host`, dont la limite doit donc être configurée à **80 Gio** ; le tier `PinnedHost` est limité séparément à **8 Gio**. La mémoire épinglée n'est pas comprise dans les 80 Gio du tier `Host`.\n\nTrois référentiels ne doivent pas être confondus : machine physique (128 Gio), VM WSL2 (96 Gio) et budget applicatif Claymore (88 Gio). La marge théorique restante dans WSL2 est d'environ 8 Gio pour Linux et le page cache ; elle doit être mesurée sur la machine cible. La réserve d'environ 24 Gio concerne la mémoire physique hors VM et reste indicative. **VRAM : postes imbriqués ; RAM hôte : enveloppes disjointes.**
+Les enveloppes RAM hôte sont **disjointes** : 64 + 16 + 8 = 88 Gio. Le pool poids/experts et le staging/états utilisent le tier `Host`, dont la limite doit donc être configurée à **80 Gio** ; le tier `PinnedHost` est limité séparément à **8 Gio**. La mémoire épinglée n'est pas comprise dans les 80 Gio du tier `Host`.
+
+Trois référentiels ne doivent pas être confondus : machine physique (128 Gio), VM WSL2 (96 Gio) et budget applicatif Claymore (88 Gio). La marge théorique restante dans WSL2 est d'environ 8 Gio pour Linux et le page cache ; elle doit être mesurée sur la machine cible. La réserve d'environ 24 Gio concerne la mémoire physique hors VM et reste indicative. **VRAM : postes imbriqués ; RAM hôte : enveloppes disjointes.**
 
 ### 5.3 WSL2
 
@@ -259,7 +261,9 @@ L'architecture est organisée en couches avec des frontières explicites.
 | `claymore-cuda` | Backend optionnel CUDA Driver API |
 | `claymore-cli` | Commandes, profil et diagnostics |
 
-Le workspace utilise Cargo, resolver 2, Rust edition 2021. La version de référence actuelle est 0.4.0.\n\n`claymore-scheduler` ne fournit actuellement qu'une structure `SchedulerConfig` (`cpu_workers`, `max_prefetches`, `lookahead`) et sa validation ; aucune boucle ni logique de planification n'est implémentée. La validation accepte de 1 à 12 workers. Les valeurs minimales de 6 workers, les nombres de streams et le tick de 500 µs figurant dans le profil JSON sont des paramètres documentaires, pas des contraintes appliquées par le code.
+Le workspace utilise Cargo, resolver 2, Rust edition 2021. La version de référence actuelle est 0.4.0.
+
+`claymore-scheduler` ne fournit actuellement qu'une structure `SchedulerConfig` (`cpu_workers`, `max_prefetches`, `lookahead`) et sa validation ; aucune boucle ni logique de planification n'est implémentée. La validation accepte de 1 à 12 workers. Les valeurs minimales de 6 workers, les nombres de streams et le tick de 500 µs figurant dans le profil JSON sont des paramètres documentaires, pas des contraintes appliquées par le code.
 
 ### 6.3 Principes de conception
 
@@ -291,11 +295,17 @@ Le crate `claymore-memory` contient :
 - politiques LRU, LFU et adaptive ;
 - protection logique des allocations avec `safe_after_tick` ;
 - confirmation explicite d'éviction avant mise à jour de la comptabilité ;
-- getters de configuration et compteur d'usage du cache d'experts ; la cible de 14 Gio et le maximum de 16 Gio ne sont pas appliqués à l'admission.\n\nLe budget souple VRAM de 26 Gio est actuellement validé par rapport au plafond dur, mais n'est pas appliqué comme limite d'admission : `limit_for(Vram)` renvoie le plafond dur de 28 Gio. Le champ working set de 18 Gio n'existe pas dans `MemoryBudgets` ; l'inclusion du cache d'experts dans ce working set reste donc un invariant documentaire non vérifié par le code.
+- getters de configuration et compteur d'usage du cache d'experts ; la cible de 14 Gio et le maximum de 16 Gio ne sont pas appliqués à l'admission.
+
+Le budget souple VRAM de 26 Gio est actuellement validé par rapport au plafond dur, mais n'est pas appliqué comme limite d'admission : `limit_for(Vram)` renvoie le plafond dur de 28 Gio. Le champ working set de 18 Gio n'existe pas dans `MemoryBudgets` ; l'inclusion du cache d'experts dans ce working set reste donc un invariant documentaire non vérifié par le code.
 
 Cette version est une couche de politique host-side. Elle n'alloue pas elle-même la VRAM, ne réserve pas réellement de pages épinglées et ne réalise pas de transfert CUDA.
 
-#### Scheduler et profil CLI — état réel\n\n`claymore-scheduler` ne contient qu'une configuration et une méthode `validate()` ; il ne planifie pas de tâches et ne pilote aucun préchargement. Le fichier `config/rtx5090-7950x3d.json` est versionné mais n'est pas chargé par le runtime. La commande `claymore-cli profile` affiche les valeurs de `SchedulerConfig::default()` et ne reflète donc pas le profil matériel JSON.\n\n#### v0.4 — CUDA Driver Backend
+#### Scheduler et profil CLI — état réel
+
+`claymore-scheduler` ne contient qu'une configuration et une méthode `validate()` ; il ne planifie pas de tâches et ne pilote aucun préchargement. Le fichier `config/rtx5090-7950x3d.json` est versionné mais n'est pas chargé par le runtime. La commande `claymore-cli profile` affiche les valeurs de `SchedulerConfig::default()` et ne reflète donc pas le profil matériel JSON.
+
+#### v0.4 — CUDA Driver Backend
 
 Le crate `claymore-cuda` fournit un backend optionnel, activé par la feature `cuda-driver`, qui expose les primitives suivantes :
 
@@ -314,7 +324,11 @@ Le build par défaut reste indépendant du matériel. La feature CUDA requiert u
 
 Les éléments suivants ne doivent pas être considérés comme fonctionnels de bout en bout :
 
-- chargement du profil matériel JSON par le runtime ou la CLI ;\n- application effective du budget souple VRAM de 26 Gio ;\n- enforcement de la cible/max du cache d'experts et de son inclusion dans un working set explicite ;\n- logique de scheduling, files de tâches et préchargement ;\n- raccordement du memory orchestrator aux allocations CUDA réelles ;
+- chargement du profil matériel JSON par le runtime ou la CLI ;
+- application effective du budget souple VRAM de 26 Gio ;
+- enforcement de la cible/max du cache d'experts et de son inclusion dans un working set explicite ;
+- logique de scheduling, files de tâches et préchargement ;
+- raccordement du memory orchestrator aux allocations CUDA réelles ;
 - protection automatique de l'éviction par synchronisation des CUDA events ;
 - pool allocator VRAM, réutilisation de blocs et défragmentation ;
 - moteur de transfert piloté par le scheduler ;
@@ -377,7 +391,20 @@ Chaque moteur de modèle doit pouvoir préparer, exécuter et libérer ses état
 
 ---
 
-## 8 bis. Couverture actuelle des exigences\n\n| Exigence | Statut sur `main` | Justification |\n|---|---|---|\n| FR-01 — Configuration du runtime | **Non livré** | Le profil JSON existe, mais aucun chargeur ne l'applique ; la CLI utilise `SchedulerConfig::default()`. |\n| FR-02 — Gestion des budgets | **Partiel** | Comptabilité host-side et validation des budgets ; le budget souple VRAM n'est pas appliqué à l'admission. |\n| FR-03 — Admission et éviction | **Livré (host-side)** | Plan d'admission, candidats et confirmation explicite ; aucune libération CUDA intégrée. |\n| FR-04 — Sûreté asynchrone | **Non livré** | Le tick logique n'est pas relié aux CUDA events réels. |\n| FR-05 — Gestion des experts | **Non livré** | Getters/compteur seulement ; cible et maximum non appliqués à l'admission. |\n| FR-06 — Scheduling et prefetch | **Non livré** | Configuration seulement ; aucune logique de scheduling/prefetch. |\n| FR-07 — Diagnostics | **Partiel** | CLI de base et diagnostic device optionnel ; le profil JSON n'est pas chargé. |\n| FR-08 — Exécution des modèles | **Non livré** | Pas d'intégration Candle ni d'inférence réelle des deux modèles. |\n\n## 9. Exigences non fonctionnelles et invariants
+## 8 bis. Couverture actuelle des exigences
+
+| Exigence | Statut sur `main` | Justification |
+|---|---|---|
+| FR-01 — Configuration du runtime | **Non livré** | Le profil JSON existe, mais aucun chargeur ne l'applique ; la CLI utilise `SchedulerConfig::default()`. |
+| FR-02 — Gestion des budgets | **Partiel** | Comptabilité host-side et validation des budgets ; le budget souple VRAM n'est pas appliqué à l'admission. |
+| FR-03 — Admission et éviction | **Livré (host-side)** | Plan d'admission, candidats et confirmation explicite ; aucune libération CUDA intégrée. |
+| FR-04 — Sûreté asynchrone | **Non livré** | Le tick logique n'est pas relié aux CUDA events réels. |
+| FR-05 — Gestion des experts | **Non livré** | Getters/compteur seulement ; cible et maximum non appliqués à l'admission. |
+| FR-06 — Scheduling et prefetch | **Non livré** | Configuration seulement ; aucune logique de scheduling/prefetch. |
+| FR-07 — Diagnostics | **Partiel** | CLI de base et diagnostic device optionnel ; le profil JSON n'est pas chargé. |
+| FR-08 — Exécution des modèles | **Non livré** | Pas d'intégration Candle ni d'inférence réelle des deux modèles. |
+
+## 9. Exigences non fonctionnelles et invariants
 
 ### NFR-01 — Sécurité mémoire
 
@@ -630,7 +657,9 @@ Une PR ne doit pas être déclarée prête uniquement parce que le code existe :
 
 ## 13. Risques et décisions ouvertes
 
-| Sujet | Risque / question | Décision ou traitement |\n|---|---|---|\n| Contexte CUDA / Candle | Le backend crée un contexte via `cuCtxCreate_v2`, alors que Candle/cudarc peut utiliser le contexte primaire ; les pointeurs ne sont pas interchangeables entre contextes | **Décision ouverte avant M3/M5** : vérifier le modèle de contexte Candle/cudarc retenu et choisir un contexte primaire partagé ou une stratégie d'interopérabilité explicitement supportée. Ne pas transmettre de pointeurs entre contextes sans preuve. |
+| Sujet | Risque / question | Décision ou traitement |
+|---|---|---|
+| Contexte CUDA / Candle | Le backend crée un contexte via `cuCtxCreate_v2`, alors que Candle/cudarc peut utiliser le contexte primaire ; les pointeurs ne sont pas interchangeables entre contextes | **Décision ouverte avant M3/M5** : vérifier le modèle de contexte Candle/cudarc retenu et choisir un contexte primaire partagé ou une stratégie d'interopérabilité explicitement supportée. Ne pas transmettre de pointeurs entre contextes sans preuve. |
 |---|---|---|
 | Driver CUDA dans WSL2 | Bibliothèque ou lien linker absent | Vérifier `libcuda.so.1` et le linkage sur la cible |
 | Durée de vie async | Libération ou réutilisation prématurée | Ownership explicite et event de complétion |
@@ -687,10 +716,23 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-18 | Cache experts cible 14 Gio, maximum 16 Gio, inclus dans le working set modèles / experts. |
 | 2026-11-18 | Le memory orchestrator reste testable sans CUDA ; le backend CUDA est une feature optionnelle. |
 | 2026-11-18 | Une éviction planifiée ne devient comptable qu'après confirmation de la libération effective. |
-| 2026-11-18 | La sûreté des opérations asynchrones doit être fondée sur les CUDA events réels, pas seulement sur un tick logique. |\n| 2026-11-18 | RAM hôte : enveloppes disjointes 64 Gio Host weights + 16 Gio Host staging/state + 8 Gio PinnedHost = 88 Gio ; limites de tiers Host 80 Gio et PinnedHost 8 Gio. |\n| 2026-11-18 | Référentiels RAM séparés : machine 128 Gio, VM WSL2 96 Gio, budget Claymore 88 Gio ; marge WSL2 ~8 Gio à mesurer. |\n| 2026-11-18 | Le contexte CUDA du backend et celui utilisé par Candle/cudarc constituent un risque ouvert à résoudre avant M3/M5. |\n| 2026-11-18 | Cette référence est rédigée en français ; README et documentation technique existante restent en anglais. |
+| 2026-11-18 | La sûreté des opérations asynchrones doit être fondée sur les CUDA events réels, pas seulement sur un tick logique. |
+| 2026-11-18 | RAM hôte : enveloppes disjointes 64 Gio Host weights + 16 Gio Host staging/state + 8 Gio PinnedHost = 88 Gio ; limites de tiers Host 80 Gio et PinnedHost 8 Gio. |
+| 2026-11-18 | Référentiels RAM séparés : machine 128 Gio, VM WSL2 96 Gio, budget Claymore 88 Gio ; marge WSL2 ~8 Gio à mesurer. |
+| 2026-11-18 | Le contexte CUDA du backend et celui utilisé par Candle/cudarc constituent un risque ouvert à résoudre avant M3/M5. |
+| 2026-11-18 | Cette référence est rédigée en français ; README et documentation technique existante restent en anglais. |
 | 2026-11-18 | DiffusionGemma et Clover disposent de moteurs distincts partageant les services transverses du runtime. |
 
 ---
 
 **Fin du document de référence Claymore.**
-\n\n## 17. Références externes\n\nLes références exactes (URL et révision/commit) doivent être consignées avant de figer les choix d'implémentation. Elles ne sont pas reproduites ici tant que leur URL canonique et leur révision n'ont pas été vérifiées :\n\n- FreeToken — URL/révision à compléter après vérification.\n- Strata (Niko1221) — URL/révision à compléter après vérification.\n- DiffusionGemma — dépôt Hugging Face et révision à compléter après vérification.\n- Clover-35B-A3B-preview — dépôt Hugging Face et révision à compléter après vérification.\n
+
+
+## 17. Références externes
+
+Les références exactes (URL et révision/commit) doivent être consignées avant de figer les choix d'implémentation. Elles ne sont pas reproduites ici tant que leur URL canonique et leur révision n'ont pas été vérifiées :
+
+- FreeToken — URL/révision à compléter après vérification.
+- Strata (Niko1221) — URL/révision à compléter après vérification.
+- DiffusionGemma — dépôt Hugging Face et révision à compléter après vérification.
+- Clover-35B-A3B-preview — dépôt Hugging Face et révision à compléter après vérification.
