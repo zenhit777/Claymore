@@ -282,7 +282,7 @@ Le workspace utilise Cargo, resolver 2, Rust edition 2021. La version de référ
 
 Cette section prévaut sur toute formulation plus ambitieuse de la vision cible.
 
-### 7.1 Livré sur main
+### 7.1 Livré sur main et candidat en PR
 
 #### v0.3 — Memory Orchestrator (politiques host-side)
 
