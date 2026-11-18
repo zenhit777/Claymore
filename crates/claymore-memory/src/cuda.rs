@@ -335,14 +335,14 @@ impl CudaMemoryManager {
                     .get_mut(id)
                     .ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?
                     .free()?;
-                self.device.remove(id);
+                let _ = self.device.remove(id);
             }
             MemoryTier::PinnedHost => {
                 self.pinned
                     .get_mut(id)
                     .ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?
                     .free()?;
-                self.pinned.remove(id);
+                let _ = self.pinned.remove(id);
             }
             MemoryTier::Host => return Err(CudaMemoryError::WrongTier(id.to_owned())),
         }
