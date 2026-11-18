@@ -7,7 +7,7 @@ use std::{
     ffi::{c_char, c_int, c_uint, c_void, CStr},
     marker::PhantomData,
     ptr,
-    sync::Arc,
+    rc::Rc,
 };
 
 use crate::{CudaDeviceInfo, CudaError, DeviceInventory};
@@ -78,7 +78,7 @@ struct ContextInner {
 
 impl ContextInner {
     fn activate(&self) -> Result<(), CudaError> {
-        // SAFETY: raw remains live while this context is held by an Arc.
+        // SAFETY: raw remains live while this context is held by an Rc.
         check(unsafe { cuCtxSetCurrent(self.raw) }, "cuCtxSetCurrent")
     }
 }
@@ -93,7 +93,7 @@ impl Drop for ContextInner {
 }
 
 pub struct CudaDriver {
-    context: Arc<ContextInner>,
+    context: Rc<ContextInner>,
     info: CudaDeviceInfo,
 }
 pub type CudaRuntime = CudaDriver;
@@ -140,7 +140,7 @@ impl CudaDriver {
             unsafe { cuCtxCreate_v2(&mut raw, 0, device) },
             "cuCtxCreate_v2",
         )?;
-        let context = Arc::new(ContextInner { raw });
+        let context = Rc::new(ContextInner { raw });
         context.activate()?;
         Ok(Self {
             context,
@@ -175,7 +175,7 @@ impl CudaDriver {
         // SAFETY: pointer is valid output storage; CUDA owns the resulting allocation.
         check(unsafe { cuMemAlloc_v2(&mut pointer, len) }, "cuMemAlloc_v2")?;
         Ok(DeviceBuffer {
-            context: Arc::clone(&self.context),
+            context: Rc::clone(&self.context),
             pointer,
             len,
         })
