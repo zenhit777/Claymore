@@ -150,6 +150,7 @@ impl CudaMemoryManager {
         bytes: u64,
         tick: u64,
     ) -> Result<(), CudaMemoryError> {
+        self.advance_tick(tick)?;
         let id = id.into();
         if bytes == 0 {
             return Err(CudaMemoryError::ZeroSizedAllocation);
@@ -182,6 +183,7 @@ impl CudaMemoryManager {
         data: &[u8],
         tick: u64,
     ) -> Result<(), CudaMemoryError> {
+        self.advance_tick(tick)?;
         self.wait_for_allocation(id, tick)?;
         let buffer = self
             .pinned
@@ -289,6 +291,7 @@ impl CudaMemoryManager {
         bytes: usize,
         tick: u64,
     ) -> Result<(), CudaMemoryError> {
+        self.advance_tick(tick)?;
         let event = self.driver.create_event()?;
         let source = self
             .device
