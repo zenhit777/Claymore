@@ -21,6 +21,7 @@ La surface publique est disponible derrière `--features cuda-driver` :
 - `CudaMemoryManager::new(ordinal, budgets, eviction)`
 - `allocate_device(id, bytes, tick, expert)`
 - `allocate_pinned(id, bytes, tick)`
+- `write_pinned(id, offset, data, tick)` et `read_pinned(id, offset, len, tick)`
 - `copy_h2d(pinned_id, device_id, bytes, tick)`
 - `copy_d2h(device_id, pinned_id, bytes, tick)`
 - `wait_for_allocation(id, tick)`
@@ -57,4 +58,4 @@ cargo check -p claymore-memory --features cuda-driver
 cargo test -p claymore-memory --features cuda-driver -- --ignored
 ```
 
-La validation sur cible devra compléter ces commandes par un test H2D puis D2H avec vérification des octets, une tentative de libération avant event, une libération après event, une pression mémoire provoquant une éviction, et une vérification de la comptabilité après chaque succès/échec. Les instructions opérationnelles destinées à OhMyPi seront préparées après validation de la PR, pas exécutées dans cette phase.
+Le test CUDA ignoré inclut un aller-retour H2D puis D2H avec vérification des octets. La validation sur cible devra compléter ces commandes par une tentative de libération avant event, une libération après event, une pression mémoire provoquant une éviction, une tentative de libération avant event, une libération après event, une pression mémoire provoquant une éviction, et une vérification de la comptabilité après chaque succès/échec. Les instructions opérationnelles destinées à OhMyPi seront préparées après validation de la PR, pas exécutées dans cette phase.
