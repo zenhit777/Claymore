@@ -1,0 +1,45 @@
+{
+  "profile": "rtx5090-7950x3d",
+  "hardware": {
+    "gpu": "NVIDIA RTX 5090",
+    "vram_gib": 32,
+    "cpu": "AMD Ryzen 9 7950X3D",
+    "ram_gib": 128,
+    "environment": "WSL2"
+  },
+  "precision": {
+    "policy": "mixed",
+    "preferred": "bf16",
+    "sensitive_accumulation": "fp32",
+    "fallback": "fp16"
+  },
+  "vram": {
+    "soft_budget_gib": 26,
+    "hard_ceiling_gib": 28,
+    "safety_reserve_gib": 4,
+    "model_working_set_gib": 18,
+    "state_kv_canvas_gib": 4,
+    "cuda_workspace_gib": 2,
+    "transfer_gib": 1,
+    "allocator_slack_gib": 1,
+    "expert_cache_target_gib": 14,
+    "expert_cache_max_gib": 16
+  },
+  "host_memory": {
+    "claymore_budget_gib": 88,
+    "weights_pool_target_gib": 64,
+    "pinned_ceiling_gib": 8,
+    "staging_and_state_gib": 16,
+    "system_reserve_gib": 24
+  },
+  "scheduler": {
+    "cpu_workers": 10,
+    "cpu_workers_min": 6,
+    "cpu_workers_max": 12,
+    "cuda_compute_streams": 1,
+    "transfer_streams": 1,
+    "max_prefetches": 2,
+    "lookahead": 1,
+    "tick_us": 500
+  }
+}
