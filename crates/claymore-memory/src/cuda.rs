@@ -414,3 +414,32 @@ mod tests {
         manager.release("host", 6).unwrap();
     }
 }
+
+impl Drop for CudaMemoryManager {
+    fn drop(&mut self) {
+        // Do not destroy buffers while queued DMA may still reference them.
+        let mut safe_to_drop = self.transfer_stream.synchronize().is_ok();
+        if !safe_to_drop {
+            safe_to_drop = true;
+            for (_, event) in &self.pending {
+                if event.synchronize().is_err() {
+                    safe_to_drop = false;
+                    break;
+                }
+            }
+        }
+        if !safe_to_drop {
+            // A failed driver synchronization leaves buffer lifetime uncertain.
+            // Leak these CUDA owners rather than risk freeing memory still in use.
+            for (_, buffer) in self.device.drain() {
+                std::mem::forget(buffer);
+            }
+            for (_, buffer) in self.pinned.drain() {
+                std::mem::forget(buffer);
+            }
+            for (_, event) in self.pending.drain(..) {
+                std::mem::forget(event);
+            }
+        }
+    }
+}
