@@ -13,6 +13,25 @@ use claymore_cuda::{CudaDriver, CudaError, CudaEvent, CudaStream, DeviceBuffer, 
 
 const IN_FLIGHT: u64 = u64::MAX;
 
+fn validate_monotonic_tick(
+    previous: Option<u64>,
+    provided: u64,
+) -> Result<(), CudaMemoryError> {
+    if let Some(previous) = previous {
+        if provided < previous {
+            return Err(CudaMemoryError::NonMonotonicTick { previous, provided });
+        }
+    }
+    Ok(())
+}
+
+fn ensure_release_safe(id: &str, safe_after_tick: u64, tick: u64) -> Result<(), CudaMemoryError> {
+    if safe_after_tick > tick {
+        return Err(MemoryError::AllocationBusy(id.to_owned()).into());
+    }
+    Ok(())
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum CudaMemoryError {
     #[error(transparent)]
@@ -69,14 +88,7 @@ impl CudaMemoryManager {
 
     /// Enforce one monotonic logical clock for every operation on this manager.
     fn advance_tick(&mut self, tick: u64) -> Result<(), CudaMemoryError> {
-        if let Some(previous) = self.last_tick {
-            if tick < previous {
-                return Err(CudaMemoryError::NonMonotonicTick {
-                    previous,
-                    provided: tick,
-                });
-            }
-        }
+        validate_monotonic_tick(self.last_tick, tick)?;
         self.last_tick = Some(tick);
         Ok(())
     }
@@ -355,9 +367,7 @@ impl CudaMemoryManager {
             .policy
             .allocation(id)
             .ok_or_else(|| CudaMemoryError::UnknownAllocation(id.to_owned()))?;
-        if allocation.safe_after_tick > tick {
-            return Err(MemoryError::AllocationBusy(id.to_owned()).into());
-        }
+        ensure_release_safe(id, allocation.safe_after_tick, tick)?;
         let tier = allocation.tier;
         match tier {
             MemoryTier::Vram => {
@@ -441,6 +451,29 @@ impl Drop for CudaMemoryManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn logical_ticks_must_be_monotonic() {
+        assert!(validate_monotonic_tick(None, 10).is_ok());
+        assert!(validate_monotonic_tick(Some(10), 10).is_ok());
+        assert!(validate_monotonic_tick(Some(10), 11).is_ok());
+        assert!(matches!(
+            validate_monotonic_tick(Some(10), 9),
+            Err(CudaMemoryError::NonMonotonicTick {
+                previous: 10,
+                provided: 9
+            })
+        ));
+    }
+
+    #[test]
+    fn release_guard_rejects_tick_before_safe_horizon() {
+        assert!(matches!(
+            ensure_release_safe("buffer", 10, 9),
+            Err(CudaMemoryError::Policy(MemoryError::AllocationBusy(id))) if id == "buffer"
+        ));
+        assert!(ensure_release_safe("buffer", 10, 10).is_ok());
+    }
 
     #[test]
     #[ignore = "requires a CUDA driver and a usable NVIDIA device"]
