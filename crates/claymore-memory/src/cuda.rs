@@ -33,6 +33,8 @@ pub enum CudaMemoryError {
     },
     #[error("CUDA reports only {free} free bytes; {requested} bytes were requested")]
     InsufficientDeviceMemory { requested: u64, free: u64 },
+    #[error("logical tick moved backwards: previous {previous}, provided {provided}")]
+    NonMonotonicTick { previous: u64, provided: u64 },
 }
 
 pub struct CudaMemoryManager {
@@ -42,6 +44,7 @@ pub struct CudaMemoryManager {
     device: HashMap<String, DeviceBuffer>,
     pinned: HashMap<String, PinnedHostBuffer>,
     pending: Vec<(Vec<String>, CudaEvent)>,
+    last_tick: Option<u64>,
 }
 
 impl CudaMemoryManager {
@@ -60,7 +63,22 @@ impl CudaMemoryManager {
             device: HashMap::new(),
             pinned: HashMap::new(),
             pending: Vec::new(),
+            last_tick: None,
         })
+    }
+
+    /// Enforce one monotonic logical clock for every operation on this manager.
+    fn advance_tick(&mut self, tick: u64) -> Result<(), CudaMemoryError> {
+        if let Some(previous) = self.last_tick {
+            if tick < previous {
+                return Err(CudaMemoryError::NonMonotonicTick {
+                    previous,
+                    provided: tick,
+                });
+            }
+        }
+        self.last_tick = Some(tick);
+        Ok(())
     }
 
     pub fn device_info(&self) -> &claymore_cuda::CudaDeviceInfo {
@@ -94,6 +112,7 @@ impl CudaMemoryManager {
         tick: u64,
         expert: bool,
     ) -> Result<(), CudaMemoryError> {
+        self.advance_tick(tick)?;
         let id = id.into();
         if bytes == 0 {
             return Err(CudaMemoryError::ZeroSizedAllocation);
@@ -203,6 +222,7 @@ impl CudaMemoryManager {
         len: usize,
         tick: u64,
     ) -> Result<Vec<u8>, CudaMemoryError> {
+        self.advance_tick(tick)?;
         self.wait_for_allocation(id, tick)?;
         let buffer = self
             .pinned
@@ -235,6 +255,7 @@ impl CudaMemoryManager {
         bytes: usize,
         tick: u64,
     ) -> Result<(), CudaMemoryError> {
+        self.advance_tick(tick)?;
         let event = self.driver.create_event()?;
         let source = self
             .pinned
@@ -295,6 +316,7 @@ impl CudaMemoryManager {
     }
 
     pub fn wait_for_allocation(&mut self, id: &str, tick: u64) -> Result<(), CudaMemoryError> {
+        self.advance_tick(tick)?;
         let mut index = 0;
         while index < self.pending.len() {
             let matches = self.pending[index]
@@ -324,12 +346,17 @@ impl CudaMemoryManager {
     }
 
     pub fn release(&mut self, id: &str, tick: u64) -> Result<Allocation, CudaMemoryError> {
+        self.advance_tick(tick)?;
         self.wait_for_allocation(id, tick)?;
         let allocation = self
             .policy
             .allocation(id)
             .ok_or_else(|| CudaMemoryError::UnknownAllocation(id.to_owned()))?;
-        match allocation.tier {
+        if allocation.safe_after_tick > tick {
+            return Err(MemoryError::AllocationBusy(id.to_owned()).into());
+        }
+        let tier = allocation.tier;
+        match tier {
             MemoryTier::Vram => {
                 // SAFETY: wait_for_allocation synchronized every event involving id.
                 unsafe {
@@ -379,6 +406,35 @@ impl CudaMemoryManager {
     }
 }
 
+impl Drop for CudaMemoryManager {
+    fn drop(&mut self) {
+        // Do not destroy buffers while queued DMA may still reference them.
+        let mut safe_to_drop = self.transfer_stream.synchronize().is_ok();
+        if !safe_to_drop {
+            safe_to_drop = !self.pending.is_empty();
+            for (_, event) in &self.pending {
+                if event.synchronize().is_err() {
+                    safe_to_drop = false;
+                    break;
+                }
+            }
+        }
+        if !safe_to_drop {
+            // A failed driver synchronization leaves buffer lifetime uncertain.
+            // Leak these CUDA owners rather than risk freeing memory still in use.
+            for (_, buffer) in self.device.drain() {
+                std::mem::forget(buffer);
+            }
+            for (_, buffer) in self.pinned.drain() {
+                std::mem::forget(buffer);
+            }
+            for (_, event) in self.pending.drain(..) {
+                std::mem::forget(event);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -419,34 +475,5 @@ mod tests {
         );
         manager.release("device", 6).unwrap();
         manager.release("host", 6).unwrap();
-    }
-}
-
-impl Drop for CudaMemoryManager {
-    fn drop(&mut self) {
-        // Do not destroy buffers while queued DMA may still reference them.
-        let mut safe_to_drop = self.transfer_stream.synchronize().is_ok();
-        if !safe_to_drop {
-            safe_to_drop = !self.pending.is_empty();
-            for (_, event) in &self.pending {
-                if event.synchronize().is_err() {
-                    safe_to_drop = false;
-                    break;
-                }
-            }
-        }
-        if !safe_to_drop {
-            // A failed driver synchronization leaves buffer lifetime uncertain.
-            // Leak these CUDA owners rather than risk freeing memory still in use.
-            for (_, buffer) in self.device.drain() {
-                std::mem::forget(buffer);
-            }
-            for (_, buffer) in self.pinned.drain() {
-                std::mem::forget(buffer);
-            }
-            for (_, event) in self.pending.drain(..) {
-                std::mem::forget(event);
-            }
-        }
     }
 }
