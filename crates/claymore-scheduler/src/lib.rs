@@ -9,7 +9,11 @@ pub struct SchedulerConfig {
 
 impl Default for SchedulerConfig {
     fn default() -> Self {
-        Self { cpu_workers: 10, max_prefetches: 2, lookahead: 1 }
+        Self {
+            cpu_workers: 10,
+            max_prefetches: 2,
+            lookahead: 1,
+        }
     }
 }
 
