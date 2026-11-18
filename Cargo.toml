@@ -6,11 +6,12 @@ members = [
   "crates/claymore-scheduler",
   "crates/claymore-model-gemma",
   "crates/claymore-model-clover",
+  "crates/claymore-cuda",
   "crates/claymore-cli",
 ]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/zenhit777/Claymore"

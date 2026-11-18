@@ -4,7 +4,13 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+cuda-driver = ["claymore-cuda/cuda-driver"]
+
 [dependencies]
+claymore-cuda = { path = "../claymore-cuda" }
+
 claymore-core = { path = "../claymore-core" }
 claymore-memory = { path = "../claymore-memory" }
 claymore-scheduler = { path = "../claymore-scheduler" }
