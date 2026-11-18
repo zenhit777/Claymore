@@ -331,17 +331,23 @@ impl CudaMemoryManager {
             .ok_or_else(|| CudaMemoryError::UnknownAllocation(id.to_owned()))?;
         match allocation.tier {
             MemoryTier::Vram => {
-                self.device
-                    .get_mut(id)
-                    .ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?
-                    .free()?;
+                // SAFETY: wait_for_allocation synchronized every event involving id.
+                unsafe {
+                    self.device
+                        .get_mut(id)
+                        .ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?
+                        .free()?;
+                }
                 let _ = self.device.remove(id);
             }
             MemoryTier::PinnedHost => {
-                self.pinned
-                    .get_mut(id)
-                    .ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?
-                    .free()?;
+                // SAFETY: wait_for_allocation synchronized every event involving id.
+                unsafe {
+                    self.pinned
+                        .get_mut(id)
+                        .ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?
+                        .free()?;
+                }
                 let _ = self.pinned.remove(id);
             }
             MemoryTier::Host => return Err(CudaMemoryError::WrongTier(id.to_owned())),
