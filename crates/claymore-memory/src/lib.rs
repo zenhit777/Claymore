@@ -321,6 +321,11 @@ impl MemoryOrchestrator {
     }
 }
 
+#[cfg(feature = "cuda-driver")]
+mod cuda;
+#[cfg(feature = "cuda-driver")]
+pub use cuda::{CudaMemoryError, CudaMemoryManager};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -423,8 +428,3 @@ mod tests {
         ));
     }
 }
-
-#[cfg(feature = "cuda-driver")]
-mod cuda;
-#[cfg(feature = "cuda-driver")]
-pub use cuda::{CudaMemoryError, CudaMemoryManager};
