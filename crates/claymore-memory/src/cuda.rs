@@ -104,15 +104,20 @@ impl CudaMemoryManager {
     }
 
     pub fn wait_for_allocation(&mut self, id: &str, tick: u64) -> Result<(), CudaMemoryError> {
-        let mut retained = Vec::with_capacity(self.pending.len());
         let mut completed_ids = Vec::new();
-        for (ids, event) in self.pending.drain(..) {
-            if ids.iter().any(|candidate| candidate == id) {
-                event.synchronize()?;
+        let mut index = 0;
+        while index < self.pending.len() {
+            let matches = self.pending[index].0.iter().any(|candidate| candidate == id);
+            if matches {
+                // Synchronize before removing the event. On failure the event and
+                // every allocation it protects remain tracked and non-evictable.
+                self.pending[index].1.synchronize()?;
+                let (ids, _event) = self.pending.remove(index);
                 completed_ids.extend(ids);
-            } else { retained.push((ids, event)); }
+            } else {
+                index += 1;
+            }
         }
-        self.pending = retained;
         completed_ids.sort();
         completed_ids.dedup();
         for completed_id in completed_ids { self.policy.mark_in_flight_until(&completed_id, tick)?; }
