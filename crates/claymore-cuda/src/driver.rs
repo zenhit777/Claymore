@@ -247,7 +247,7 @@ impl DeviceBuffer {
     }
 
     /// Explicitly release the allocation and report driver failures to the caller.
-    pub fn free(mut self) -> Result<(), CudaError> {
+    pub fn free(&mut self) -> Result<(), CudaError> {
         self.context.activate()?;
         // SAFETY: this object uniquely owns the live device allocation.
         check(unsafe { cuMemFree_v2(self.pointer) }, "cuMemFree_v2")?;
