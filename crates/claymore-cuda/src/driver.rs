@@ -191,7 +191,7 @@ impl CudaDriver {
             "cuMemHostAlloc",
         )?;
         Ok(PinnedHostBuffer {
-            context: Arc::clone(&self.context),
+            context: Rc::clone(&self.context),
             pointer,
             len,
             _not_sync: PhantomData,
@@ -207,7 +207,7 @@ impl CudaDriver {
             "cuStreamCreate",
         )?;
         Ok(CudaStream {
-            context: Arc::clone(&self.context),
+            context: Rc::clone(&self.context),
             raw,
         })
     }
@@ -221,7 +221,7 @@ impl CudaDriver {
             "cuEventCreate",
         )?;
         Ok(CudaEvent {
-            context: Arc::clone(&self.context),
+            context: Rc::clone(&self.context),
             raw,
         })
     }
@@ -234,7 +234,7 @@ impl DeviceInventory for CudaDriver {
 }
 
 pub struct DeviceBuffer {
-    context: Arc<ContextInner>,
+    context: Rc<ContextInner>,
     pointer: CuDevicePtr,
     len: usize,
 }
@@ -333,7 +333,7 @@ impl Drop for DeviceBuffer {
 }
 
 pub struct PinnedHostBuffer {
-    context: Arc<ContextInner>,
+    context: Rc<ContextInner>,
     pointer: *mut c_void,
     len: usize,
     _not_sync: PhantomData<*mut ()>,
@@ -380,7 +380,7 @@ impl Drop for PinnedHostBuffer {
 }
 
 pub struct CudaStream {
-    context: Arc<ContextInner>,
+    context: Rc<ContextInner>,
     raw: CuStreamRaw,
 }
 impl CudaStream {
@@ -405,7 +405,7 @@ impl Drop for CudaStream {
 }
 
 pub struct CudaEvent {
-    context: Arc<ContextInner>,
+    context: Rc<ContextInner>,
     raw: CuEventRaw,
 }
 impl CudaEvent {
