@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/claymore-core",
+  "crates/claymore-memory",
+  "crates/claymore-scheduler",
+  "crates/claymore-model-gemma",
+  "crates/claymore-model-clover",
+  "crates/claymore-cli",
+]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/zenhit777/Claymore"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
