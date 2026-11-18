@@ -128,8 +128,12 @@ impl CudaMemoryManager {
         self.wait_for_allocation(id, tick)?;
         let allocation = self.policy.allocation(id).ok_or_else(|| CudaMemoryError::UnknownAllocation(id.to_owned()))?;
         match allocation.tier {
-            MemoryTier::Vram => { self.device.remove(id).ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?; }
-            MemoryTier::PinnedHost => { self.pinned.remove(id).ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?; }
+            MemoryTier::Vram => {
+                self.device.remove(id).ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?.free()?;
+            }
+            MemoryTier::PinnedHost => {
+                self.pinned.remove(id).ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?.free()?;
+            }
             MemoryTier::Host => return Err(CudaMemoryError::WrongTier(id.to_owned())),
         }
         Ok(self.policy.confirm_eviction(id, tick)?)
