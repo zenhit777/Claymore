@@ -25,6 +25,8 @@ pub enum CudaMemoryError {
     WrongTier(String),
     #[error("allocation size must be greater than zero")]
     ZeroSizedAllocation,
+    #[error("byte range {offset}..{end} exceeds pinned buffer capacity {capacity}")]
+    BufferRangeOutOfBounds { offset: usize, end: usize, capacity: usize },
     #[error("CUDA reports only {free} free bytes; {requested} bytes were requested")]
     InsufficientDeviceMemory { requested: u64, free: u64 },
 }
@@ -147,6 +149,58 @@ impl CudaMemoryManager {
         }
         self.pinned.insert(id, buffer);
         Ok(())
+    }
+
+    /// Writes bytes into a pinned buffer before an H2D transfer.
+    pub fn write_pinned(
+        &mut self,
+        id: &str,
+        offset: usize,
+        data: &[u8],
+    ) -> Result<(), CudaMemoryError> {
+        let buffer = self.pinned.get_mut(id)
+            .ok_or_else(|| CudaMemoryError::UnknownAllocation(id.to_owned()))?;
+        let end = offset.checked_add(data.len()).ok_or(CudaMemoryError::BufferRangeOutOfBounds {
+            offset, end: usize::MAX, capacity: buffer.len(),
+        })?;
+        if end > buffer.len() {
+            return Err(CudaMemoryError::BufferRangeOutOfBounds {
+                offset, end, capacity: buffer.len(),
+            });
+        }
+        // SAFETY: the range is checked and no transfer can be in flight while
+        // the caller mutably borrows this manager to write the buffer.
+        unsafe {
+            std::ptr::copy_nonoverlapping(data.as_ptr(), buffer.as_mut_ptr().add(offset), data.len());
+        }
+        Ok(())
+    }
+
+    /// Waits for outstanding D2H work and returns a copy of the requested bytes.
+    pub fn read_pinned(
+        &mut self,
+        id: &str,
+        offset: usize,
+        len: usize,
+        tick: u64,
+    ) -> Result<Vec<u8>, CudaMemoryError> {
+        self.wait_for_allocation(id, tick)?;
+        let buffer = self.pinned.get_mut(id)
+            .ok_or_else(|| CudaMemoryError::UnknownAllocation(id.to_owned()))?;
+        let end = offset.checked_add(len).ok_or(CudaMemoryError::BufferRangeOutOfBounds {
+            offset, end: usize::MAX, capacity: buffer.len(),
+        })?;
+        if end > buffer.len() {
+            return Err(CudaMemoryError::BufferRangeOutOfBounds {
+                offset, end, capacity: buffer.len(),
+            });
+        }
+        // SAFETY: the range is checked and wait_for_allocation completed every
+        // CUDA operation that could write this pinned buffer.
+        let bytes = unsafe {
+            std::slice::from_raw_parts(buffer.as_mut_ptr().add(offset), len)
+        };
+        Ok(bytes.to_vec())
     }
 
     pub fn copy_h2d(
