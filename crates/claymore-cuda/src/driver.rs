@@ -248,6 +248,9 @@ impl DeviceBuffer {
 
     /// Explicitly release the allocation and report driver failures to the caller.
     pub fn free(&mut self) -> Result<(), CudaError> {
+        if self.pointer == 0 {
+            return Ok(());
+        }
         self.context.activate()?;
         // SAFETY: this object uniquely owns the live device allocation.
         check(unsafe { cuMemFree_v2(self.pointer) }, "cuMemFree_v2")?;
@@ -349,6 +352,9 @@ impl PinnedHostBuffer {
 
     /// Explicitly release pinned memory and report driver failures.
     pub fn free(&mut self) -> Result<(), CudaError> {
+        if self.pointer.is_null() {
+            return Ok(());
+        }
         self.context.activate()?;
         // SAFETY: this object uniquely owns the live pinned allocation.
         check(unsafe { cuMemFreeHost(self.pointer) }, "cuMemFreeHost")?;
