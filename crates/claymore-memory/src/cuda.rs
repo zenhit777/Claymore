@@ -307,10 +307,11 @@ impl CudaMemoryManager {
                 self.pending[index].1.synchronize()?;
                 let (ids, _event) = self.pending.remove(index);
                 for completed_id in ids {
-                    let still_in_flight = self
-                        .pending
-                        .iter()
-                        .any(|(pending_ids, _)| pending_ids.iter().any(|pending_id| pending_id == &completed_id));
+                    let still_in_flight = self.pending.iter().any(|(pending_ids, _)| {
+                        pending_ids
+                            .iter()
+                            .any(|pending_id| pending_id == &completed_id)
+                    });
                     if !still_in_flight {
                         self.policy.mark_in_flight_until(&completed_id, tick)?;
                     }
