@@ -39,5 +39,9 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Run tests
         run: cargo test --workspace --all-targets
+      - name: Check optional CUDA feature without linking or requiring a GPU
+        run: |
+          cargo check -p claymore-memory --features cuda-driver
+          cargo check -p claymore-cli --features cuda-driver
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
