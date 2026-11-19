@@ -6,7 +6,7 @@ license.workspace = true
 
 [features]
 default = []
-cuda-driver = ["claymore-cuda/cuda-driver"]
+cuda-driver = ["claymore-cuda/cuda-driver", "claymore-memory/cuda-driver"]
 
 [dependencies]
 claymore-cuda = { path = "../claymore-cuda" }

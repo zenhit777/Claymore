@@ -7,7 +7,7 @@ use std::{
     ffi::{c_char, c_int, c_uint, c_void, CStr},
     marker::PhantomData,
     ptr,
-    sync::Arc,
+    rc::Rc,
 };
 
 use crate::{CudaDeviceInfo, CudaError, DeviceInventory};
@@ -78,7 +78,7 @@ struct ContextInner {
 
 impl ContextInner {
     fn activate(&self) -> Result<(), CudaError> {
-        // SAFETY: raw remains live while this context is held by an Arc.
+        // SAFETY: raw remains live while this context is held by an Rc.
         check(unsafe { cuCtxSetCurrent(self.raw) }, "cuCtxSetCurrent")
     }
 }
@@ -93,7 +93,7 @@ impl Drop for ContextInner {
 }
 
 pub struct CudaDriver {
-    context: Arc<ContextInner>,
+    context: Rc<ContextInner>,
     info: CudaDeviceInfo,
 }
 pub type CudaRuntime = CudaDriver;
@@ -140,7 +140,7 @@ impl CudaDriver {
             unsafe { cuCtxCreate_v2(&mut raw, 0, device) },
             "cuCtxCreate_v2",
         )?;
-        let context = Arc::new(ContextInner { raw });
+        let context = Rc::new(ContextInner { raw });
         context.activate()?;
         Ok(Self {
             context,
@@ -175,7 +175,7 @@ impl CudaDriver {
         // SAFETY: pointer is valid output storage; CUDA owns the resulting allocation.
         check(unsafe { cuMemAlloc_v2(&mut pointer, len) }, "cuMemAlloc_v2")?;
         Ok(DeviceBuffer {
-            context: Arc::clone(&self.context),
+            context: Rc::clone(&self.context),
             pointer,
             len,
         })
@@ -191,7 +191,7 @@ impl CudaDriver {
             "cuMemHostAlloc",
         )?;
         Ok(PinnedHostBuffer {
-            context: Arc::clone(&self.context),
+            context: Rc::clone(&self.context),
             pointer,
             len,
             _not_sync: PhantomData,
@@ -207,7 +207,7 @@ impl CudaDriver {
             "cuStreamCreate",
         )?;
         Ok(CudaStream {
-            context: Arc::clone(&self.context),
+            context: Rc::clone(&self.context),
             raw,
         })
     }
@@ -221,7 +221,7 @@ impl CudaDriver {
             "cuEventCreate",
         )?;
         Ok(CudaEvent {
-            context: Arc::clone(&self.context),
+            context: Rc::clone(&self.context),
             raw,
         })
     }
@@ -234,7 +234,7 @@ impl DeviceInventory for CudaDriver {
 }
 
 pub struct DeviceBuffer {
-    context: Arc<ContextInner>,
+    context: Rc<ContextInner>,
     pointer: CuDevicePtr,
     len: usize,
 }
@@ -244,6 +244,21 @@ impl DeviceBuffer {
     }
     pub fn is_empty(&self) -> bool {
         self.len == 0
+    }
+
+    /// Explicitly release the allocation and report driver failures to the caller.
+    ///
+    /// # Safety
+    /// No in-flight CUDA operation may access this allocation.
+    pub unsafe fn free(&mut self) -> Result<(), CudaError> {
+        if self.pointer == 0 {
+            return Ok(());
+        }
+        self.context.activate()?;
+        // SAFETY: this object uniquely owns the live device allocation.
+        check(unsafe { cuMemFree_v2(self.pointer) }, "cuMemFree_v2")?;
+        self.pointer = 0;
+        Ok(())
     }
 
     /// Enqueue pinned-host-to-device transfer.
@@ -308,7 +323,7 @@ impl DeviceBuffer {
 }
 impl Drop for DeviceBuffer {
     fn drop(&mut self) {
-        if self.context.activate().is_ok() {
+        if self.pointer != 0 && self.context.activate().is_ok() {
             // SAFETY: pointer is a live allocation owned by this object.
             unsafe {
                 let _ = cuMemFree_v2(self.pointer);
@@ -318,7 +333,7 @@ impl Drop for DeviceBuffer {
 }
 
 pub struct PinnedHostBuffer {
-    context: Arc<ContextInner>,
+    context: Rc<ContextInner>,
     pointer: *mut c_void,
     len: usize,
     _not_sync: PhantomData<*mut ()>,
@@ -337,10 +352,25 @@ impl PinnedHostBuffer {
     pub unsafe fn as_mut_ptr(&mut self) -> *mut u8 {
         self.pointer.cast()
     }
+
+    /// Explicitly release pinned memory and report driver failures.
+    ///
+    /// # Safety
+    /// No in-flight CUDA operation may access this allocation.
+    pub unsafe fn free(&mut self) -> Result<(), CudaError> {
+        if self.pointer.is_null() {
+            return Ok(());
+        }
+        self.context.activate()?;
+        // SAFETY: this object uniquely owns the live pinned allocation.
+        check(unsafe { cuMemFreeHost(self.pointer) }, "cuMemFreeHost")?;
+        self.pointer = ptr::null_mut();
+        Ok(())
+    }
 }
 impl Drop for PinnedHostBuffer {
     fn drop(&mut self) {
-        if self.context.activate().is_ok() {
+        if !self.pointer.is_null() && self.context.activate().is_ok() {
             // SAFETY: pointer is a live pinned allocation owned by this object.
             unsafe {
                 let _ = cuMemFreeHost(self.pointer);
@@ -350,7 +380,7 @@ impl Drop for PinnedHostBuffer {
 }
 
 pub struct CudaStream {
-    context: Arc<ContextInner>,
+    context: Rc<ContextInner>,
     raw: CuStreamRaw,
 }
 impl CudaStream {
@@ -375,7 +405,7 @@ impl Drop for CudaStream {
 }
 
 pub struct CudaEvent {
-    context: Arc<ContextInner>,
+    context: Rc<ContextInner>,
     raw: CuEventRaw,
 }
 impl CudaEvent {

@@ -4,6 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+cuda-driver = ["dep:claymore-cuda", "claymore-cuda/cuda-driver"]
+
 [dependencies]
+claymore-cuda = { path = "../claymore-cuda", optional = true }
 claymore-core = { path = "../claymore-core" }
 thiserror.workspace = true

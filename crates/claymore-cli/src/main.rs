@@ -7,7 +7,7 @@ fn main() {
     match command.as_str() {
         "profile" => {
             let config = SchedulerConfig::default();
-            println!("Claymore v0.4.0");
+            println!("Claymore v0.5.0");
             println!("scheduler_config_valid={}", config.validate());
             println!("cuda_driver_feature={}", cfg!(feature = "cuda-driver"));
             println!("status=experimental_runtime");
