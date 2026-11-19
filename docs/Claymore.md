@@ -357,7 +357,7 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 
 ### 7.3 Limites connues du backend CUDA actuel
 
-- pas de détection de compute capability ;
+- compute capability exposée via `CudaDeviceInfo` ;
 - sélection du device par ordinal uniquement ;
 - pas de pool allocator, de défragmentation, de télémétrie ou d'éviction automatique ;
 - les appels de copie asynchrone imposent à l'appelant de conserver les buffers vivants et de synchroniser avant leur destruction ou réutilisation ;
