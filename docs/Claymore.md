@@ -331,7 +331,7 @@ Le build par défaut reste indépendant du matériel. La feature CUDA requiert u
 - contrôle de la mémoire VRAM libre et accès borné aux buffers pinned ;
 - ticks logiques monotones imposés par le manager.
 
-**État :** livré sur `main` derrière la feature `cuda-driver` ; compilation et Clippy de la feature vérifiés en CI sans lien ni GPU ; aucune exécution sur WSL2 / RTX 5090 ; pas de backend simulé.
+**État :** livré sur `main` derrière la feature `cuda-driver` ; compilation et Clippy de la feature vérifiés en CI sans lien ni GPU ; validation matérielle réelle effectuée sous WSL2 sur RTX 5090 pour le SHA `a3ff0fd` de la branche `feat/m1-hardware-foundation` (compute capability 12.0, contexte primaire partagé, allocations pinned/device, roundtrip H2D/D2H de 1 Mio, intégrité et libération) ; détails et limites dans `docs/audits/m1-hardware-validation.md` ; pas de backend simulé.
 
 ### 7.2 Non livré à ce stade
 
@@ -363,7 +363,7 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 - les appels de copie asynchrone imposent à l'appelant de conserver les buffers vivants et de synchroniser avant leur destruction ou réutilisation ;
 - les CUDA events sont connectés aux transferts du `CudaMemoryManager` ; leur complétion est traitée par attente explicite, sans polling non bloquant ni finalisation automatique lors d'une admission ;
 - le backend CUDA et le `CudaMemoryManager` sont confinés au thread propriétaire (`Rc`, types non `Send`/`Sync`) ; le scheduler M4 devra déléguer les opérations CUDA à un thread propriétaire dédié ou faire évoluer explicitement ce modèle de concurrence ;
-- aucune validation runtime sur WSL2 / RTX 5090 n'est encore attestée par ce dépôt.
+- la validation runtime sous WSL2 / RTX 5090 est attestée pour le SHA `a3ff0fd` par `docs/audits/m1-hardware-validation.md` ; elle couvre le contexte primaire, la compute capability, les allocations pinned/device, le roundtrip H2D/D2H et la libération, mais pas Compute Sanitizer, l'injection de faute fail-closed, Candle ni les performances.
 
 La CI standard valide le build par défaut sans exiger un GPU. Les tests matériels marqués `#[ignore]` ne sont pas exécutés par la CI. Le backend CUDA n'est pas encore relié à Candle. `CudaDriver::new` retient désormais le contexte primaire du device ; les opérations inter-ressources vérifient l'identité du contexte. Cela établit le contrat de partage CUDA visé, mais ne remplace pas un test d'intégration réel avec la version Candle/cudarc retenue en M5. Le backend et le manager restent confinés au thread propriétaire (`Rc`) ; aucune implémentation `Send`/`Sync` unsafe n'est envisagée.
 
@@ -383,9 +383,13 @@ Le gestionnaire mémoire doit connaître les budgets par tier, comptabiliser les
 
 Le gestionnaire doit pouvoir proposer un plan d'admission et des candidats à l'éviction selon la politique active. Une proposition n'est pas une libération : la comptabilité ne change qu'après confirmation du backend.
 
+Validation : l'adaptateur CUDA opt-in a été exercé sur RTX 5090 pour le SHA `a3ff0fd` (allocation, libération et confirmation comptable) ; voir `docs/audits/m1-hardware-validation.md`. Les tests avec backend simulé restent à construire.
+
 ### FR-04 — Sûreté asynchrone
 
 Aucune allocation ne peut être libérée, réutilisée ou évincée tant qu'un transfert ou un kernel susceptible de l'utiliser n'est pas terminé. L'intégration CUDA doit utiliser des events réels pour établir cette disponibilité.
+
+Validation : le roundtrip H2D/D2H de 1 Mio avec deux buffers pinned distincts, la synchronisation des events et la libération des allocations ont été validés sur RTX 5090 pour le SHA `a3ff0fd` ; voir `docs/audits/m1-hardware-validation.md`. Le chemin fail-closed après double échec `event.record`/`synchronize` n'a pas été exercé par injection de faute.
 
 ### FR-05 — Gestion des experts
 
@@ -411,8 +415,8 @@ Chaque moteur de modèle doit pouvoir préparer, exécuter et libérer ses état
 |---|---|---|
 | FR-01 — Configuration du runtime | **Non livré** | Le profil JSON existe, mais aucun chargeur ne l'applique ; la CLI utilise `SchedulerConfig::default()`. |
 | FR-02 — Gestion des budgets | **Partiel** | Comptabilité host-side et validation des budgets ; le budget souple VRAM n'est pas appliqué à l'admission. |
-| FR-03 — Admission et éviction | **Livré (host-side) ; exécution CUDA opt-in non validée sur cible** | Adaptateur d'allocation/libération CUDA et confirmation après free livrés derrière `cuda-driver` ; validation matérielle et tests simulés manquants. |
-| FR-04 — Sûreté asynchrone | **Partiel** | Events réels reliés aux transferts et allocations protégées jusqu'à synchronisation explicite ; pas de polling non bloquant, de backend simulé ni de validation GPU. |
+| FR-03 — Admission et éviction | **Livré (host-side) ; exécution CUDA opt-in validée sur RTX 5090 pour le SHA `a3ff0fd`** | Adaptateur d'allocation/libération CUDA et confirmation après free livrés derrière `cuda-driver` ; validation matérielle disponible dans `docs/audits/m1-hardware-validation.md` ; tests avec backend simulé encore manquants. |
+| FR-04 — Sûreté asynchrone | **Partiel, avec validation GPU du chemin nominal** | Events réels reliés aux transferts et allocations protégées jusqu'à synchronisation explicite ; roundtrip H2D/D2H et libération validés sur RTX 5090 (`docs/audits/m1-hardware-validation.md`) ; pas de polling non bloquant, de backend simulé ni d'injection de faute fail-closed. |
 | FR-05 — Gestion des experts | **Non livré** | Getters/compteur seulement ; cible et maximum non appliqués à l'admission. |
 | FR-06 — Scheduling et prefetch | **Non livré** | Configuration seulement ; aucune logique de scheduling/prefetch. |
 | FR-07 — Diagnostics | **Partiel** | CLI de base et diagnostic device optionnel ; le profil JSON n'est pas chargé. |
@@ -490,9 +494,10 @@ Travaux :
 
 Critères d'acceptation :
 - build par défaut indépendant de CUDA ;
-- compilation, tests et Clippy de la feature cuda-driver dans la CI sans GPU ;
-- tests unitaires des validations de contexte et des tailles ;
-- test matériel existant couvrant allocation VRAM, pinned host, H2D, D2H, vérification des octets et libération ;
+- compilation et Clippy de la feature `cuda-driver` dans la CI sans GPU ; la CI n'exécute pas les tests unitaires qui nécessitent un driver CUDA ;
+- tests unitaires des validations de contexte et des tailles, exécutés sur la cible matérielle avec `cargo test -p claymore-cuda -p claymore-memory --features cuda-driver --lib` ;
+- test matériel existant couvrant allocation VRAM, pinned host, H2D, D2H, vérification des octets et libération, exécuté sur RTX 5090 ;
+- preuves de validation versionnées dans `docs/audits/m1-hardware-validation.md` ;
 - compatibilité avec Candle/cudarc à confirmer par un test d'intégration ultérieur avant de déclarer l'interopérabilité validée.
 
 **Périmètre de la PR M1 :** backend CUDA, adaptateur mémoire, documentation d'audit et mise à jour de cette feuille de route. Aucun scheduler, modèle ou moteur de génération n'est introduit dans ce jalon.
@@ -674,8 +679,8 @@ Une fonctionnalité est considérée terminée lorsque :
 2. les invariants de sûreté sont respectés ;
 3. les tests unitaires et d'intégration adaptés existent ;
 4. les contrôles CI applicables passent ;
-5. les tests matériels requis ont été exécutés ou sont explicitement signalés comme restant à faire ;
-6. les métriques ou preuves nécessaires sont disponibles ;
+5. les tests matériels requis ont été exécutés ou sont explicitement signalés comme restant à faire, et leurs preuves sont versionnées dans le dépôt ;
+6. les métriques ou preuves nécessaires sont disponibles et versionnées dans le dépôt, et pas uniquement dans des commentaires GitHub ;
 7. la documentation et les exemples reflètent le comportement réel.
 
 Un prototype compilable n'est pas automatiquement une fonctionnalité prête pour la production.
@@ -711,6 +716,9 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-19 | Référentiels RAM séparés : machine 128 Gio, plafond WSL2 115 GB, budget applicatif Claymore 88 Gio ; environ 13 Gio restent hors VM et la marge Linux au-dessus du budget applicatif doit être mesurée. |
 | 2026-11-19 | Le backend retient le contexte primaire CUDA du device ; l'interopérabilité effective avec Candle/cudarc sera testée en M5. |
 | 2026-11-19 | Correspondance de la feuille de route précédente : ancien M2 (backend Driver) → socle livré v0.4/M0 ; ancien M3 (Memory ↔ CUDA) → v0.5/M0 et durcissement M1 ; ancien M4 (scheduler) → nouveau M4 ; ancien M5 (moteurs modèles) → M5/M6/M7 selon le chemin d'exécution ; ancien M6 (optimisation) → M8. Les tests simulés de l'adaptateur sont reportés à M2/M3 ; la preuve de protection d'une allocation en vol jusqu'à l'event relève de M4. |
+| 2026-11-19 | Le backend CUDA utilise `Rc` car son contexte n'est pas `Send`/`Sync` : driver, buffers, streams, events et `CudaMemoryManager` sont confinés au thread propriétaire ; M4 doit prévoir un thread CUDA dédié ou une évolution sûre de ce modèle. |
+| 2026-11-18 | Cette référence est rédigée en français ; README et documentation technique existante restent en anglais. |
+| 2026-11-18 | DiffusionGemma et Clover disposent de moteurs distincts partageant les services transverses du runtime. |
 
 ### Correspondance de la feuille de route historique
 
@@ -723,9 +731,6 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | M6 | Optimisation et validation RTX 5090 | M8 — Optimisation et validation de performance |
 
 Les critères de l'ancien M3 qui n'étaient pas couverts par le nouveau découpage sont explicitement réaffectés : backend simulé de l'adaptateur en M2/M3 ; démonstration de protection d'une allocation en vol jusqu'à la complétion de son event en M4.
-| 2026-11-19 | Le backend CUDA utilise `Rc` car son contexte n'est pas `Send`/`Sync` : driver, buffers, streams, events et `CudaMemoryManager` sont confinés au thread propriétaire ; M4 doit prévoir un thread CUDA dédié ou une évolution sûre de ce modèle. |
-| 2026-11-18 | Cette référence est rédigée en français ; README et documentation technique existante restent en anglais. |
-| 2026-11-18 | DiffusionGemma et Clover disposent de moteurs distincts partageant les services transverses du runtime. |
 
 ---
 
