@@ -156,11 +156,23 @@ impl CudaDriver {
         let (mut major, mut minor) = (0, 0);
         // SAFETY: outputs are valid and device was obtained from the driver.
         check(
-            unsafe { cuDeviceGetAttribute(&mut major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, device) },
+            unsafe {
+                cuDeviceGetAttribute(
+                    &mut major,
+                    CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
+                    device,
+                )
+            },
             "cuDeviceGetAttribute(COMPUTE_CAPABILITY_MAJOR)",
         )?;
         check(
-            unsafe { cuDeviceGetAttribute(&mut minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, device) },
+            unsafe {
+                cuDeviceGetAttribute(
+                    &mut minor,
+                    CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,
+                    device,
+                )
+            },
             "cuDeviceGetAttribute(COMPUTE_CAPABILITY_MINOR)",
         )?;
 
