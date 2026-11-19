@@ -442,16 +442,11 @@ impl CudaMemoryManager {
 impl Drop for CudaMemoryManager {
     fn drop(&mut self) {
         // Do not destroy buffers while queued DMA may still reference them.
-        let mut safe_to_drop = self.transfer_stream.synchronize().is_ok();
-        if !safe_to_drop {
-            safe_to_drop = !self.pending.is_empty();
-            for (_, event) in &self.pending {
-                if event.synchronize().is_err() {
-                    safe_to_drop = false;
-                    break;
-                }
-            }
-        }
+        // Only a successful synchronization of the transfer stream proves that
+        // every operation enqueued on it has completed. Older events in
+        // `pending` cannot prove completion of a later copy whose event record
+        // failed, so never use them as a fallback.
+        let safe_to_drop = self.transfer_stream.synchronize().is_ok();
         if !safe_to_drop {
             // A failed driver synchronization leaves buffer lifetime uncertain.
             // Leak these CUDA owners rather than risk freeing memory still in use.
