@@ -51,6 +51,8 @@ pub enum CudaMemoryError {
     InsufficientDeviceMemory { requested: u64, free: u64 },
     #[error("logical tick moved backwards: previous {previous}, provided {provided}")]
     NonMonotonicTick { previous: u64, provided: u64 },
+    #[error("CUDA memory manager is poisoned after an uncertain transfer synchronization failure")]
+    ManagerPoisoned,
 }
 
 pub struct CudaMemoryManager {
@@ -61,6 +63,7 @@ pub struct CudaMemoryManager {
     pinned: HashMap<String, PinnedHostBuffer>,
     pending: Vec<(Vec<String>, CudaEvent)>,
     last_tick: Option<u64>,
+    poisoned: bool,
 }
 
 impl CudaMemoryManager {
@@ -80,11 +83,15 @@ impl CudaMemoryManager {
             pinned: HashMap::new(),
             pending: Vec::new(),
             last_tick: None,
+            poisoned: false,
         })
     }
 
     /// Enforce one monotonic logical clock for every operation on this manager.
     fn advance_tick(&mut self, tick: u64) -> Result<(), CudaMemoryError> {
+        if self.poisoned {
+            return Err(CudaMemoryError::ManagerPoisoned);
+        }
         validate_monotonic_tick(self.last_tick, tick)?;
         self.last_tick = Some(tick);
         Ok(())
@@ -281,7 +288,15 @@ impl CudaMemoryManager {
             destination.copy_from_pinned_async(source, bytes, &self.transfer_stream)?;
         }
         if let Err(error) = event.record(&self.transfer_stream) {
-            self.transfer_stream.synchronize()?;
+            if let Err(sync_error) = self.transfer_stream.synchronize() {
+                // The copy may still be using either allocation. Fail closed:
+                // prevent every subsequent operation and keep both allocations
+                // non-evictable until manager destruction can synchronize again.
+                self.poisoned = true;
+                self.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
+                self.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
+                return Err(sync_error.into());
+            }
             return Err(error.into());
         }
         self.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
@@ -315,7 +330,15 @@ impl CudaMemoryManager {
             source.copy_to_pinned_async(destination, bytes, &self.transfer_stream)?;
         }
         if let Err(error) = event.record(&self.transfer_stream) {
-            self.transfer_stream.synchronize()?;
+            if let Err(sync_error) = self.transfer_stream.synchronize() {
+                // The copy may still be using either allocation. Fail closed:
+                // prevent every subsequent operation and keep both allocations
+                // non-evictable until manager destruction can synchronize again.
+                self.poisoned = true;
+                self.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
+                self.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
+                return Err(sync_error.into());
+            }
             return Err(error.into());
         }
         self.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
@@ -419,16 +442,11 @@ impl CudaMemoryManager {
 impl Drop for CudaMemoryManager {
     fn drop(&mut self) {
         // Do not destroy buffers while queued DMA may still reference them.
-        let mut safe_to_drop = self.transfer_stream.synchronize().is_ok();
-        if !safe_to_drop {
-            safe_to_drop = !self.pending.is_empty();
-            for (_, event) in &self.pending {
-                if event.synchronize().is_err() {
-                    safe_to_drop = false;
-                    break;
-                }
-            }
-        }
+        // Only a successful synchronization of the transfer stream proves that
+        // every operation enqueued on it has completed. Older events in
+        // `pending` cannot prove completion of a later copy whose event record
+        // failed, so never use them as a fallback.
+        let safe_to_drop = self.transfer_stream.synchronize().is_ok();
         if !safe_to_drop {
             // A failed driver synchronization leaves buffer lifetime uncertain.
             // Leak these CUDA owners rather than risk freeing memory still in use.
@@ -487,6 +505,9 @@ mod tests {
         let mut manager = CudaMemoryManager::new(0, budgets, EvictionPolicy::Lru).unwrap();
         let (free, total) = manager.driver.memory_info().unwrap();
         assert!(free <= total);
+        assert!(manager.device_info().compute_capability.is_some());
+        let peer_driver = CudaDriver::new(0).unwrap();
+        assert!(manager.driver.shares_context_with(&peer_driver));
 
         let expected = b"clay";
         manager

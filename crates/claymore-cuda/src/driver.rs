@@ -1,8 +1,9 @@
 //! Thin, ownership-aware wrappers over the CUDA Driver API.
 //!
-//! Async copy methods are unsafe because the caller must keep host/device
-//! buffers alive and avoid conflicting access until the associated stream has
-//! completed. Every operation activates the owning CUDA context first.
+//! The backend retains the device primary context so resources can interoperate
+//! with CUDA libraries (including Candle/cudarc) that use the same context.
+//! Async copy methods remain unsafe: callers must keep buffers alive and avoid
+//! conflicting access until the associated stream has completed.
 use std::{
     ffi::{c_char, c_int, c_uint, c_void, CStr},
     marker::PhantomData,
@@ -23,6 +24,8 @@ const CUDA_SUCCESS: CuResult = 0;
 const CU_STREAM_DEFAULT: c_uint = 0;
 const CU_EVENT_DEFAULT: c_uint = 0;
 const CU_MEMHOSTALLOC_PORTABLE: c_uint = 1;
+const CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR: c_int = 75;
+const CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR: c_int = 76;
 
 #[link(name = "cuda")]
 unsafe extern "C" {
@@ -31,9 +34,10 @@ unsafe extern "C" {
     fn cuDeviceGet(device: *mut CuDevice, ordinal: c_int) -> CuResult;
     fn cuDeviceGetName(name: *mut c_char, len: c_int, device: CuDevice) -> CuResult;
     fn cuDeviceTotalMem_v2(bytes: *mut usize, device: CuDevice) -> CuResult;
-    fn cuCtxCreate_v2(context: *mut CuContext, flags: c_uint, device: CuDevice) -> CuResult;
+    fn cuDeviceGetAttribute(value: *mut c_int, attribute: c_int, device: CuDevice) -> CuResult;
+    fn cuDevicePrimaryCtxRetain(context: *mut CuContext, device: CuDevice) -> CuResult;
+    fn cuDevicePrimaryCtxRelease_v2(device: CuDevice) -> CuResult;
     fn cuCtxSetCurrent(context: CuContext) -> CuResult;
-    fn cuCtxDestroy_v2(context: CuContext) -> CuResult;
     fn cuMemGetInfo_v2(free: *mut usize, total: *mut usize) -> CuResult;
     fn cuMemAlloc_v2(pointer: *mut CuDevicePtr, bytes: usize) -> CuResult;
     fn cuMemFree_v2(pointer: CuDevicePtr) -> CuResult;
@@ -69,25 +73,37 @@ fn check(code: CuResult, operation: &'static str) -> Result<(), CudaError> {
 }
 
 fn as_size(bytes: u64) -> Result<usize, CudaError> {
+    if bytes == 0 {
+        return Err(CudaError::ZeroSizedAllocation);
+    }
     usize::try_from(bytes).map_err(|_| CudaError::SizeOverflow)
+}
+
+fn ensure_same_context(left: CuContext, right: CuContext) -> Result<(), CudaError> {
+    if left == right {
+        Ok(())
+    } else {
+        Err(CudaError::ContextMismatch)
+    }
 }
 
 struct ContextInner {
     raw: CuContext,
+    device: CuDevice,
 }
 
 impl ContextInner {
     fn activate(&self) -> Result<(), CudaError> {
-        // SAFETY: raw remains live while this context is held by an Rc.
+        // SAFETY: raw is retained for the lifetime of this shared owner.
         check(unsafe { cuCtxSetCurrent(self.raw) }, "cuCtxSetCurrent")
     }
 }
 
 impl Drop for ContextInner {
     fn drop(&mut self) {
-        // SAFETY: this context was created by cuCtxCreate_v2 and is released once.
+        // SAFETY: this owner balances exactly one successful primary-context retain.
         unsafe {
-            let _ = cuCtxDestroy_v2(self.raw);
+            let _ = cuDevicePrimaryCtxRelease_v2(self.device);
         }
     }
 }
@@ -105,18 +121,19 @@ impl CudaDriver {
         let mut count = 0;
         // SAFETY: count points to valid writable storage.
         check(unsafe { cuDeviceGetCount(&mut count) }, "cuDeviceGetCount")?;
-        if ordinal >= count as u32 {
-            return Err(CudaError::Driver {
-                operation: "device ordinal out of range",
-                code: 101,
-            });
+        let ordinal_i32 =
+            c_int::try_from(ordinal).map_err(|_| CudaError::InvalidDeviceOrdinal(ordinal))?;
+        if ordinal_i32 < 0 || ordinal_i32 >= count {
+            return Err(CudaError::InvalidDeviceOrdinal(ordinal));
         }
+
         let mut device = 0;
         // SAFETY: device points to valid writable storage and ordinal is in range.
         check(
-            unsafe { cuDeviceGet(&mut device, ordinal as c_int) },
+            unsafe { cuDeviceGet(&mut device, ordinal_i32) },
             "cuDeviceGet",
         )?;
+
         let mut name = [0_i8; 256];
         // SAFETY: name is a writable buffer and its length is provided.
         check(
@@ -128,33 +145,67 @@ impl CudaDriver {
             .to_str()
             .map_err(|_| CudaError::InvalidDeviceName)?
             .to_owned();
+
         let mut total = 0_usize;
         // SAFETY: total points to valid writable storage.
         check(
             unsafe { cuDeviceTotalMem_v2(&mut total, device) },
             "cuDeviceTotalMem_v2",
         )?;
+
+        let (mut major, mut minor) = (0, 0);
+        // SAFETY: outputs are valid and device was obtained from the driver.
+        check(
+            unsafe {
+                cuDeviceGetAttribute(
+                    &mut major,
+                    CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
+                    device,
+                )
+            },
+            "cuDeviceGetAttribute(COMPUTE_CAPABILITY_MAJOR)",
+        )?;
+        check(
+            unsafe {
+                cuDeviceGetAttribute(
+                    &mut minor,
+                    CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,
+                    device,
+                )
+            },
+            "cuDeviceGetAttribute(COMPUTE_CAPABILITY_MINOR)",
+        )?;
+
         let mut raw = ptr::null_mut();
+        // Retaining the primary context makes this backend interoperable with
+        // CUDA consumers that also use the device primary context.
         // SAFETY: raw is valid output storage and device is valid.
         check(
-            unsafe { cuCtxCreate_v2(&mut raw, 0, device) },
-            "cuCtxCreate_v2",
+            unsafe { cuDevicePrimaryCtxRetain(&mut raw, device) },
+            "cuDevicePrimaryCtxRetain",
         )?;
-        let context = Rc::new(ContextInner { raw });
+        let context = Rc::new(ContextInner { raw, device });
         context.activate()?;
+
         Ok(Self {
             context,
             info: CudaDeviceInfo {
                 ordinal,
                 name,
                 total_memory_bytes: total as u64,
-                compute_capability: None,
+                compute_capability: Some((major as u32, minor as u32)),
             },
         })
     }
 
     pub fn device_info(&self) -> &CudaDeviceInfo {
         &self.info
+    }
+
+    /// Returns whether two driver handles retain the same CUDA context.
+    /// Drivers created for the same device primary context should return true.
+    pub fn shares_context_with(&self, other: &Self) -> bool {
+        self.context.raw == other.context.raw
     }
 
     pub fn memory_info(&self) -> Result<(u64, u64), CudaError> {
@@ -169,8 +220,8 @@ impl CudaDriver {
     }
 
     pub fn allocate(&self, bytes: u64) -> Result<DeviceBuffer, CudaError> {
-        self.context.activate()?;
         let len = as_size(bytes)?;
+        self.context.activate()?;
         let mut pointer = 0;
         // SAFETY: pointer is valid output storage; CUDA owns the resulting allocation.
         check(unsafe { cuMemAlloc_v2(&mut pointer, len) }, "cuMemAlloc_v2")?;
@@ -182,8 +233,8 @@ impl CudaDriver {
     }
 
     pub fn allocate_pinned(&self, bytes: u64) -> Result<PinnedHostBuffer, CudaError> {
-        self.context.activate()?;
         let len = as_size(bytes)?;
+        self.context.activate()?;
         let mut pointer = ptr::null_mut();
         // SAFETY: pointer is valid output storage; CUDA allocates page-locked host memory.
         check(
@@ -271,6 +322,8 @@ impl DeviceBuffer {
         bytes: usize,
         stream: &CudaStream,
     ) -> Result<(), CudaError> {
+        ensure_same_context(self.context.raw, source.context.raw)?;
+        ensure_same_context(self.context.raw, stream.context.raw)?;
         if bytes > self.len {
             return Err(CudaError::BufferTooSmall {
                 requested: bytes,
@@ -301,6 +354,8 @@ impl DeviceBuffer {
         bytes: usize,
         stream: &CudaStream,
     ) -> Result<(), CudaError> {
+        ensure_same_context(self.context.raw, destination.context.raw)?;
+        ensure_same_context(self.context.raw, stream.context.raw)?;
         if bytes > self.len {
             return Err(CudaError::BufferTooSmall {
                 requested: bytes,
@@ -345,6 +400,7 @@ impl PinnedHostBuffer {
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
+
     /// Access pinned storage.
     ///
     /// # Safety
@@ -410,8 +466,9 @@ pub struct CudaEvent {
 }
 impl CudaEvent {
     pub fn record(&self, stream: &CudaStream) -> Result<(), CudaError> {
+        ensure_same_context(self.context.raw, stream.context.raw)?;
         self.context.activate()?;
-        // SAFETY: both handles are live and belong to the same driver context.
+        // SAFETY: both handles are live and belong to the same CUDA context.
         check(
             unsafe { cuEventRecord(self.raw, stream.raw) },
             "cuEventRecord",
@@ -434,5 +491,26 @@ impl Drop for CudaEvent {
                 let _ = cuEventDestroy_v2(self.raw);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resources_must_share_the_same_context() {
+        let context = 1_usize as CuContext;
+        assert!(ensure_same_context(context, context).is_ok());
+        assert!(matches!(
+            ensure_same_context(context, 2_usize as CuContext),
+            Err(CudaError::ContextMismatch)
+        ));
+    }
+
+    #[test]
+    fn zero_sized_allocations_are_rejected_before_driver_calls() {
+        assert!(matches!(as_size(0), Err(CudaError::ZeroSizedAllocation)));
+        assert_eq!(as_size(1).unwrap(), 1);
     }
 }
