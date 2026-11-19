@@ -4,7 +4,7 @@
 >
 > **Projet :** Claymore  
 > **Dépôt :** https://github.com/zenhit777/Claymore  
-> **Version de référence du workspace :** 0.5.0 (candidat PR #4)  
+> **Version de référence du workspace :** 0.5.0  
 > **État du document :** référence vivante, à mettre à jour à chaque jalon  
 > **Dernière mise à jour :** 19 novembre 2026
 
@@ -261,7 +261,7 @@ L'architecture est organisée en couches avec des frontières explicites.
 | `claymore-cuda` | Backend optionnel CUDA Driver API |
 | `claymore-cli` | Commandes, profil et diagnostics |
 
-Le workspace utilise Cargo, resolver 2, Rust edition 2021. La version de référence actuelle est 0.4.0.
+Le workspace utilise Cargo, resolver 2, Rust edition 2021. La version de référence actuelle est 0.5.0.
 
 `claymore-scheduler` ne fournit actuellement qu'une structure `SchedulerConfig` (`cpu_workers`, `max_prefetches`, `lookahead`) et sa validation ; aucune boucle ni logique de planification n'est implémentée. La validation accepte de 1 à 12 workers. Les valeurs minimales de 6 workers, les nombres de streams et le tick de 500 µs figurant dans le profil JSON sont des paramètres documentaires, pas des contraintes appliquées par le code.
 
@@ -282,7 +282,7 @@ Le workspace utilise Cargo, resolver 2, Rust edition 2021. La version de référ
 
 Cette section prévaut sur toute formulation plus ambitieuse de la vision cible.
 
-### 7.1 Livré sur main et candidat en PR
+### 7.1 Livré sur main
 
 #### v0.3 — Memory Orchestrator (politiques host-side)
 
@@ -320,9 +320,9 @@ Le crate `claymore-cuda` fournit un backend optionnel, activé par la feature `c
 
 Le build par défaut reste indépendant du matériel. La feature CUDA requiert une bibliothèque driver NVIDIA accessible dans l'environnement Linux/WSL2, généralement `libcuda.so.1` et un lien de développement utilisable par le linker.
 
-#### v0.5 — Adaptateur Memory ↔ CUDA (PR #4, branche non fusionnée)
+#### v0.5 — Adaptateur Memory ↔ CUDA (opt-in, feature `cuda-driver`)
 
-La branche de la PR #4 ajoute `CudaMemoryManager` dans `claymore-memory`, derrière la feature optionnelle `cuda-driver` :
+`claymore-memory` expose `CudaMemoryManager` derrière la feature optionnelle `cuda-driver` :
 
 - allocations et libérations réelles de buffers VRAM et pinned host ;
 - exécution des plans d'admission et confirmation comptable après libération backend ;
@@ -331,7 +331,7 @@ La branche de la PR #4 ajoute `CudaMemoryManager` dans `claymore-memory`, derri�
 - contrôle de la mémoire VRAM libre et accès borné aux buffers pinned ;
 - ticks logiques monotones imposés par le manager.
 
-**État :** code présent sur la branche de la PR #4, pas encore livré sur `main`. CI de la feature à valider ; aucune validation sur WSL2 / RTX 5090. L'adaptateur ne dispose pas encore d'un backend simulé pour des tests unitaires sans GPU.
+**État :** livré sur `main` derrière la feature `cuda-driver` ; compilation et Clippy de la feature vérifiés en CI sans lien ni GPU ; aucune exécution sur WSL2 / RTX 5090 ; pas de backend simulé.
 
 ### 7.2 Non livré à ce stade
 
@@ -361,10 +361,11 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 - sélection du device par ordinal uniquement ;
 - pas de pool allocator, de défragmentation, de télémétrie ou d'éviction automatique ;
 - les appels de copie asynchrone imposent à l'appelant de conserver les buffers vivants et de synchroniser avant leur destruction ou réutilisation ;
-- les CUDA events sont connectés aux transferts du `CudaMemoryManager` sur la branche PR #4 ; leur complétion est traitée par attente explicite, sans polling non bloquant ni finalisation automatique lors d'une admission ;
+- les CUDA events sont connectés aux transferts du `CudaMemoryManager` ; leur complétion est traitée par attente explicite, sans polling non bloquant ni finalisation automatique lors d'une admission ;
+- le backend CUDA et le `CudaMemoryManager` sont confinés au thread propriétaire (`Rc`, types non `Send`/`Sync`) ; le scheduler M4 devra déléguer les opérations CUDA à un thread propriétaire dédié ou faire évoluer explicitement ce modèle de concurrence ;
 - aucune validation runtime sur WSL2 / RTX 5090 n'est encore attestée par ce dépôt.
 
-La CI standard valide le build par défaut sans exiger un GPU. Le backend CUDA n'est pas encore relié à Candle. `CudaDriver::new` crée actuellement un contexte CUDA propre (`cuCtxCreate_v2`) ; l'interopérabilité avec le contexte primaire potentiellement utilisé par Candle/cudarc n'est pas établie et doit être vérifiée avant l'intégration M3/M5. Elle ne doit pas être interprétée comme une validation de la feature `cuda-driver` ni comme une validation matérielle sur RTX 5090.
+La CI standard valide le build par défaut sans exiger un GPU. Les tests matériels marqués `#[ignore]` ne sont pas exécutés par la CI. Le backend CUDA n'est pas encore relié à Candle. `CudaDriver::new` crée actuellement un contexte CUDA propre (`cuCtxCreate_v2`) ; l'interopérabilité avec le contexte primaire potentiellement utilisé par Candle/cudarc n'est pas établie et doit être vérifiée avant l'intégration M3/M5. Elle ne doit pas être interprétée comme une validation de la feature `cuda-driver` ni comme une validation matérielle sur RTX 5090.
 
 ---
 
@@ -406,12 +407,12 @@ Chaque moteur de modèle doit pouvoir préparer, exécuter et libérer ses état
 
 ## 8 bis. Couverture actuelle des exigences
 
-| Exigence | Statut sur `main` / PR #4 | Justification |
+| Exigence | Statut sur `main` | Justification |
 |---|---|---|
 | FR-01 — Configuration du runtime | **Non livré** | Le profil JSON existe, mais aucun chargeur ne l'applique ; la CLI utilise `SchedulerConfig::default()`. |
 | FR-02 — Gestion des budgets | **Partiel** | Comptabilité host-side et validation des budgets ; le budget souple VRAM n'est pas appliqué à l'admission. |
-| FR-03 — Admission et éviction | **Partiel (PR #4)** | Adaptateur d'allocation/libération CUDA et confirmation après free sur la branche non fusionnée ; validation matérielle et tests simulés manquants. |
-| FR-04 — Sûreté asynchrone | **Partiel (PR #4)** | Events réels reliés aux transferts et allocations protégées jusqu'à synchronisation explicite ; pas de polling non bloquant, de backend simulé ni de validation GPU. |
+| FR-03 — Admission et éviction | **Livré (host-side) ; exécution CUDA opt-in non validée sur cible** | Adaptateur d'allocation/libération CUDA et confirmation après free livrés derrière `cuda-driver` ; validation matérielle et tests simulés manquants. |
+| FR-04 — Sûreté asynchrone | **Partiel** | Events réels reliés aux transferts et allocations protégées jusqu'à synchronisation explicite ; pas de polling non bloquant, de backend simulé ni de validation GPU. |
 | FR-05 — Gestion des experts | **Non livré** | Getters/compteur seulement ; cible et maximum non appliqués à l'admission. |
 | FR-06 — Scheduling et prefetch | **Non livré** | Configuration seulement ; aucune logique de scheduling/prefetch. |
 | FR-07 — Diagnostics | **Partiel** | CLI de base et diagnostic device optionnel ; le profil JSON n'est pas chargé. |
@@ -461,7 +462,7 @@ Les jalons ci-dessous définissent l'ordre logique de réalisation. Les numéros
 | M0 | Fondation et scaffold | Workspace, crates, fichiers de configuration et CLI minimale livrés ; le profil matériel n'est pas chargé par le runtime |
 | M1 | Memory Orchestrator v0.3 | Livré sur `main` |
 | M2 | CUDA Driver Backend v0.4 | Livré sur `main`, validation matérielle à faire |
-| M3 | Intégration Memory ↔ CUDA v0.5 | Partiel — code sur PR #4, non fusionnée ; CI feature à valider, pas de test RTX 5090 |
+| M3 | Intégration Memory ↔ CUDA v0.5 | Partiel — adaptateur livré sur `main` (opt-in) ; tests simulés et validation RTX 5090 à faire |
 | M4 | Scheduler, transferts et expert cache | Planifié |
 | M5 | Intégration Candle et moteurs modèles | Planifié |
 | M6 | Optimisation, kernels et validation cible | Planifié |
@@ -518,7 +519,7 @@ Livré :
 
 ### M3 — Intégration Memory ↔ CUDA v0.5
 
-Spécification détaillée : [memory-cuda-integration-v0.5.md](memory-cuda-integration-v0.5.md). L'adaptateur `CudaMemoryManager` est implémenté sur la branche de la PR #4 (non fusionnée). Il est opt-in via `cuda-driver`, et n'a pas été validé sur RTX 5090.
+Spécification détaillée : [memory-cuda-integration-v0.5.md](memory-cuda-integration-v0.5.md). L'adaptateur `CudaMemoryManager` est implémenté sur `main` (PR #4). Il est opt-in via `cuda-driver`, et n'a pas été validé sur RTX 5090.
 
 **Objectif :** faire du backend CUDA l'exécutant réel des décisions du memory orchestrator.
 
@@ -664,7 +665,7 @@ Historique de référence :
 - **v0.3** : memory orchestrator host-side ;
 - **v0.4** : backend CUDA Driver API optionnel.
 
-Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 propose v0.5.0 et l'adaptateur Memory ↔ CUDA ; elle reste ouverte et non fusionnée à la date de cette révision.
+Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in).
 
 Une PR ne doit pas être déclarée prête uniquement parce que le code existe : elle doit préciser si les tests couvrent le build par défaut, la feature CUDA, le matériel réel ou seulement un backend simulé.
 
@@ -733,7 +734,8 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-18 | La sûreté des opérations asynchrones doit être fondée sur les CUDA events réels, pas seulement sur un tick logique. |
 | 2026-11-18 | RAM hôte : enveloppes disjointes 64 Gio Host weights + 16 Gio Host staging/state + 8 Gio PinnedHost = 88 Gio ; limites de tiers Host 80 Gio et PinnedHost 8 Gio. |
 | 2026-11-18 | Référentiels RAM séparés : machine 128 Gio, VM WSL2 96 Gio, budget Claymore 88 Gio ; marge WSL2 ~8 Gio à mesurer. |
-| 2026-11-18 | Le contexte CUDA du backend et celui utilisé par Candle/cudarc constituent un risque ouvert à résoudre avant M3/M5. |
+| 2026-11-18 | Le contexte CUDA du backend et celui utilisé par Candle/cudarc constituent un risque ouvert à résoudre avant M5. |
+| 2026-11-19 | Le backend CUDA utilise `Rc` car son contexte n'est pas `Send`/`Sync` : driver, buffers, streams, events et `CudaMemoryManager` sont confinés au thread propriétaire ; M4 doit prévoir un thread CUDA dédié ou une évolution sûre de ce modèle. |
 | 2026-11-18 | Cette référence est rédigée en français ; README et documentation technique existante restent en anglais. |
 | 2026-11-18 | DiffusionGemma et Clover disposent de moteurs distincts partageant les services transverses du runtime. |
 
