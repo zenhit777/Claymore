@@ -14,7 +14,7 @@ Cette phase relie les décisions de la couche de politique `claymore-memory` aux
 - Le manager impose une horloge logique monotone : toute opération recevant un tick inférieur au précédent est rejetée.
 - `release` vérifie que `safe_after_tick <= tick` avant de libérer le buffer, afin d'éviter une divergence entre mémoire physique et comptabilité.
 - Si la synchronisation d'un event échoue, l'event reste suivi et les allocations restent non évictables.
-- Le backend CUDA et le manager sont confinés au thread propriétaire : le contexte interne utilise `Rc` et n'est ni `Send` ni `Sync`. Le scheduler M4 devra utiliser un thread CUDA propriétaire dédié ou faire évoluer explicitement cette architecture.
+- Le backend CUDA et le manager sont confinés au thread propriétaire : le contexte interne utilise `Rc` et n'est ni `Send` ni `Sync`. Le scheduler M4 devra utiliser un thread CUDA propriétaire dédié ou faire évoluer explicitement cette architecture. Le critère de test d'un backend simulé de l'adaptateur mémoire est reporté à M2/M3 ; la démonstration de protection d'une allocation en vol jusqu'à la complétion de son event relève de M4.
 - La feature `claymore-memory/cuda-driver` active le backend optionnel. La feature équivalente du CLI la relaie.
 
 ## API de départ
