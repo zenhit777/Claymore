@@ -18,7 +18,7 @@ Host RAM planning (reference frame: 128 GiB physical machine):
   - Weight pool target: 64 GiB (tier `Host`)
   - Staging/state: 16 GiB (tier `Host`)
   - Pinned-memory ceiling: 8 GiB (tier `PinnedHost`)
-- System reserve: 24 GiB (outside the Claymore budget)
+- Windows/host-side remainder: approximately 13 GiB when WSL2 is capped at 115 GB on a 128 GiB machine; this is not a guaranteed free reserve.
 
 The `Host` tier limit is therefore 80 GiB (64 + 16) and the `PinnedHost` tier limit is 8 GiB, so the total never exceeds 88 GiB.
 
