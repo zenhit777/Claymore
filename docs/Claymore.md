@@ -179,11 +179,11 @@ Le budget souple, le plafond dur et la réserve répondent à des objectifs diff
 | Pool poids / experts : cible | 64 Gio |
 | Mémoire hôte épinglée : plafond | 8 Gio |
 | Staging et états | 16 Gio |
-| Réserve système | 24 Gio |
+| Réserve hors VM (Windows et processus hôte) | environ 13 Gio avec une limite WSL2 de 115 GB sur 128 Gio physiques ; marge indicative, non garantie |
 
 Les enveloppes RAM hôte sont **disjointes** : 64 + 16 + 8 = 88 Gio. Le pool poids/experts et le staging/états utilisent le tier `Host`, dont la limite doit donc être configurée à **80 Gio** ; le tier `PinnedHost` est limité séparément à **8 Gio**. La mémoire épinglée n'est pas comprise dans les 80 Gio du tier `Host`.
 
-Trois référentiels ne doivent pas être confondus : machine physique (128 Gio), limite WSL2 configurée à memory=115GB (environ 112 Gio visibles dans Linux sur la machine de référence, à recontrôler après changement d'environnement) et budget applicatif Claymore (88 Gio). La marge restante dans WSL2 est destinée à Linux, au page cache et aux outils de développement ; elle doit être mesurée en exploitation. La réserve d'environ 24 Gio concerne la mémoire physique hors VM et reste indicative. **VRAM : postes imbriqués ; RAM hôte : enveloppes disjointes.**
+Trois référentiels ne doivent pas être confondus : machine physique (128 Gio), limite WSL2 configurée à memory=115GB (environ 112 Gio visibles dans Linux sur la machine de référence, à recontrôler après changement d'environnement) et budget applicatif Claymore (88 Gio). La marge disponible dans la VM au-delà du budget applicatif de 88 Gio est destinée à Linux, au page cache et aux outils de développement ; elle doit être mesurée en exploitation. Avec une limite WSL2 de 115 GB sur 128 Gio physiques, il reste environ 13 Gio hors VM pour Windows et les processus hôte, sous réserve de la conversion GB/Gio et de la consommation réelle. **VRAM : postes imbriqués ; RAM hôte : enveloppes disjointes.**
 
 ### 5.3 WSL2
 
@@ -191,7 +191,7 @@ Configuration de départ proposée dans `%UserProfile%\.wslconfig` :
 
 ```ini
 [wsl2]
-memory=96GB
+memory=115GB
 processors=16
 swap=16GB
 ```
@@ -280,7 +280,7 @@ Le workspace utilise Cargo, resolver 2, Rust edition 2021. La version de référ
 
 ## 7. État réel de l'implémentation
 
-Cette section prévaut sur toute formulation plus ambitieuse de la vision cible. Les modifications M1 proposées sur la branche feat/m1-hardware-foundation sont signalées séparément : elles ne sont pas considérées comme livrées sur main avant revue et merge.
+Cette section prévaut sur toute formulation plus ambitieuse de la vision cible. La consolidation matérielle M1 est livrée par la PR #5 : contexte primaire CUDA, contrôles d'appartenance des ressources, compute capability et comportement fail-closed du gestionnaire mémoire.
 
 ### 7.1 Livré sur main
 
@@ -365,7 +365,7 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 - le backend CUDA et le `CudaMemoryManager` sont confinés au thread propriétaire (`Rc`, types non `Send`/`Sync`) ; le scheduler M4 devra déléguer les opérations CUDA à un thread propriétaire dédié ou faire évoluer explicitement ce modèle de concurrence ;
 - aucune validation runtime sur WSL2 / RTX 5090 n'est encore attestée par ce dépôt.
 
-La CI standard valide le build par défaut sans exiger un GPU. Les tests matériels marqués #[ignore] ne sont pas exécutés par la CI. Le backend CUDA n'est pas encore relié à Candle. Sur main, CudaDriver::new crée un contexte CUDA propre (cuCtxCreate_v2) ; l'interopérabilité avec le contexte primaire potentiellement utilisé par Candle/cudarc n'est donc pas établie. La PR M1 propose de retenir le contexte primaire du device et de vérifier les appartenances de contexte entre buffers, streams et events. Cette modification réduit le risque d'interopérabilité mais ne remplace pas un test d'intégration réel avec la version Candle/cudarc retenue. Le backend et le manager restent confinés au thread propriétaire (Rc) ; aucune implémentation Send/Sync unsafe n'est envisagée.
+La CI standard valide le build par défaut sans exiger un GPU. Les tests matériels marqués `#[ignore]` ne sont pas exécutés par la CI. Le backend CUDA n'est pas encore relié à Candle. `CudaDriver::new` retient désormais le contexte primaire du device ; les opérations inter-ressources vérifient l'identité du contexte. Cela établit le contrat de partage CUDA visé, mais ne remplace pas un test d'intégration réel avec la version Candle/cudarc retenue en M5. Le backend et le manager restent confinés au thread propriétaire (`Rc`) ; aucune implémentation `Send`/`Sync` unsafe n'est envisagée.
 
 ---
 
@@ -460,7 +460,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | Phase | Nom | Statut |
 |---|---|---|
 | M0 | Scaffold et configuration | Livré ; profil matériel versionné, non chargé automatiquement |
-| M1 | Consolidation de la fondation matérielle | En cours sur la PR dédiée ; backend CUDA, contexte, sûreté et contrats |
+| M1 | Consolidation de la fondation matérielle | Livré par la PR #5 ; contexte primaire, sûreté et contrats CUDA |
 | M2 | Abstractions Device / Tensor | Planifié |
 | M3 | Runtime unifié | Planifié |
 | M4 | Scheduler et orchestration mémoire | Planifié |
@@ -502,7 +502,7 @@ Critères d'acceptation :
 **Objectif :** définir des interfaces communes et explicites pour les devices, buffers, transferts et tenseurs, sans exposer les détails CUDA aux couches supérieures.
 
 Critères d'acceptation :
-- backend simulé CPU pour les tests ;
+- backend simulé CPU pour les tests des contrats Device/Tensor et de l'adaptateur mémoire (critère reporté de l'ancien M3) ;
 - contrats de propriété, synchronisation et capacités documentés ;
 - aucune hypothèse implicite sur le contexte ou le thread CUDA ;
 - interopérabilité Candle conçue à partir de l'API effectivement retenue.
@@ -530,6 +530,7 @@ Travaux :
 Critères d'acceptation :
 - tests déterministes avec backend simulé ;
 - aucun dépassement de budget ;
+- démonstration qu'une allocation en vol reste protégée jusqu'à la complétion de son event (critère de validation reporté de l'ancien M3) ;
 - aucun buffer évincé avant complétion de ses dépendances ;
 - mesures séparées du temps de transfert, d'attente et de calcul.
 
@@ -586,7 +587,7 @@ cargo test --workspace --all-targets
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Le workflow peut appliquer rustfmt automatiquement sur les branches selon sa configuration. Les tests CI standards ne remplacent pas les tests CUDA sur la machine cible.
+Le workflow vérifie `cargo fmt --all -- --check` sans modifier ni pousser la branche. Les tests CI standards ne remplacent pas les tests CUDA sur la machine cible.
 
 ### 11.2 Contrôles CUDA dans WSL2
 
@@ -649,7 +650,7 @@ Une PR ne doit pas être déclarée prête uniquement parce que le code existe :
 
 | Sujet | Risque / question | Décision ou traitement |
 |---|---|---|
-| Contexte CUDA / Candle | Les ressources CUDA doivent partager un contexte compatible avec Candle/cudarc | M1 propose le contexte primaire du device, mais l'interopérabilité effective reste à démontrer par un test d'intégration avec la version Candle/cudarc retenue. Ne pas transmettre de pointeurs entre contextes distincts. |
+| Contexte CUDA / Candle | Les ressources CUDA doivent partager un contexte compatible avec Candle/cudarc | M1 retient le contexte primaire du device et vérifie les appartenances de contexte ; l'interopérabilité effective reste à démontrer par un test d'intégration avec la version Candle/cudarc retenue. Ne pas transmettre de pointeurs entre contextes distincts. |
 | Driver CUDA dans WSL2 | Bibliothèque ou lien linker absent | Vérifier `libcuda.so.1` et le linkage sur la cible |
 | Durée de vie async | Libération ou réutilisation prématurée | Ownership explicite et event de complétion |
 | Comptabilité mémoire | Écart entre état logique et mémoire réelle | Confirmer uniquement après succès backend |
@@ -707,8 +708,9 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-18 | Une éviction planifiée ne devient comptable qu'après confirmation de la libération effective. |
 | 2026-11-18 | La sûreté des opérations asynchrones doit être fondée sur les CUDA events réels, pas seulement sur un tick logique. |
 | 2026-11-18 | RAM hôte : enveloppes disjointes 64 Gio Host weights + 16 Gio Host staging/state + 8 Gio PinnedHost = 88 Gio ; limites de tiers Host 80 Gio et PinnedHost 8 Gio. |
-| 2026-11-18 | Référentiels RAM séparés : machine 128 Gio, VM WSL2 96 Gio, budget Claymore 88 Gio ; marge WSL2 ~8 Gio à mesurer. |
-| 2026-11-18 | Le contexte CUDA du backend et celui utilisé par Candle/cudarc constituent un risque ouvert à résoudre avant M5. |
+| 2026-11-19 | Référentiels RAM séparés : machine 128 Gio, plafond WSL2 115 GB, budget applicatif Claymore 88 Gio ; environ 13 Gio restent hors VM et la marge Linux au-dessus du budget applicatif doit être mesurée. |
+| 2026-11-19 | Le backend retient le contexte primaire CUDA du device ; l'interopérabilité effective avec Candle/cudarc sera testée en M5. |
+| 2026-11-19 | Correspondance de la feuille de route précédente : ancien M2 (backend Driver) → socle livré v0.4/M0 ; ancien M3 (Memory ↔ CUDA) → v0.5/M0 et durcissement M1 ; ancien M4 (scheduler) → nouveau M4 ; ancien M5 (moteurs modèles) → M5/M6/M7 selon le chemin d'exécution ; ancien M6 (optimisation) → M8. Les tests simulés de l'adaptateur sont reportés à M2/M3 ; la preuve de protection d'une allocation en vol jusqu'à l'event relève de M4. |
 | 2026-11-19 | Le backend CUDA utilise `Rc` car son contexte n'est pas `Send`/`Sync` : driver, buffers, streams, events et `CudaMemoryManager` sont confinés au thread propriétaire ; M4 doit prévoir un thread CUDA dédié ou une évolution sûre de ce modèle. |
 | 2026-11-18 | Cette référence est rédigée en français ; README et documentation technique existante restent en anglais. |
 | 2026-11-18 | DiffusionGemma et Clover disposent de moteurs distincts partageant les services transverses du runtime. |
