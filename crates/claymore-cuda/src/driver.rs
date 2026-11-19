@@ -24,6 +24,8 @@ const CUDA_SUCCESS: CuResult = 0;
 const CU_STREAM_DEFAULT: c_uint = 0;
 const CU_EVENT_DEFAULT: c_uint = 0;
 const CU_MEMHOSTALLOC_PORTABLE: c_uint = 1;
+const CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR: c_int = 75;
+const CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR: c_int = 76;
 
 #[link(name = "cuda")]
 unsafe extern "C" {
@@ -32,11 +34,7 @@ unsafe extern "C" {
     fn cuDeviceGet(device: *mut CuDevice, ordinal: c_int) -> CuResult;
     fn cuDeviceGetName(name: *mut c_char, len: c_int, device: CuDevice) -> CuResult;
     fn cuDeviceTotalMem_v2(bytes: *mut usize, device: CuDevice) -> CuResult;
-    fn cuDeviceComputeCapability(
-        major: *mut c_int,
-        minor: *mut c_int,
-        device: CuDevice,
-    ) -> CuResult;
+    fn cuDeviceGetAttribute(value: *mut c_int, attribute: c_int, device: CuDevice) -> CuResult;
     fn cuDevicePrimaryCtxRetain(context: *mut CuContext, device: CuDevice) -> CuResult;
     fn cuDevicePrimaryCtxRelease_v2(device: CuDevice) -> CuResult;
     fn cuCtxSetCurrent(context: CuContext) -> CuResult;
@@ -156,10 +154,14 @@ impl CudaDriver {
         )?;
 
         let (mut major, mut minor) = (0, 0);
-        // SAFETY: both outputs are valid and device was obtained from the driver.
+        // SAFETY: outputs are valid and device was obtained from the driver.
         check(
-            unsafe { cuDeviceComputeCapability(&mut major, &mut minor, device) },
-            "cuDeviceComputeCapability",
+            unsafe { cuDeviceGetAttribute(&mut major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, device) },
+            "cuDeviceGetAttribute(COMPUTE_CAPABILITY_MAJOR)",
+        )?;
+        check(
+            unsafe { cuDeviceGetAttribute(&mut minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, device) },
+            "cuDeviceGetAttribute(COMPUTE_CAPABILITY_MINOR)",
         )?;
 
         let mut raw = ptr::null_mut();
@@ -186,6 +188,12 @@ impl CudaDriver {
 
     pub fn device_info(&self) -> &CudaDeviceInfo {
         &self.info
+    }
+
+    /// Returns whether two driver handles retain the same CUDA context.
+    /// Drivers created for the same device primary context should return true.
+    pub fn shares_context_with(&self, other: &Self) -> bool {
+        self.context.raw == other.context.raw
     }
 
     pub fn memory_info(&self) -> Result<(u64, u64), CudaError> {
