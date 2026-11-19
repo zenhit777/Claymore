@@ -505,6 +505,9 @@ mod tests {
         let mut manager = CudaMemoryManager::new(0, budgets, EvictionPolicy::Lru).unwrap();
         let (free, total) = manager.driver.memory_info().unwrap();
         assert!(free <= total);
+        assert!(manager.device_info().compute_capability.is_some());
+        let peer_driver = CudaDriver::new(0).unwrap();
+        assert!(manager.driver.shares_context_with(&peer_driver));
 
         let expected = b"clay";
         manager
