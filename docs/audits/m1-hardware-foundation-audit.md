@@ -56,7 +56,7 @@ Les méthodes de copie et CudaEvent::record supposaient que les buffers, streams
 
 CudaDeviceInfo prévoit compute_capability, mais la valeur restait None.
 
-**Traitement M1 :** renseigner la capability via cuDeviceComputeCapability. Cette donnée permettra aux phases suivantes de sélectionner les capacités disponibles sans coder en dur le modèle de GPU.
+**Traitement M1 :** renseigner la capability via cuDeviceGetAttribute (COMPUTE_CAPABILITY_MAJOR / MINOR). Cette donnée permettra aux phases suivantes de sélectionner les capacités disponibles sans coder en dur le modèle de GPU.
 
 ### P1 — Échec incertain après envoi d'une copie
 
