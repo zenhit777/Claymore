@@ -477,7 +477,7 @@ mod tests {
     fn cuda_manager_reports_device_memory() {
         let gib = 1024_u64.pow(3);
         let budgets = MemoryBudgets {
-            vram_soft_bytes: 24 * gib,
+            vram_soft_bytes: 26 * gib,
             vram_hard_bytes: 28 * gib,
             host_bytes: 80 * gib,
             pinned_host_bytes: 8 * gib,
