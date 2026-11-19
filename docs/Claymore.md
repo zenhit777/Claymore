@@ -599,11 +599,11 @@ nvidia-smi --query-gpu=name,memory.total,memory.free,compute_cap --format=csv
 nvcc --version
 ```
 
-Puis :
+Puis, sous WSL2 où la bibliothèque driver est exposée dans `/usr/lib/wsl/lib` :
 
 ```bash
-cargo check -p claymore-cuda --features cuda-driver
-cargo run -p claymore-cli --features cuda-driver -- device
+RUSTFLAGS="-L native=/usr/lib/wsl/lib" cargo check -p claymore-cuda --features cuda-driver
+RUSTFLAGS="-L native=/usr/lib/wsl/lib" cargo run -p claymore-cli --features cuda-driver -- device
 ```
 
 La disponibilité de `nvcc` dépend de l'installation du toolkit ; le backend Driver API a surtout besoin de la bibliothèque driver et de l'environnement de linkage approprié.
@@ -711,6 +711,18 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-19 | Référentiels RAM séparés : machine 128 Gio, plafond WSL2 115 GB, budget applicatif Claymore 88 Gio ; environ 13 Gio restent hors VM et la marge Linux au-dessus du budget applicatif doit être mesurée. |
 | 2026-11-19 | Le backend retient le contexte primaire CUDA du device ; l'interopérabilité effective avec Candle/cudarc sera testée en M5. |
 | 2026-11-19 | Correspondance de la feuille de route précédente : ancien M2 (backend Driver) → socle livré v0.4/M0 ; ancien M3 (Memory ↔ CUDA) → v0.5/M0 et durcissement M1 ; ancien M4 (scheduler) → nouveau M4 ; ancien M5 (moteurs modèles) → M5/M6/M7 selon le chemin d'exécution ; ancien M6 (optimisation) → M8. Les tests simulés de l'adaptateur sont reportés à M2/M3 ; la preuve de protection d'une allocation en vol jusqu'à l'event relève de M4. |
+
+### Correspondance de la feuille de route historique
+
+| Ancien jalon | Périmètre historique | Nouveau jalon |
+|---|---|---|
+| M2 | Backend CUDA Driver API | v0.4 livré ; socle historique M0 |
+| M3 | Intégration Memory ↔ CUDA | v0.5 livré dans le socle ; durcissement de sûreté M1 |
+| M4 | Scheduler, transferts et cache experts | M4 — Scheduler et orchestration mémoire |
+| M5 | Intégration Candle et moteurs modèles | M5 — Candle, M6 — autoregressif, M7 — diffusion |
+| M6 | Optimisation et validation RTX 5090 | M8 — Optimisation et validation de performance |
+
+Les critères de l'ancien M3 qui n'étaient pas couverts par le nouveau découpage sont explicitement réaffectés : backend simulé de l'adaptateur en M2/M3 ; démonstration de protection d'une allocation en vol jusqu'à la complétion de son event en M4.
 | 2026-11-19 | Le backend CUDA utilise `Rc` car son contexte n'est pas `Send`/`Sync` : driver, buffers, streams, events et `CudaMemoryManager` sont confinés au thread propriétaire ; M4 doit prévoir un thread CUDA dédié ou une évolution sûre de ce modèle. |
 | 2026-11-18 | Cette référence est rédigée en français ; README et documentation technique existante restent en anglais. |
 | 2026-11-18 | DiffusionGemma et Clover disposent de moteurs distincts partageant les services transverses du runtime. |
