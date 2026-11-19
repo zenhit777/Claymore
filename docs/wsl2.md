@@ -4,11 +4,11 @@ Suggested starting point for `%UserProfile%\.wslconfig`:
 
 ```ini
 [wsl2]
-memory=96GB
+memory=115GB
 processors=16
 swap=16GB
 ```
 
-This gives the WSL2 VM a 96 GiB memory ceiling. The Claymore application budget is 88 GiB, leaving approximately 8 GiB for Linux and page cache; this headroom is an estimate and must be measured on the target machine. The physical machine has 128 GiB of RAM, so about 32 GiB remain outside the VM (128 - 96); the 24 GiB system reserve of the planning profile is an indicative allocation within that Windows-side memory.
+This sets the WSL2 VM memory ceiling to 115 GB. On the 128 GiB reference machine, roughly 13 GiB remain outside the VM for Windows and host-side processes (128 - 115, subject to the GB/GiB conversion and the actual Windows memory report). Claymore's 88 GiB application budget is inside the VM ceiling; the remaining VM capacity is intended for Linux, page cache, development tools, and runtime overhead. It is not a guaranteed free-memory reserve: measure actual Linux and Windows usage under the target workload before increasing application limits. This deliberately prioritizes a large WSL2 working set over a 24 GiB Windows-side reserve.
 
 Restart WSL after changing the file (`wsl --shutdown`). Keep swap out of the model-weight tier; use it only as an emergency system mechanism.
