@@ -26,6 +26,12 @@ pub enum CudaError {
     SizeOverflow,
     #[error("CUDA returned an invalid device name")]
     InvalidDeviceName,
+    #[error("CUDA device ordinal {0} is invalid or unavailable")]
+    InvalidDeviceOrdinal(u32),
+    #[error("zero-sized CUDA allocations are not supported")]
+    ZeroSizedAllocation,
+    #[error("CUDA resources belong to different contexts")]
+    ContextMismatch,
 }
 
 pub trait DeviceInventory {

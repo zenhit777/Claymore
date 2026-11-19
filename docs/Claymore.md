@@ -183,7 +183,7 @@ Le budget souple, le plafond dur et la réserve répondent à des objectifs diff
 
 Les enveloppes RAM hôte sont **disjointes** : 64 + 16 + 8 = 88 Gio. Le pool poids/experts et le staging/états utilisent le tier `Host`, dont la limite doit donc être configurée à **80 Gio** ; le tier `PinnedHost` est limité séparément à **8 Gio**. La mémoire épinglée n'est pas comprise dans les 80 Gio du tier `Host`.
 
-Trois référentiels ne doivent pas être confondus : machine physique (128 Gio), VM WSL2 (96 Gio) et budget applicatif Claymore (88 Gio). La marge théorique restante dans WSL2 est d'environ 8 Gio pour Linux et le page cache ; elle doit être mesurée sur la machine cible. La réserve d'environ 24 Gio concerne la mémoire physique hors VM et reste indicative. **VRAM : postes imbriqués ; RAM hôte : enveloppes disjointes.**
+Trois référentiels ne doivent pas être confondus : machine physique (128 Gio), limite WSL2 configurée à memory=115GB (environ 112 Gio visibles dans Linux sur la machine de référence, à recontrôler après changement d'environnement) et budget applicatif Claymore (88 Gio). La marge restante dans WSL2 est destinée à Linux, au page cache et aux outils de développement ; elle doit être mesurée en exploitation. La réserve d'environ 24 Gio concerne la mémoire physique hors VM et reste indicative. **VRAM : postes imbriqués ; RAM hôte : enveloppes disjointes.**
 
 ### 5.3 WSL2
 
@@ -280,7 +280,7 @@ Le workspace utilise Cargo, resolver 2, Rust edition 2021. La version de référ
 
 ## 7. État réel de l'implémentation
 
-Cette section prévaut sur toute formulation plus ambitieuse de la vision cible.
+Cette section prévaut sur toute formulation plus ambitieuse de la vision cible. Les modifications M1 proposées sur la branche feat/m1-hardware-foundation sont signalées séparément : elles ne sont pas considérées comme livrées sur main avant revue et merge.
 
 ### 7.1 Livré sur main
 
@@ -365,7 +365,7 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 - le backend CUDA et le `CudaMemoryManager` sont confinés au thread propriétaire (`Rc`, types non `Send`/`Sync`) ; le scheduler M4 devra déléguer les opérations CUDA à un thread propriétaire dédié ou faire évoluer explicitement ce modèle de concurrence ;
 - aucune validation runtime sur WSL2 / RTX 5090 n'est encore attestée par ce dépôt.
 
-La CI standard valide le build par défaut sans exiger un GPU. Les tests matériels marqués `#[ignore]` ne sont pas exécutés par la CI. Le backend CUDA n'est pas encore relié à Candle. `CudaDriver::new` crée actuellement un contexte CUDA propre (`cuCtxCreate_v2`) ; l'interopérabilité avec le contexte primaire potentiellement utilisé par Candle/cudarc n'est pas établie et doit être vérifiée avant l'intégration M3/M5. Elle ne doit pas être interprétée comme une validation de la feature `cuda-driver` ni comme une validation matérielle sur RTX 5090.
+La CI standard valide le build par défaut sans exiger un GPU. Les tests matériels marqués #[ignore] ne sont pas exécutés par la CI. Le backend CUDA n'est pas encore relié à Candle. Sur main, CudaDriver::new crée un contexte CUDA propre (cuCtxCreate_v2) ; l'interopérabilité avec le contexte primaire potentiellement utilisé par Candle/cudarc n'est donc pas établie. La PR M1 propose de retenir le contexte primaire du device et de vérifier les appartenances de contexte entre buffers, streams et events. Cette modification réduit le risque d'interopérabilité mais ne remplace pas un test d'intégration réel avec la version Candle/cudarc retenue. Le backend et le manager restent confinés au thread propriétaire (Rc) ; aucune implémentation Send/Sync unsafe n'est envisagée.
 
 ---
 
@@ -455,148 +455,122 @@ Chaque changement doit passer le formatage, les tests et Clippy sur les configur
 
 ## 10. Feuille de route et phases de développement
 
-Les jalons ci-dessous définissent l'ordre logique de réalisation. Les numéros de version sont des repères de projet ; ils ne signifient pas que tous les composants d'un jalon sont déjà implémentés.
+Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (politiques mémoire, backend CUDA et adaptateur Memory ↔ CUDA). La feuille de route ci-dessous repart de l'état réel du dépôt et utilise une numérotation de travail M0 à M8 ; elle ne réécrit pas l'historique des versions.
 
 | Phase | Nom | Statut |
 |---|---|---|
-| M0 | Fondation et scaffold | Workspace, crates, fichiers de configuration et CLI minimale livrés ; le profil matériel n'est pas chargé par le runtime |
-| M1 | Memory Orchestrator v0.3 | Livré sur `main` |
-| M2 | CUDA Driver Backend v0.4 | Livré sur `main`, validation matérielle à faire |
-| M3 | Intégration Memory ↔ CUDA v0.5 | Partiel — adaptateur livré sur `main` (opt-in) ; tests simulés et validation RTX 5090 à faire |
-| M4 | Scheduler, transferts et expert cache | Planifié |
-| M5 | Intégration Candle et moteurs modèles | Planifié |
-| M6 | Optimisation, kernels et validation cible | Planifié |
+| M0 | Scaffold et configuration | Livré ; profil matériel versionné, non chargé automatiquement |
+| M1 | Consolidation de la fondation matérielle | En cours sur la PR dédiée ; backend CUDA, contexte, sûreté et contrats |
+| M2 | Abstractions Device / Tensor | Planifié |
+| M3 | Runtime unifié | Planifié |
+| M4 | Scheduler et orchestration mémoire | Planifié |
+| M5 | Candle et premier chemin modèle | Planifié |
+| M6 | Stratégie autoregressive | Planifié |
+| M7 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
+| M8 | Optimisation et validation de performance | Planifié |
 
-### M0 — Fondation et scaffold
+### M0 — Scaffold et configuration
 
-**Objectif :** disposer d'un workspace Rust propre, de crates séparés, d'une configuration RTX 5090 et d'une première documentation d'architecture.
+**Objectif :** disposer d'un workspace Rust, de crates séparés, d'un profil matériel versionné et d'une CLI de diagnostic.
 
-Livrables :
-- workspace Cargo ;
-- séparation des responsabilités par crate ;
-- profil de configuration matériel ;
-- CLI de base et commandes de diagnostic initiales ;
-- documentation des budgets et de WSL2.
+**État :** livré. Le profil JSON existe mais n'est pas encore chargé automatiquement par le runtime.
 
-Critères d'acceptation :
-- workspace cohérent ;
-- configuration lisible et versionnable ;
-- compilation et tests de base en CI.
+### M1 — Consolidation de la fondation matérielle
 
-### M1 — Memory Orchestrator v0.3
-
-**Objectif :** établir les politiques de gestion mémoire indépendamment de CUDA.
-
-Livré :
-- validation des budgets ;
-- comptabilité par tier ;
-- admission et candidats à l'éviction ;
-- LRU, LFU et adaptive ;
-- protection logique par horizon de tick ;
-- confirmation explicite d'éviction.
-
-Critères d'acceptation :
-- tests déterministes des budgets et des transitions comptables ;
-- aucune éviction comptabilisée avant confirmation ;
-- protection des allocations déclarées en cours d'utilisation.
-
-### M2 — CUDA Driver Backend v0.4
-
-**Objectif :** fournir une couche d'accès CUDA isolée et optionnelle.
-
-Livré :
-- initialisation driver/device ;
-- requêtes mémoire ;
-- buffers device et pinned host ;
-- streams et events ;
-- copies H2D/D2H asynchrones ;
-- feature optionnelle et build par défaut indépendant du matériel.
-
-À valider :
-- compilation avec `--features cuda-driver` dans WSL2 avec la bibliothèque driver ;
-- exécution des diagnostics sur RTX 5090 ;
-- tests de création/destruction et transferts sur le device cible.
-
-### M3 — Intégration Memory ↔ CUDA v0.5
-
-Spécification détaillée : [memory-cuda-integration-v0.5.md](memory-cuda-integration-v0.5.md). L'adaptateur `CudaMemoryManager` est implémenté sur `main` (PR #4). Il est opt-in via `cuda-driver`, et n'a pas été validé sur RTX 5090.
-
-**Objectif :** faire du backend CUDA l'exécutant réel des décisions du memory orchestrator.
+**Objectif :** fiabiliser les primitives CUDA existantes et définir un contrat de contexte utilisable par les couches d'exécution qui partageront les ressources CUDA.
 
 Travaux :
-- définir un adaptateur entre les IDs d'allocations du gestionnaire et les buffers CUDA ;
-- interroger la mémoire libre réelle avant admission ;
-- exécuter les plans d'allocation et d'éviction ;
-- conserver l'ownership des buffers et de l'event pendant les transferts asynchrones ;
-- ne rendre une allocation évictable qu'après synchronisation effective de tous les events qui la concernent ;
-- appeler la confirmation d'éviction uniquement après libération effective ;
-- valider l'appartenance des streams, events et buffers au même contexte CUDA ;
-- gérer explicitement les erreurs, les allocations nulles et les tailles invalides ;
-- éviter toute destruction d'un buffer encore utilisé par le GPU.
+- utiliser le contexte primaire CUDA du device afin de permettre l'interopérabilité avec les bibliothèques CUDA qui utilisent ce contexte ;
+- exposer la compute capability détectée ;
+- vérifier que buffers, streams et events impliqués dans une opération appartiennent au même contexte ;
+- rejeter explicitement les ordinaux invalides et les allocations de taille nulle ;
+- faire échouer de manière sûre le gestionnaire mémoire lorsqu'une synchronisation de transfert ne permet plus de prouver la fin des opérations ;
+- conserver le confinement au thread propriétaire tant qu'une architecture d'exécution concurrente sûre n'est pas définie ;
+- documenter précisément les validations matérielles et les limites restantes.
 
 Critères d'acceptation :
-- tests unitaires de l'adaptateur avec backend simulé (non implémentés à ce stade) ;
-- tests d'intégration CUDA sur cible (non exécutés à ce stade) ;
-- démonstration qu'une allocation en vol est protégée jusqu'à la complétion de son event ;
-- comptabilité identique à l'état réel après succès ou échec des opérations ;
-- aucun chemin d'erreur ne confirme une libération non réalisée.
+- build par défaut indépendant de CUDA ;
+- compilation, tests et Clippy de la feature cuda-driver dans la CI sans GPU ;
+- tests unitaires des validations de contexte et des tailles ;
+- test matériel existant couvrant allocation VRAM, pinned host, H2D, D2H, vérification des octets et libération ;
+- compatibilité avec Candle/cudarc à confirmer par un test d'intégration ultérieur avant de déclarer l'interopérabilité validée.
 
-### M4 — Scheduler, transfert et expert cache
+**Périmètre de la PR M1 :** backend CUDA, adaptateur mémoire, documentation d'audit et mise à jour de cette feuille de route. Aucun scheduler, modèle ou moteur de génération n'est introduit dans ce jalon.
 
-**Objectif :** coordonner calcul, résidence mémoire et transferts.
+### M2 — Abstractions Device / Tensor
+
+**Objectif :** définir des interfaces communes et explicites pour les devices, buffers, transferts et tenseurs, sans exposer les détails CUDA aux couches supérieures.
+
+Critères d'acceptation :
+- backend simulé CPU pour les tests ;
+- contrats de propriété, synchronisation et capacités documentés ;
+- aucune hypothèse implicite sur le contexte ou le thread CUDA ;
+- interopérabilité Candle conçue à partir de l'API effectivement retenue.
+
+### M3 — Runtime unifié
+
+**Objectif :** introduire le cycle de vie des requêtes, les contextes d'exécution, les états, les erreurs, les annulations et l'orchestration de haut niveau.
+
+Critères d'acceptation :
+- exécution d'une requête simulée de bout en bout sur CPU ;
+- frontières nettes entre runtime, architecture de modèle, stratégie de génération et mode d'exécution ;
+- aucune dépendance à un modèle particulier dans le cœur runtime.
+
+### M4 — Scheduler et orchestration mémoire
+
+**Objectif :** coordonner calcul, résidence mémoire, transferts et préchargements.
 
 Travaux :
-- formaliser les états de tâche et les dépendances ;
-- connecter le scheduler au moteur de transfert ;
-- gérer les files compute et transfer ;
-- appliquer les limites de préchargement et le lookahead ;
-- construire une politique de résidence d'experts tenant compte de la fréquence, du coût de chargement et de la mémoire ;
-- intégrer LRU/LFU/adaptive à des métriques observées ;
-- ajouter télémétrie et traces de scheduling.
+- formaliser tâches, états, dépendances et priorités ;
+- définir le propriétaire des opérations CUDA et leur file d'exécution ;
+- gérer les files compute et transfer, les limites de préchargement et le lookahead ;
+- intégrer les politiques LRU/LFU/adaptive aux coûts de chargement et aux métriques observées ;
+- protéger les ressources jusqu'à la fin de toutes les opérations dépendantes.
 
 Critères d'acceptation :
-- aucun préchargement ne dépasse les budgets ;
-- le scheduler ne bloque pas inutilement le compute en attendant un transfert non requis ;
-- les buffers ne sont pas évincés avant la fin des tâches dépendantes ;
-- mesures séparées du temps de transfert, du temps d'attente et du temps de calcul.
+- tests déterministes avec backend simulé ;
+- aucun dépassement de budget ;
+- aucun buffer évincé avant complétion de ses dépendances ;
+- mesures séparées du temps de transfert, d'attente et de calcul.
 
-### M5 — Candle et moteurs modèles
+### M5 — Candle et premier chemin modèle
 
-**Objectif :** transformer les frontières modèles en chemins d'inférence fonctionnels.
+**Objectif :** intégrer Candle et obtenir un premier forward pass reproductible sur un modèle de référence.
 
 Travaux :
-- intégrer les versions et features Candle retenues ;
-- définir le chargement des poids et leur représentation ;
-- connecter les tenseurs Candle aux contrats mémoire et CUDA ;
-- implémenter un premier chemin fonctionnel DiffusionGemma ;
-- implémenter un premier chemin fonctionnel Clover ;
-- intégrer les états spécifiques, attention, GDN, block diffusion et routage MoE selon les besoins réels ;
-- valider les sorties et la stabilité numérique.
+- fixer les versions et features Candle ;
+- définir le chargement et la représentation des poids ;
+- connecter les tenseurs Candle aux contrats Device / Tensor / Memory ;
+- valider formes, précision, sorties et durée de vie des buffers.
 
 Critères d'acceptation :
-- chargement et inférence reproductibles sur au moins un cas de test documenté par modèle ;
-- comparaison de qualité et de précision avec une référence ;
-- mesure du pic VRAM, RAM, latence et débit ;
-- tests de libération propre des états après inférence.
+- forward pass reproductible sur CPU ou GPU selon le modèle ;
+- test d'interopérabilité avec le contexte CUDA partagé ;
+- mesure du pic RAM/VRAM et libération propre des ressources.
 
-### M6 — Optimisation et validation RTX 5090
+### M6 — Stratégie autoregressive
+
+**Objectif :** fournir une stratégie de génération autoregressive réutilisant le runtime unifié.
+
+Travaux : prefill, décodage token par token, KV cache, sampling, arrêt et gestion de plusieurs requêtes.
+
+Critères d'acceptation : génération de référence reproductible, tests du cache et mesure de latence/débit.
+
+### M7 — Stratégie diffusion (DiffusionGemma / Clover)
+
+**Objectif :** ajouter la génération itérative par canvas et les besoins propres aux architectures ciblées.
+
+Travaux : états de canvas, denoising, politiques de confiance, commit, replay causal si requis, self-conditioning, GDN et routage MoE selon le modèle.
+
+Critères d'acceptation : cas de génération reproductible, cohérence des états, qualité comparée à une référence et mesures mémoire.
+
+### M8 — Optimisation et validation de performance
 
 **Objectif :** optimiser les chemins réellement identifiés comme limitants.
 
-Travaux :
-- profiling détaillé ;
-- optimisation du prefetch et de la résidence des experts ;
-- kernels spécialisés et kernel dispatcher si un gain mesuré le justifie ;
-- exploration INT8/INT4 ;
-- tuning des streams et workers ;
-- tests de charge et scénarios de pression mémoire ;
-- documentation des performances et limites.
+Travaux : profiling, expert cache, offloading, transferts groupés, kernels spécialisés si justifiés, quantification et tuning des streams/workers.
 
-Critères d'acceptation :
-- benchmarks reproductibles et comparables ;
-- aucune régression de qualité non acceptée ;
-- respect des plafonds mémoire et des invariants de sûreté ;
-- gains mesurés par rapport à une baseline documentée.
+Critères d'acceptation : benchmarks reproductibles, gains mesurés, absence de régression de qualité non acceptée et respect des budgets mémoire.
 
 ---
 
@@ -675,13 +649,13 @@ Une PR ne doit pas être déclarée prête uniquement parce que le code existe :
 
 | Sujet | Risque / question | Décision ou traitement |
 |---|---|---|
-| Contexte CUDA / Candle | Le backend crée un contexte via `cuCtxCreate_v2`, alors que Candle/cudarc peut utiliser le contexte primaire ; les pointeurs ne sont pas interchangeables entre contextes | **Décision ouverte avant M3/M5** : vérifier le modèle de contexte Candle/cudarc retenu et choisir un contexte primaire partagé ou une stratégie d'interopérabilité explicitement supportée. Ne pas transmettre de pointeurs entre contextes sans preuve. |
+| Contexte CUDA / Candle | Les ressources CUDA doivent partager un contexte compatible avec Candle/cudarc | M1 propose le contexte primaire du device, mais l'interopérabilité effective reste à démontrer par un test d'intégration avec la version Candle/cudarc retenue. Ne pas transmettre de pointeurs entre contextes distincts. |
 | Driver CUDA dans WSL2 | Bibliothèque ou lien linker absent | Vérifier `libcuda.so.1` et le linkage sur la cible |
 | Durée de vie async | Libération ou réutilisation prématurée | Ownership explicite et event de complétion |
 | Comptabilité mémoire | Écart entre état logique et mémoire réelle | Confirmer uniquement après succès backend |
 | Pression VRAM externe | Mémoire disponible variable | Réserve et interrogation runtime |
 | Mémoire épinglée | Pression sur l'OS | Plafond strict et instrumentation |
-| API CUDA | Contexte incohérent entre buffers/streams/events | Valider les appartenances au contexte |
+| API CUDA | Contexte incohérent entre buffers/streams/events | Vérification d'identité de contexte dans les opérations du backend (M1) |
 | Modèles cibles | APIs et kernels spécifiques | Implémenter séparément et tester chaque moteur |
 | Précision mixte | Dégradation numérique | Comparaison de qualité avant activation |
 | Kernels spécialisés | Complexité sans gain démontré | Développer après profiling |
