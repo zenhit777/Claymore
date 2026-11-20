@@ -397,18 +397,24 @@ impl CudaMemoryManager {
         self.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
         self.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
         let allocation_ids = vec![device_id.to_owned(), pinned_id.to_owned()];
-        self.pending
-            .push((transfer_id, allocation_ids.clone(), event));
+        let completed = Arc::new(AtomicBool::new(false));
+        self.pending.push((
+            transfer_id,
+            allocation_ids.clone(),
+            event,
+            Arc::clone(&completed),
+        ));
         self.policy.touch(device_id, tick)?;
         self.policy.touch(pinned_id, tick)?;
         Ok(TransferToken {
             id: transfer_id,
             allocation_ids,
+            completed,
         })
     }
 
-    /// Query the associated CUDA event without blocking. A missing pending
-    /// entry means an earlier explicit wait already confirmed completion.
+    /// Query the associated CUDA event without blocking. A token is complete
+    /// after its event query succeeds or an explicit wait synchronizes it.
     pub fn is_transfer_complete(&self, token: &TransferToken) -> Result<bool, CudaMemoryError> {
         if token.completed.load(Ordering::Acquire) {
             return Ok(true);
@@ -449,8 +455,8 @@ impl CudaMemoryManager {
             })
             .map(|(_, ids, _, _)| ids.clone())
             .ok_or(CudaMemoryError::UnknownTransferToken(token.id))?;
-        for id in allocation_ids {
-            self.wait_for_allocation(&id, tick)?;
+        if let Some(id) = allocation_ids.first() {
+            self.wait_for_allocation(id, tick)?;
         }
         token.completed.store(true, Ordering::Release);
         Ok(())
@@ -471,7 +477,7 @@ impl CudaMemoryManager {
                 let (_, ids, _event, completed) = self.pending.remove(index);
                 completed.store(true, Ordering::Release);
                 for completed_id in ids {
-                    let still_in_flight = self.pending.iter().any(|(_, pending_ids, _)| {
+                    let still_in_flight = self.pending.iter().any(|(_, pending_ids, _, _)| {
                         pending_ids
                             .iter()
                             .any(|pending_id| pending_id == &completed_id)
@@ -554,7 +560,12 @@ impl Drop for CudaMemoryManager {
         // `pending` cannot prove completion of a later copy whose event record
         // failed, so never use them as a fallback.
         let safe_to_drop = self.transfer_stream.synchronize().is_ok();
-        if !safe_to_drop {
+        if safe_to_drop {
+            for (_, _, event, completed) in self.pending.drain(..) {
+                completed.store(true, Ordering::Release);
+                drop(event);
+            }
+        } else {
             // A failed driver synchronization leaves buffer lifetime uncertain.
             // Leak these CUDA owners rather than risk freeing memory still in use.
             for (_, buffer) in self.device.drain() {
