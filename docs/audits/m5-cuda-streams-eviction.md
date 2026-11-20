@@ -87,8 +87,8 @@ Aucune CI standard ne doit exiger un GPU ni linker le pilote CUDA. Les tests mat
 - [x] Les allocations restent protégées tant qu'un event associé reste en vol.
 - [x] Départage déterministe des évictions de priorité égale.
 - [x] Tests de conversion des codes d'état CUDA au niveau du wrapper ; ils ne démontrent pas l'exécution des chemins event/stream ni le comportement de `poll_completed_transfers` et ne sont pas exécutés par la CI actuelle.
-- [ ] Scénario matériel ciblé : `poll_completed_transfers` retire un event confirmé terminé, puis une admission sous pression évince l'allocation sans `wait_for_*` ; exécution RTX 5090 et preuve à consigner avant merge.
-- [x] CI verte sur le HEAD `1fe6ff5e8cc53f4fd5fd6d4d508e9321a56d47a2` : format, tests workspace, feature CUDA, Clippy standard/CUDA et MSRV Rust 1.86 (workflow [44817813430](https://github.com/zenhit777/Claymore/actions/runs/44817813430)).
+- [ ] Scénario matériel ciblé `M5-HW-POLL-01` : `poll_completed_transfers` retire un event confirmé terminé, puis une admission sous pression évince l'allocation sans `wait_for_*` ; exécution RTX 5090 et preuve à consigner dans `docs/audits/m5-hardware-validation.md` avant merge.
+- [x] CI verte sur le HEAD `a8cef7d70d68bf7510b6cea5f55a953d71d388e1` : format, tests workspace, Clippy standard/CUDA, compilation des cibles `cuda-driver` avec `--all-targets` et MSRV Rust 1.86 (runs push et pull request [44840121627](https://github.com/zenhit777/Claymore/actions/runs/44840121627) et [44840117619](https://github.com/zenhit777/Claymore/actions/runs/44840117619)). Les tests `cuda-driver` sont compilés par le contrôle `--all-targets`, mais ne sont pas exécutés par la CI.
 - [ ] Revue architecturale et fusion.
 - [ ] Validation matérielle RTX 5090 ciblée et preuve versionnée.
 
