@@ -174,7 +174,7 @@ impl<D: Device> DeviceMemoryManager<D> {
             .policy
             .allocation(id)
             .ok_or_else(|| DeviceMemoryError::UnknownAllocation(id.to_owned()))?;
-        if allocation.safe_after_tick > tick {
+        if !crate::lifecycle::release_is_safe(allocation.safe_after_tick, tick) {
             return Err(MemoryError::AllocationBusy(id.to_owned()).into());
         }
         // The backend must confirm release before the allocation is removed
