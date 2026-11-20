@@ -644,16 +644,17 @@ mod tests {
         let device = CpuDevice::new();
         let source = device.allocate(MemoryTier::Host, 4).unwrap();
         let mut destination = device.allocate(MemoryTier::Host, 4).unwrap();
-        let mut token = BorrowedFakeCompletionToken {
-            _source: source.as_ref(),
-            _destination: destination.as_mut(),
-            complete: false,
-        };
+        {
+            let mut token = BorrowedFakeCompletionToken {
+                _source: source.as_ref(),
+                _destination: destination.as_mut(),
+                complete: false,
+            };
 
-        assert!(!token.is_complete().unwrap());
-        token.wait().unwrap();
-        assert!(token.is_complete().unwrap());
-        drop(token);
+            assert!(!token.is_complete().unwrap());
+            token.wait().unwrap();
+            assert!(token.is_complete().unwrap());
+        }
         destination.release().unwrap();
     }
 
