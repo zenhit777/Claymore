@@ -750,7 +750,7 @@ Les références exactes (URL et révision/commit) doivent être consignées ava
 
 - FreeToken — URL/révision à compléter après vérification.
 - Strata (Niko1221) — URL/révision à compléter après vérification.
-- DiffusionGemma — dépôt Hugging Face et révision à compléter après vérification.
+- DiffusionGemma — `google/diffusiongemma-26B-A4B-it` ; révision exacte du dépôt à consigner avant l'implémentation du chargeur.
 - Clover-35B-A3B-preview — dépôt Hugging Face et révision à compléter après vérification.
 
 
