@@ -4,13 +4,39 @@
 //! (as the current CUDA primary-context owner is). Callers must respect the
 //! ownership model reported by the backend rather than assuming thread safety.
 use std::any::Any;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use claymore_core::MemoryTier;
 use thiserror::Error;
 
+static NEXT_DEVICE_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Opaque process-local identity for one device instance.
+///
+/// This is deliberately separate from `DeviceInfo::id`, which is a stable
+/// logical identifier suitable for display/configuration. Cloning a device
+/// handle preserves this identity; constructing a new device allocates a new
+/// identity even when its logical id and name are identical.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct DeviceInstanceId(u64);
+
+impl DeviceInstanceId {
+    fn next() -> Self {
+        let id = NEXT_DEVICE_INSTANCE_ID
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                current.checked_add(1)
+            })
+            .expect("device instance identity space exhausted");
+        Self(id)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceInfo {
+    /// Stable logical identifier, not an ownership/security boundary.
     pub id: String,
+    /// Unique process-local identity of this concrete device instance.
+    pub instance_id: DeviceInstanceId,
     pub name: String,
     pub kind: DeviceKind,
     pub total_memory_bytes: Option<u64>,
@@ -35,7 +61,10 @@ pub struct DeviceCapabilities {
 
 /// Owned allocation. No Send/Sync bounds: backends may have thread/context affinity.
 pub trait DeviceBuffer: Any {
+    /// Stable logical device identifier, for diagnostics only.
     fn device_id(&self) -> &str;
+    /// Identity of the exact device instance that owns this buffer.
+    fn device_instance_id(&self) -> DeviceInstanceId;
     fn tier(&self) -> MemoryTier;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
@@ -78,9 +107,11 @@ pub enum DeviceError {
     ZeroSizedAllocation,
     #[error("allocation size does not fit this platform")]
     SizeOverflow,
+    #[error("allocation of {requested_bytes} bytes could not be satisfied")]
+    OutOfMemory { requested_bytes: usize },
     #[error("memory tier {0:?} is not supported by this device")]
     UnsupportedMemoryTier(MemoryTier),
-    #[error("buffer belongs to another device")]
+    #[error("buffer belongs to another device instance")]
     DeviceMismatch,
     #[error("buffer implementation is incompatible with this device")]
     BufferTypeMismatch,
@@ -98,6 +129,18 @@ pub enum DeviceError {
     TensorSizeOverflow,
     #[error("tensor requires {required} bytes but its buffer has {capacity}")]
     TensorBufferTooSmall { required: usize, capacity: usize },
+}
+
+fn allocate_zeroed_with<E>(
+    len: usize,
+    reserve: impl FnOnce(&mut Vec<u8>, usize) -> Result<(), E>,
+) -> Result<Vec<u8>, DeviceError> {
+    let mut storage = Vec::new();
+    reserve(&mut storage, len).map_err(|_| DeviceError::OutOfMemory {
+        requested_bytes: len,
+    })?;
+    storage.resize(len, 0);
+    Ok(storage)
 }
 
 /// Deterministic in-memory backend. It simulates device and host tiers with
@@ -118,6 +161,7 @@ impl CpuDevice {
         Self {
             info: DeviceInfo {
                 id: "cpu:0".to_owned(),
+                instance_id: DeviceInstanceId::next(),
                 name: "Claymore CPU simulator".to_owned(),
                 kind: DeviceKind::Cpu,
                 total_memory_bytes: None,
@@ -126,7 +170,7 @@ impl CpuDevice {
     }
 
     fn checked<'a>(&self, buffer: &'a dyn DeviceBuffer) -> Result<&'a CpuBuffer, DeviceError> {
-        if buffer.device_id() != self.info.id {
+        if buffer.device_instance_id() != self.info.instance_id {
             return Err(DeviceError::DeviceMismatch);
         }
         buffer
@@ -139,7 +183,7 @@ impl CpuDevice {
         &self,
         buffer: &'a mut dyn DeviceBuffer,
     ) -> Result<&'a mut CpuBuffer, DeviceError> {
-        if buffer.device_id() != self.info.id {
+        if buffer.device_instance_id() != self.info.instance_id {
             return Err(DeviceError::DeviceMismatch);
         }
         buffer
@@ -151,6 +195,7 @@ impl CpuDevice {
 
 struct CpuBuffer {
     device_id: String,
+    device_instance_id: DeviceInstanceId,
     tier: MemoryTier,
     bytes: Vec<u8>,
 }
@@ -158,6 +203,9 @@ struct CpuBuffer {
 impl DeviceBuffer for CpuBuffer {
     fn device_id(&self) -> &str {
         &self.device_id
+    }
+    fn device_instance_id(&self) -> DeviceInstanceId {
+        self.device_instance_id
     }
     fn tier(&self) -> MemoryTier {
         self.tier
@@ -196,13 +244,10 @@ impl Device for CpuDevice {
             return Err(DeviceError::UnsupportedMemoryTier(tier));
         }
         let len = usize::try_from(bytes).map_err(|_| DeviceError::SizeOverflow)?;
-        let mut storage = Vec::new();
-        storage
-            .try_reserve_exact(len)
-            .map_err(|_| DeviceError::SizeOverflow)?;
-        storage.resize(len, 0);
+        let storage = allocate_zeroed_with(len, |storage, len| storage.try_reserve_exact(len))?;
         Ok(Box::new(CpuBuffer {
             device_id: self.info.id.clone(),
+            device_instance_id: self.info.instance_id,
             tier,
             bytes: storage,
         }))
@@ -420,6 +465,83 @@ mod tests {
             device.write(buffer.as_mut(), 3, &[1, 2]),
             Err(DeviceError::BufferRangeOutOfBounds { .. })
         ));
+    }
+
+    #[test]
+    fn independent_devices_reject_each_others_buffers_for_all_operations() {
+        let first = CpuDevice::new();
+        let second = CpuDevice::new();
+        assert_eq!(first.info().id, second.info().id);
+        assert_ne!(first.info().instance_id, second.info().instance_id);
+
+        let mut first_buffer = first.allocate(MemoryTier::Host, 4).unwrap();
+        let mut second_buffer = second.allocate(MemoryTier::Host, 4).unwrap();
+        assert_eq!(
+            second.read(first_buffer.as_ref(), 0, 1),
+            Err(DeviceError::DeviceMismatch)
+        );
+        assert_eq!(
+            second.write(first_buffer.as_mut(), 0, &[1]),
+            Err(DeviceError::DeviceMismatch)
+        );
+        assert_eq!(
+            second.copy(first_buffer.as_ref(), second_buffer.as_mut(), 1),
+            Err(DeviceError::DeviceMismatch)
+        );
+        assert_eq!(
+            first.copy(first_buffer.as_ref(), second_buffer.as_mut(), 1),
+            Err(DeviceError::DeviceMismatch)
+        );
+    }
+
+    #[test]
+    fn cloned_device_handle_shares_instance_identity() {
+        let device = CpuDevice::new();
+        let clone = device.clone();
+        assert_eq!(device.info().instance_id, clone.info().instance_id);
+        let buffer = device.allocate(MemoryTier::Host, 4).unwrap();
+        assert_eq!(clone.read(buffer.as_ref(), 0, 4).unwrap(), [0; 4]);
+    }
+
+    #[test]
+    fn cpu_capabilities_match_supported_operations_and_memory_tiers() {
+        let device = CpuDevice::new();
+        let capabilities = device.capabilities();
+        assert!(capabilities.device_memory);
+        assert!(capabilities.host_memory);
+        assert!(!capabilities.pinned_host_memory);
+        assert!(!capabilities.asynchronous_transfers);
+        assert!(!capabilities.tensor_compute);
+
+        assert!(device.allocate(MemoryTier::Vram, 1).is_ok());
+        assert!(device.allocate(MemoryTier::Host, 1).is_ok());
+        assert!(matches!(
+            device.allocate(MemoryTier::PinnedHost, 1),
+            Err(DeviceError::UnsupportedMemoryTier(MemoryTier::PinnedHost))
+        ));
+    }
+
+    #[test]
+    fn zero_sized_allocation_is_rejected() {
+        let device = CpuDevice::new();
+        assert_eq!(
+            device.allocate(MemoryTier::Host, 0).err(),
+            Some(DeviceError::ZeroSizedAllocation)
+        );
+    }
+
+    #[test]
+    fn allocation_failure_is_reported_as_out_of_memory() {
+        let error = allocate_zeroed_with(4096, |_storage: &mut Vec<u8>, _len| {
+            Err::<(), _>("injected allocation failure")
+        })
+        .unwrap_err();
+        assert_eq!(
+            error,
+            DeviceError::OutOfMemory {
+                requested_bytes: 4096
+            }
+        );
     }
 
     #[test]
