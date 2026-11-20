@@ -350,8 +350,7 @@ mod tests {
         let device = FailingReleaseDevice {
             inner: CpuDevice::new(),
         };
-        let mut manager =
-            DeviceMemoryManager::new(device, budgets(), EvictionPolicy::Lru).unwrap();
+        let mut manager = DeviceMemoryManager::new(device, budgets(), EvictionPolicy::Lru).unwrap();
         manager
             .allocate("buffer", MemoryTier::Host, 16, 1, false)
             .unwrap();
