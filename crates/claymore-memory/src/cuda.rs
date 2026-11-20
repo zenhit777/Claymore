@@ -387,10 +387,14 @@ impl CudaMemoryManager {
         self.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
         self.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
         let allocation_ids = vec![device_id.to_owned(), pinned_id.to_owned()];
-        self.pending.push((transfer_id, allocation_ids.clone(), event));
+        self.pending
+            .push((transfer_id, allocation_ids.clone(), event));
         self.policy.touch(device_id, tick)?;
         self.policy.touch(pinned_id, tick)?;
-        Ok(TransferToken { id: transfer_id, allocation_ids })
+        Ok(TransferToken {
+            id: transfer_id,
+            allocation_ids,
+        })
     }
 
     /// Query the associated CUDA event without blocking. A missing pending
