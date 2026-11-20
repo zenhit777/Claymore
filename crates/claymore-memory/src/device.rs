@@ -212,39 +212,107 @@ mod tests {
     }
 
     impl DeviceBuffer for FailingReleaseBuffer {
-        fn device_id(&self) -> &str { self.inner.device_id() }
-        fn device_instance_id(&self) -> claymore_device::DeviceInstanceId { self.inner.device_instance_id() }
-        fn tier(&self) -> MemoryTier { self.inner.tier() }
-        fn len(&self) -> usize { self.inner.len() }
-        fn release(&mut self) -> Result<(), DeviceError> {
-            Err(DeviceError::ReleaseFailed("injected backend failure".to_owned()))
+        fn device_id(&self) -> &str {
+            self.inner.device_id()
         }
-        fn as_any(&self) -> &dyn std::any::Any { self }
-        fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+
+        fn device_instance_id(&self) -> claymore_device::DeviceInstanceId {
+            self.inner.device_instance_id()
+        }
+
+        fn tier(&self) -> MemoryTier {
+            self.inner.tier()
+        }
+
+        fn len(&self) -> usize {
+            self.inner.len()
+        }
+
+        fn release(&mut self) -> Result<(), DeviceError> {
+            Err(DeviceError::ReleaseFailed(
+                "injected backend failure".to_owned(),
+            ))
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            self
+        }
     }
 
-    struct FailingReleaseDevice { inner: CpuDevice }
+    struct FailingReleaseDevice {
+        inner: CpuDevice,
+    }
 
     impl Device for FailingReleaseDevice {
-        fn info(&self) -> &DeviceInfo { self.inner.info() }
-        fn capabilities(&self) -> DeviceCapabilities { self.inner.capabilities() }
-        fn allocate(&self, tier: MemoryTier, bytes: u64) -> Result<Box<dyn DeviceBuffer>, DeviceError> {
-            Ok(Box::new(FailingReleaseBuffer { inner: self.inner.allocate(tier, bytes)? }))
+        fn info(&self) -> &DeviceInfo {
+            self.inner.info()
         }
-        fn write(&self, buffer: &mut dyn DeviceBuffer, offset: usize, data: &[u8]) -> Result<(), DeviceError> {
-            let buffer = buffer.as_any_mut().downcast_mut::<FailingReleaseBuffer>().ok_or(DeviceError::BufferTypeMismatch)?;
+
+        fn capabilities(&self) -> DeviceCapabilities {
+            self.inner.capabilities()
+        }
+
+        fn allocate(
+            &self,
+            tier: MemoryTier,
+            bytes: u64,
+        ) -> Result<Box<dyn DeviceBuffer>, DeviceError> {
+            Ok(Box::new(FailingReleaseBuffer {
+                inner: self.inner.allocate(tier, bytes)?,
+            }))
+        }
+
+        fn write(
+            &self,
+            buffer: &mut dyn DeviceBuffer,
+            offset: usize,
+            data: &[u8],
+        ) -> Result<(), DeviceError> {
+            let buffer = buffer
+                .as_any_mut()
+                .downcast_mut::<FailingReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
             self.inner.write(buffer.inner.as_mut(), offset, data)
         }
-        fn read(&self, buffer: &dyn DeviceBuffer, offset: usize, len: usize) -> Result<Vec<u8>, DeviceError> {
-            let buffer = buffer.as_any().downcast_ref::<FailingReleaseBuffer>().ok_or(DeviceError::BufferTypeMismatch)?;
+
+        fn read(
+            &self,
+            buffer: &dyn DeviceBuffer,
+            offset: usize,
+            len: usize,
+        ) -> Result<Vec<u8>, DeviceError> {
+            let buffer = buffer
+                .as_any()
+                .downcast_ref::<FailingReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
             self.inner.read(buffer.inner.as_ref(), offset, len)
         }
-        fn copy(&self, source: &dyn DeviceBuffer, destination: &mut dyn DeviceBuffer, bytes: usize) -> Result<(), DeviceError> {
-            let source = source.as_any().downcast_ref::<FailingReleaseBuffer>().ok_or(DeviceError::BufferTypeMismatch)?;
-            let destination = destination.as_any_mut().downcast_mut::<FailingReleaseBuffer>().ok_or(DeviceError::BufferTypeMismatch)?;
-            self.inner.copy(source.inner.as_ref(), destination.inner.as_mut(), bytes)
+
+        fn copy(
+            &self,
+            source: &dyn DeviceBuffer,
+            destination: &mut dyn DeviceBuffer,
+            bytes: usize,
+        ) -> Result<(), DeviceError> {
+            let source = source
+                .as_any()
+                .downcast_ref::<FailingReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            let destination = destination
+                .as_any_mut()
+                .downcast_mut::<FailingReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            self.inner
+                .copy(source.inner.as_ref(), destination.inner.as_mut(), bytes)
         }
-        fn synchronize(&self) -> Result<(), DeviceError> { Ok(()) }
+
+        fn synchronize(&self) -> Result<(), DeviceError> {
+            Ok(())
+        }
     }
 
     fn budgets() -> MemoryBudgets {
@@ -279,9 +347,14 @@ mod tests {
 
     #[test]
     fn failed_backend_release_keeps_buffer_and_accounting_for_retry() {
-        let device = FailingReleaseDevice { inner: CpuDevice::new() };
-        let mut manager = DeviceMemoryManager::new(device, budgets(), EvictionPolicy::Lru).unwrap();
-        manager.allocate("buffer", MemoryTier::Host, 16, 1, false).unwrap();
+        let device = FailingReleaseDevice {
+            inner: CpuDevice::new(),
+        };
+        let mut manager =
+            DeviceMemoryManager::new(device, budgets(), EvictionPolicy::Lru).unwrap();
+        manager
+            .allocate("buffer", MemoryTier::Host, 16, 1, false)
+            .unwrap();
         manager.write("buffer", 0, &[1, 2, 3], 2).unwrap();
 
         assert!(matches!(
@@ -297,7 +370,9 @@ mod tests {
     fn release_confirms_backend_release_before_removing_accounting() {
         let mut manager =
             DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
-        manager.allocate("buffer", MemoryTier::Host, 16, 1, false).unwrap();
+        manager
+            .allocate("buffer", MemoryTier::Host, 16, 1, false)
+            .unwrap();
         let released = manager.release("buffer", 2).unwrap();
         assert_eq!(released.id, "buffer");
         assert!(manager.allocation("buffer").is_none());
