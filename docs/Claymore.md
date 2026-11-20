@@ -776,6 +776,7 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 - `docs/memory-profile.md` — profil mémoire RTX 5090.
 - `docs/wsl2.md` — configuration WSL2.
 - `docs/audits/m2-device-tensor-design.md` — contrats Device/Tensor et validation CPU.
+- `docs/audits/m3-device-foundations.md` — audit et durcissement des fondations Device.
 - `config/rtx5090-7950x3d.json` — profil machine versionné.
 
 ---
