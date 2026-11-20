@@ -107,8 +107,8 @@ pub enum DeviceError {
     ZeroSizedAllocation,
     #[error("allocation size does not fit this platform")]
     SizeOverflow,
-    #[error("allocation of {requested_bytes} bytes could not be satisfied")]
-    OutOfMemory { requested_bytes: usize },
+    #[error("allocation of {requested_bytes} bytes could not be satisfied: {reason}")]
+    OutOfMemory { requested_bytes: usize, reason: String },
     #[error("memory tier {0:?} is not supported by this device")]
     UnsupportedMemoryTier(MemoryTier),
     #[error("buffer belongs to another device instance")]
@@ -131,13 +131,14 @@ pub enum DeviceError {
     TensorBufferTooSmall { required: usize, capacity: usize },
 }
 
-fn allocate_zeroed_with<E>(
+fn allocate_zeroed_with<E: std::fmt::Display>(
     len: usize,
     reserve: impl FnOnce(&mut Vec<u8>, usize) -> Result<(), E>,
 ) -> Result<Vec<u8>, DeviceError> {
     let mut storage = Vec::new();
-    reserve(&mut storage, len).map_err(|_| DeviceError::OutOfMemory {
+    reserve(&mut storage, len).map_err(|error| DeviceError::OutOfMemory {
         requested_bytes: len,
+        reason: error.to_string(),
     })?;
     storage.resize(len, 0);
     Ok(storage)
@@ -539,7 +540,8 @@ mod tests {
         assert_eq!(
             error,
             DeviceError::OutOfMemory {
-                requested_bytes: 4096
+                requested_bytes: 4096,
+                reason: "injected allocation failure".to_owned(),
             }
         );
     }
