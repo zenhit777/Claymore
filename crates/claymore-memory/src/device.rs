@@ -272,4 +272,55 @@ mod tests {
         assert!(manager.allocation("replacement").is_some());
         assert_eq!(manager.usage_bytes(MemoryTier::Host), 200);
     }
+    #[test]
+    fn expert_allocations_must_use_vram() {
+        let mut manager =
+            DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
+        assert!(matches!(
+            manager.allocate("expert", MemoryTier::Host, 8, 1, true),
+            Err(DeviceMemoryError::ExpertMustUseVram)
+        ));
+        assert_eq!(manager.usage_bytes(MemoryTier::Host), 0);
+        assert!(manager.allocation("expert").is_none());
+    }
+
+    #[test]
+    fn aliased_copy_is_rejected_without_mutating_the_buffer() {
+        let mut manager =
+            DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
+        manager
+            .allocate("buffer", MemoryTier::Host, 4, 1, false)
+            .unwrap();
+        manager.write("buffer", 0, &[1, 2, 3, 4], 2).unwrap();
+
+        assert!(matches!(
+            manager.copy("buffer", "buffer", 4, 3),
+            Err(DeviceMemoryError::AliasedCopy)
+        ));
+        assert_eq!(manager.read("buffer", 0, 4, 4).unwrap(), [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn zero_sized_allocation_is_rejected_without_accounting() {
+        let mut manager =
+            DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
+        assert!(matches!(
+            manager.allocate("empty", MemoryTier::Host, 0, 1, false),
+            Err(DeviceMemoryError::Device(DeviceError::ZeroSizedAllocation))
+        ));
+        assert_eq!(manager.usage_bytes(MemoryTier::Host), 0);
+        assert!(manager.allocation("empty").is_none());
+    }
+
+    #[test]
+    fn device_capabilities_are_reported_consistently_by_manager() {
+        let manager =
+            DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
+        let capabilities = manager.device().capabilities();
+        assert!(capabilities.device_memory);
+        assert!(capabilities.host_memory);
+        assert!(!capabilities.pinned_host_memory);
+        assert!(!capabilities.asynchronous_transfers);
+        assert!(!capabilities.tensor_compute);
+    }
 }

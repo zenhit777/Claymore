@@ -12,6 +12,8 @@ Claymore is an experimental Rust inference runtime with its own device, memory, 
 
 ## Architecture
 
+**Minimum supported Rust version (MSRV): 1.86.0.** Every workspace crate inherits this version from the root manifest, and CI runs the complete workspace test suite on Rust 1.86 as well as stable. Raise the MSRV only with an explicit compatibility review and synchronized manifest, CI, and documentation updates.
+
 The workspace is split into eight crates:
 
 - `claymore-core`: shared runtime types and configuration

@@ -39,6 +39,18 @@ Les valeurs mémoire indiquées sont des budgets de planification, pas des garan
 
 ---
 
+
+### 1.2 Politique de version Rust
+
+La MSRV du workspace est **Rust 1.86.0**. Chaque crate déclare `rust-version.workspace = true` et hérite de `workspace.package.rust-version`. La CI exécute la suite workspace sur cette version minimale, en plus des contrôles sur la toolchain stable.
+
+La MSRV ne doit être augmentée que par une modification explicite du manifeste workspace, accompagnée :
+- d'une justification (API standard ou dépendance nécessitant la nouvelle version) ;
+- de la mise à jour de tous les manifests, de la CI et de la documentation ;
+- d'une validation complète sur la nouvelle version minimale et sur stable.
+
+Les dépendances doivent rester compatibles avec la MSRV déclarée. Une mise à jour de dépendance qui relève silencieusement la version minimale est une régression, même si le build stable réussit.
+
 ## 2. Vision produit
 
 Claymore est un runtime expérimental d'inférence écrit en **Rust**, conçu pour exécuter efficacement des modèles de génération avancés sur une machine personnelle équipée d'un GPU NVIDIA à forte capacité mémoire.
@@ -299,7 +311,16 @@ Ces composants peuvent fournir des primitives spécialisées, mais l'API tensori
 
 Cette section prévaut sur toute formulation plus ambitieuse de la vision cible. La consolidation matérielle M1 est livrée par la PR #5 : contexte primaire CUDA, contrôles d'appartenance des ressources, compute capability et comportement fail-closed du gestionnaire mémoire.
 
+### 7.0 Travaux en cours
+
+#### M3 — Device foundations hardening (PR ouverte, non livrée sur main)
+
+La PR M3 regroupe les issues #7 à #10 : MSRV Rust 1.86, identité d'instance des devices, distinction des erreurs OOM/overflow et couverture des cas limites CPU. Les changements ne sont considérés comme livrés qu'après fusion de la PR.
+
+Sémantique retenue : le clonage d'un handle `CpuDevice` conserve l'identité d'instance ; deux appels indépendants à `CpuDevice::new()` créent deux identités différentes même si `DeviceInfo::id` vaut dans les deux cas `cpu:0`. Cette identité est opaque et locale au processus.
+
 ### 7.1 Livré sur main
+
 
 #### v0.3 — Memory Orchestrator (politiques host-side)
 
@@ -490,12 +511,15 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M0 | Scaffold et configuration | Livré ; profil matériel versionné, non chargé automatiquement |
 | M1 | Consolidation de la fondation matérielle | Livré par la PR #5 ; contexte primaire, sûreté et contrats CUDA |
 | M2 | Abstractions Device / Tensor | Livré par la PR #6 |
-| M3 | Runtime unifié | Planifié |
-| M4 | Scheduler et orchestration mémoire | Planifié |
-| M5 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
-| M6 | Stratégie autoregressive | Planifié |
-| M7 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
-| M8 | Optimisation et validation de performance | Planifié |
+| M3 | Durcissement des fondations Device (issues #7 à #10) | En revue dans la PR M3 |
+| M4 | Contrat Device et sûreté mémoire (issues #11 et #12) | Planifié |
+| M5 | Robustesse et validation CUDA (issue #13) | Planifié |
+| M6 | Runtime unifié | Planifié |
+| M7 | Scheduler et orchestration mémoire | Planifié |
+| M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
+| M9 | Stratégie autoregressive | Planifié |
+| M10 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
+| M11 | Optimisation et validation de performance | Planifié |
 
 ### M0 — Scaffold et configuration
 
@@ -539,7 +563,33 @@ Critères d'acceptation :
 - contrats Device/Tensor détenus par Claymore ; aucune bibliothèque tierce de tenseurs n'est imposée comme dépendance ou cible d'intégration ;
 - raccordement du backend CUDA au trait Device, transferts asynchrones avec jetons de complétion et validation GPU : hors M2, à traiter avant ou pendant M4/M5 selon le contrat d'exécution.
 
-### M3 — Runtime unifié
+### M3 — Durcissement des fondations Device
+
+**Objectif :** rendre les contrats Device fiables et explicites avant de développer le runtime, le scheduling ou le raccordement du backend CUDA.
+
+Travaux :
+- déclarer et tester la MSRV Rust 1.86 ;
+- distinguer l'identité d'instance du device de son identifiant logique ;
+- séparer les erreurs de capacité/overflow des échecs d'allocation ;
+- couvrir les cas limites du backend CPU et de l'adaptateur mémoire.
+
+**État :** implémentation regroupée dans la PR M3 ; les changements ne sont livrés qu'après fusion.
+
+Critères d'acceptation : les issues #7 à #10 sont couvertes, les tests CPU sont déterministes, la CI passe sur MSRV et stable, et la revue architecturale valide les contrats.
+
+### M4 — Contrat Device et sûreté mémoire
+
+**Objectif :** finaliser les contrats de libération, de propriété et de complétion avant tout raccordement du backend CUDA au trait Device.
+
+Travaux : libération backend faillible, garde des allocations en vol, sémantique des copies inter-devices, vues tensor non contiguës et jetons de complétion asynchrones. Conserver les garanties fail-closed de M1.
+
+### M5 — Robustesse et validation CUDA
+
+**Objectif :** renforcer les validations matérielles et les tests de sûreté CUDA, sans contourner les contrats établis en M4.
+
+Travaux : polling d'events, streams, injection de fautes, évictions déterministes et validation sur la cible RTX 5090.
+
+### M6 — Runtime unifié
 
 **Objectif :** introduire le cycle de vie des requêtes, les contextes d'exécution, les états, les erreurs, les annulations et l'orchestration de haut niveau.
 
@@ -548,7 +598,7 @@ Critères d'acceptation :
 - frontières nettes entre runtime, architecture de modèle, stratégie de génération et mode d'exécution ;
 - aucune dépendance à un modèle particulier dans le cœur runtime.
 
-### M4 — Scheduler et orchestration mémoire
+### M7 — Scheduler et orchestration mémoire
 
 **Objectif :** coordonner calcul, résidence mémoire, transferts et préchargements.
 
@@ -566,7 +616,7 @@ Critères d'acceptation :
 - aucun buffer évincé avant complétion de ses dépendances ;
 - mesures séparées du temps de transfert, d'attente et de calcul.
 
-### M5 — Moteur tensoriel Claymore et premier chemin modèle
+### M8 — Moteur tensoriel Claymore et premier chemin modèle
 
 **Objectif :** construire le premier chemin tensoriel natif de Claymore et obtenir un forward pass reproductible sur un modèle de référence.
 
@@ -581,7 +631,7 @@ Critères d'acceptation :
 - test d'interopérabilité avec le contexte CUDA partagé ;
 - mesure du pic RAM/VRAM et libération propre des ressources.
 
-### M6 — Stratégie autoregressive
+### M9 — Stratégie autoregressive
 
 **Objectif :** fournir une stratégie de génération autoregressive réutilisant le runtime unifié.
 
@@ -589,7 +639,7 @@ Travaux : prefill, décodage token par token, KV cache, sampling, arrêt et gest
 
 Critères d'acceptation : génération de référence reproductible, tests du cache et mesure de latence/débit.
 
-### M7 — Stratégie diffusion (DiffusionGemma / Clover)
+### M10 — Stratégie diffusion (DiffusionGemma / Clover)
 
 **Objectif :** ajouter la génération itérative par canvas et les besoins propres aux architectures ciblées.
 
@@ -597,7 +647,7 @@ Travaux : états de canvas, denoising, politiques de confiance, commit, replay c
 
 Critères d'acceptation : cas de génération reproductible, cohérence des états, qualité comparée à une référence et mesures mémoire.
 
-### M8 — Optimisation et validation de performance
+### M11 — Optimisation et validation de performance
 
 **Objectif :** optimiser les chemins réellement identifiés comme limitants.
 
@@ -726,6 +776,7 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 - `docs/memory-profile.md` — profil mémoire RTX 5090.
 - `docs/wsl2.md` — configuration WSL2.
 - `docs/audits/m2-device-tensor-design.md` — contrats Device/Tensor et validation CPU.
+- `docs/audits/m3-device-foundations.md` — audit et durcissement des fondations Device.
 - `config/rtx5090-7950x3d.json` — profil machine versionné.
 
 ---
