@@ -175,9 +175,9 @@ Le test lui-même a réussi pendant la tentative, mais l'instrumentation memchec
 
 Le double échec `event.record` puis `synchronize` n'est pas déclenché par les tests matériels. Le comportement fail-closed est couvert par la revue de code, pas par une injection de faute.
 
-### Intégration Candle
+### Moteur tensoriel Claymore
 
-L'intégration Candle/cudarc est hors périmètre M1. Elle reste planifiée pour M5 et n'est pas validée par ce document.
+Le moteur tensoriel et son raccordement au backend CUDA sont hors périmètre M1. Ils relèvent des jalons ultérieurs et ne sont pas validés par ce document.
 
 ### Performances
 
@@ -206,7 +206,7 @@ La CI standard ne lie ni n'exécute les tests unitaires qui nécessitent un driv
 
 - validation memcheck via Compute Sanitizer ;
 - injection de faute sur le chemin fail-closed ;
-- interopérabilité Candle/cudarc ;
+- raccordement du moteur tensoriel Claymore au backend CUDA ;
 - benchmarks de performance ;
 - exécution de kernels CUDA et de modèles ;
 - backend simulé de l'adaptateur mémoire ;
