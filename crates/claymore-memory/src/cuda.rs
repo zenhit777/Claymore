@@ -407,7 +407,7 @@ impl CudaMemoryManager {
             if matches {
                 // Synchronize before removing the event. On failure the event and
                 // every allocation it protects remain tracked and non-evictable.
-                self.pending[index].1.synchronize()?;
+                self.pending[index].2.synchronize()?;
                 let (_, ids, _event) = self.pending.remove(index);
                 for completed_id in ids {
                     let still_in_flight = self.pending.iter().any(|(_, pending_ids, _)| {
