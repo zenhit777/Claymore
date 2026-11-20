@@ -194,13 +194,8 @@ impl<D: Device> DeviceMemoryManager<D> {
     }
 
     fn advance_tick(&mut self, tick: u64) -> Result<(), DeviceMemoryError> {
-        if let Some(previous) = self.last_tick {
-            if tick < previous {
-                return Err(DeviceMemoryError::NonMonotonicTick {
-                    previous,
-                    provided: tick,
-                });
-            }
+        if let Some((previous, provided)) = crate::lifecycle::backwards_tick(self.last_tick, tick) {
+            return Err(DeviceMemoryError::NonMonotonicTick { previous, provided });
         }
         self.last_tick = Some(tick);
         Ok(())
