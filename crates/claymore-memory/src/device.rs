@@ -174,12 +174,16 @@ impl<D: Device> DeviceMemoryManager<D> {
             .policy
             .allocation(id)
             .ok_or_else(|| DeviceMemoryError::UnknownAllocation(id.to_owned()))?;
-        if allocation.safe_after_tick > tick {
+        if !crate::lifecycle::release_is_safe(allocation.safe_after_tick, tick) {
             return Err(MemoryError::AllocationBusy(id.to_owned()).into());
         }
-        // Destroy the backend allocation before releasing its logical budget.
-        // The policy entry and safe_after_tick were checked above, so confirmation
-        // cannot fail unless the policy implementation violates its contract.
+        // The backend must confirm release before the allocation is removed
+        // from ownership or logical accounting. On failure, both remain intact
+        // so the caller can diagnose or retry without inventing free capacity.
+        self.buffers
+            .get_mut(id)
+            .expect("buffer existence was checked above")
+            .release()?;
         let buffer = self
             .buffers
             .remove(id)
@@ -190,13 +194,8 @@ impl<D: Device> DeviceMemoryManager<D> {
     }
 
     fn advance_tick(&mut self, tick: u64) -> Result<(), DeviceMemoryError> {
-        if let Some(previous) = self.last_tick {
-            if tick < previous {
-                return Err(DeviceMemoryError::NonMonotonicTick {
-                    previous,
-                    provided: tick,
-                });
-            }
+        if let Some((previous, provided)) = crate::lifecycle::backwards_tick(self.last_tick, tick) {
+            return Err(DeviceMemoryError::NonMonotonicTick { previous, provided });
         }
         self.last_tick = Some(tick);
         Ok(())
@@ -206,7 +205,121 @@ impl<D: Device> DeviceMemoryManager<D> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claymore_device::CpuDevice;
+    use claymore_device::{CpuDevice, DeviceCapabilities, DeviceInfo};
+
+    struct FailingReleaseBuffer {
+        inner: Box<dyn DeviceBuffer>,
+        fail_next_release: bool,
+    }
+
+    impl DeviceBuffer for FailingReleaseBuffer {
+        fn device_id(&self) -> &str {
+            self.inner.device_id()
+        }
+
+        fn device_instance_id(&self) -> claymore_device::DeviceInstanceId {
+            self.inner.device_instance_id()
+        }
+
+        fn tier(&self) -> MemoryTier {
+            self.inner.tier()
+        }
+
+        fn len(&self) -> usize {
+            self.inner.len()
+        }
+
+        fn release(&mut self) -> Result<(), DeviceError> {
+            if self.fail_next_release {
+                self.fail_next_release = false;
+                return Err(DeviceError::ReleaseFailed(
+                    "injected backend failure".to_owned(),
+                ));
+            }
+            self.inner.release()
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            self
+        }
+    }
+
+    struct FailingReleaseDevice {
+        inner: CpuDevice,
+    }
+
+    impl Device for FailingReleaseDevice {
+        fn info(&self) -> &DeviceInfo {
+            self.inner.info()
+        }
+
+        fn capabilities(&self) -> DeviceCapabilities {
+            self.inner.capabilities()
+        }
+
+        fn allocate(
+            &self,
+            tier: MemoryTier,
+            bytes: u64,
+        ) -> Result<Box<dyn DeviceBuffer>, DeviceError> {
+            Ok(Box::new(FailingReleaseBuffer {
+                inner: self.inner.allocate(tier, bytes)?,
+                fail_next_release: true,
+            }))
+        }
+
+        fn write(
+            &self,
+            buffer: &mut dyn DeviceBuffer,
+            offset: usize,
+            data: &[u8],
+        ) -> Result<(), DeviceError> {
+            let buffer = buffer
+                .as_any_mut()
+                .downcast_mut::<FailingReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            self.inner.write(buffer.inner.as_mut(), offset, data)
+        }
+
+        fn read(
+            &self,
+            buffer: &dyn DeviceBuffer,
+            offset: usize,
+            len: usize,
+        ) -> Result<Vec<u8>, DeviceError> {
+            let buffer = buffer
+                .as_any()
+                .downcast_ref::<FailingReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            self.inner.read(buffer.inner.as_ref(), offset, len)
+        }
+
+        fn copy(
+            &self,
+            source: &dyn DeviceBuffer,
+            destination: &mut dyn DeviceBuffer,
+            bytes: usize,
+        ) -> Result<(), DeviceError> {
+            let source = source
+                .as_any()
+                .downcast_ref::<FailingReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            let destination = destination
+                .as_any_mut()
+                .downcast_mut::<FailingReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            self.inner
+                .copy(source.inner.as_ref(), destination.inner.as_mut(), bytes)
+        }
+
+        fn synchronize(&self) -> Result<(), DeviceError> {
+            Ok(())
+        }
+    }
 
     fn budgets() -> MemoryBudgets {
         MemoryBudgets {
@@ -236,6 +349,43 @@ mod tests {
         manager.release("source", 6).unwrap();
         assert_eq!(manager.usage_bytes(MemoryTier::Host), 0);
         manager.synchronize().unwrap();
+    }
+
+    #[test]
+    fn failed_backend_release_keeps_buffer_and_accounting_for_retry() {
+        let device = FailingReleaseDevice {
+            inner: CpuDevice::new(),
+        };
+        let mut manager = DeviceMemoryManager::new(device, budgets(), EvictionPolicy::Lru).unwrap();
+        manager
+            .allocate("buffer", MemoryTier::Host, 16, 1, false)
+            .unwrap();
+        manager.write("buffer", 0, &[1, 2, 3], 2).unwrap();
+
+        assert!(matches!(
+            manager.release("buffer", 3),
+            Err(DeviceMemoryError::Device(DeviceError::ReleaseFailed(_)))
+        ));
+        assert!(manager.allocation("buffer").is_some());
+        assert_eq!(manager.usage_bytes(MemoryTier::Host), 16);
+        assert_eq!(manager.read("buffer", 0, 3, 4).unwrap(), [1, 2, 3]);
+
+        manager.release("buffer", 4).unwrap();
+        assert!(manager.allocation("buffer").is_none());
+        assert_eq!(manager.usage_bytes(MemoryTier::Host), 0);
+    }
+
+    #[test]
+    fn release_confirms_backend_release_before_removing_accounting() {
+        let mut manager =
+            DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
+        manager
+            .allocate("buffer", MemoryTier::Host, 16, 1, false)
+            .unwrap();
+        let released = manager.release("buffer", 2).unwrap();
+        assert_eq!(released.id, "buffer");
+        assert!(manager.allocation("buffer").is_none());
+        assert_eq!(manager.usage_bytes(MemoryTier::Host), 0);
     }
 
     #[test]

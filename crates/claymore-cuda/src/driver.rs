@@ -21,6 +21,7 @@ type CuStreamRaw = *mut c_void;
 type CuEventRaw = *mut c_void;
 
 const CUDA_SUCCESS: CuResult = 0;
+const CUDA_ERROR_NOT_READY: CuResult = 600;
 const CU_STREAM_DEFAULT: c_uint = 0;
 const CU_EVENT_DEFAULT: c_uint = 0;
 const CU_MEMHOSTALLOC_PORTABLE: c_uint = 1;
@@ -60,6 +61,7 @@ unsafe extern "C" {
     fn cuStreamDestroy_v2(stream: CuStreamRaw) -> CuResult;
     fn cuEventCreate(event: *mut CuEventRaw, flags: c_uint) -> CuResult;
     fn cuEventRecord(event: CuEventRaw, stream: CuStreamRaw) -> CuResult;
+    fn cuEventQuery(event: CuEventRaw) -> CuResult;
     fn cuEventSynchronize(event: CuEventRaw) -> CuResult;
     fn cuEventDestroy_v2(event: CuEventRaw) -> CuResult;
 }
@@ -77,6 +79,19 @@ fn as_size(bytes: u64) -> Result<usize, CudaError> {
         return Err(CudaError::ZeroSizedAllocation);
     }
     usize::try_from(bytes).map_err(|_| CudaError::SizeOverflow)
+}
+
+fn event_query_result(result: CuResult) -> Result<bool, CudaError> {
+    if result == CUDA_SUCCESS {
+        Ok(true)
+    } else if result == CUDA_ERROR_NOT_READY {
+        Ok(false)
+    } else {
+        Err(CudaError::Driver {
+            operation: "cuEventQuery",
+            code: result,
+        })
+    }
 }
 
 fn ensure_same_context(left: CuContext, right: CuContext) -> Result<(), CudaError> {
@@ -219,13 +234,13 @@ impl CudaDriver {
         Ok((free as u64, total as u64))
     }
 
-    pub fn allocate(&self, bytes: u64) -> Result<DeviceBuffer, CudaError> {
+    pub fn allocate(&self, bytes: u64) -> Result<CudaDeviceBuffer, CudaError> {
         let len = as_size(bytes)?;
         self.context.activate()?;
         let mut pointer = 0;
         // SAFETY: pointer is valid output storage; CUDA owns the resulting allocation.
         check(unsafe { cuMemAlloc_v2(&mut pointer, len) }, "cuMemAlloc_v2")?;
-        Ok(DeviceBuffer {
+        Ok(CudaDeviceBuffer {
             context: Rc::clone(&self.context),
             pointer,
             len,
@@ -284,12 +299,12 @@ impl DeviceInventory for CudaDriver {
     }
 }
 
-pub struct DeviceBuffer {
+pub struct CudaDeviceBuffer {
     context: Rc<ContextInner>,
     pointer: CuDevicePtr,
     len: usize,
 }
-impl DeviceBuffer {
+impl CudaDeviceBuffer {
     pub fn len(&self) -> usize {
         self.len
     }
@@ -376,7 +391,7 @@ impl DeviceBuffer {
         )
     }
 }
-impl Drop for DeviceBuffer {
+impl Drop for CudaDeviceBuffer {
     fn drop(&mut self) {
         if self.pointer != 0 && self.context.activate().is_ok() {
             // SAFETY: pointer is a live allocation owned by this object.
@@ -474,6 +489,15 @@ impl CudaEvent {
             "cuEventRecord",
         )
     }
+    /// Query the event without blocking. CUDA_ERROR_NOT_READY is a normal
+    /// incomplete state; every other driver error is propagated.
+    pub fn is_complete(&self) -> Result<bool, CudaError> {
+        self.context.activate()?;
+        // SAFETY: raw is a live event owned by this object.
+        let result = unsafe { cuEventQuery(self.raw) };
+        event_query_result(result)
+    }
+
     pub fn synchronize(&self) -> Result<(), CudaError> {
         self.context.activate()?;
         // SAFETY: raw is a live event owned by this object.
@@ -505,6 +529,19 @@ mod tests {
         assert!(matches!(
             ensure_same_context(context, 2_usize as CuContext),
             Err(CudaError::ContextMismatch)
+        ));
+    }
+
+    #[test]
+    fn event_query_distinguishes_complete_pending_and_driver_failure() {
+        assert_eq!(event_query_result(CUDA_SUCCESS), Ok(true));
+        assert_eq!(event_query_result(CUDA_ERROR_NOT_READY), Ok(false));
+        assert!(matches!(
+            event_query_result(999),
+            Err(CudaError::Driver {
+                operation: "cuEventQuery",
+                code: 999
+            })
         ));
     }
 

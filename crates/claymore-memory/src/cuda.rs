@@ -4,26 +4,47 @@
 //! asynchronous transfer is associated with a real CUDA event; allocations
 //! touched by unfinished transfers remain non-evictable until synchronization.
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 
 use crate::{
     Allocation, EvictionPolicy, MemoryBudgets, MemoryError, MemoryOrchestrator, MemorySnapshot,
 };
 use claymore_core::MemoryTier;
-use claymore_cuda::{CudaDriver, CudaError, CudaEvent, CudaStream, DeviceBuffer, PinnedHostBuffer};
+use claymore_cuda::{
+    CudaDeviceBuffer, CudaDriver, CudaError, CudaEvent, CudaStream, PinnedHostBuffer,
+};
 
-const IN_FLIGHT: u64 = u64::MAX;
+const IN_FLIGHT: u64 = crate::lifecycle::IN_FLIGHT_TICK;
+static NEXT_TRANSFER_ID: AtomicU64 = AtomicU64::new(1);
+
+fn allocate_transfer_id() -> Result<u64, CudaMemoryError> {
+    let mut current = NEXT_TRANSFER_ID.load(Ordering::Relaxed);
+    loop {
+        let next = current
+            .checked_add(1)
+            .ok_or(CudaMemoryError::TransferIdExhausted)?;
+        match NEXT_TRANSFER_ID.compare_exchange_weak(
+            current,
+            next,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => return Ok(current),
+            Err(observed) => current = observed,
+        }
+    }
+}
 
 fn validate_monotonic_tick(previous: Option<u64>, provided: u64) -> Result<(), CudaMemoryError> {
-    if let Some(previous) = previous {
-        if provided < previous {
-            return Err(CudaMemoryError::NonMonotonicTick { previous, provided });
-        }
+    if let Some((previous, provided)) = crate::lifecycle::backwards_tick(previous, provided) {
+        return Err(CudaMemoryError::NonMonotonicTick { previous, provided });
     }
     Ok(())
 }
 
 fn ensure_release_safe(id: &str, safe_after_tick: u64, tick: u64) -> Result<(), CudaMemoryError> {
-    if safe_after_tick > tick {
+    if !crate::lifecycle::release_is_safe(safe_after_tick, tick) {
         return Err(MemoryError::AllocationBusy(id.to_owned()).into());
     }
     Ok(())
@@ -53,15 +74,37 @@ pub enum CudaMemoryError {
     NonMonotonicTick { previous: u64, provided: u64 },
     #[error("CUDA memory manager is poisoned after an uncertain transfer synchronization failure")]
     ManagerPoisoned,
+    #[error("CUDA transfer token identifier space exhausted")]
+    TransferIdExhausted,
+    #[error("CUDA transfer token {0} is not owned by this manager")]
+    UnknownTransferToken(u64),
+}
+
+#[derive(Debug, Clone)]
+pub struct TransferToken {
+    manager_id: u64,
+    id: u64,
+    allocation_ids: Vec<String>,
+    completed: Arc<AtomicBool>,
+}
+
+impl TransferToken {
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+    pub fn allocation_ids(&self) -> &[String] {
+        &self.allocation_ids
+    }
 }
 
 pub struct CudaMemoryManager {
+    manager_id: u64,
     driver: CudaDriver,
     transfer_stream: CudaStream,
     policy: MemoryOrchestrator,
-    device: HashMap<String, DeviceBuffer>,
+    device: HashMap<String, CudaDeviceBuffer>,
     pinned: HashMap<String, PinnedHostBuffer>,
-    pending: Vec<(Vec<String>, CudaEvent)>,
+    pending: Vec<(u64, Vec<String>, CudaEvent, Arc<AtomicBool>)>,
     last_tick: Option<u64>,
     poisoned: bool,
 }
@@ -72,10 +115,12 @@ impl CudaMemoryManager {
         budgets: MemoryBudgets,
         eviction: EvictionPolicy,
     ) -> Result<Self, CudaMemoryError> {
+        let manager_id = allocate_transfer_id()?;
         let driver = CudaDriver::new(ordinal)?;
         let transfer_stream = driver.create_stream()?;
         let policy = MemoryOrchestrator::new(budgets, eviction)?;
         Ok(Self {
+            manager_id,
             driver,
             transfer_stream,
             policy,
@@ -272,8 +317,9 @@ impl CudaMemoryManager {
         device_id: &str,
         bytes: usize,
         tick: u64,
-    ) -> Result<(), CudaMemoryError> {
+    ) -> Result<TransferToken, CudaMemoryError> {
         self.advance_tick(tick)?;
+        let transfer_id = allocate_transfer_id()?;
         let event = self.driver.create_event()?;
         let source = self
             .pinned
@@ -301,11 +347,22 @@ impl CudaMemoryManager {
         }
         self.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
         self.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
-        self.pending
-            .push((vec![pinned_id.to_owned(), device_id.to_owned()], event));
+        let allocation_ids = vec![pinned_id.to_owned(), device_id.to_owned()];
+        let completed = Arc::new(AtomicBool::new(false));
+        self.pending.push((
+            transfer_id,
+            allocation_ids.clone(),
+            event,
+            Arc::clone(&completed),
+        ));
         self.policy.touch(pinned_id, tick)?;
         self.policy.touch(device_id, tick)?;
-        Ok(())
+        Ok(TransferToken {
+            manager_id: self.manager_id,
+            id: transfer_id,
+            allocation_ids,
+            completed,
+        })
     }
 
     pub fn copy_d2h(
@@ -314,8 +371,9 @@ impl CudaMemoryManager {
         pinned_id: &str,
         bytes: usize,
         tick: u64,
-    ) -> Result<(), CudaMemoryError> {
+    ) -> Result<TransferToken, CudaMemoryError> {
         self.advance_tick(tick)?;
+        let transfer_id = allocate_transfer_id()?;
         let event = self.driver.create_event()?;
         let source = self
             .device
@@ -343,11 +401,80 @@ impl CudaMemoryManager {
         }
         self.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
         self.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
-        self.pending
-            .push((vec![device_id.to_owned(), pinned_id.to_owned()], event));
+        let allocation_ids = vec![device_id.to_owned(), pinned_id.to_owned()];
+        let completed = Arc::new(AtomicBool::new(false));
+        self.pending.push((
+            transfer_id,
+            allocation_ids.clone(),
+            event,
+            Arc::clone(&completed),
+        ));
         self.policy.touch(device_id, tick)?;
         self.policy.touch(pinned_id, tick)?;
-        Ok(())
+        Ok(TransferToken {
+            manager_id: self.manager_id,
+            id: transfer_id,
+            allocation_ids,
+            completed,
+        })
+    }
+
+    /// Query the associated CUDA event without blocking. A token is complete
+    /// after its event query succeeds or an explicit wait synchronizes it.
+    /// This query does not retire the pending event or release allocation guards;
+    /// call wait_for_transfer (or wait_for_allocation) to retire the tracked work.
+    pub fn is_transfer_complete(&self, token: &TransferToken) -> Result<bool, CudaMemoryError> {
+        if token.manager_id != self.manager_id {
+            return Err(CudaMemoryError::UnknownTransferToken(token.id));
+        }
+        if token.completed.load(Ordering::Acquire) {
+            return Ok(true);
+        }
+        if let Some((_, _, event, completed)) = self.pending.iter().find(|(id, ids, _, state)| {
+            *id == token.id && *ids == token.allocation_ids && Arc::ptr_eq(state, &token.completed)
+        }) {
+            let is_complete = event.is_complete()?;
+            if is_complete {
+                completed.store(true, Ordering::Release);
+            }
+            Ok(is_complete)
+        } else {
+            Err(CudaMemoryError::UnknownTransferToken(token.id))
+        }
+    }
+
+    /// Wait for the exact transfer represented by the token. A synchronization
+    /// error leaves the event and its allocation protections tracked.
+    pub fn wait_for_transfer(
+        &mut self,
+        token: &TransferToken,
+        tick: u64,
+    ) -> Result<(), CudaMemoryError> {
+        self.advance_tick(tick)?;
+        if token.manager_id != self.manager_id {
+            return Err(CudaMemoryError::UnknownTransferToken(token.id));
+        }
+        let allocation_ids = self
+            .pending
+            .iter()
+            .find(|(id, ids, _, state)| {
+                *id == token.id
+                    && *ids == token.allocation_ids
+                    && Arc::ptr_eq(state, &token.completed)
+            })
+            .map(|(_, ids, _, _)| ids.clone());
+        if let Some(allocation_ids) = allocation_ids {
+            if let Some(id) = allocation_ids.first() {
+                self.wait_for_allocation(id, tick)?;
+            }
+            token.completed.store(true, Ordering::Release);
+            return Ok(());
+        }
+        if token.completed.load(Ordering::Acquire) {
+            Ok(())
+        } else {
+            Err(CudaMemoryError::UnknownTransferToken(token.id))
+        }
     }
 
     pub fn wait_for_allocation(&mut self, id: &str, tick: u64) -> Result<(), CudaMemoryError> {
@@ -355,16 +482,17 @@ impl CudaMemoryManager {
         let mut index = 0;
         while index < self.pending.len() {
             let matches = self.pending[index]
-                .0
+                .1
                 .iter()
                 .any(|candidate| candidate == id);
             if matches {
                 // Synchronize before removing the event. On failure the event and
                 // every allocation it protects remain tracked and non-evictable.
-                self.pending[index].1.synchronize()?;
-                let (ids, _event) = self.pending.remove(index);
+                self.pending[index].2.synchronize()?;
+                let (_, ids, _event, completed) = self.pending.remove(index);
+                completed.store(true, Ordering::Release);
                 for completed_id in ids {
-                    let still_in_flight = self.pending.iter().any(|(pending_ids, _)| {
+                    let still_in_flight = self.pending.iter().any(|(_, pending_ids, _, _)| {
                         pending_ids
                             .iter()
                             .any(|pending_id| pending_id == &completed_id)
@@ -447,7 +575,12 @@ impl Drop for CudaMemoryManager {
         // `pending` cannot prove completion of a later copy whose event record
         // failed, so never use them as a fallback.
         let safe_to_drop = self.transfer_stream.synchronize().is_ok();
-        if !safe_to_drop {
+        if safe_to_drop {
+            for (_, _, event, completed) in self.pending.drain(..) {
+                completed.store(true, Ordering::Release);
+                drop(event);
+            }
+        } else {
             // A failed driver synchronization leaves buffer lifetime uncertain.
             // Leak these CUDA owners rather than risk freeing memory still in use.
             for (_, buffer) in self.device.drain() {
@@ -456,7 +589,7 @@ impl Drop for CudaMemoryManager {
             for (_, buffer) in self.pinned.drain() {
                 std::mem::forget(buffer);
             }
-            for (_, event) in self.pending.drain(..) {
+            for (_, _, event, _) in self.pending.drain(..) {
                 std::mem::forget(event);
             }
         }
@@ -466,6 +599,21 @@ impl Drop for CudaMemoryManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transfer_token_clones_share_completion_state() {
+        let completed = Arc::new(AtomicBool::new(false));
+        let token = TransferToken {
+            manager_id: 1,
+            id: 2,
+            allocation_ids: vec!["device".to_owned(), "pinned".to_owned()],
+            completed: Arc::clone(&completed),
+        };
+        let clone = token.clone();
+
+        clone.completed.store(true, Ordering::Release);
+        assert!(token.completed.load(Ordering::Acquire));
+    }
 
     #[test]
     fn logical_ticks_must_be_monotonic() {

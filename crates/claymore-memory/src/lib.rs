@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use claymore_core::MemoryTier;
 use thiserror::Error;
 
+mod lifecycle;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EvictionPolicy {
     Lru,
@@ -327,7 +329,7 @@ pub use device::{DeviceMemoryError, DeviceMemoryManager};
 #[cfg(feature = "cuda-driver")]
 mod cuda;
 #[cfg(feature = "cuda-driver")]
-pub use cuda::{CudaMemoryError, CudaMemoryManager};
+pub use cuda::{CudaMemoryError, CudaMemoryManager, TransferToken};
 
 #[cfg(test)]
 mod tests {

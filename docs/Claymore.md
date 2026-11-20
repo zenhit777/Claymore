@@ -313,11 +313,17 @@ Cette section prévaut sur toute formulation plus ambitieuse de la vision cible.
 
 ### 7.0 Travaux en cours
 
-#### M3 — Device foundations hardening (PR ouverte, non livrée sur main)
+#### M3 — Device foundations hardening (PR #15 fusionnée)
 
-La PR M3 regroupe les issues #7 à #10 : MSRV Rust 1.86, identité d'instance des devices, distinction des erreurs OOM/overflow et couverture des cas limites CPU. Les changements ne sont considérés comme livrés qu'après fusion de la PR.
+La PR #15 a livré les issues #7 à #10 : MSRV Rust 1.86, identité d'instance des devices, distinction des erreurs OOM/overflow et couverture des cas limites CPU. La fusion dans `main` a été effectuée le 20 novembre 2026 (merge commit `e758862937a0dff376b83449aab2c937400be9f4`).
 
 Sémantique retenue : le clonage d'un handle `CpuDevice` conserve l'identité d'instance ; deux appels indépendants à `CpuDevice::new()` créent deux identités différentes même si `DeviceInfo::id` vaut dans les deux cas `cpu:0`. Cette identité est opaque et locale au processus.
+
+#### M4 — Device lifecycle contracts (PR en cours)
+
+La PR M4 regroupe les issues #11 et #12. Elle introduit une libération explicite et faillible des buffers, conserve l'ownership et la comptabilité en cas d'échec backend, factorise les invariants de cycle de vie des gestionnaires CPU/CUDA, expose des jetons de complétion pour les transferts H2D/D2H et ajoute les vues tensor stridées.
+
+Le contrat `CompletionToken` et la méthode `Device::copy_async` sont définis, mais aucun raccordement de `CudaDeviceBuffer` au trait `Device` n'est effectué. Le backend CUDA reste confiné au thread propriétaire. Le polling automatique et la finalisation des allocations terminées restent à traiter en M5.
 
 ### 7.1 Livré sur main
 
@@ -385,7 +391,7 @@ Les éléments suivants ne doivent pas être considérés comme fonctionnels de 
 - application effective du budget souple VRAM de 26 Gio ;
 - enforcement de la cible/max du cache d'experts et de son inclusion dans un working set explicite ;
 - logique de scheduling, files de tâches et préchargement ;
-- polling non bloquant des CUDA events et finalisation automatique des transferts terminés avant admission ;
+- finalisation automatique des transferts terminés avant admission (le query event et les tokens sont introduits en M4, l'orchestration automatique relève de M5) ;
 - adaptateur CUDA spécifique injectable et tests du cycle de vie CUDA avec backend simulé ;
 - pool allocator VRAM, réutilisation de blocs et défragmentation ;
 - moteur de transfert piloté par le scheduler ;
@@ -581,13 +587,13 @@ Critères d'acceptation : les issues #7 à #10 sont couvertes, les tests CPU son
 
 **Objectif :** finaliser les contrats de libération, de propriété et de complétion avant tout raccordement du backend CUDA au trait Device.
 
-Travaux : libération backend faillible, garde des allocations en vol, sémantique des copies inter-devices, vues tensor non contiguës et jetons de complétion asynchrones. Conserver les garanties fail-closed de M1.
+Travaux : libération backend faillible, garde des allocations en vol, contrats H2D/D2H et complétion vérifiable, vues tensor non contiguës et clarification des types de buffer. Les copies D2D multi-device sont différées tant que le projet reste mono-GPU. Conserver les garanties fail-closed de M1.
 
 ### M5 — Robustesse et validation CUDA
 
 **Objectif :** renforcer les validations matérielles et les tests de sûreté CUDA, sans contourner les contrats établis en M4.
 
-Travaux : polling d'events, streams, injection de fautes, évictions déterministes et validation sur la cible RTX 5090.
+Travaux : finalisation automatique des transferts terminés avant admission/éviction, injection de fautes sur les chemins event/stream, évictions déterministes et validation matérielle sur la cible RTX 5090.
 
 ### M6 — Runtime unifié
 
@@ -777,6 +783,7 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 - `docs/wsl2.md` — configuration WSL2.
 - `docs/audits/m2-device-tensor-design.md` — contrats Device/Tensor et validation CPU.
 - `docs/audits/m3-device-foundations.md` — audit et durcissement des fondations Device.
+- `docs/audits/m4-device-lifecycle-contracts.md` — audit des contrats de libération, complétion asynchrone et vues tensor.
 - `config/rtx5090-7950x3d.json` — profil machine versionné.
 
 ---
@@ -801,6 +808,7 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-18 | DiffusionGemma (`google/diffusiongemma-26B-A4B-it`) et Clover disposent de moteurs distincts partageant les services transverses du runtime. |
 | 2026-11-20 | Claymore ne fonde pas son moteur tensoriel sur un runtime tensoriel externe : les contrats Device/Buffer/Tensor, l'ownership, la synchronisation, la politique mémoire et l'exécution des modèles doivent rester cohérents et maîtrisés dans le projet, sans adapter les invariants Claymore au cycle de vie d'un framework tiers. Ce choix évite une dépendance structurante et les frictions d'interopérabilité autour des contextes CUDA, des buffers et des transferts ; il augmente en contrepartie fortement l'effort d'implémentation, de maintenance, de correction numérique et d'optimisation. Claymore pourra s'appuyer sur des bibliothèques de calcul bas niveau et des outils CUDA selon §6.4, sans leur déléguer ses abstractions ni son runtime. |
 | 2026-11-20 | Candle et les autres projets externes restent des références d'étude uniquement ; Claymore possède ses contrats Device/Buffer/Tensor et son futur moteur tensoriel natif. DiffusionGemma est référencé par son identifiant Hugging Face exact. |
+| 2026-11-20 | M4 introduit une libération de buffer explicite et faillible, des tokens de complétion H2D/D2H vérifiables par CUDA event et des vues tensor stridées ; aucun raccordement CUDA au trait Device n'est autorisé avant validation de ces contrats. |
 
 ### Correspondance de la feuille de route historique
 
