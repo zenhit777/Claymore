@@ -401,9 +401,7 @@ mod tests {
     fn equal_priority_evictions_use_lexicographic_allocation_id() {
         let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
         for id in ["gamma", "alpha", "beta"] {
-            manager
-                .record_allocation(allocation(id, 30, 5, 0))
-                .unwrap();
+            manager.record_allocation(allocation(id, 30, 5, 0)).unwrap();
         }
 
         for _ in 0..32 {
