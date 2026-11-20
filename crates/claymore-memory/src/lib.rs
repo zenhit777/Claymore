@@ -329,7 +329,7 @@ pub use device::{DeviceMemoryError, DeviceMemoryManager};
 #[cfg(feature = "cuda-driver")]
 mod cuda;
 #[cfg(feature = "cuda-driver")]
-pub use cuda::{CudaMemoryError, CudaMemoryManager};
+pub use cuda::{CudaMemoryError, CudaMemoryManager, TransferToken};
 
 #[cfg(test)]
 mod tests {
