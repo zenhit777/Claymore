@@ -699,8 +699,8 @@ mod tests {
             expert_cache_target_bytes: 0,
             expert_cache_max_bytes: 0,
         };
-        let mut manager = CudaMemoryManager::new(0, budgets, EvictionPolicy::Lru)
-            .expect("CUDA memory manager");
+        let mut manager =
+            CudaMemoryManager::new(0, budgets, EvictionPolicy::Lru).expect("CUDA memory manager");
         manager
             .allocate_pinned("host", 4096, 1)
             .expect("pinned allocation");
@@ -750,9 +750,7 @@ mod tests {
         manager
             .release("replacement", tick + 1)
             .expect("replacement release");
-        manager
-            .release("host", tick + 1)
-            .expect("pinned release");
+        manager.release("host", tick + 1).expect("pinned release");
         println!(
             "M5-HW-POLL-01 retired={retired}; admission evicted completed victim without explicit wait"
         );
