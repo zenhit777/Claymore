@@ -39,6 +39,18 @@ Les valeurs mémoire indiquées sont des budgets de planification, pas des garan
 
 ---
 
+
+### 1.2 Politique de version Rust
+
+La MSRV du workspace est **Rust 1.86.0**. Chaque crate déclare `rust-version.workspace = true` et hérite de `workspace.package.rust-version`. La CI exécute la suite workspace sur cette version minimale, en plus des contrôles sur la toolchain stable.
+
+La MSRV ne doit être augmentée que par une modification explicite du manifeste workspace, accompagnée :
+- d'une justification (API standard ou dépendance nécessitant la nouvelle version) ;
+- de la mise à jour de tous les manifests, de la CI et de la documentation ;
+- d'une validation complète sur la nouvelle version minimale et sur stable.
+
+Les dépendances doivent rester compatibles avec la MSRV déclarée. Une mise à jour de dépendance qui relève silencieusement la version minimale est une régression, même si le build stable réussit.
+
 ## 2. Vision produit
 
 Claymore est un runtime expérimental d'inférence écrit en **Rust**, conçu pour exécuter efficacement des modèles de génération avancés sur une machine personnelle équipée d'un GPU NVIDIA à forte capacité mémoire.
@@ -300,6 +312,13 @@ Ces composants peuvent fournir des primitives spécialisées, mais l'API tensori
 Cette section prévaut sur toute formulation plus ambitieuse de la vision cible. La consolidation matérielle M1 est livrée par la PR #5 : contexte primaire CUDA, contrôles d'appartenance des ressources, compute capability et comportement fail-closed du gestionnaire mémoire.
 
 ### 7.1 Livré sur main
+
+
+#### M3 — Device foundations hardening
+
+**En cours dans la PR M3 :** MSRV Rust 1.86 explicitement déclarée et testée en CI ; identité d'instance distincte de l'identifiant logique du device ; distinction des erreurs d'épuisement mémoire et de débordement ; tests CPU déterministes des cas limites du device et de l'adaptateur mémoire.
+
+Le clonage d'un handle `CpuDevice` conserve l'identité d'instance (deux handles vers le même device logique). Deux appels indépendants à `CpuDevice::new()` produisent des identités différentes, même si `DeviceInfo::id` vaut dans les deux cas `cpu:0`. Cette identité est un identifiant opaque local au processus, et non un identifiant persistant ou global inter-processus.
 
 #### v0.3 — Memory Orchestrator (politiques host-side)
 
