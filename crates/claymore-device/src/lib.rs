@@ -108,7 +108,10 @@ pub enum DeviceError {
     #[error("allocation size does not fit this platform")]
     SizeOverflow,
     #[error("allocation of {requested_bytes} bytes could not be satisfied: {reason}")]
-    OutOfMemory { requested_bytes: usize, reason: String },
+    OutOfMemory {
+        requested_bytes: usize,
+        reason: String,
+    },
     #[error("memory tier {0:?} is not supported by this device")]
     UnsupportedMemoryTier(MemoryTier),
     #[error("buffer belongs to another device instance")]
