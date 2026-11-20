@@ -419,6 +419,39 @@ impl CudaMemoryManager {
         })
     }
 
+    /// Poll every pending transfer without blocking and retire only events
+    /// that CUDA positively reports as complete.
+    ///
+    /// If any event query fails, the error is returned and that event remains
+    /// tracked with its allocation guards intact. Earlier positively completed
+    /// events may already have been retired; an error is never treated as success.
+    pub fn poll_completed_transfers(&mut self, tick: u64) -> Result<usize, CudaMemoryError> {
+        self.advance_tick(tick)?;
+        let mut retired = 0;
+        let mut index = 0;
+        while index < self.pending.len() {
+            // Query before mutating the tracker. Any driver error leaves this
+            // event and every allocation it protects untouched.
+            if !self.pending[index].2.is_complete()? {
+                index += 1;
+                continue;
+            }
+
+            let (_, ids, _event, completed) = self.pending.remove(index);
+            completed.store(true, Ordering::Release);
+            for completed_id in ids {
+                let still_in_flight = self.pending.iter().any(|(_, pending_ids, _, _)| {
+                    pending_ids.iter().any(|pending_id| pending_id == &completed_id)
+                });
+                if !still_in_flight {
+                    self.policy.mark_in_flight_until(&completed_id, tick)?;
+                }
+            }
+            retired += 1;
+        }
+        Ok(retired)
+    }
+
     /// Query the associated CUDA event without blocking. A token is complete
     /// after its event query succeeds or an explicit wait synchronizes it.
     /// This query does not retire the pending event or release allocation guards;
@@ -559,6 +592,9 @@ impl CudaMemoryManager {
         bytes: u64,
         tick: u64,
     ) -> Result<(), CudaMemoryError> {
+        // Reclaim transfers already completed by the device before planning
+        // evictions. Polling is non-blocking; pending/error states stay guarded.
+        self.poll_completed_transfers(tick)?;
         let plan = self.policy.plan_admission(tier, bytes, tick)?;
         for id in plan.evict_ids {
             self.release(&id, tick)?;
@@ -665,17 +701,22 @@ mod tests {
             .allocate_device("device", expected.len() as u64, 1, false)
             .unwrap();
         manager.write_pinned("host", 0, expected, 2).unwrap();
-        manager
+        let h2d = manager
             .copy_h2d("host", "device", expected.len(), 3)
             .unwrap();
-        manager
-            .copy_d2h("device", "host", expected.len(), 4)
+        // Polling is explicitly non-blocking; the transfer may or may not have
+        // completed by this point. Either result is valid.
+        let _ = manager.is_transfer_complete(&h2d).unwrap();
+        manager.wait_for_transfer(&h2d, 4).unwrap();
+        let d2h = manager
+            .copy_d2h("device", "host", expected.len(), 5)
             .unwrap();
+        manager.wait_for_transfer(&d2h, 6).unwrap();
         assert_eq!(
-            manager.read_pinned("host", 0, expected.len(), 5).unwrap(),
+            manager.read_pinned("host", 0, expected.len(), 7).unwrap(),
             expected
         );
-        manager.release("device", 6).unwrap();
-        manager.release("host", 6).unwrap();
+        manager.release("device", 8).unwrap();
+        manager.release("host", 8).unwrap();
     }
 }
