@@ -103,7 +103,7 @@ Le profil matériel actuel cible un seul GPU NVIDIA. Les chemins H2D et D2H sont
 - [x] Les contrats asynchrones définissent les obligations de durée de vie et de fail-closed.
 - [x] Les vues tensor stridées valident rang, overflow et étendue mémoire.
 - [x] Le wrapper CUDA possède un nom distinct du contrat backend-neutre.
-- [ ] CI stable/MSRV et feature CUDA validées sur le HEAD final de la PR.
+- [x] CI stable/MSRV et feature CUDA validées sur le HEAD `596bd40d37514fabf3a559e9d15c04a420c356d4` (workflow [44749236821](https://github.com/zenhit777/Claymore/actions/runs/44749236821)) : format, tests, check CUDA, Clippy standard et Clippy CUDA ; tests workspace sur Rust 1.86.0.
 - [ ] Revue architecturale et fusion.
 - [ ] Validation matérielle des nouveaux chemins event query/wait sur RTX 5090 (suivi M5 si non disponible pendant M4).
 
