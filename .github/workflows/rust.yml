@@ -37,3 +37,13 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Run Clippy with optional CUDA feature
         run: cargo clippy -p claymore-memory -p claymore-cli --features cuda-driver --all-targets -- -D warnings
+
+  msrv:
+    name: Minimum supported Rust 1.86
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.86.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Verify workspace on the declared MSRV
+        run: cargo test --workspace --all-targets
