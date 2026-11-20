@@ -131,6 +131,14 @@ pub enum DeviceError {
     TensorBufferTooSmall { required: usize, capacity: usize },
 }
 
+fn checked_allocation_len(bytes: u64, platform_max: usize) -> Result<usize, DeviceError> {
+    let len = checked_allocation_len(bytes, usize::MAX)?;
+    if len > platform_max {
+        return Err(DeviceError::SizeOverflow);
+    }
+    Ok(len)
+}
+
 fn allocate_zeroed_with<E: std::fmt::Display>(
     len: usize,
     reserve: impl FnOnce(&mut Vec<u8>, usize) -> Result<(), E>,
@@ -493,6 +501,8 @@ mod tests {
             first.copy(first_buffer.as_ref(), second_buffer.as_mut(), 1),
             Err(DeviceError::DeviceMismatch)
         );
+        assert_eq!(second.read(second_buffer.as_ref(), 0, 4).unwrap(), [0; 4]);
+        assert_eq!(first.read(first_buffer.as_ref(), 0, 4).unwrap(), [0; 4]);
     }
 
     #[test]
@@ -529,6 +539,19 @@ mod tests {
             device.allocate(MemoryTier::Host, 0).err(),
             Some(DeviceError::ZeroSizedAllocation)
         );
+    }
+
+    #[test]
+    fn size_overflow_is_distinct_from_allocation_failure() {
+        assert_eq!(
+            checked_allocation_len(1025, 1024),
+            Err(DeviceError::SizeOverflow)
+        );
+        let oom = allocate_zeroed_with(1025, |_storage: &mut Vec<u8>, _len| {
+            Err::<(), _>("injected allocator exhaustion")
+        })
+        .unwrap_err();
+        assert!(matches!(oom, DeviceError::OutOfMemory { .. }));
     }
 
     #[test]
