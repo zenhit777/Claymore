@@ -437,18 +437,28 @@ impl CudaMemoryManager {
                 continue;
             }
 
-            let (_, ids, _event, completed) = self.pending.remove(index);
-            completed.store(true, Ordering::Release);
-            for completed_id in ids {
-                let still_in_flight = self.pending.iter().any(|(_, pending_ids, _, _)| {
-                    pending_ids
-                        .iter()
-                        .any(|pending_id| pending_id == &completed_id)
-                });
+            // Keep the completed event tracked until every allocation guard
+            // it owns has been safely lifted. If policy bookkeeping fails partway
+            // through, a later poll can retry while this event remains discoverable.
+            let ids = self.pending[index].1.clone();
+            for completed_id in &ids {
+                let still_in_flight = self.pending.iter().enumerate().any(
+                    |(pending_index, (_, pending_ids, _, _))| {
+                        pending_index != index
+                            && pending_ids
+                                .iter()
+                                .any(|pending_id| pending_id == completed_id)
+                    },
+                );
                 if !still_in_flight {
-                    self.policy.mark_in_flight_until(&completed_id, tick)?;
+                    self.policy.mark_in_flight_until(completed_id, tick)?;
                 }
             }
+
+            // All guards are now safely lifted. Only now may the event stop
+            // being tracked and its shared completion state become observable.
+            let (_, _, _event, completed) = self.pending.remove(index);
+            completed.store(true, Ordering::Release);
             retired += 1;
         }
         Ok(retired)
