@@ -4,6 +4,7 @@
 **Branche auditée :** main  
 **Révision auditée :** 7a0f4fc84cdf50d93a8f2d048bf3283d04ff106f  
 **Date :** 19 novembre 2026  
+**Note de révision (20 novembre 2026) :** la décision d'architecture postérieure à cet audit retient un moteur tensoriel natif appartenant à Claymore. Les bibliothèques CUDA/NVIDIA de bas niveau peuvent être utilisées comme primitives ; aucun framework tensoriel tiers n'est une cible d'intégration. Cette note complète la trajectoire du projet sans modifier les constats historiques de l'audit M1.
 **Objet :** état réel du dépôt, risques bloquants et périmètre de consolidation M1.
 
 ---
