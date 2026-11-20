@@ -209,6 +209,7 @@ mod tests {
 
     struct FailingReleaseBuffer {
         inner: Box<dyn DeviceBuffer>,
+        fail_next_release: bool,
     }
 
     impl DeviceBuffer for FailingReleaseBuffer {
@@ -229,9 +230,13 @@ mod tests {
         }
 
         fn release(&mut self) -> Result<(), DeviceError> {
-            Err(DeviceError::ReleaseFailed(
-                "injected backend failure".to_owned(),
-            ))
+            if self.fail_next_release {
+                self.fail_next_release = false;
+                return Err(DeviceError::ReleaseFailed(
+                    "injected backend failure".to_owned(),
+                ));
+            }
+            self.inner.release()
         }
 
         fn as_any(&self) -> &dyn std::any::Any {
@@ -263,6 +268,7 @@ mod tests {
         ) -> Result<Box<dyn DeviceBuffer>, DeviceError> {
             Ok(Box::new(FailingReleaseBuffer {
                 inner: self.inner.allocate(tier, bytes)?,
+                fail_next_release: true,
             }))
         }
 
@@ -363,6 +369,10 @@ mod tests {
         assert!(manager.allocation("buffer").is_some());
         assert_eq!(manager.usage_bytes(MemoryTier::Host), 16);
         assert_eq!(manager.read("buffer", 0, 3, 4).unwrap(), [1, 2, 3]);
+
+        manager.release("buffer", 4).unwrap();
+        assert!(manager.allocation("buffer").is_none());
+        assert_eq!(manager.usage_bytes(MemoryTier::Host), 0);
     }
 
     #[test]
