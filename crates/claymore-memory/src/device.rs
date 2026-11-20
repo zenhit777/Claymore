@@ -323,5 +323,4 @@ mod tests {
         assert!(!capabilities.asynchronous_transfers);
         assert!(!capabilities.tensor_compute);
     }
-
 }
