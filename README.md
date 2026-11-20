@@ -1,6 +1,6 @@
 # Claymore
 
-Claymore is an experimental Rust inference runtime built around Hugging Face Candle, targeting efficient execution of DiffusionGemma and Clover-35B-A3B-preview on a single NVIDIA GPU.
+Claymore is an experimental Rust inference runtime with its own device, memory, tensor, and model-execution architecture, targeting efficient execution of DiffusionGemma and Clover-35B-A3B-preview on a single NVIDIA GPU.
 
 ## Target development machine
 
@@ -12,9 +12,10 @@ Claymore is an experimental Rust inference runtime built around Hugging Face Can
 
 ## Architecture
 
-The workspace is split into seven crates:
+The workspace is split into eight crates:
 
 - `claymore-core`: shared runtime types and configuration
+- `claymore-device`: backend-neutral Device/Buffer/Tensor contracts and CPU simulator
 - `claymore-memory`: memory budgets, placement policies, and expert-cache policy
 - `claymore-scheduler`: work scheduling and prefetch policy
 - `claymore-model-gemma`: DiffusionGemma integration boundary
@@ -26,7 +27,7 @@ The optimization roadmap includes a memory orchestrator, adaptive expert cache, 
 
 ## Important implementation status
 
-This repository is an early-stage runtime. The v0.3 memory crate contains deterministic budget validation, allocation accounting, admission planning, LRU/LFU/adaptive eviction policy hooks, and an event-horizon safety check. These are host-side policies only: they do not yet orchestrate real CUDA allocation, pinned memory, asynchronous transfers, Candle model execution, or specialized kernels.
+This repository is an early-stage runtime. The v0.3 memory crate contains deterministic budget validation, allocation accounting, admission planning, LRU/LFU/adaptive eviction policy hooks, and an event-horizon safety check. These are host-side policies only: they do not yet orchestrate real CUDA allocation, pinned memory, asynchronous transfers, native Claymore model execution, or specialized kernels.
 
 The CUDA backend is opt-in and links directly to the NVIDIA Driver API. The default workspace build remains hardware-independent. The CUDA feature has not yet been compiled or exercised on the target WSL2 machine. Validate locally with:
 
