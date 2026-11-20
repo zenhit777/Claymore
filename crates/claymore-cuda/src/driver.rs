@@ -81,6 +81,16 @@ fn as_size(bytes: u64) -> Result<usize, CudaError> {
     usize::try_from(bytes).map_err(|_| CudaError::SizeOverflow)
 }
 
+fn event_query_result(result: CuResult) -> Result<bool, CudaError> {
+    if result == CUDA_SUCCESS {
+        Ok(true)
+    } else if result == CUDA_ERROR_NOT_READY {
+        Ok(false)
+    } else {
+        Err(CudaError::Driver { operation: "cuEventQuery", code: result })
+    }
+}
+
 fn ensure_same_context(left: CuContext, right: CuContext) -> Result<(), CudaError> {
     if left == right {
         Ok(())
@@ -482,13 +492,7 @@ impl CudaEvent {
         self.context.activate()?;
         // SAFETY: raw is a live event owned by this object.
         let result = unsafe { cuEventQuery(self.raw) };
-        if result == CUDA_SUCCESS {
-            Ok(true)
-        } else if result == CUDA_ERROR_NOT_READY {
-            Ok(false)
-        } else {
-            Err(CudaError::Driver { operation: "cuEventQuery", code: result })
-        }
+        event_query_result(result)
     }
 
     pub fn synchronize(&self) -> Result<(), CudaError> {
@@ -522,6 +526,16 @@ mod tests {
         assert!(matches!(
             ensure_same_context(context, 2_usize as CuContext),
             Err(CudaError::ContextMismatch)
+        ));
+    }
+
+    #[test]
+    fn event_query_distinguishes_complete_pending_and_driver_failure() {
+        assert_eq!(event_query_result(CUDA_SUCCESS), Ok(true));
+        assert_eq!(event_query_result(CUDA_ERROR_NOT_READY), Ok(false));
+        assert!(matches!(
+            event_query_result(999),
+            Err(CudaError::Driver { operation: "cuEventQuery", code: 999 })
         ));
     }
 
