@@ -534,7 +534,7 @@ mod tests {
     }
 
     #[test]
-    fn event_query_distinguishes_complete_pending_and_driver_failure() {
+    fn event_query_status_conversion_distinguishes_complete_pending_and_driver_failure() {
         assert_eq!(event_query_result(CUDA_SUCCESS), Ok(true));
         assert_eq!(event_query_result(CUDA_ERROR_NOT_READY), Ok(false));
         assert!(matches!(
@@ -547,7 +547,7 @@ mod tests {
     }
 
     #[test]
-    fn stream_synchronization_driver_errors_are_propagated() {
+    fn driver_error_conversion_preserves_operation_and_code() {
         assert!(matches!(
             check(999, "cuStreamSynchronize"),
             Err(CudaError::Driver {
