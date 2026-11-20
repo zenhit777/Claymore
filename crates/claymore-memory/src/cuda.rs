@@ -10,7 +10,9 @@ use crate::{
     Allocation, EvictionPolicy, MemoryBudgets, MemoryError, MemoryOrchestrator, MemorySnapshot,
 };
 use claymore_core::MemoryTier;
-use claymore_cuda::{CudaDriver, CudaError, CudaEvent, CudaStream, CudaDeviceBuffer, PinnedHostBuffer};
+use claymore_cuda::{
+    CudaDeviceBuffer, CudaDriver, CudaError, CudaEvent, CudaStream, PinnedHostBuffer,
+};
 
 const IN_FLIGHT: u64 = crate::lifecycle::IN_FLIGHT_TICK;
 static NEXT_TRANSFER_ID: AtomicU64 = AtomicU64::new(1);
@@ -18,8 +20,15 @@ static NEXT_TRANSFER_ID: AtomicU64 = AtomicU64::new(1);
 fn allocate_transfer_id() -> Result<u64, CudaMemoryError> {
     let mut current = NEXT_TRANSFER_ID.load(Ordering::Relaxed);
     loop {
-        let next = current.checked_add(1).ok_or(CudaMemoryError::TransferIdExhausted)?;
-        match NEXT_TRANSFER_ID.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
+        let next = current
+            .checked_add(1)
+            .ok_or(CudaMemoryError::TransferIdExhausted)?;
+        match NEXT_TRANSFER_ID.compare_exchange_weak(
+            current,
+            next,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
             Ok(_) => return Ok(current),
             Err(observed) => current = observed,
         }
@@ -75,8 +84,12 @@ pub struct TransferToken {
 }
 
 impl TransferToken {
-    pub fn id(&self) -> u64 { self.id }
-    pub fn allocation_ids(&self) -> &[String] { &self.allocation_ids }
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+    pub fn allocation_ids(&self) -> &[String] {
+        &self.allocation_ids
+    }
 }
 
 pub struct CudaMemoryManager {
@@ -327,10 +340,14 @@ impl CudaMemoryManager {
         self.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
         self.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
         let allocation_ids = vec![pinned_id.to_owned(), device_id.to_owned()];
-        self.pending.push((transfer_id, allocation_ids.clone(), event));
+        self.pending
+            .push((transfer_id, allocation_ids.clone(), event));
         self.policy.touch(pinned_id, tick)?;
         self.policy.touch(device_id, tick)?;
-        Ok(TransferToken { id: transfer_id, allocation_ids })
+        Ok(TransferToken {
+            id: transfer_id,
+            allocation_ids,
+        })
     }
 
     pub fn copy_d2h(
@@ -379,9 +396,11 @@ impl CudaMemoryManager {
     /// Query the associated CUDA event without blocking. A missing pending
     /// entry means an earlier explicit wait already confirmed completion.
     pub fn is_transfer_complete(&self, token: &TransferToken) -> Result<bool, CudaMemoryError> {
-        if let Some((_, _, event)) = self.pending.iter().find(|(id, ids, _)| {
-            *id == token.id && *ids == token.allocation_ids
-        }) {
+        if let Some((_, _, event)) = self
+            .pending
+            .iter()
+            .find(|(id, ids, _)| *id == token.id && *ids == token.allocation_ids)
+        {
             Ok(event.is_complete()?)
         } else {
             Ok(true)
@@ -396,7 +415,9 @@ impl CudaMemoryManager {
         tick: u64,
     ) -> Result<(), CudaMemoryError> {
         self.advance_tick(tick)?;
-        let allocation_ids = self.pending.iter()
+        let allocation_ids = self
+            .pending
+            .iter()
             .find(|(id, ids, _)| *id == token.id && *ids == token.allocation_ids)
             .map(|(_, ids, _)| ids.clone());
         if let Some(allocation_ids) = allocation_ids {
