@@ -423,8 +423,11 @@ impl CudaMemoryManager {
     /// that CUDA positively reports as complete.
     ///
     /// If any event query fails, the error is returned and that event remains
-    /// tracked with its allocation guards intact. Earlier positively completed
-    /// events may already have been retired; an error is never treated as success.
+    /// tracked with its allocation guards intact. A completed event is also kept
+    /// tracked until every guard no longer covered by another pending transfer
+    /// has been lifted successfully; policy errors therefore remain retryable.
+    /// Earlier completed events may already have been retired; an error is never
+    /// treated as success.
     pub fn poll_completed_transfers(&mut self, tick: u64) -> Result<usize, CudaMemoryError> {
         self.advance_tick(tick)?;
         let mut retired = 0;
