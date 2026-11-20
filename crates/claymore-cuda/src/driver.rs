@@ -221,13 +221,13 @@ impl CudaDriver {
         Ok((free as u64, total as u64))
     }
 
-    pub fn allocate(&self, bytes: u64) -> Result<DeviceBuffer, CudaError> {
+    pub fn allocate(&self, bytes: u64) -> Result<CudaDeviceBuffer, CudaError> {
         let len = as_size(bytes)?;
         self.context.activate()?;
         let mut pointer = 0;
         // SAFETY: pointer is valid output storage; CUDA owns the resulting allocation.
         check(unsafe { cuMemAlloc_v2(&mut pointer, len) }, "cuMemAlloc_v2")?;
-        Ok(DeviceBuffer {
+        Ok(CudaDeviceBuffer {
             context: Rc::clone(&self.context),
             pointer,
             len,
@@ -286,12 +286,12 @@ impl DeviceInventory for CudaDriver {
     }
 }
 
-pub struct DeviceBuffer {
+pub struct CudaDeviceBuffer {
     context: Rc<ContextInner>,
     pointer: CuDevicePtr,
     len: usize,
 }
-impl DeviceBuffer {
+impl CudaDeviceBuffer {
     pub fn len(&self) -> usize {
         self.len
     }
@@ -378,7 +378,7 @@ impl DeviceBuffer {
         )
     }
 }
-impl Drop for DeviceBuffer {
+impl Drop for CudaDeviceBuffer {
     fn drop(&mut self) {
         if self.pointer != 0 && self.context.activate().is_ok() {
             // SAFETY: pointer is a live allocation owned by this object.
