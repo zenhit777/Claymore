@@ -3,6 +3,7 @@
 //! These helpers centralize logical-clock and release-horizon semantics without
 //! forcing CPU and CUDA resource ownership into one backend abstraction.
 
+#[cfg(feature = "cuda-driver")]
 pub(crate) const IN_FLIGHT_TICK: u64 = u64::MAX;
 
 /// Returns the backwards transition, if any. Equal ticks are intentionally valid.
