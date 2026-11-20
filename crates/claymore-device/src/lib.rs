@@ -612,6 +612,23 @@ mod tests {
         complete: bool,
     }
 
+    struct BorrowedFakeCompletionToken<'a> {
+        _source: &'a dyn DeviceBuffer,
+        _destination: &'a mut dyn DeviceBuffer,
+        complete: bool,
+    }
+
+    impl CompletionToken for BorrowedFakeCompletionToken<'_> {
+        fn is_complete(&mut self) -> Result<bool, DeviceError> {
+            Ok(self.complete)
+        }
+
+        fn wait(&mut self) -> Result<(), DeviceError> {
+            self.complete = true;
+            Ok(())
+        }
+    }
+
     impl CompletionToken for FakeCompletionToken {
         fn is_complete(&mut self) -> Result<bool, DeviceError> {
             Ok(self.complete)
@@ -620,6 +637,24 @@ mod tests {
             self.complete = true;
             Ok(())
         }
+    }
+
+    #[test]
+    fn borrowed_completion_token_keeps_buffers_borrowed_until_drop() {
+        let device = CpuDevice::new();
+        let source = device.allocate(MemoryTier::Host, 4).unwrap();
+        let mut destination = device.allocate(MemoryTier::Host, 4).unwrap();
+        let mut token = BorrowedFakeCompletionToken {
+            _source: source.as_ref(),
+            _destination: destination.as_mut(),
+            complete: false,
+        };
+
+        assert!(!token.is_complete().unwrap());
+        token.wait().unwrap();
+        assert!(token.is_complete().unwrap());
+        drop(token);
+        destination.release().unwrap();
     }
 
     #[test]
