@@ -252,7 +252,7 @@ impl Device for CpuDevice {
         if tier == MemoryTier::PinnedHost {
             return Err(DeviceError::UnsupportedMemoryTier(tier));
         }
-        let len = checked_allocation_len(bytes, usize::MAX)?;
+        let len = checked_allocation_len(bytes, isize::MAX as usize)?;
         let storage = allocate_zeroed_with(len, |storage, len| storage.try_reserve_exact(len))?;
         Ok(Box::new(CpuBuffer {
             device_id: self.info.id.clone(),
