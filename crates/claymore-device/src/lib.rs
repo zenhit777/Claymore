@@ -79,12 +79,25 @@ pub trait DeviceBuffer: Any {
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+    /// Explicitly release backend storage. On failure, the owner must retain
+    /// this buffer and its accounting entry so that release can be retried.
+    fn release(&mut self) -> Result<(), DeviceError>;
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
+/// A verifiable completion handle for asynchronous device work.
+///
+/// Implementations must make wait return only after completion. Dropping an
+/// incomplete token must synchronize or retain/leak every resource lease needed
+/// to prevent use-after-free; it must never silently release an in-flight buffer.
+pub trait CompletionToken {
+    fn is_complete(&mut self) -> Result<bool, DeviceError>;
+    fn wait(&mut self) -> Result<(), DeviceError>;
+}
+
 /// Synchronous operations: write/read/copy are complete when they return.
-/// Async work must later use an explicit completion token, not an implicit tick.
+/// Async work must expose a verifiable completion token.
 pub trait Device {
     fn info(&self) -> &DeviceInfo;
     fn capabilities(&self) -> DeviceCapabilities;
@@ -107,6 +120,17 @@ pub trait Device {
         destination: &mut dyn DeviceBuffer,
         bytes: usize,
     ) -> Result<(), DeviceError>;
+    /// Enqueue a copy and return a token that can be queried or waited.
+    /// The token borrows the device and both buffers for its lifetime.
+    fn copy_async<'a>(
+        &'a self,
+        source: &'a dyn DeviceBuffer,
+        destination: &'a mut dyn DeviceBuffer,
+        bytes: usize,
+    ) -> Result<Box<dyn CompletionToken + 'a>, DeviceError> {
+        let _ = (source, destination, bytes);
+        Err(DeviceError::UnsupportedOperation("asynchronous copy"))
+    }
     fn synchronize(&self) -> Result<(), DeviceError>;
 }
 
@@ -127,6 +151,14 @@ pub enum DeviceError {
     DeviceMismatch,
     #[error("buffer implementation is incompatible with this device")]
     BufferTypeMismatch,
+    #[error("buffer storage has already been released")]
+    BufferReleased,
+    #[error("buffer is still in use by an unfinished device operation")]
+    BufferBusy,
+    #[error("device operation is not supported: {0}")]
+    UnsupportedOperation(&'static str),
+    #[error("backend release failed: {0}")]
+    ReleaseFailed(String),
     #[error("buffer range {offset}..{end} exceeds capacity {capacity}")]
     BufferRangeOutOfBounds {
         offset: usize,
@@ -141,6 +173,8 @@ pub enum DeviceError {
     TensorSizeOverflow,
     #[error("tensor requires {required} bytes but its buffer has {capacity}")]
     TensorBufferTooSmall { required: usize, capacity: usize },
+    #[error("tensor shape rank {shape_rank} differs from stride rank {stride_rank}")]
+    TensorStrideRankMismatch { shape_rank: usize, stride_rank: usize },
 }
 
 fn checked_allocation_len(bytes: u64, platform_max: usize) -> Result<usize, DeviceError> {
@@ -194,10 +228,14 @@ impl CpuDevice {
         if buffer.device_instance_id() != self.info.instance_id {
             return Err(DeviceError::DeviceMismatch);
         }
-        buffer
+        let buffer = buffer
             .as_any()
             .downcast_ref::<CpuBuffer>()
-            .ok_or(DeviceError::BufferTypeMismatch)
+            .ok_or(DeviceError::BufferTypeMismatch)?;
+        if buffer.released {
+            return Err(DeviceError::BufferReleased);
+        }
+        Ok(buffer)
     }
 
     fn checked_mut<'a>(
@@ -207,10 +245,14 @@ impl CpuDevice {
         if buffer.device_instance_id() != self.info.instance_id {
             return Err(DeviceError::DeviceMismatch);
         }
-        buffer
+        let buffer = buffer
             .as_any_mut()
             .downcast_mut::<CpuBuffer>()
-            .ok_or(DeviceError::BufferTypeMismatch)
+            .ok_or(DeviceError::BufferTypeMismatch)?;
+        if buffer.released {
+            return Err(DeviceError::BufferReleased);
+        }
+        Ok(buffer)
     }
 }
 
@@ -219,6 +261,7 @@ struct CpuBuffer {
     device_instance_id: DeviceInstanceId,
     tier: MemoryTier,
     bytes: Vec<u8>,
+    released: bool,
 }
 
 impl DeviceBuffer for CpuBuffer {
@@ -233,6 +276,14 @@ impl DeviceBuffer for CpuBuffer {
     }
     fn len(&self) -> usize {
         self.bytes.len()
+    }
+    fn release(&mut self) -> Result<(), DeviceError> {
+        if self.released {
+            return Err(DeviceError::BufferReleased);
+        }
+        self.bytes = Vec::new();
+        self.released = true;
+        Ok(())
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -271,6 +322,7 @@ impl Device for CpuDevice {
             device_instance_id: self.info.instance_id,
             tier,
             bytes: storage,
+            released: false,
         }))
     }
 
@@ -440,6 +492,73 @@ impl Tensor {
     pub fn into_buffer(self) -> Box<dyn DeviceBuffer> {
         self.buffer
     }
+
+    /// Create a borrowed strided view over this tensor's storage.
+    pub fn view<'a>(
+        &'a self,
+        shape: impl Into<Vec<usize>>,
+        strides: impl Into<Vec<usize>>,
+        offset_bytes: usize,
+    ) -> Result<TensorView<'a>, DeviceError> {
+        TensorView::new(self.buffer.as_ref(), shape, strides, self.dtype, offset_bytes)
+    }
+}
+
+/// Borrowed tensor metadata over an existing allocation. Strides are measured
+/// in elements; offset_bytes is measured in bytes. No storage is allocated.
+pub struct TensorView<'a> {
+    buffer: &'a dyn DeviceBuffer,
+    shape: Vec<usize>,
+    strides: Vec<usize>,
+    dtype: DType,
+    numel: usize,
+    offset_bytes: usize,
+    span_bytes: usize,
+}
+
+impl<'a> TensorView<'a> {
+    pub fn new(
+        buffer: &'a dyn DeviceBuffer,
+        shape: impl Into<Vec<usize>>,
+        strides: impl Into<Vec<usize>>,
+        dtype: DType,
+        offset_bytes: usize,
+    ) -> Result<Self, DeviceError> {
+        let shape = shape.into();
+        let strides = strides.into();
+        if shape.len() != strides.len() {
+            return Err(DeviceError::TensorStrideRankMismatch {
+                shape_rank: shape.len(),
+                stride_rank: strides.len(),
+            });
+        }
+        let mut numel = 1_usize;
+        let mut max_element_offset = 0_usize;
+        for (&dimension, &stride) in shape.iter().zip(&strides) {
+            if dimension == 0 {
+                return Err(DeviceError::EmptyTensorDimension);
+            }
+            numel = numel.checked_mul(dimension).ok_or(DeviceError::TensorSizeOverflow)?;
+            let axis_span = (dimension - 1).checked_mul(stride).ok_or(DeviceError::TensorSizeOverflow)?;
+            max_element_offset = max_element_offset.checked_add(axis_span).ok_or(DeviceError::TensorSizeOverflow)?;
+        }
+        let span_bytes = max_element_offset.checked_add(1)
+            .and_then(|elements| elements.checked_mul(dtype.element_size_bytes()))
+            .ok_or(DeviceError::TensorSizeOverflow)?;
+        let end = offset_bytes.checked_add(span_bytes).ok_or(DeviceError::TensorSizeOverflow)?;
+        if end > buffer.len() {
+            return Err(DeviceError::TensorBufferTooSmall { required: end, capacity: buffer.len() });
+        }
+        Ok(Self { buffer, shape, strides, dtype, numel, offset_bytes, span_bytes })
+    }
+
+    pub fn shape(&self) -> &[usize] { &self.shape }
+    pub fn strides(&self) -> &[usize] { &self.strides }
+    pub fn dtype(&self) -> DType { self.dtype }
+    pub fn numel(&self) -> usize { self.numel }
+    pub fn offset_bytes(&self) -> usize { self.offset_bytes }
+    pub fn span_bytes(&self) -> usize { self.span_bytes }
+    pub fn buffer(&self) -> &'a dyn DeviceBuffer { self.buffer }
 }
 
 #[cfg(test)]
@@ -583,6 +702,41 @@ mod tests {
                 reason: "injected allocation failure".to_owned(),
             }
         );
+    }
+
+    #[test]
+    fn cpu_buffer_explicit_release_is_checked_and_blocks_access() {
+        let device = CpuDevice::new();
+        let mut buffer = device.allocate(MemoryTier::Host, 8).unwrap();
+        buffer.release().unwrap();
+        assert_eq!(buffer.len(), 0);
+        assert_eq!(buffer.release(), Err(DeviceError::BufferReleased));
+        assert_eq!(device.read(buffer.as_ref(), 0, 1), Err(DeviceError::BufferReleased));
+    }
+
+    #[test]
+    fn tensor_view_supports_non_contiguous_layouts() {
+        let device = CpuDevice::new();
+        let buffer = device.allocate(MemoryTier::Host, 64).unwrap();
+        let view = TensorView::new(&*buffer, vec![2, 3], vec![5, 1], DType::F32, 4).unwrap();
+        assert_eq!(view.shape(), [2, 3]);
+        assert_eq!(view.strides(), [5, 1]);
+        assert_eq!(view.offset_bytes(), 4);
+        assert_eq!(view.span_bytes(), 36);
+    }
+
+    #[test]
+    fn tensor_view_rejects_rank_mismatch_and_out_of_bounds_span() {
+        let device = CpuDevice::new();
+        let buffer = device.allocate(MemoryTier::Host, 16).unwrap();
+        assert!(matches!(
+            TensorView::new(&*buffer, vec![2, 3], vec![3], DType::F32, 0),
+            Err(DeviceError::TensorStrideRankMismatch { .. })
+        ));
+        assert!(matches!(
+            TensorView::new(&*buffer, vec![2, 3], vec![5, 1], DType::F32, 0),
+            Err(DeviceError::TensorBufferTooSmall { .. })
+        ));
     }
 
     #[test]
