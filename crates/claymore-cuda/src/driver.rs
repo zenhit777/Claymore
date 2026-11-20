@@ -535,8 +535,8 @@ mod tests {
 
     #[test]
     fn event_query_status_conversion_distinguishes_complete_pending_and_driver_failure() {
-        assert_eq!(event_query_result(CUDA_SUCCESS), Ok(true));
-        assert_eq!(event_query_result(CUDA_ERROR_NOT_READY), Ok(false));
+        assert!(matches!(event_query_result(CUDA_SUCCESS), Ok(true)));
+        assert!(matches!(event_query_result(CUDA_ERROR_NOT_READY), Ok(false)));
         assert!(matches!(
             event_query_result(999),
             Err(CudaError::Driver {
