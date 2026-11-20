@@ -45,7 +45,7 @@ Claymore est un runtime expérimental d'inférence écrit en **Rust**, conçu po
 
 Le projet vise à construire progressivement un moteur spécialisé qui combine :
 
-1. une exécution de modèles fondée sur **Hugging Face Candle** ;
+1. une exécution de modèles fondée sur les composants natifs de Claymore ;
 2. une orchestration explicite des ressources CPU, RAM, VRAM et mémoire hôte épinglée ;
 3. une gestion de résidence et de cache des experts pour les architectures Mixture-of-Experts (MoE) ;
 4. un ordonnanceur conscient des transferts et des coûts de chargement ;
@@ -72,7 +72,7 @@ Ne sont pas des objectifs des premières versions :
 - un cluster multi-GPU ou multi-machine ;
 - une API réseau de production avec authentification et gestion de tenants ;
 - l'entraînement ou le fine-tuning des modèles ;
-- une compatibilité universelle avec toutes les architectures Candle ;
+- une compatibilité universelle avec toutes les architectures de modèles ;
 - une promesse de faire tenir intégralement en VRAM un modèle dont les poids dépassent le budget disponible ;
 - l'usage du swap système comme niveau normal de stockage des poids.
 
@@ -130,7 +130,7 @@ La première cible de développement et de validation est la machine suivante :
 | RAM système | 128 Gio |
 | Environnement | WSL2 sous Windows |
 | Langage | Rust, édition 2021 |
-| Backend de tenseurs visé | Hugging Face Candle |
+| Backend de tenseurs visé | Moteur tensoriel natif Claymore (à construire) |
 | Politique numérique | précision mixte, BF16 privilégié lorsque supporté |
 
 Cette configuration est le profil de référence, pas une limite architecturale du projet. Les paramètres matériels doivent rester configurables.
@@ -245,7 +245,7 @@ L'architecture est organisée en couches avec des frontières explicites.
    - télémétrie et profiling.
 
 4. **Backend d'exécution**
-   - Candle pour les tenseurs et l'exécution des modèles ;
+   - moteur tensoriel et exécution des modèles propres à Claymore ;
    - backend CUDA pour les allocations, transferts, streams et events ;
    - kernels spécialisés lorsque leur nécessité est démontrée.
 
@@ -350,7 +350,7 @@ Les éléments suivants ne doivent pas être considérés comme fonctionnels de 
 - moteur de transfert piloté par le scheduler ;
 - prefetch prédictif intégré au cache d'experts ;
 - télémétrie consolidée CPU/RAM/VRAM/transferts ;
-- intégration effective de Candle dans le chemin d'inférence ;
+- moteur tensoriel natif et chemin d'inférence effectif ;
 - chargement et exécution réels de DiffusionGemma ;
 - chargement et exécution réels de Clover-35B-A3B-preview ;
 - kernels CUDA spécialisés et kernel dispatcher opérationnel ;
@@ -366,9 +366,9 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 - les appels de copie asynchrone imposent à l'appelant de conserver les buffers vivants et de synchroniser avant leur destruction ou réutilisation ;
 - les CUDA events sont connectés aux transferts du `CudaMemoryManager` ; leur complétion est traitée par attente explicite, sans polling non bloquant ni finalisation automatique lors d'une admission ;
 - le backend CUDA et le `CudaMemoryManager` sont confinés au thread propriétaire (`Rc`, types non `Send`/`Sync`) ; le scheduler M4 devra déléguer les opérations CUDA à un thread propriétaire dédié ou faire évoluer explicitement ce modèle de concurrence ;
-- la validation runtime sous WSL2 / RTX 5090 est attestée pour le SHA `a3ff0fd` par `docs/audits/m1-hardware-validation.md` ; elle couvre le contexte primaire, la compute capability, les allocations pinned/device, le roundtrip H2D/D2H et la libération, mais pas Compute Sanitizer, l'injection de faute fail-closed, Candle ni les performances.
+- la validation runtime sous WSL2 / RTX 5090 est attestée pour le SHA `a3ff0fd` par `docs/audits/m1-hardware-validation.md` ; elle couvre le contexte primaire, la compute capability, les allocations pinned/device, le roundtrip H2D/D2H et la libération, mais pas Compute Sanitizer, l'injection de faute fail-closed ni les performances.
 
-La CI standard valide le build par défaut sans exiger un GPU. Les tests matériels marqués `#[ignore]` ne sont pas exécutés par la CI. Le backend CUDA n'est pas encore relié à Candle. `CudaDriver::new` retient désormais le contexte primaire du device ; les opérations inter-ressources vérifient l'identité du contexte. Cela établit le contrat de partage CUDA visé, mais ne remplace pas un test d'intégration réel avec la version Candle/cudarc retenue en M5. Le backend et le manager restent confinés au thread propriétaire (`Rc`) ; aucune implémentation `Send`/`Sync` unsafe n'est envisagée.
+La CI standard valide le build par défaut sans exiger un GPU. Les tests matériels marqués `#[ignore]` ne sont pas exécutés par la CI. Le backend CUDA n'est pas encore relié au contrat `Device` de Claymore. `CudaDriver::new` retient le contexte primaire du device ; les opérations inter-ressources vérifient l'identité du contexte. Le raccordement futur devra préserver explicitement l'identité du contexte, l'ownership et la durée de vie des buffers. Le backend et le manager restent confinés au thread propriétaire (`Rc`) ; aucune implémentation `Send`/`Sync` unsafe n'est envisagée.
 
 ---
 
@@ -408,7 +408,7 @@ La CLI doit exposer les informations utiles au diagnostic du profil, du backend 
 
 ### FR-08 — Exécution des modèles
 
-Chaque moteur de modèle doit pouvoir préparer, exécuter et libérer ses états en respectant les contrats du runtime, de Candle et du backend. L'exécution ne sera considérée livrée qu'après tests fonctionnels sur les modèles ciblés.
+Chaque moteur de modèle doit pouvoir préparer, exécuter et libérer ses états en respectant les contrats du runtime, des tenseurs Claymore et du backend. L'exécution ne sera considérée livrée qu'après tests fonctionnels sur les modèles ciblés.
 
 ---
 
@@ -423,7 +423,7 @@ Chaque moteur de modèle doit pouvoir préparer, exécuter et libérer ses état
 | FR-05 — Gestion des experts | **Non livré** | Getters/compteur seulement ; cible et maximum non appliqués à l'admission. |
 | FR-06 — Scheduling et prefetch | **Non livré** | Configuration seulement ; aucune logique de scheduling/prefetch. |
 | FR-07 — Diagnostics | **Partiel** | CLI de base et diagnostic device optionnel ; le profil JSON n'est pas chargé. |
-| FR-08 — Exécution des modèles | **Non livré** | Pas d'intégration Candle ni d'inférence réelle des deux modèles. |
+| FR-08 — Exécution des modèles | **Non livré** | Pas de moteur tensoriel complet ni d'inférence réelle des deux modèles. |
 
 ## 9. Exigences non fonctionnelles et invariants
 
@@ -515,7 +515,7 @@ Critères d'acceptation :
 - backend simulé CPU pour les contrats Device/Tensor et l'adaptateur mémoire : livré et testé sans GPU ;
 - contrats de propriété, synchronisation synchrone et capacités documentés ;
 - aucune borne Send/Sync implicite : les backends peuvent rester confinés à leur thread/contexte ;
-- interopérabilité Candle définie comme adaptateur futur sans remplacer les tenseurs Candle ; version et API concrètes à figer en M5 ;
+- contrats Device/Tensor détenus par Claymore ; aucune bibliothèque tierce de tenseurs n'est imposée comme dépendance ou cible d'intégration ;
 - raccordement du backend CUDA au trait Device, transferts asynchrones avec jetons de complétion et validation GPU : hors M2, à traiter avant ou pendant M4/M5 selon le contrat d'exécution.
 
 ### M3 — Runtime unifié
@@ -545,14 +545,14 @@ Critères d'acceptation :
 - aucun buffer évincé avant complétion de ses dépendances ;
 - mesures séparées du temps de transfert, d'attente et de calcul.
 
-### M5 — Candle et premier chemin modèle
+### M5 — Moteur tensoriel Claymore et premier chemin modèle
 
-**Objectif :** intégrer Candle et obtenir un premier forward pass reproductible sur un modèle de référence.
+**Objectif :** construire le premier chemin tensoriel natif de Claymore et obtenir un forward pass reproductible sur un modèle de référence.
 
 Travaux :
-- fixer les versions et features Candle ;
+- définir et stabiliser les primitives de calcul tensoriel natives de Claymore ;
 - définir le chargement et la représentation des poids ;
-- connecter les tenseurs Candle aux contrats Device / Tensor / Memory ;
+- connecter les opérations tensorielle aux contrats Device / Tensor / Memory et au backend d'exécution Claymore ;
 - valider formes, précision, sorties et durée de vie des buffers.
 
 Critères d'acceptation :
@@ -637,7 +637,7 @@ Chaque benchmark devra préciser :
 - warmup et nombre d'itérations ;
 - latence, débit et temps de transfert ;
 - pic VRAM et RAM ;
-- version Rust, Candle, driver et environnement ;
+- version Rust, implémentation Claymore, driver et environnement ;
 - qualité ou métrique de comparaison pertinente.
 
 ---
@@ -661,7 +661,7 @@ Une PR ne doit pas être déclarée prête uniquement parce que le code existe :
 
 | Sujet | Risque / question | Décision ou traitement |
 |---|---|---|
-| Contexte CUDA / Candle | Les ressources CUDA doivent partager un contexte compatible avec Candle/cudarc | M1 retient le contexte primaire du device et vérifie les appartenances de contexte ; l'interopérabilité effective reste à démontrer par un test d'intégration avec la version Candle/cudarc retenue. Ne pas transmettre de pointeurs entre contextes distincts. |
+| Contexte CUDA | Les ressources CUDA doivent partager un contexte cohérent au sein de Claymore | M1 retient le contexte primaire du device et vérifie les appartenances de contexte ; le raccordement des buffers CUDA aux contrats Device/Tensor de Claymore devra être démontré par des tests d'intégration. Ne pas transmettre de pointeurs entre contextes distincts. |
 | Driver CUDA dans WSL2 | Bibliothèque ou lien linker absent | Vérifier `libcuda.so.1` et le linkage sur la cible |
 | Durée de vie async | Libération ou réutilisation prématurée | Ownership explicite et event de complétion |
 | Comptabilité mémoire | Écart entre état logique et mémoire réelle | Confirmer uniquement après succès backend |
@@ -721,7 +721,7 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-18 | La sûreté des opérations asynchrones doit être fondée sur les CUDA events réels, pas seulement sur un tick logique. |
 | 2026-11-18 | RAM hôte : enveloppes disjointes 64 Gio Host weights + 16 Gio Host staging/state + 8 Gio PinnedHost = 88 Gio ; limites de tiers Host 80 Gio et PinnedHost 8 Gio. |
 | 2026-11-19 | Référentiels RAM séparés : machine 128 Gio, plafond WSL2 115 GB, budget applicatif Claymore 88 Gio ; environ 13 Gio restent hors VM et la marge Linux au-dessus du budget applicatif doit être mesurée. |
-| 2026-11-19 | Le backend retient le contexte primaire CUDA du device ; l'interopérabilité effective avec Candle/cudarc sera testée en M5. |
+| 2026-11-19 | Le backend retient le contexte primaire CUDA du device ; le raccordement aux contrats Device/Tensor natifs de Claymore sera validé par des tests d'intégration dédiés. |
 | 2026-11-19 | Correspondance de la feuille de route précédente : ancien M2 (backend Driver) → socle livré v0.4/M0 ; ancien M3 (Memory ↔ CUDA) → v0.5/M0 et durcissement M1 ; ancien M4 (scheduler) → nouveau M4 ; ancien M5 (moteurs modèles) → M5/M6/M7 selon le chemin d'exécution ; ancien M6 (optimisation) → M8. Les tests simulés de l'adaptateur sont reportés à M2/M3 ; la preuve de protection d'une allocation en vol jusqu'à l'event relève de M4. |
 | 2026-11-19 | Le backend CUDA utilise `Rc` car son contexte n'est pas `Send`/`Sync` : driver, buffers, streams, events et `CudaMemoryManager` sont confinés au thread propriétaire ; M4 doit prévoir un thread CUDA dédié ou une évolution sûre de ce modèle. |
 | 2026-11-18 | Cette référence est rédigée en français ; README et documentation technique existante restent en anglais. |
@@ -734,7 +734,7 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | M2 | Backend CUDA Driver API | v0.4 livré ; socle historique M0 |
 | M3 | Intégration Memory ↔ CUDA | v0.5 livré dans le socle ; durcissement de sûreté M1 |
 | M4 | Scheduler, transferts et cache experts | M4 — Scheduler et orchestration mémoire |
-| M5 | Intégration Candle et moteurs modèles | M5 — Candle, M6 — autoregressif, M7 — diffusion |
+| M5 | Moteur tensoriel natif et premier chemin modèle | M5 — moteur tensoriel Claymore, M6 — autoregressif, M7 — diffusion |
 | M6 | Optimisation et validation RTX 5090 | M8 — Optimisation et validation de performance |
 
 Les critères de l'ancien M3 qui n'étaient pas couverts par le nouveau découpage sont explicitement réaffectés : backend simulé de l'adaptateur en M2/M3 ; démonstration de protection d'une allocation en vol jusqu'à la complétion de son event en M4.
