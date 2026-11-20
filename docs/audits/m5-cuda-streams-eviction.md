@@ -87,6 +87,6 @@ Aucune CI standard ne doit exiger un GPU ni linker le pilote CUDA. Les tests mat
 - [x] Les allocations restent protégées tant qu'un event associé reste en vol.
 - [x] Départage déterministe des évictions de priorité égale.
 - [x] Tests unitaires indépendants du GPU pour les résultats d'event et les erreurs de stream.
-- [ ] CI verte sur le HEAD final de la PR.
+- [x] CI verte sur le HEAD `1fe6ff5e8cc53f4fd5fd6d4d508e9321a56d47a2` : format, tests workspace, feature CUDA, Clippy standard/CUDA et MSRV Rust 1.86 (workflow [44817813430](https://github.com/zenhit777/Claymore/actions/runs/44817813430)).
 - [ ] Revue architecturale et fusion.
 - [ ] Validation matérielle RTX 5090.
