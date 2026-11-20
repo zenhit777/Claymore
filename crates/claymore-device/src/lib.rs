@@ -132,7 +132,7 @@ pub enum DeviceError {
 }
 
 fn checked_allocation_len(bytes: u64, platform_max: usize) -> Result<usize, DeviceError> {
-    let len = checked_allocation_len(bytes, usize::MAX)?;
+    let len = usize::try_from(bytes).map_err(|_| DeviceError::SizeOverflow)?;
     if len > platform_max {
         return Err(DeviceError::SizeOverflow);
     }
@@ -252,7 +252,7 @@ impl Device for CpuDevice {
         if tier == MemoryTier::PinnedHost {
             return Err(DeviceError::UnsupportedMemoryTier(tier));
         }
-        let len = usize::try_from(bytes).map_err(|_| DeviceError::SizeOverflow)?;
+        let len = checked_allocation_len(bytes, usize::MAX)?;
         let storage = allocate_zeroed_with(len, |storage, len| storage.try_reserve_exact(len))?;
         Ok(Box::new(CpuBuffer {
             device_id: self.info.id.clone(),
