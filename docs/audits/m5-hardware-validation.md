@@ -3,9 +3,9 @@
 **Périmètre :** stream non bloquant, polling des events, finalisation avant admission/éviction et déterminisme des évictions.  
 **Branche :** `feat/m5-cuda-streams-eviction-hardening`.  
 **Base M5 de la campagne générale :** `c465100202370d7b3246bb2cd656a435fbff4fc6`.  
-**HEAD contenant le correctif B2 et le test M5-HW-POLL-01 :** `a8cef7d70d68bf7510b6cea5f55a953d71d388e1`.  
+**HEAD contenant le correctif B2, le test M5-HW-POLL-01 et la couverture des égalités LRU/LFU/Adaptive :** `0b7314d3a9388ef528426cdb8e55e1c4831fc025`.  
 **Campagne générale :** 24 tests matériels PASS, 0 FAIL, documentés initialement dans la campagne M4/M5.  
-**Statut de la preuve ciblée B1 :** scénario dédié ajouté dans cette PR ; exécution sur RTX 5090 requise avant merge.
+**Statut de la preuve ciblée B1 :** scénario dédié ajouté dans cette PR ; CI stable et MSRV verte sur le HEAD indiqué ; exécution sur RTX 5090 requise avant merge.
 
 ## 1. Environnement observé
 
@@ -72,7 +72,7 @@ Procédure attendue :
 5. Demander une allocation `replacement` qui dépasse le budget disponible.
 6. Vérifier que l'admission réussit, que `victim` a été évincée et que la comptabilité correspond à `replacement`.
 
-**Résultat : NOT RUN — exécution ciblée sur RTX 5090 requise sur le HEAD corrigé de cette PR (`a8cef7d70d68bf7510b6cea5f55a953d71d388e1` ou son descendant documentaire).**
+**Résultat : NOT RUN — exécution ciblée sur RTX 5090 requise sur le HEAD corrigé de cette PR (`0b7314d3a9388ef528426cdb8e55e1c4831fc025` ou son descendant documentaire).**
 
 Aucun résultat n'est inféré de la campagne précédente. Après exécution, consigner ici le SHA exact, la commande, la sortie du test et sa durée.
 
