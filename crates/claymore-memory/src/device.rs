@@ -177,8 +177,15 @@ impl<D: Device> DeviceMemoryManager<D> {
         if allocation.safe_after_tick > tick {
             return Err(MemoryError::AllocationBusy(id.to_owned()).into());
         }
+        // Destroy the backend allocation before releasing its logical budget.
+        // The policy entry and safe_after_tick were checked above, so confirmation
+        // cannot fail unless the policy implementation violates its contract.
+        let buffer = self
+            .buffers
+            .remove(id)
+            .expect("buffer existence was checked above");
+        drop(buffer);
         let allocation = self.policy.confirm_eviction(id, tick)?;
-        self.buffers.remove(id);
         Ok(allocation)
     }
 
