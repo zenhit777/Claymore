@@ -1,6 +1,6 @@
 # M2 — Contrats Device / Tensor et backend CPU
 
-**Statut :** implémentation portée par la PR #6 (`feat/m2-device-tensor-abstractions`), en revue architecturale et non fusionnée dans `main`.
+**Statut :** M2 est livré par la PR #6 : contrats `Device` / `DeviceBuffer` / `Tensor`, simulateur CPU et adaptateur mémoire générique. Aucun calcul tensoriel ni raccordement CUDA au trait `Device` n'est inclus dans ce jalon.
 
 ## Portée
 
@@ -67,9 +67,9 @@ Le raccordement du backend CUDA devra respecter les contrats Claymore de context
 
 ## Validation CI
 
-SHA validé par la CI avant les corrections demandées par la revue : `de83b47bbf359a30166afa0130e06edf18869949`.
+SHA final validé par la CI après les corrections de revue : `795bcd9ad8b49e5de4cd0c67a1e27a4f9f037a24`.
 
-Sur ce SHA, les checks push et pull request sont verts : [CI push](https://github.com/zenhit777/Claymore/actions/runs/44645543927) et [CI pull request](https://github.com/zenhit777/Claymore/actions/runs/44645550522). Les corrections décrites dans cette mise à jour nécessitent une nouvelle exécution CI sur le SHA qui les contiendra. Le job CI a exécuté :
+Les deux checks sont verts sur ce SHA : [CI push](https://github.com/zenhit777/Claymore/actions/runs/44702130042) et [CI pull request](https://github.com/zenhit777/Claymore/actions/runs/44702134289). Le job CI a exécuté :
 - `cargo fmt --all -- --check` : succès ;
 - `cargo test --workspace --all-targets` : succès, dont 6 tests `claymore-device` et 9 tests `claymore-memory` ;
 - `cargo check -p claymore-memory --features cuda-driver` et `cargo check -p claymore-cli --features cuda-driver` : succès ;
