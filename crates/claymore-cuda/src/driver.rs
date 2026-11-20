@@ -547,6 +547,17 @@ mod tests {
     }
 
     #[test]
+    fn stream_synchronization_driver_errors_are_propagated() {
+        assert!(matches!(
+            check(999, "cuStreamSynchronize"),
+            Err(CudaError::Driver {
+                operation: "cuStreamSynchronize",
+                code: 999
+            })
+        ));
+    }
+
+    #[test]
     fn zero_sized_allocations_are_rejected_before_driver_calls() {
         assert!(matches!(as_size(0), Err(CudaError::ZeroSizedAllocation)));
         assert_eq!(as_size(1).unwrap(), 1);
