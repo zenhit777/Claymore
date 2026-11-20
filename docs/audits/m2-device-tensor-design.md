@@ -1,5 +1,7 @@
 # M2 — Contrats Device / Tensor et backend CPU
 
+**Statut :** implémentation portée par la PR #6 (`feat/m2-device-tensor-abstractions`), en revue architecturale et non fusionnée dans `main`.
+
 ## Portée
 
 M2 introduit une frontière backend-neutre pour les périphériques, les buffers et les métadonnées de tenseurs, ainsi qu'un backend CPU déterministe permettant de tester les contrats et l'adaptateur mémoire sans GPU.
@@ -19,7 +21,7 @@ Ce jalon ne livre ni opérateurs tensoriels, ni autograd, ni exécution de modè
 
 Les opérations de M2 (`write`, `read`, `copy`) sont synchrones : leur retour garantit que l'accès aux buffers est terminé. Un futur chemin asynchrone ne devra pas réutiliser ce contrat en prétendant qu'un simple retour signifie complétion ; il devra retourner un jeton de transfert explicite dont l'attente protège les buffers jusqu'à la complétion.
 
-Les buffers sont possédés par leurs wrappers backend et libérés par leur destruction. La couche mémoire confirme la libération comptable uniquement après la destruction du buffer détenu.
+Les buffers sont possédés par leurs wrappers backend et libérés par leur destruction. `DeviceMemoryManager` détruit désormais le buffer détenu avant de confirmer la libération comptable. Cette séquence est sûre pour le simulateur CPU et le contrat actuel, mais la destruction par `Drop` ne peut pas signaler un échec de libération du backend.
 
 ### Tensor
 
@@ -49,22 +51,20 @@ Ce manager générique est distinct du `CudaMemoryManager` spécifique M1, qui c
 
 Les types `Device`, `DeviceBuffer` et `Tensor` définis dans ce jalon sont des abstractions propriétaires de Claymore. Ils constituent la base du futur moteur tensoriel et des chemins d'exécution des modèles.
 
-Aucune bibliothèque tensorielle tierce n'est une dépendance requise ni une cible d'intégration de Claymore. Les choix de représentation, d'opérations, de propriété mémoire et d'exécution seront définis et validés dans l'architecture du projet. Les références externes peuvent servir à comparer des approches, sans dicter les contrats ni introduire de dépendance.
+Claymore ne délègue pas ses abstractions, sa gestion mémoire ni son runtime à un framework tensoriel tiers. Ce choix conserve la maîtrise des contrats `Device` / `Buffer` / `Tensor`, de l'ownership, de la synchronisation et des chemins d'exécution spécifiques aux modèles, et évite une dépendance structurante ainsi que les adaptations imposées par le cycle de vie d'un framework externe. Il augmente en contrepartie l'effort de développement et de maintenance du moteur, la responsabilité de la correction numérique et le risque de performances inférieures à des runtimes établis.\n\nLa politique de dépendances distingue les frameworks tensoriels des primitives spécialisées. Les API et bibliothèques NVIDIA de bas niveau (CUDA Driver API, CUDA Runtime si nécessaire, cuBLAS/cuBLASLt, CUTLASS, cuDNN) sont autorisées pour les opérations et kernels ; les bibliothèques de formats (dont safetensors), les tokenizers et les crates utilitaires Rust (par exemple `half`) le sont également après revue. Ces dépendances ne doivent pas devenir propriétaires des types tensoriels, du cycle de vie des buffers, de la politique mémoire ou du runtime de Claymore.
 
-Le raccordement du backend CUDA devra respecter les contrats Claymore de contexte, d'ownership, de synchronisation et de durée de vie des buffers.
+Le raccordement du backend CUDA devra respecter les contrats Claymore de contexte, d'ownership, de synchronisation et de durée de vie des buffers. La destruction actuelle via `Drop` ne permet pas d'exprimer une libération backend faillible ni une protection d'allocation en vol ; avant d'implémenter `Device` pour CUDA, le contrat devra prévoir une opération de libération faillible (par exemple `free(self) -> Result`) et une garde explicite jusqu'à la complétion du travail GPU, afin de préserver les garanties fail-closed de M1.
 
 ## Limites et suites
 
-- Le backend CUDA n'implémente pas encore `Device`.
+- Le backend CUDA n'implémente pas encore `Device` ; il ne devra pas le faire avant l'évolution du contrat de libération pour préserver les garanties fail-closed de M1.
 - Les transferts asynchrones et leurs jetons de complétion restent à définir avant toute orchestration concurrente.
 - L'injection de fautes et le test de sûreté des buffers en vol relèvent du raccordement CUDA et de M4.
-- Le CPU simulator ne prouve ni le comportement matériel CUDA, ni la mémoire pinned réelle, ni la performance.
+- Le CPU simulator ne prouve ni le comportement matériel CUDA, ni la mémoire pinned réelle, ni la performance.\n- Le moteur tensoriel natif reporte sur Claymore la responsabilité de la correction numérique (notamment BF16/FP32), des performances GEMM/attention sur sm_120 et de la comparaison systématique à une référence indépendante.
 
 ## Validation CI
 
-SHA validé par la CI : `73d3720c74ff6f9669a435157afc32f3b5d97019`.
-
-Sur ce SHA, les checks push et pull request sont verts. Le job CI a exécuté :
+SHA validé par la CI avant les corrections demandées par la revue : `de83b47bbf359a30166afa0130e06edf18869949`.\n\nSur ce SHA, les checks push et pull request sont verts : [CI push](https://github.com/zenhit777/Claymore/actions/runs/44645543927) et [CI pull request](https://github.com/zenhit777/Claymore/actions/runs/44645550522). Les corrections décrites dans cette mise à jour nécessitent une nouvelle exécution CI sur le SHA qui les contiendra. Le job CI a exécuté :
 - `cargo fmt --all -- --check` : succès ;
 - `cargo test --workspace --all-targets` : succès, dont 6 tests `claymore-device` et 9 tests `claymore-memory` ;
 - `cargo check -p claymore-memory --features cuda-driver` et `cargo check -p claymore-cli --features cuda-driver` : succès ;
