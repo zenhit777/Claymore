@@ -518,10 +518,6 @@ Critères d'acceptation :
 - interopérabilité Candle définie comme adaptateur futur sans remplacer les tenseurs Candle ; version et API concrètes à figer en M5 ;
 - raccordement du backend CUDA au trait Device, transferts asynchrones avec jetons de complétion et validation GPU : hors M2, à traiter avant ou pendant M4/M5 selon le contrat d'exécution.
 
-**État M2 :** livré dans `claymore-device` et `claymore-memory` : contrats Device/DeviceBuffer, capacités explicites, opérations synchrones, métadonnées Tensor contiguës (dtype/shape/strides), backend CPU déterministe et `DeviceMemoryManager` générique branché sur les politiques d'admission/éviction. Les tests CPU couvrent allocation, accès borné, copie, métadonnées Tensor, comptabilité et éviction. Le backend CPU ne simule pas la mémoire pinned, n'exécute aucun calcul tensoriel et n'émule pas CUDA. Le backend CUDA existant n'implémente pas encore le trait Device ; ce raccordement nécessitera un contrat de propriété/context/thread validé, sans conversion implicite vers Send/Sync.
-
-La frontière Candle est volontairement un adaptateur futur : les tenseurs Candle resteront les objets de calcul au jalon M5 ; les types Claymore décrivent la résidence et la propriété des buffers, sans réimplémenter les opérateurs Candle ni partager des pointeurs bruts non documentés. La version Candle et le mécanisme d'import/export seront figés à M5 après vérification de l'API retenue.
-
 ### M3 — Runtime unifié
 
 **Objectif :** introduire le cycle de vie des requêtes, les contextes d'exécution, les états, les erreurs, les annulations et l'orchestration de haut niveau.

@@ -144,16 +144,15 @@ impl<D: Device> DeviceMemoryManager<D> {
         if source_id == destination_id {
             return Err(DeviceMemoryError::AliasedCopy);
         }
-        let source = self
+        let [source, destination] = self
             .buffers
-            .get(source_id)
+            .get_disjoint_mut([source_id, destination_id]);
+        let source = source
             .ok_or_else(|| DeviceMemoryError::UnknownAllocation(source_id.to_owned()))?;
-        let payload = self.device.read(source.as_ref(), 0, bytes)?;
-        let destination = self
-            .buffers
-            .get_mut(destination_id)
+        let destination = destination
             .ok_or_else(|| DeviceMemoryError::UnknownAllocation(destination_id.to_owned()))?;
-        self.device.write(destination.as_mut(), 0, &payload)?;
+        self.device
+            .copy(source.as_ref(), destination.as_mut(), bytes)?;
         self.policy.touch(source_id, tick)?;
         self.policy.touch(destination_id, tick)?;
         Ok(())

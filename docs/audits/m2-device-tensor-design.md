@@ -58,6 +58,14 @@ Aucun pointeur brut ne sera partagé entre Candle/cudarc et Claymore sans contra
 - L'injection de fautes et le test de sûreté des buffers en vol relèvent du raccordement CUDA et de M4.
 - Le CPU simulator ne prouve ni le comportement matériel CUDA, ni la mémoire pinned réelle, ni la performance.
 
-## Validation
+## Validation CI
 
-Les tests unitaires du nouveau crate `claymore-device` et de l'adaptateur `DeviceMemoryManager` sont inclus dans le workspace et s'exécutent sans driver NVIDIA. Les résultats de CI sur le SHA de la PR doivent être consultés avant de considérer le jalon validé.
+SHA validé par la CI : `0b122279af7699d90550fc400045451f42b2958b`.
+
+Sur ce SHA, les deux checks déclenchés (push et pull request) sont verts. Le job CI a exécuté :
+- `cargo fmt --all -- --check` : succès ;
+- `cargo test --workspace --all-targets` : succès, dont 6 tests `claymore-device` et 9 tests `claymore-memory` ;
+- `cargo check -p claymore-memory --features cuda-driver` et `cargo check -p claymore-cli --features cuda-driver` : succès ;
+- Clippy workspace et Clippy avec feature CUDA : succès.
+
+La feature CUDA est compilée sans lien vers le driver ni GPU, conformément au workflow. Ces checks ne valident pas l'implémentation future du trait Device par CUDA.
