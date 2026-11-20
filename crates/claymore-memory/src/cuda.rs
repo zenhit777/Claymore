@@ -82,6 +82,7 @@ pub enum CudaMemoryError {
 
 #[derive(Debug, Clone)]
 pub struct TransferToken {
+    manager_id: u64,
     id: u64,
     allocation_ids: Vec<String>,
     completed: Arc<AtomicBool>,
@@ -97,6 +98,7 @@ impl TransferToken {
 }
 
 pub struct CudaMemoryManager {
+    manager_id: u64,
     driver: CudaDriver,
     transfer_stream: CudaStream,
     policy: MemoryOrchestrator,
@@ -113,10 +115,12 @@ impl CudaMemoryManager {
         budgets: MemoryBudgets,
         eviction: EvictionPolicy,
     ) -> Result<Self, CudaMemoryError> {
+        let manager_id = allocate_transfer_id()?;
         let driver = CudaDriver::new(ordinal)?;
         let transfer_stream = driver.create_stream()?;
         let policy = MemoryOrchestrator::new(budgets, eviction)?;
         Ok(Self {
+            manager_id,
             driver,
             transfer_stream,
             policy,
@@ -354,6 +358,7 @@ impl CudaMemoryManager {
         self.policy.touch(pinned_id, tick)?;
         self.policy.touch(device_id, tick)?;
         Ok(TransferToken {
+            manager_id: self.manager_id,
             id: transfer_id,
             allocation_ids,
             completed,
@@ -416,6 +421,9 @@ impl CudaMemoryManager {
     /// Query the associated CUDA event without blocking. A token is complete
     /// after its event query succeeds or an explicit wait synchronizes it.
     pub fn is_transfer_complete(&self, token: &TransferToken) -> Result<bool, CudaMemoryError> {
+        if token.manager_id != self.manager_id {
+            return Err(CudaMemoryError::UnknownTransferToken(token.id));
+        }
         if token.completed.load(Ordering::Acquire) {
             return Ok(true);
         }
@@ -442,8 +450,8 @@ impl CudaMemoryManager {
         tick: u64,
     ) -> Result<(), CudaMemoryError> {
         self.advance_tick(tick)?;
-        if token.completed.load(Ordering::Acquire) {
-            return Ok(());
+        if token.manager_id != self.manager_id {
+            return Err(CudaMemoryError::UnknownTransferToken(token.id));
         }
         let allocation_ids = self
             .pending
@@ -453,12 +461,19 @@ impl CudaMemoryManager {
                     && *ids == token.allocation_ids
                     && Arc::ptr_eq(state, &token.completed)
             })
-            .map(|(_, ids, _, _)| ids.clone())
-            .ok_or(CudaMemoryError::UnknownTransferToken(token.id))?;
-        if let Some(id) = allocation_ids.first() {
-            self.wait_for_allocation(id, tick)?;
+            .map(|(_, ids, _, _)| ids.clone());
+        if let Some(allocation_ids) = allocation_ids {
+            if let Some(id) = allocation_ids.first() {
+                self.wait_for_allocation(id, tick)?;
+            }
+            token.completed.store(true, Ordering::Release);
+            return Ok(());
         }
-        token.completed.store(true, Ordering::Release);
+        if token.completed.load(Ordering::Acquire) {
+            Ok(())
+        } else {
+            Err(CudaMemoryError::UnknownTransferToken(token.id))
+        }
         Ok(())
     }
 
