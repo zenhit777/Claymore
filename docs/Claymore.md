@@ -84,7 +84,9 @@ Les deux cibles fonctionnelles initiales sont indépendantes et doivent disposer
 
 ### 3.1 DiffusionGemma
 
-Objectif : construire un chemin d'exécution adapté à un modèle de type diffusion de texte.
+**Modèle cible exact :** `google/diffusiongemma-26B-A4B-it` (identifiant Hugging Face).
+
+Objectif : construire un chemin d'exécution adapté à ce modèle de diffusion de texte. Les mentions de « Gemma » seules désignent la famille ou le backbone architectural, jamais une cible modèle interchangeable.
 
 Les travaux spécifiques prévus comprennent :
 
@@ -114,7 +116,7 @@ Le cache d'experts est une politique de résidence sous contrainte mémoire. Il 
 
 ### 3.3 Principe d'isolation
 
-Les moteurs Gemma et Clover peuvent partager le runtime, les abstractions de mémoire, le scheduler, le backend CUDA et les utilitaires de tenseurs. Ils ne doivent pas être forcés dans une abstraction commune qui masquerait des différences fondamentales de calcul ou de cycle de vie.
+Les moteurs DiffusionGemma et Clover peuvent partager le runtime, les abstractions de mémoire, le scheduler, le backend CUDA et les utilitaires de tenseurs. Ils ne doivent pas être forcés dans une abstraction commune qui masquerait des différences fondamentales de calcul ou de cycle de vie.
 
 ---
 
@@ -257,7 +259,7 @@ L'architecture est organisée en couches avec des frontières explicites.
 | `claymore-device` | Contrats Device/Buffer/Tensor indépendants du backend et simulateur CPU |
 | `claymore-memory` | Budgets, comptabilité, admission et politiques d'éviction |
 | `claymore-scheduler` | Planification du travail et politique de préchargement |
-| `claymore-model-gemma` | Frontière d'intégration DiffusionGemma |
+| `claymore-model-gemma` | Frontière d'intégration du modèle DiffusionGemma (`google/diffusiongemma-26B-A4B-it`) |
 | `claymore-model-clover` | Frontière d'intégration Clover |
 | `claymore-cuda` | Backend optionnel CUDA Driver API |
 | `claymore-cli` | Commandes, profil et diagnostics |
@@ -725,7 +727,8 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-19 | Correspondance de la feuille de route précédente : ancien M2 (backend Driver) → socle livré v0.4/M0 ; ancien M3 (Memory ↔ CUDA) → v0.5/M0 et durcissement M1 ; ancien M4 (scheduler) → nouveau M4 ; ancien M5 (moteurs modèles) → M5/M6/M7 selon le chemin d'exécution ; ancien M6 (optimisation) → M8. Les tests simulés de l'adaptateur sont reportés à M2/M3 ; la preuve de protection d'une allocation en vol jusqu'à l'event relève de M4. |
 | 2026-11-19 | Le backend CUDA utilise `Rc` car son contexte n'est pas `Send`/`Sync` : driver, buffers, streams, events et `CudaMemoryManager` sont confinés au thread propriétaire ; M4 doit prévoir un thread CUDA dédié ou une évolution sûre de ce modèle. |
 | 2026-11-18 | Cette référence est rédigée en français ; README et documentation technique existante restent en anglais. |
-| 2026-11-18 | DiffusionGemma et Clover disposent de moteurs distincts partageant les services transverses du runtime. |
+| 2026-11-18 | DiffusionGemma (`google/diffusiongemma-26B-A4B-it`) et Clover disposent de moteurs distincts partageant les services transverses du runtime. |
+| 2026-11-20 | Candle et les autres projets externes restent des références d'étude uniquement ; Claymore possède ses contrats Device/Buffer/Tensor et son futur moteur tensoriel natif. DiffusionGemma est référencé par son identifiant Hugging Face exact. |
 
 ### Correspondance de la feuille de route historique
 
