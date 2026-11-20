@@ -268,17 +268,6 @@ Le workspace utilise Cargo, resolver 2, Rust edition 2021. La version de référ
 
 `claymore-scheduler` ne fournit actuellement qu'une structure `SchedulerConfig` (`cpu_workers`, `max_prefetches`, `lookahead`) et sa validation ; aucune boucle ni logique de planification n'est implémentée. La validation accepte de 1 à 12 workers. Les valeurs minimales de 6 workers, les nombres de streams et le tick de 500 µs figurant dans le profil JSON sont des paramètres documentaires, pas des contraintes appliquées par le code.
 
-### 6.4 Politique de dépendances du moteur tensoriel
-
-Le moteur tensoriel, ses contrats publics et son orchestration appartiennent à Claymore. Un framework ou runtime tensoriel tiers ne doit pas devenir le propriétaire des types `Tensor` / `Device` / `Buffer`, de leur cycle de vie, de la politique mémoire, du scheduler ou du chemin d'exécution des modèles.
-
-Sont autorisés après revue de leur pertinence, de leur licence et de leur coût d'intégration :
-- les API et bibliothèques CUDA/NVIDIA de bas niveau (CUDA Driver API, CUDA Runtime si nécessaire, cuBLAS/cuBLASLt, CUTLASS, cuDNN) pour exécuter des primitives ou kernels ;
-- les bibliothèques de formats et de données (notamment safetensors), les tokenizers et les parseurs nécessaires au chargement des modèles ;
-- les crates Rust utilitaires ciblées (par exemple `half` pour les types BF16/FP16, sérialisation, vérification ou instrumentation).
-
-Ces composants peuvent fournir des primitives spécialisées, mais l'API tensorielle, les règles d'ownership, la synchronisation, la gestion des allocations et les choix d'exécution restent définis par Claymore. Toute nouvelle dépendance doit être justifiée et validée ; aucune bibliothèque externe ne devient automatiquement une dépendance structurante du runtime.
-
 ### 6.3 Principes de conception
 
 - Les politiques métier et mémoire doivent être testables sans matériel CUDA.
@@ -291,6 +280,18 @@ Ces composants peuvent fournir des primitives spécialisées, mais l'API tensori
 - Les événements CUDA, et non un simple compteur logique, doivent devenir la source d'autorité pour la sûreté des opérations asynchrones.
 - Le scheduler ne doit pas déclencher de préchargements qui dépassent les budgets ou qui évinceraient des allocations encore utilisées.
 - Les choix d'optimisation doivent être mesurés avant d'être complexifiés.
+
+### 6.4 Politique de dépendances du moteur tensoriel
+
+Le moteur tensoriel, ses contrats publics et son orchestration appartiennent à Claymore. Un framework ou runtime tensoriel tiers ne doit pas devenir le propriétaire des types `Tensor` / `Device` / `Buffer`, de leur cycle de vie, de la politique mémoire, du scheduler ou du chemin d'exécution des modèles.
+
+Sont autorisés après revue de leur pertinence, de leur licence et de leur coût d'intégration :
+- les API et bibliothèques CUDA/NVIDIA de bas niveau (CUDA Driver API, CUDA Runtime si nécessaire, cuBLAS/cuBLASLt, CUTLASS, cuDNN) pour exécuter des primitives ou kernels ;
+- les bibliothèques de formats et de données (notamment safetensors), les tokenizers et les parseurs nécessaires au chargement des modèles ;
+- les crates Rust utilitaires ciblées (par exemple `half` pour les types BF16/FP16, sérialisation, vérification ou instrumentation).
+
+Ces composants peuvent fournir des primitives spécialisées, mais l'API tensorielle, les règles d'ownership, la synchronisation, la gestion des allocations et les choix d'exécution restent définis par Claymore. Toute nouvelle dépendance doit être justifiée et validée ; aucune bibliothèque externe ne devient automatiquement une dépendance structurante du runtime.
+
 
 ---
 
