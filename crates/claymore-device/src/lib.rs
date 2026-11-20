@@ -547,6 +547,10 @@ mod tests {
             checked_allocation_len(1025, 1024),
             Err(DeviceError::SizeOverflow)
         );
+        assert_eq!(
+            checked_allocation_len(isize::MAX as u64 + 1, isize::MAX as usize),
+            Err(DeviceError::SizeOverflow)
+        );
         let oom = allocate_zeroed_with(1025, |_storage: &mut Vec<u8>, _len| {
             Err::<(), _>("injected allocator exhaustion")
         })
