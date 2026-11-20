@@ -31,7 +31,7 @@ Le stream dédié est désormais créé avec `CU_STREAM_NON_BLOCKING`. Il ne par
 
 `CudaMemoryManager::poll_completed_transfers(tick)` interroge chaque event sans bloquer. Seul un résultat positif de `cuEventQuery` autorise le retrait de l'event et la levée des protections d'allocations qui ne sont plus couvertes par un autre transfert en vol.
 
-`CUDA_ERROR_NOT_READY` conserve l'event et ses allocations protégées. Toute autre erreur est propagée : elle n'est jamais convertie en complétion.
+`CUDA_ERROR_NOT_READY` conserve l'event et ses allocations protégées. Toute autre erreur est propagée : elle n'est jamais convertie en complétion. Pour un event terminé, les protections de toutes les allocations non référencées par un autre transfert sont levées avant le retrait de l'event de `pending`. Si une mise à jour de politique échoue en cours de traitement, l'event reste suivi et la transition peut être retentée (correction B2).
 
 Le chemin d'admission appelle ce polling avant de calculer les victimes d'éviction. Toute erreur de polling est propagée par `make_room` et bloque l'admission, même si l'event en erreur ne référence pas la victime envisagée : ce comportement fail-closed est intentionnel. Les opérations de lecture/écriture et de libération conservent leurs attentes explicites.
 
