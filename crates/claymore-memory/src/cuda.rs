@@ -691,7 +691,6 @@ mod tests {
     fn hardware_poll_retires_completed_transfer_before_admission_without_wait() {
         use std::time::{Duration, Instant};
 
-        let _gib = 1024_u64.pow(3);
         let budgets = MemoryBudgets {
             vram_soft_bytes: 1024 * 1024,
             vram_hard_bytes: 1024 * 1024,
