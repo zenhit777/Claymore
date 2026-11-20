@@ -62,9 +62,9 @@ Le raccordement du backend CUDA devra respecter les contrats Claymore de context
 
 ## Validation CI
 
-SHA validé par la CI : `0b122279af7699d90550fc400045451f42b2958b`.
+SHA validé par la CI : `73d3720c74ff6f9669a435157afc32f3b5d97019`.
 
-Sur ce SHA, les deux checks déclenchés (push et pull request) sont verts. Le job CI a exécuté :
+Sur ce SHA, les checks push et pull request sont verts. Le job CI a exécuté :
 - `cargo fmt --all -- --check` : succès ;
 - `cargo test --workspace --all-targets` : succès, dont 6 tests `claymore-device` et 9 tests `claymore-memory` ;
 - `cargo check -p claymore-memory --features cuda-driver` et `cargo check -p claymore-cli --features cuda-driver` : succès ;
