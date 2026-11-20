@@ -21,6 +21,7 @@ type CuStreamRaw = *mut c_void;
 type CuEventRaw = *mut c_void;
 
 const CUDA_SUCCESS: CuResult = 0;
+const CUDA_ERROR_NOT_READY: CuResult = 600;
 const CU_STREAM_DEFAULT: c_uint = 0;
 const CU_EVENT_DEFAULT: c_uint = 0;
 const CU_MEMHOSTALLOC_PORTABLE: c_uint = 1;
@@ -60,6 +61,7 @@ unsafe extern "C" {
     fn cuStreamDestroy_v2(stream: CuStreamRaw) -> CuResult;
     fn cuEventCreate(event: *mut CuEventRaw, flags: c_uint) -> CuResult;
     fn cuEventRecord(event: CuEventRaw, stream: CuStreamRaw) -> CuResult;
+    fn cuEventQuery(event: CuEventRaw) -> CuResult;
     fn cuEventSynchronize(event: CuEventRaw) -> CuResult;
     fn cuEventDestroy_v2(event: CuEventRaw) -> CuResult;
 }
@@ -474,6 +476,21 @@ impl CudaEvent {
             "cuEventRecord",
         )
     }
+    /// Query the event without blocking. CUDA_ERROR_NOT_READY is a normal
+    /// incomplete state; every other driver error is propagated.
+    pub fn is_complete(&self) -> Result<bool, CudaError> {
+        self.context.activate()?;
+        // SAFETY: raw is a live event owned by this object.
+        let result = unsafe { cuEventQuery(self.raw) };
+        if result == CUDA_SUCCESS {
+            Ok(true)
+        } else if result == CUDA_ERROR_NOT_READY {
+            Ok(false)
+        } else {
+            Err(CudaError::Driver { operation: "cuEventQuery", code: result })
+        }
+    }
+
     pub fn synchronize(&self) -> Result<(), CudaError> {
         self.context.activate()?;
         // SAFETY: raw is a live event owned by this object.
