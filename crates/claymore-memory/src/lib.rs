@@ -244,6 +244,9 @@ impl MemoryOrchestrator {
         candidates.sort_by(|a, b| {
             self.eviction_key(a, now_tick)
                 .cmp(&self.eviction_key(b, now_tick))
+                // HashMap iteration order is intentionally unspecified. An ID
+                // tie-break makes equal-priority eviction plans reproducible.
+                .then_with(|| a.id.cmp(&b.id))
         });
         let mut selected = Vec::new();
         let mut reclaimed = 0_u64;
@@ -392,6 +395,21 @@ mod tests {
             90,
             "planning must not mutate state"
         );
+    }
+
+    #[test]
+    fn equal_priority_evictions_use_lexicographic_allocation_id() {
+        let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
+        for id in ["gamma", "alpha", "beta"] {
+            manager
+                .record_allocation(allocation(id, 40, 5, 0))
+                .unwrap();
+        }
+
+        for _ in 0..32 {
+            let plan = manager.plan_admission(MemoryTier::Vram, 1, 5).unwrap();
+            assert_eq!(plan.evict_ids, vec!["alpha"]);
+        }
     }
 
     #[test]
