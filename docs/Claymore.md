@@ -471,7 +471,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M2 | Abstractions Device / Tensor | Livré (contrats backend-neutres, simulateur CPU et adaptateur mémoire générique) |
 | M3 | Runtime unifié | Planifié |
 | M4 | Scheduler et orchestration mémoire | Planifié |
-| M5 | Candle et premier chemin modèle | Planifié |
+| M5 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
 | M6 | Stratégie autoregressive | Planifié |
 | M7 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
 | M8 | Optimisation et validation de performance | Planifié |
