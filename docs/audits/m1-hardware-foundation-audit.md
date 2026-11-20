@@ -4,6 +4,7 @@
 **Branche auditée :** main  
 **Révision auditée :** 7a0f4fc84cdf50d93a8f2d048bf3283d04ff106f  
 **Date :** 19 novembre 2026  
+**Note de révision (20 novembre 2026) :** la décision d'architecture postérieure à cet audit retient un moteur tensoriel natif appartenant à Claymore. Les bibliothèques CUDA/NVIDIA de bas niveau peuvent être utilisées comme primitives ; aucun framework tensoriel tiers n'est une cible d'intégration. Cette note complète la trajectoire du projet sans modifier les constats historiques de l'audit M1.
 **Objet :** état réel du dépôt, risques bloquants et périmètre de consolidation M1.
 
 ---
@@ -12,9 +13,9 @@
 
 Claymore dispose déjà d'une base Rust organisée en crates, d'une politique mémoire host-side, d'un backend CUDA Driver API optionnel et d'un adaptateur reliant la politique mémoire aux allocations/transferts CUDA.
 
-Le projet n'est pas encore un runtime d'inférence : le scheduler ne planifie pas de tâches, les crates Gemma et Clover sont des frontières vides, Candle n'est pas intégré et le profil matériel JSON n'est pas chargé automatiquement.
+Le projet n'est pas encore un runtime d'inférence complet : le scheduler ne planifie pas de tâches, les crates Gemma et Clover sont des frontières vides et le profil matériel JSON n'est pas chargé automatiquement. Le moteur tensoriel et les chemins d'exécution natifs restent à construire.
 
-Le risque architectural prioritaire avant de construire les couches Device/Tensor et Candle est le modèle de contexte CUDA. Sur main, le backend crée un contexte privé avec cuCtxCreate_v2. Les bibliothèques CUDA telles que cudarc peuvent utiliser le contexte primaire du device. Les pointeurs CUDA ne sont pas interchangeables entre contextes distincts.
+Le risque architectural prioritaire avant de construire les couches Device/Tensor et le moteur d'exécution est le modèle de contexte CUDA. Sur main, le backend crée un contexte privé avec cuCtxCreate_v2. Les composants Claymore doivent partager un contexte cohérent ; les pointeurs CUDA ne sont pas interchangeables entre contextes distincts.
 
 La PR M1 durcit la fondation existante sans introduire prématurément le runtime, le scheduler ou les moteurs de modèles.
 
@@ -32,7 +33,7 @@ La PR M1 durcit la fondation existante sans introduire prématurément le runtim
 | claymore-model-clover | crate et lib minimale | Pas de modèle |
 | claymore-cli | commandes de profil et device | Diagnostics de base |
 | Profil RTX 5090 JSON | budgets et paramètres | Versionné, non chargé automatiquement |
-| Candle | aucune dépendance ni intégration | Non livré |
+| Moteur tensoriel Claymore | primitives de calcul et exécution | Non livré |
 | Runtime unifié | aucune crate dédiée | Non livré |
 | Tests simulés CUDA/memory adapter | absents | À construire avec les abstractions M2/M3 |
 
@@ -40,11 +41,11 @@ La PR M1 durcit la fondation existante sans introduire prématurément le runtim
 
 ### P0 — Contexte CUDA privé incompatible avec une interopérabilité implicite
 
-Sur main, CudaDriver::new appelle cuCtxCreate_v2. Cette fonction crée un contexte distinct du contexte primaire du device. Un consommateur Candle/cudarc utilisant le contexte primaire ne peut pas utiliser directement les allocations/streams/events de ce contexte privé.
+Sur main, CudaDriver::new appelle cuCtxCreate_v2. Cette fonction crée un contexte distinct du contexte primaire du device. Un composant Claymore utilisant le contexte primaire ne peut pas utiliser directement les allocations/streams/events de ce contexte privé.
 
 **Traitement M1 :** retenir le contexte primaire avec cuDevicePrimaryCtxRetain, puis équilibrer cette rétention avec cuDevicePrimaryCtxRelease_v2 lorsque le dernier objet possédant le contexte est détruit.
 
-**Limite :** ce choix est le contrat CUDA partagé attendu, mais l'interopérabilité effective devra être prouvée avec la version exacte de Candle/cudarc retenue en M5. La PR ne prétend pas livrer cette intégration.
+**Limite :** ce choix établit le contrat de contexte CUDA commun aux composants Claymore. Le raccordement du backend CUDA aux abstractions Device/Tensor devra être démontré par des tests d'intégration dédiés.
 
 ### P1 — Absence de contrôle d'appartenance au contexte
 
@@ -88,7 +89,7 @@ Le backend utilise Rc, ce qui rend volontairement les ressources non Send/Sync. 
 
 | Sujet | Phase | Motif |
 |---|---|---|
-| Preuve d'interopérabilité Candle/cudarc | M5 | Candle n'est pas encore une dépendance du workspace |
+| Raccordement du backend CUDA aux contrats Device/Tensor | M4/M5 | Les contrats et le chemin d'exécution doivent être définis dans Claymore |
 | Abstraction Device/Tensor et backend CPU simulé | M2 | Contrats à définir avant le runtime |
 | Runtime de requêtes | M3 | Dépend des contrats Device/Tensor |
 | Actor/thread CUDA propriétaire | M4 | À concevoir avec le scheduler et le modèle de concurrence |
@@ -119,13 +120,13 @@ CI :
 Matériel :
 - relancer le test roundtrip existant après checkout de la branche ;
 - vérifier que compute capability est renseignée ;
-- valider ensuite l'interopérabilité avec Candle lors de M5.
+- valider ensuite le raccordement du backend CUDA aux contrats Device/Tensor de Claymore.
 
-**Aucune compilation locale par l'assistant, aucun résultat CI de cette PR et aucune validation Candle ne sont revendiqués dans cet audit.** Les résultats seront ceux des checks GitHub et des essais sur la machine cible.
+**Aucune compilation locale par l'assistant, aucun résultat CI de cette PR ni aucune validation du moteur tensoriel ne sont revendiqués dans cet audit.** Les résultats seront ceux des checks GitHub et des essais sur la machine cible.
 
 ## 7. Questions proposées à l'architecte logiciel
 
-1. Valider le contexte primaire comme contrat de partage avec Candle/cudarc.
+1. Valider le contexte primaire comme contrat de partage entre les composants CUDA de Claymore.
 2. Confirmer le maintien du confinement Rc/thread jusqu'à l'introduction de l'executor CUDA propriétaire.
 3. Valider le choix fail-closed du manager après une synchronisation incertaine, y compris la stratégie de fuite volontaire en dernier recours.
 4. Confirmer que les abstractions Device/Tensor sont le prochain jalon et qu'elles ne doivent pas être ajoutées dans M1.

@@ -2,7 +2,7 @@
 
 ## Objectif
 
-Cette phase relie les décisions de la couche de politique `claymore-memory` aux opérations réelles du backend `claymore-cuda`, sans introduire Candle ni exécuter un modèle. Le chemin reste opt-in via la feature `cuda-driver`. Le build et les tests de politique par défaut restent indépendants d'un GPU.
+Cette phase relie les décisions de la couche de politique `claymore-memory` aux opérations réelles du backend `claymore-cuda`, sans introduire de bibliothèque tensorielle tierce ni exécuter un modèle. Le chemin reste opt-in via la feature `cuda-driver`. Le build et les tests de politique par défaut restent indépendants d'un GPU.
 
 ## Code ajouté dans cette contribution
 
@@ -35,7 +35,7 @@ La surface publique est disponible derrière `--features cuda-driver` :
 
 ## Limites explicites
 
-- Cette phase ne raccorde pas encore Candle/cudarc et ne résout pas le risque de contexte primaire versus contexte créé par `cuCtxCreate_v2`.
+- Cette phase ne raccorde pas encore le backend CUDA aux contrats `Device` / `DeviceBuffer` de Claymore. Le choix du contexte primaire évite les contextes privés incompatibles entre composants Claymore.
 - Le manager ne prend en charge que les tiers VRAM et PinnedHost pour les allocations physiques. Le tier Host reste géré par la politique hôte.
 - Le profil JSON n'est pas chargé automatiquement.
 - La politique de budget souple VRAM de 26 Gio, le working set de 18 Gio et l'enveloppe cache experts 14/16 Gio ne sont pas encore appliqués comme contraintes distinctes par le gestionnaire existant.

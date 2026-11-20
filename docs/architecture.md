@@ -5,7 +5,7 @@
 1. Runtime/API: configuration, lifecycle, diagnostics, and CLI.
 2. Model engines: separate DiffusionGemma and Clover adapters.
 3. Optimization core: memory orchestrator, expert cache, scheduler, transfer engine, kernel dispatcher, and quantization policy.
-4. Backend: Candle with CUDA support.
+4. Backend: Claymore-owned tensor execution contracts, with CPU and optional CUDA device backends.
 
 ## Model-specific work
 

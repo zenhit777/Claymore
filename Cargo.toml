@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "crates/claymore-core",
+  "crates/claymore-device",
   "crates/claymore-memory",
   "crates/claymore-scheduler",
   "crates/claymore-model-gemma",

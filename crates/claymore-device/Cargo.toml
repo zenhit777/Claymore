@@ -1,0 +1,9 @@
+[package]
+name = "claymore-device"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+claymore-core = { path = "../claymore-core" }
+thiserror.workspace = true
