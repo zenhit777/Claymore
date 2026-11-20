@@ -87,7 +87,10 @@ fn event_query_result(result: CuResult) -> Result<bool, CudaError> {
     } else if result == CUDA_ERROR_NOT_READY {
         Ok(false)
     } else {
-        Err(CudaError::Driver { operation: "cuEventQuery", code: result })
+        Err(CudaError::Driver {
+            operation: "cuEventQuery",
+            code: result,
+        })
     }
 }
 
@@ -535,7 +538,10 @@ mod tests {
         assert_eq!(event_query_result(CUDA_ERROR_NOT_READY), Ok(false));
         assert!(matches!(
             event_query_result(999),
-            Err(CudaError::Driver { operation: "cuEventQuery", code: 999 })
+            Err(CudaError::Driver {
+                operation: "cuEventQuery",
+                code: 999
+            })
         ));
     }
 
