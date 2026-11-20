@@ -412,7 +412,7 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 
 - compute capability exposée via `CudaDeviceInfo` ;
 - sélection du device par ordinal uniquement ;
-- pas de pool allocator, de défragmentation, de télémétrie ou d'éviction automatique ;
+- pas de pool allocator, de défragmentation, de télémétrie ni d'éviction périodique/prédictive hors du chemin d'admission de `CudaMemoryManager` ;
 - les appels bas niveau de copie asynchrone imposent à l'appelant de conserver les buffers vivants jusqu'à la complétion ; dans `CudaMemoryManager`, les allocations sont protégées par les events suivis ;
 - les CUDA events sont connectés aux transferts du `CudaMemoryManager` ; `poll_completed_transfers` interroge les events sans bloquer et `make_room` l'exécute avant tout plan d'admission/éviction ; `is_transfer_complete` seul ne retire pas l'event ni les protections, et les opérations qui consomment les données doivent toujours attendre explicitement ;
 - le stream de transfert utilise `CU_STREAM_NON_BLOCKING` et ne bénéficie donc pas des synchronisations implicites avec le legacy default stream ; tout futur consommateur compute (kernels, cuBLAS/cuBLASLt) devra exprimer les dépendances compute ↔ transfert explicitement, notamment avec `cuStreamWaitEvent` ;
