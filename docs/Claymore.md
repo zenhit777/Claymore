@@ -311,14 +311,16 @@ Ces composants peuvent fournir des primitives spécialisées, mais l'API tensori
 
 Cette section prévaut sur toute formulation plus ambitieuse de la vision cible. La consolidation matérielle M1 est livrée par la PR #5 : contexte primaire CUDA, contrôles d'appartenance des ressources, compute capability et comportement fail-closed du gestionnaire mémoire.
 
+### 7.0 Travaux en cours
+
+#### M3 — Device foundations hardening (PR ouverte, non livrée sur main)
+
+La PR M3 regroupe les issues #7 à #10 : MSRV Rust 1.86, identité d'instance des devices, distinction des erreurs OOM/overflow et couverture des cas limites CPU. Les changements ne sont considérés comme livrés qu'après fusion de la PR.
+
+Sémantique retenue : le clonage d'un handle `CpuDevice` conserve l'identité d'instance ; deux appels indépendants à `CpuDevice::new()` créent deux identités différentes même si `DeviceInfo::id` vaut dans les deux cas `cpu:0`. Cette identité est opaque et locale au processus.
+
 ### 7.1 Livré sur main
 
-
-#### M3 — Device foundations hardening
-
-**En cours dans la PR M3 :** MSRV Rust 1.86 explicitement déclarée et testée en CI ; identité d'instance distincte de l'identifiant logique du device ; distinction des erreurs d'épuisement mémoire et de débordement ; tests CPU déterministes des cas limites du device et de l'adaptateur mémoire.
-
-Le clonage d'un handle `CpuDevice` conserve l'identité d'instance (deux handles vers le même device logique). Deux appels indépendants à `CpuDevice::new()` produisent des identités différentes, même si `DeviceInfo::id` vaut dans les deux cas `cpu:0`. Cette identité est un identifiant opaque local au processus, et non un identifiant persistant ou global inter-processus.
 
 #### v0.3 — Memory Orchestrator (politiques host-side)
 
