@@ -9,7 +9,7 @@ use crate::{
     Allocation, EvictionPolicy, MemoryBudgets, MemoryError, MemoryOrchestrator, MemorySnapshot,
 };
 use claymore_core::MemoryTier;
-use claymore_cuda::{CudaDriver, CudaError, CudaEvent, CudaStream, DeviceBuffer, PinnedHostBuffer};
+use claymore_cuda::{CudaDriver, CudaError, CudaEvent, CudaStream, CudaDeviceBuffer, PinnedHostBuffer};
 
 const IN_FLIGHT: u64 = crate::lifecycle::IN_FLIGHT_TICK;
 
@@ -70,7 +70,7 @@ pub struct CudaMemoryManager {
     driver: CudaDriver,
     transfer_stream: CudaStream,
     policy: MemoryOrchestrator,
-    device: HashMap<String, DeviceBuffer>,
+    device: HashMap<String, CudaDeviceBuffer>,
     pinned: HashMap<String, PinnedHostBuffer>,
     pending: Vec<(u64, Vec<String>, CudaEvent)>,
     next_transfer_id: u64,
