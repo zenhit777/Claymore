@@ -48,7 +48,7 @@ Le comparateur ajoute l'identifiant d'allocation comme dernier critère lexicogr
 - Une erreur de synchronisation du stream pendant `Drop` provoque toujours la fuite volontaire des buffers/events suivis, plutôt qu'une libération incertaine.
 - Un échec de synchronisation du stream après échec de `cuEventRecord` empoisonne le gestionnaire et marque les deux allocations comme en vol.
 
-Les tests unitaires `event_query_status_conversion_distinguishes_complete_pending_and_driver_failure` et `driver_error_conversion_preserves_operation_and_code` vérifient uniquement la conversion de codes de retour en résultats/erreurs. Le second ne teste pas `cuStreamSynchronize` lui-même ; aucun des deux ne teste le comportement manager-level de `poll_completed_transfers`. Ces tests sous `cfg(feature = "cuda-driver")` ne sont pas exécutés par la CI actuelle : celle-ci lance les tests workspace sans cette feature, puis `cargo check` et Clippy avec la feature, sans `--all-targets`. Ne pas présenter ces vérifications comme des tests d'injection ou comme une preuve de propagation d'erreur dans le chemin runtime.
+Les tests unitaires `event_query_status_conversion_distinguishes_complete_pending_and_driver_failure` et `driver_error_conversion_preserves_operation_and_code` vérifient uniquement la conversion de codes de retour en résultats/erreurs. Le second ne teste pas `cuStreamSynchronize` lui-même ; aucun des deux ne teste le comportement manager-level de `poll_completed_transfers`. La CI compile désormais les cibles de tests avec `cargo check ... --all-targets`, mais ne les exécute pas sous `cuda-driver`. Ne pas présenter ces vérifications comme des tests d'injection ou comme une preuve de propagation d'erreur dans le chemin runtime.
 
 ## 3. Changements
 
@@ -70,7 +70,7 @@ La CI existante couvre déjà :
 - Clippy standard et avec `cuda-driver` ;
 - tests workspace sur Rust 1.86.
 
-Aucune CI standard ne doit exiger un GPU ni linker le pilote CUDA. Les tests matériels sont explicitement ignorés sans pilote et périphérique NVIDIA. Les tests sous `cuda-driver` ne sont pas exécutés par la CI actuelle ; la compilation de ces cibles doit être explicitement distinguée de leur exécution.
+Aucune CI standard ne doit exiger un GPU ni linker le pilote CUDA. Les tests matériels sont explicitement ignorés sans pilote et périphérique NVIDIA. La CI compile les cibles de tests CUDA avec `--all-targets`, sans les exécuter : la compilation des tests et leur exécution sur un GPU sont deux validations distinctes.
 
 ## 5. Limites
 
@@ -85,10 +85,10 @@ Aucune CI standard ne doit exiger un GPU ni linker le pilote CUDA. Les tests mat
 - [x] Polling non bloquant des events et finalisation avant admission.
 - [x] Les états pending et les erreurs ne sont pas assimilés à une complétion.
 - [x] Les allocations restent protégées tant qu'un event associé reste en vol.
-- [x] Départage déterministe des évictions de priorité égale.
+- [x] Départage déterministe des évictions de priorité égale pour LRU, LFU et Adaptive, y compris un plan nécessitant deux victimes.
 - [x] Tests de conversion des codes d'état CUDA au niveau du wrapper ; ils ne démontrent pas l'exécution des chemins event/stream ni le comportement de `poll_completed_transfers` et ne sont pas exécutés par la CI actuelle.
 - [ ] Scénario matériel ciblé `M5-HW-POLL-01` : `poll_completed_transfers` retire un event confirmé terminé, puis une admission sous pression évince l'allocation sans `wait_for_*` ; exécution RTX 5090 et preuve à consigner dans `docs/audits/m5-hardware-validation.md` avant merge.
-- [x] CI verte sur le HEAD `a8cef7d70d68bf7510b6cea5f55a953d71d388e1` : format, tests workspace, Clippy standard/CUDA, compilation des cibles `cuda-driver` avec `--all-targets` et MSRV Rust 1.86 (runs push et pull request [44840121627](https://github.com/zenhit777/Claymore/actions/runs/44840121627) et [44840117619](https://github.com/zenhit777/Claymore/actions/runs/44840117619)). Les tests `cuda-driver` sont compilés par le contrôle `--all-targets`, mais ne sont pas exécutés par la CI.
+- [x] CI verte sur le HEAD `0b7314d3a9388ef528426cdb8e55e1c4831fc025` : format, tests workspace, Clippy standard/CUDA, compilation des cibles `cuda-driver` avec `--all-targets` et MSRV Rust 1.86 (runs push et pull request [44840317161](https://github.com/zenhit777/Claymore/actions/runs/44840317161) et [44840312918](https://github.com/zenhit777/Claymore/actions/runs/44840312918)). Les tests `cuda-driver` sont compilés par le contrôle `--all-targets`, mais ne sont pas exécutés par la CI.
 - [ ] Revue architecturale et fusion.
 - [ ] Validation matérielle RTX 5090 ciblée et preuve versionnée.
 
