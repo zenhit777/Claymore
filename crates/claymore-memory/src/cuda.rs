@@ -473,7 +473,6 @@ impl CudaMemoryManager {
         } else {
             Err(CudaMemoryError::UnknownTransferToken(token.id))
         }
-        Ok(())
     }
 
     pub fn wait_for_allocation(&mut self, id: &str, tick: u64) -> Result<(), CudaMemoryError> {
