@@ -54,7 +54,7 @@ mod driver;
 #[cfg(feature = "cuda-driver")]
 pub use driver::CudaRuntime;
 #[cfg(feature = "cuda-driver")]
-pub use driver::{CudaDriver, CudaEvent, CudaStream, DeviceBuffer, PinnedHostBuffer};
+pub use driver::{CudaDeviceBuffer, CudaDriver, CudaEvent, CudaStream, PinnedHostBuffer};
 
 #[cfg(test)]
 mod tests {
