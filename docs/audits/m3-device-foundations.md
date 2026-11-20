@@ -107,7 +107,7 @@ L'adaptateur `claymore-memory` couvre désormais :
 - [x] Sémantique de clonage documentée et testée.
 - [x] Distinction explicite OOM / overflow et tests déterministes.
 - [x] Tests CPU pour les cas demandés par #10.
-- [ ] CI verte sur le SHA final de la PR.
+- [x] CI verte sur le SHA de code `e7838992aec1c27aff70141927e607c758e0efac` : [workflow PR #15](https://github.com/zenhit777/Claymore/actions/runs/44729176687) — tests MSRV 1.86, formatage, tests workspace, vérification feature CUDA et Clippy réussis.
 - [ ] Revue architecturale et fusion de la PR.
 
-Les deux derniers critères ne seront cochés qu'après observation des résultats GitHub sur le commit final et validation de la revue.
+La validation CI ci-dessus couvre le SHA de code indiqué. La PR reste ouverte pour revue architecturale ; la fusion n'est pas incluse dans ce jalon d'implémentation.
