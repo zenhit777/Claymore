@@ -58,6 +58,8 @@ unsafe extern "C" {
         stream: CuStreamRaw,
     ) -> CuResult;
     fn cuStreamCreate(stream: *mut CuStreamRaw, flags: c_uint) -> CuResult;
+    #[cfg(test)]
+    fn cuStreamGetFlags(stream: CuStreamRaw, flags: *mut c_uint) -> CuResult;
     fn cuStreamSynchronize(stream: CuStreamRaw) -> CuResult;
     fn cuStreamDestroy_v2(stream: CuStreamRaw) -> CuResult;
     fn cuEventCreate(event: *mut CuEventRaw, flags: c_uint) -> CuResult;
@@ -535,8 +537,8 @@ mod tests {
 
     #[test]
     fn event_query_distinguishes_complete_pending_and_driver_failure() {
-        assert_eq!(event_query_result(CUDA_SUCCESS), Ok(true));
-        assert_eq!(event_query_result(CUDA_ERROR_NOT_READY), Ok(false));
+        assert!(event_query_result(CUDA_SUCCESS).expect("complete query"));
+        assert!(!event_query_result(CUDA_ERROR_NOT_READY).expect("pending query"));
         assert!(matches!(
             event_query_result(999),
             Err(CudaError::Driver {
@@ -561,5 +563,106 @@ mod tests {
     fn zero_sized_allocations_are_rejected_before_driver_calls() {
         assert!(matches!(as_size(0), Err(CudaError::ZeroSizedAllocation)));
         assert_eq!(as_size(1).unwrap(), 1);
+    }
+
+    #[test]
+    #[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+    fn hardware_streams_are_explicitly_non_blocking() {
+        let driver = CudaDriver::new(0).expect("CUDA driver and device 0");
+        let stream = driver.create_stream().expect("stream creation");
+        let mut flags = 0_u32;
+        check(
+            unsafe { cuStreamGetFlags(stream.raw, &mut flags) },
+            "cuStreamGetFlags",
+        )
+        .expect("driver-reported stream flags");
+        assert_eq!(
+            flags & CU_STREAM_NON_BLOCKING,
+            CU_STREAM_NON_BLOCKING,
+            "transfer stream must not synchronize with the legacy default stream"
+        );
+
+        // Creation and destruction are balanced; the empty stream is quiescent.
+        for _ in 0..32 {
+            let extra = driver.create_stream().expect("stream creation");
+            let mut extra_flags = 0_u32;
+            check(
+                unsafe { cuStreamGetFlags(extra.raw, &mut extra_flags) },
+                "cuStreamGetFlags",
+            )
+            .expect("driver-reported stream flags");
+            assert_eq!(extra_flags & CU_STREAM_NON_BLOCKING, CU_STREAM_NON_BLOCKING);
+            extra.synchronize().expect("empty stream synchronization");
+        }
+        stream.synchronize().expect("empty stream synchronization");
+    }
+
+    #[test]
+    #[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+    fn hardware_stream_synchronize_completes_async_copy() {
+        let driver = CudaDriver::new(0).expect("CUDA driver and device 0");
+        let stream = driver.create_stream().expect("stream creation");
+        let len = 64 * 1024 * 1024;
+        let mut source = driver
+            .allocate_pinned(len as u64)
+            .expect("pinned allocation");
+        let mut destination = driver.allocate(len as u64).expect("device allocation");
+        // SAFETY: the pinned range is exclusively owned by this test.
+        unsafe { std::ptr::write_bytes(source.as_mut_ptr(), 0x5a, len) };
+        // SAFETY: both buffers stay alive and are not accessed until completion.
+        unsafe {
+            destination
+                .copy_from_pinned_async(&source, len, &stream)
+                .expect("H2D enqueue");
+        }
+        let event = driver.create_event().expect("event creation");
+        event.record(&stream).expect("event record");
+        stream
+            .synchronize()
+            .expect("explicit stream synchronization");
+        assert!(event.is_complete().expect("event query"));
+        // SAFETY: the stream is synchronized and each owner frees once.
+        unsafe {
+            destination.free().expect("device free");
+            source.free().expect("pinned free");
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+    fn hardware_device_buffer_free_is_explicit_and_idempotent() {
+        let driver = CudaDriver::new(0).expect("CUDA driver and device 0");
+        let stream = driver.create_stream().expect("stream creation");
+        for len in [1_usize, 37, 4096, 1024 * 1024] {
+            let mut buffer = driver.allocate(len as u64).expect("device allocation");
+            assert_eq!(buffer.len(), len);
+            assert!(!buffer.is_empty());
+            // SAFETY: this test uniquely owns the allocation and no work is queued.
+            unsafe {
+                buffer.free().expect("first free succeeds");
+                buffer.free().expect("free is idempotent");
+            }
+        }
+
+        let mut source = driver.allocate_pinned(4096).expect("pinned allocation");
+        let mut destination = driver.allocate(4096).expect("device allocation");
+        // SAFETY: no work is queued on this allocation.
+        unsafe { destination.free().expect("device free") };
+        // SAFETY: the freed buffer is deliberately used to verify fail-closed
+        // driver error propagation; the pointer is never dereferenced by Rust.
+        let error = unsafe {
+            destination
+                .copy_from_pinned_async(&source, 4096, &stream)
+                .expect_err("a freed allocation must not accept an async copy")
+        };
+        assert!(matches!(
+            error,
+            CudaError::Driver {
+                operation: "cuMemcpyHtoDAsync_v2",
+                code
+            } if code != 0
+        ));
+        // SAFETY: the pinned owner is freed exactly once.
+        unsafe { source.free().expect("pinned free") };
     }
 }

@@ -14,3 +14,8 @@ claymore-cuda = { path = "../claymore-cuda", optional = true }
 claymore-core = { path = "../claymore-core" }
 claymore-device = { path = "../claymore-device" }
 thiserror.workspace = true
+
+[[test]]
+name = "hardware_cuda_memory"
+path = "tests/hardware_cuda_memory.rs"
+required-features = ["cuda-driver"]
