@@ -429,9 +429,7 @@ impl CudaMemoryManager {
             return Ok(true);
         }
         if let Some((_, _, event, completed)) = self.pending.iter().find(|(id, ids, _, state)| {
-            *id == token.id
-                && *ids == token.allocation_ids
-                && Arc::ptr_eq(state, &token.completed)
+            *id == token.id && *ids == token.allocation_ids && Arc::ptr_eq(state, &token.completed)
         }) {
             let is_complete = event.is_complete()?;
             if is_complete {
