@@ -688,6 +688,79 @@ mod tests {
 
     #[test]
     #[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+    fn hardware_poll_retires_completed_transfer_before_admission_without_wait() {
+        use std::time::{Duration, Instant};
+
+        let _gib = 1024_u64.pow(3);
+        let budgets = MemoryBudgets {
+            vram_soft_bytes: 1024 * 1024,
+            vram_hard_bytes: 1024 * 1024,
+            host_bytes: 2 * 1024 * 1024,
+            pinned_host_bytes: 64 * 1024,
+            expert_cache_target_bytes: 0,
+            expert_cache_max_bytes: 0,
+        };
+        let mut manager = CudaMemoryManager::new(0, budgets, EvictionPolicy::Lru)
+            .expect("CUDA memory manager");
+        manager
+            .allocate_pinned("host", 4096, 1)
+            .expect("pinned allocation");
+        manager
+            .allocate_device("victim", 768 * 1024, 2, false)
+            .expect("victim allocation");
+        let expected = vec![0x5a_u8; 4096];
+        manager
+            .write_pinned("host", 0, &expected, 3)
+            .expect("pinned write");
+        manager
+            .copy_h2d("host", "victim", expected.len(), 4)
+            .expect("H2D enqueue");
+
+        // Exercise the actual manager-level polling API until the event is
+        // positively completed and retired. No token wait or allocation wait
+        // is permitted in this scenario.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut tick = 5_u64;
+        let retired = loop {
+            let count = manager
+                .poll_completed_transfers(tick)
+                .expect("non-blocking transfer poll");
+            tick += 1;
+            if count == 1 {
+                break count;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "completed H2D event was not retired within the deadline"
+            );
+            std::thread::yield_now();
+        };
+        assert_eq!(retired, 1);
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 768 * 1024);
+
+        // Admission pressure must now evict the completed victim without an
+        // explicit wait_for_transfer or wait_for_allocation call.
+        manager
+            .allocate_device("replacement", 512 * 1024, tick, false)
+            .expect("admission after poll-driven retirement");
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 512 * 1024);
+        assert!(matches!(
+            manager.release("victim", tick + 1),
+            Err(CudaMemoryError::UnknownAllocation(id)) if id == "victim"
+        ));
+        manager
+            .release("replacement", tick + 1)
+            .expect("replacement release");
+        manager
+            .release("host", tick + 1)
+            .expect("pinned release");
+        println!(
+            "M5-HW-POLL-01 retired={retired}; admission evicted completed victim without explicit wait"
+        );
+    }
+
+    #[test]
+    #[ignore = "requires a CUDA driver and a usable NVIDIA device"]
     fn cuda_manager_reports_device_memory() {
         let gib = 1024_u64.pow(3);
         let budgets = MemoryBudgets {
