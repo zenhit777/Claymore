@@ -22,7 +22,7 @@ Le jalon traite :
 
 Le backend créait le stream de transfert avec `CU_STREAM_DEFAULT` (flags nuls). Ce stream pouvait participer aux synchronisations implicites du legacy default stream.
 
-Le stream dédié est désormais créé avec `CU_STREAM_NON_BLOCKING`. Les transferts restent asynchrones ; les points de synchronisation demeurent explicites :
+Le stream dédié est désormais créé avec `CU_STREAM_NON_BLOCKING`. Il ne participe donc plus aux synchronisations implicites avec le legacy default stream. Tout futur consommateur compute (kernels CUDA, cuBLAS/cuBLASLt) devra exprimer explicitement les dépendances compute ↔ transfert, notamment avec `cuStreamWaitEvent`. Les transferts restent asynchrones ; les points de synchronisation demeurent explicites :
 - `wait_for_transfer` / `wait_for_allocation` lorsqu'un consommateur exige les données ;
 - polling des events avant un plan d'admission/éviction ;
 - synchronisation du stream dans le chemin de destruction du gestionnaire pour établir la sûreté des buffers.
@@ -33,7 +33,7 @@ Le stream dédié est désormais créé avec `CU_STREAM_NON_BLOCKING`. Les trans
 
 `CUDA_ERROR_NOT_READY` conserve l'event et ses allocations protégées. Toute autre erreur est propagée : elle n'est jamais convertie en complétion.
 
-Le chemin d'admission appelle ce polling avant de calculer les victimes d'éviction. Les opérations de lecture/écriture et de libération conservent leurs attentes explicites.
+Le chemin d'admission appelle ce polling avant de calculer les victimes d'éviction. Toute erreur de polling est propagée par `make_room` et bloque l'admission, même si l'event en erreur ne référence pas la victime envisagée : ce comportement fail-closed est intentionnel. Les opérations de lecture/écriture et de libération conservent leurs attentes explicites.
 
 ### Déterminisme des évictions
 
@@ -48,7 +48,7 @@ Le comparateur ajoute l'identifiant d'allocation comme dernier critère lexicogr
 - Une erreur de synchronisation du stream pendant `Drop` provoque toujours la fuite volontaire des buffers/events suivis, plutôt qu'une libération incertaine.
 - Un échec de synchronisation du stream après échec de `cuEventRecord` empoisonne le gestionnaire et marque les deux allocations comme en vol.
 
-Les tests sans GPU vérifient la traduction des résultats de query et la propagation des erreurs de synchronisation au niveau du wrapper. Le scénario matériel reste séparé.
+Les tests unitaires `event_query_status_conversion_distinguishes_complete_pending_and_driver_failure` et `driver_error_conversion_preserves_operation_and_code` vérifient uniquement la conversion de codes de retour en résultats/erreurs. Le second ne teste pas `cuStreamSynchronize` lui-même ; aucun des deux ne teste le comportement manager-level de `poll_completed_transfers`. Ces tests sous `cfg(feature = "cuda-driver")` ne sont pas exécutés par la CI actuelle : celle-ci lance les tests workspace sans cette feature, puis `cargo check` et Clippy avec la feature, sans `--all-targets`. Ne pas présenter ces vérifications comme des tests d'injection ou comme une preuve de propagation d'erreur dans le chemin runtime.
 
 ## 3. Changements
 
@@ -57,7 +57,7 @@ Les tests sans GPU vérifient la traduction des résultats de query et la propag
 - Polling automatique avant admission/éviction.
 - Départage déterministe par identifiant en cas d'égalité de priorité.
 - Test de non-régression pour les évictions à priorité égale.
-- Test de propagation d'erreur de synchronisation de stream.
+- Tests de conversion des codes d'erreur CUDA au niveau du wrapper (pas d'injection dans le chemin stream).
 - Extension du test matériel ignoré par défaut pour exercer le polling et les chemins d'attente H2D/D2H.
 
 ## 4. Validation
@@ -70,12 +70,12 @@ La CI existante couvre déjà :
 - Clippy standard et avec `cuda-driver` ;
 - tests workspace sur Rust 1.86.
 
-Aucune CI standard ne doit exiger un GPU ni linker le pilote CUDA. Les tests matériels sont explicitement ignorés sans pilote et périphérique NVIDIA.
+Aucune CI standard ne doit exiger un GPU ni linker le pilote CUDA. Les tests matériels sont explicitement ignorés sans pilote et périphérique NVIDIA. Les tests sous `cuda-driver` ne sont pas exécutés par la CI actuelle ; la compilation de ces cibles doit être explicitement distinguée de leur exécution.
 
 ## 5. Limites
 
 - La validation réelle de `cuEventQuery`, `cuEventSynchronize`, `cuStreamSynchronize` et des transferts DMA sur RTX 5090 doit être exécutée sur la machine cible.
-- Les tests d'injection sans GPU valident les conversions d'erreurs et les invariants de décision ; ils ne remplacent pas une panne injectée dans un pilote NVIDIA réel.
+- L'injection déterministe d'erreurs event/stream/free et les tests manager-level avec backend simulé sont différés dans l'issue #19 ; les conversions de codes seules ne couvrent pas ces chemins.
 - Aucun support multi-GPU/D2D ni implémentation du trait `Device` CUDA n'est ajouté.
 - Aucune dépendance Candle ou autre framework tensoriel externe n'est introduite.
 
@@ -86,7 +86,13 @@ Aucune CI standard ne doit exiger un GPU ni linker le pilote CUDA. Les tests mat
 - [x] Les états pending et les erreurs ne sont pas assimilés à une complétion.
 - [x] Les allocations restent protégées tant qu'un event associé reste en vol.
 - [x] Départage déterministe des évictions de priorité égale.
-- [x] Tests unitaires indépendants du GPU pour les résultats d'event et les erreurs de stream.
+- [x] Tests de conversion des codes d'état CUDA au niveau du wrapper ; ils ne démontrent pas l'exécution des chemins event/stream ni le comportement de `poll_completed_transfers` et ne sont pas exécutés par la CI actuelle.
+- [ ] Scénario matériel ciblé : `poll_completed_transfers` retire un event confirmé terminé, puis une admission sous pression évince l'allocation sans `wait_for_*` ; exécution RTX 5090 et preuve à consigner avant merge.
 - [x] CI verte sur le HEAD `1fe6ff5e8cc53f4fd5fd6d4d508e9321a56d47a2` : format, tests workspace, feature CUDA, Clippy standard/CUDA et MSRV Rust 1.86 (workflow [44817813430](https://github.com/zenhit777/Claymore/actions/runs/44817813430)).
 - [ ] Revue architecturale et fusion.
-- [ ] Validation matérielle RTX 5090.
+- [ ] Validation matérielle RTX 5090 ciblée et preuve versionnée.
+
+
+## 7. Suivi hors M5
+
+L'ajout d'une frontière CUDA simulable et l'injection déterministe des erreurs `cuEventQuery`, `cuStreamSynchronize` et `cuMemFree`, avec tests manager-level des invariants fail-closed, sont suivis dans l'issue [#19](https://github.com/zenhit777/Claymore/issues/19). Cette couverture n'est pas revendiquée comme livrée par M5.
