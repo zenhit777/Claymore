@@ -4,6 +4,7 @@
 //! asynchronous transfer is associated with a real CUDA event; allocations
 //! touched by unfinished transfers remain non-evictable until synchronization.
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::{
     Allocation, EvictionPolicy, MemoryBudgets, MemoryError, MemoryOrchestrator, MemorySnapshot,
@@ -12,6 +13,18 @@ use claymore_core::MemoryTier;
 use claymore_cuda::{CudaDriver, CudaError, CudaEvent, CudaStream, CudaDeviceBuffer, PinnedHostBuffer};
 
 const IN_FLIGHT: u64 = crate::lifecycle::IN_FLIGHT_TICK;
+static NEXT_TRANSFER_ID: AtomicU64 = AtomicU64::new(1);
+
+fn allocate_transfer_id() -> Result<u64, CudaMemoryError> {
+    let mut current = NEXT_TRANSFER_ID.load(Ordering::Relaxed);
+    loop {
+        let next = current.checked_add(1).ok_or(CudaMemoryError::TransferIdExhausted)?;
+        match NEXT_TRANSFER_ID.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return Ok(current),
+            Err(observed) => current = observed,
+        }
+    }
+}
 
 fn validate_monotonic_tick(previous: Option<u64>, provided: u64) -> Result<(), CudaMemoryError> {
     if let Some((previous, provided)) = crate::lifecycle::backwards_tick(previous, provided) {
@@ -73,7 +86,6 @@ pub struct CudaMemoryManager {
     device: HashMap<String, CudaDeviceBuffer>,
     pinned: HashMap<String, PinnedHostBuffer>,
     pending: Vec<(u64, Vec<String>, CudaEvent)>,
-    next_transfer_id: u64,
     last_tick: Option<u64>,
     poisoned: bool,
 }
@@ -94,7 +106,6 @@ impl CudaMemoryManager {
             device: HashMap::new(),
             pinned: HashMap::new(),
             pending: Vec::new(),
-            next_transfer_id: 1,
             last_tick: None,
             poisoned: false,
         })
@@ -287,8 +298,7 @@ impl CudaMemoryManager {
         tick: u64,
     ) -> Result<TransferToken, CudaMemoryError> {
         self.advance_tick(tick)?;
-        let transfer_id = self.next_transfer_id;
-        let next_transfer_id = transfer_id.checked_add(1).ok_or(CudaMemoryError::TransferIdExhausted)?;
+        let transfer_id = allocate_transfer_id()?;
         let event = self.driver.create_event()?;
         let source = self
             .pinned
@@ -317,7 +327,6 @@ impl CudaMemoryManager {
         self.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
         self.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
         let allocation_ids = vec![pinned_id.to_owned(), device_id.to_owned()];
-        self.next_transfer_id = next_transfer_id;
         self.pending.push((transfer_id, allocation_ids.clone(), event));
         self.policy.touch(pinned_id, tick)?;
         self.policy.touch(device_id, tick)?;
@@ -332,8 +341,7 @@ impl CudaMemoryManager {
         tick: u64,
     ) -> Result<TransferToken, CudaMemoryError> {
         self.advance_tick(tick)?;
-        let transfer_id = self.next_transfer_id;
-        let next_transfer_id = transfer_id.checked_add(1).ok_or(CudaMemoryError::TransferIdExhausted)?;
+        let transfer_id = allocate_transfer_id()?;
         let event = self.driver.create_event()?;
         let source = self
             .device
@@ -362,7 +370,6 @@ impl CudaMemoryManager {
         self.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
         self.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
         let allocation_ids = vec![device_id.to_owned(), pinned_id.to_owned()];
-        self.next_transfer_id = next_transfer_id;
         self.pending.push((transfer_id, allocation_ids.clone(), event));
         self.policy.touch(device_id, tick)?;
         self.policy.touch(pinned_id, tick)?;
