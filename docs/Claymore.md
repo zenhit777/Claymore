@@ -254,6 +254,7 @@ L'architecture est organisée en couches avec des frontières explicites.
 | Crate | Responsabilité |
 |---|---|
 | `claymore-core` | Types partagés, configuration et contrats transverses |
+| `claymore-device` | Contrats Device/Buffer/Tensor indépendants du backend et simulateur CPU |
 | `claymore-memory` | Budgets, comptabilité, admission et politiques d'éviction |
 | `claymore-scheduler` | Planification du travail et politique de préchargement |
 | `claymore-model-gemma` | Frontière d'intégration DiffusionGemma |
@@ -268,6 +269,8 @@ Le workspace utilise Cargo, resolver 2, Rust edition 2021. La version de référ
 ### 6.3 Principes de conception
 
 - Les politiques métier et mémoire doivent être testables sans matériel CUDA.
+- Les contrats Device/Buffer/Tensor sont backend-neutres ; aucun trait n'impose Send/Sync, car un backend peut être lié à un thread ou à un contexte.
+- Les opérations Device de M2 sont synchrones : leur retour garantit la fin de l'accès aux buffers ; tout futur chemin asynchrone doit transporter un jeton de complétion explicite.
 - Les appels CUDA doivent être encapsulés dans le crate backend et exposer des contrats de durée de vie explicites.
 - Les erreurs de backend ne doivent pas être transformées en succès comptables.
 - L'état logique du gestionnaire mémoire ne doit refléter une libération qu'après confirmation du backend.
@@ -342,7 +345,7 @@ Les éléments suivants ne doivent pas être considérés comme fonctionnels de 
 - enforcement de la cible/max du cache d'experts et de son inclusion dans un working set explicite ;
 - logique de scheduling, files de tâches et préchargement ;
 - polling non bloquant des CUDA events et finalisation automatique des transferts terminés avant admission ;
-- tests unitaires de l'adaptateur Memory ↔ CUDA avec backend simulé ;
+- adaptateur CUDA spécifique injectable et tests du cycle de vie CUDA avec backend simulé ;
 - pool allocator VRAM, réutilisation de blocs et défragmentation ;
 - moteur de transfert piloté par le scheduler ;
 - prefetch prédictif intégré au cache d'experts ;
@@ -465,7 +468,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 |---|---|---|
 | M0 | Scaffold et configuration | Livré ; profil matériel versionné, non chargé automatiquement |
 | M1 | Consolidation de la fondation matérielle | Livré par la PR #5 ; contexte primaire, sûreté et contrats CUDA |
-| M2 | Abstractions Device / Tensor | Planifié |
+| M2 | Abstractions Device / Tensor | Livré (contrats backend-neutres, simulateur CPU et adaptateur mémoire générique) |
 | M3 | Runtime unifié | Planifié |
 | M4 | Scheduler et orchestration mémoire | Planifié |
 | M5 | Candle et premier chemin modèle | Planifié |
@@ -506,11 +509,18 @@ Critères d'acceptation :
 
 **Objectif :** définir des interfaces communes et explicites pour les devices, buffers, transferts et tenseurs, sans exposer les détails CUDA aux couches supérieures.
 
+**État :** livré pour le contrat backend-neutre et le backend CPU. `claymore-device` expose `Device`, `DeviceBuffer`, `DeviceCapabilities`, `Tensor` et `CpuDevice`. `claymore-memory` fournit `DeviceMemoryManager<D>` qui applique les politiques d'admission et d'éviction sur ces contrats.
+
 Critères d'acceptation :
-- backend simulé CPU pour les tests des contrats Device/Tensor et de l'adaptateur mémoire (critère reporté de l'ancien M3) ;
-- contrats de propriété, synchronisation et capacités documentés ;
-- aucune hypothèse implicite sur le contexte ou le thread CUDA ;
-- interopérabilité Candle conçue à partir de l'API effectivement retenue.
+- backend simulé CPU pour les contrats Device/Tensor et l'adaptateur mémoire : livré et testé sans GPU ;
+- contrats de propriété, synchronisation synchrone et capacités documentés ;
+- aucune borne Send/Sync implicite : les backends peuvent rester confinés à leur thread/contexte ;
+- interopérabilité Candle définie comme adaptateur futur sans remplacer les tenseurs Candle ; version et API concrètes à figer en M5 ;
+- raccordement du backend CUDA au trait Device, transferts asynchrones avec jetons de complétion et validation GPU : hors M2, à traiter avant ou pendant M4/M5 selon le contrat d'exécution.
+
+**État M2 :** livré dans `claymore-device` et `claymore-memory` : contrats Device/DeviceBuffer, capacités explicites, opérations synchrones, métadonnées Tensor contiguës (dtype/shape/strides), backend CPU déterministe et `DeviceMemoryManager` générique branché sur les politiques d'admission/éviction. Les tests CPU couvrent allocation, accès borné, copie, métadonnées Tensor, comptabilité et éviction. Le backend CPU ne simule pas la mémoire pinned, n'exécute aucun calcul tensoriel et n'émule pas CUDA. Le backend CUDA existant n'implémente pas encore le trait Device ; ce raccordement nécessitera un contrat de propriété/context/thread validé, sans conversion implicite vers Send/Sync.
+
+La frontière Candle est volontairement un adaptateur futur : les tenseurs Candle resteront les objets de calcul au jalon M5 ; les types Claymore décrivent la résidence et la propriété des buffers, sans réimplémenter les opérateurs Candle ni partager des pointeurs bruts non documentés. La version Candle et le mécanisme d'import/export seront figés à M5 après vérification de l'API retenue.
 
 ### M3 — Runtime unifié
 
@@ -697,6 +707,7 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 - `docs/cuda-backend-v0.4.md` — détails du backend CUDA.
 - `docs/memory-profile.md` — profil mémoire RTX 5090.
 - `docs/wsl2.md` — configuration WSL2.
+- `docs/audits/m2-device-tensor-design.md` — contrats Device/Tensor et validation CPU.
 - `config/rtx5090-7950x3d.json` — profil machine versionné.
 
 ---

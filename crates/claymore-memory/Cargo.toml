@@ -11,4 +11,5 @@ cuda-driver = ["dep:claymore-cuda", "claymore-cuda/cuda-driver"]
 [dependencies]
 claymore-cuda = { path = "../claymore-cuda", optional = true }
 claymore-core = { path = "../claymore-core" }
+claymore-device = { path = "../claymore-device" }
 thiserror.workspace = true

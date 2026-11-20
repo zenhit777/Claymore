@@ -321,6 +321,9 @@ impl MemoryOrchestrator {
     }
 }
 
+mod device;
+pub use device::{DeviceMemoryError, DeviceMemoryManager};
+
 #[cfg(feature = "cuda-driver")]
 mod cuda;
 #[cfg(feature = "cuda-driver")]
