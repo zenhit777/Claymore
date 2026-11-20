@@ -1,7 +1,7 @@
 //! Thin, ownership-aware wrappers over the CUDA Driver API.
 //!
-//! The backend retains the device primary context so resources can interoperate
-//! with CUDA libraries (including Candle/cudarc) that use the same context.
+//! The backend retains the device primary context so Claymore components can
+//! share CUDA resources without crossing incompatible context boundaries.
 //! Async copy methods remain unsafe: callers must keep buffers alive and avoid
 //! conflicting access until the associated stream has completed.
 use std::{
