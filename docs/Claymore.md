@@ -6,7 +6,7 @@
 > **Dépôt :** https://github.com/zenhit777/Claymore  
 > **Version de référence du workspace :** 0.5.0  
 > **État du document :** référence vivante, à mettre à jour à chaque jalon  
-> **Dernière mise à jour :** 19 novembre 2026
+> **Dernière mise à jour :** 20 novembre 2026
 
 ---
 
@@ -268,6 +268,17 @@ Le workspace utilise Cargo, resolver 2, Rust edition 2021. La version de référ
 
 `claymore-scheduler` ne fournit actuellement qu'une structure `SchedulerConfig` (`cpu_workers`, `max_prefetches`, `lookahead`) et sa validation ; aucune boucle ni logique de planification n'est implémentée. La validation accepte de 1 à 12 workers. Les valeurs minimales de 6 workers, les nombres de streams et le tick de 500 µs figurant dans le profil JSON sont des paramètres documentaires, pas des contraintes appliquées par le code.
 
+### 6.4 Politique de dépendances du moteur tensoriel
+
+Le moteur tensoriel, ses contrats publics et son orchestration appartiennent à Claymore. Un framework ou runtime tensoriel tiers ne doit pas devenir le propriétaire des types `Tensor` / `Device` / `Buffer`, de leur cycle de vie, de la politique mémoire, du scheduler ou du chemin d'exécution des modèles.
+
+Sont autorisés après revue de leur pertinence, de leur licence et de leur coût d'intégration :
+- les API et bibliothèques CUDA/NVIDIA de bas niveau (CUDA Driver API, CUDA Runtime si nécessaire, cuBLAS/cuBLASLt, CUTLASS, cuDNN) pour exécuter des primitives ou kernels ;
+- les bibliothèques de formats et de données (notamment safetensors), les tokenizers et les parseurs nécessaires au chargement des modèles ;
+- les crates Rust utilitaires ciblées (par exemple `half` pour les types BF16/FP16, sérialisation, vérification ou instrumentation).
+
+Ces composants peuvent fournir des primitives spécialisées, mais l'API tensorielle, les règles d'ownership, la synchronisation, la gestion des allocations et les choix d'exécution restent définis par Claymore. Toute nouvelle dépendance doit être justifiée et validée ; aucune bibliothèque externe ne devient automatiquement une dépendance structurante du runtime.
+
 ### 6.3 Principes de conception
 
 - Les politiques métier et mémoire doivent être testables sans matériel CUDA.
@@ -338,7 +349,9 @@ Le build par défaut reste indépendant du matériel. La feature CUDA requiert u
 
 **État :** livré sur `main` derrière la feature `cuda-driver` ; compilation et Clippy de la feature vérifiés en CI sans lien ni GPU ; validation matérielle réelle effectuée sous WSL2 sur RTX 5090 pour le SHA `a3ff0fd` de la branche `feat/m1-hardware-foundation` (compute capability 12.0, contexte primaire partagé, allocations pinned/device, roundtrip H2D/D2H de 1 Mio, intégrité et libération) ; détails et limites dans `docs/audits/m1-hardware-validation.md` ; pas de backend simulé.
 
-### 7.2 Non livré à ce stade
+### 7.2 Non livré sur main / en cours de revue
+
+**M2 — PR #6 :** les contrats `Device` / `DeviceBuffer` / `Tensor`, `CpuDevice` et `DeviceMemoryManager<D>` sont implémentés sur la branche `feat/m2-device-tensor-abstractions`, mais ne sont pas encore livrés sur `main` tant que la PR #6 n'est pas fusionnée. La CI a validé le SHA `de83b47bbf359a30166afa0130e06edf18869949` ; les corrections demandées par la revue architecturale restent à intégrer et à revalider.
 
 Les éléments suivants ne doivent pas être considérés comme fonctionnels de bout en bout :
 
@@ -368,6 +381,7 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 - les appels de copie asynchrone imposent à l'appelant de conserver les buffers vivants et de synchroniser avant leur destruction ou réutilisation ;
 - les CUDA events sont connectés aux transferts du `CudaMemoryManager` ; leur complétion est traitée par attente explicite, sans polling non bloquant ni finalisation automatique lors d'une admission ;
 - le backend CUDA et le `CudaMemoryManager` sont confinés au thread propriétaire (`Rc`, types non `Send`/`Sync`) ; le scheduler M4 devra déléguer les opérations CUDA à un thread propriétaire dédié ou faire évoluer explicitement ce modèle de concurrence ;
+- le contrat `Device` M2 actuel libère ses buffers par destruction (`Drop`) et ne peut pas exprimer une libération backend faillible ni protéger une allocation en vol ; le backend CUDA ne doit pas implémenter ce trait avant qu'un contrat de libération faillible et de garde de complétion préserve les garanties fail-closed de M1 ;
 - la validation runtime sous WSL2 / RTX 5090 est attestée pour le SHA `a3ff0fd` par `docs/audits/m1-hardware-validation.md` ; elle couvre le contexte primaire, la compute capability, les allocations pinned/device, le roundtrip H2D/D2H et la libération, mais pas Compute Sanitizer, l'injection de faute fail-closed ni les performances.
 
 La CI standard valide le build par défaut sans exiger un GPU. Les tests matériels marqués `#[ignore]` ne sont pas exécutés par la CI. Le backend CUDA n'est pas encore relié au contrat `Device` de Claymore. `CudaDriver::new` retient le contexte primaire du device ; les opérations inter-ressources vérifient l'identité du contexte. Le raccordement futur devra préserver explicitement l'identité du contexte, l'ownership et la durée de vie des buffers. Le backend et le manager restent confinés au thread propriétaire (`Rc`) ; aucune implémentation `Send`/`Sync` unsafe n'est envisagée.
@@ -470,7 +484,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 |---|---|---|
 | M0 | Scaffold et configuration | Livré ; profil matériel versionné, non chargé automatiquement |
 | M1 | Consolidation de la fondation matérielle | Livré par la PR #5 ; contexte primaire, sûreté et contrats CUDA |
-| M2 | Abstractions Device / Tensor | Livré (contrats backend-neutres, simulateur CPU et adaptateur mémoire générique) |
+| M2 | Abstractions Device / Tensor | Implémenté dans la PR #6 ; revue architecturale en cours, non fusionné |
 | M3 | Runtime unifié | Planifié |
 | M4 | Scheduler et orchestration mémoire | Planifié |
 | M5 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
@@ -653,7 +667,7 @@ Historique de référence :
 - **v0.3** : memory orchestrator host-side ;
 - **v0.4** : backend CUDA Driver API optionnel.
 
-Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in).
+Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in). La PR #6 porte M2 (`Device` / `Tensor` et simulateur CPU) ; son implémentation est en revue et n'est pas encore intégrée à `main`.
 
 Une PR ne doit pas être déclarée prête uniquement parce que le code existe : elle doit préciser si les tests couvrent le build par défaut, la feature CUDA, le matériel réel ou seulement un backend simulé.
 
@@ -664,6 +678,7 @@ Une PR ne doit pas être déclarée prête uniquement parce que le code existe :
 | Sujet | Risque / question | Décision ou traitement |
 |---|---|---|
 | Contexte CUDA | Les ressources CUDA doivent partager un contexte cohérent au sein de Claymore | M1 retient le contexte primaire du device et vérifie les appartenances de contexte ; le raccordement des buffers CUDA aux contrats Device/Tensor de Claymore devra être démontré par des tests d'intégration. Ne pas transmettre de pointeurs entre contextes distincts. |
+| Moteur tensoriel natif | Effort d'implémentation, correction numérique BF16/FP32 et performances GEMM/attention sur sm_120 | Construire par incréments mesurés ; comparer les sorties numériques à une référence indépendante et les performances aux bibliothèques NVIDIA de référence avant d'activer un chemin optimisé. Les bibliothèques de calcul bas niveau restent autorisées selon la politique de dépendances §6.4. |
 | Driver CUDA dans WSL2 | Bibliothèque ou lien linker absent | Vérifier `libcuda.so.1` et le linkage sur la cible |
 | Durée de vie async | Libération ou réutilisation prématurée | Ownership explicite et event de complétion |
 | Comptabilité mémoire | Écart entre état logique et mémoire réelle | Confirmer uniquement après succès backend |
@@ -728,7 +743,7 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-19 | Le backend CUDA utilise `Rc` car son contexte n'est pas `Send`/`Sync` : driver, buffers, streams, events et `CudaMemoryManager` sont confinés au thread propriétaire ; M4 doit prévoir un thread CUDA dédié ou une évolution sûre de ce modèle. |
 | 2026-11-18 | Cette référence est rédigée en français ; README et documentation technique existante restent en anglais. |
 | 2026-11-18 | DiffusionGemma (`google/diffusiongemma-26B-A4B-it`) et Clover disposent de moteurs distincts partageant les services transverses du runtime. |
-| 2026-11-20 | Candle et les autres projets externes restent des références d'étude uniquement ; Claymore possède ses contrats Device/Buffer/Tensor et son futur moteur tensoriel natif. DiffusionGemma est référencé par son identifiant Hugging Face exact. |
+| 2026-11-20 | Claymore ne fonde pas son moteur tensoriel sur un runtime tensoriel externe : les contrats Device/Buffer/Tensor, l'ownership, la synchronisation, la politique mémoire et l'exécution des modèles doivent rester cohérents et maîtrisés dans le projet, sans adapter les invariants Claymore au cycle de vie d'un framework tiers. Ce choix évite une dépendance structurante et les frictions d'interopérabilité autour des contextes CUDA, des buffers et des transferts ; il augmente en contrepartie fortement l'effort d'implémentation, de maintenance, de correction numérique et d'optimisation. Claymore pourra s'appuyer sur des bibliothèques de calcul bas niveau et des outils CUDA selon §6.4, sans leur déléguer ses abstractions ni son runtime. |\n| 2026-11-20 | Candle et les autres projets externes restent des références d'étude uniquement ; Claymore possède ses contrats Device/Buffer/Tensor et son futur moteur tensoriel natif. DiffusionGemma est référencé par son identifiant Hugging Face exact. |
 
 ### Correspondance de la feuille de route historique
 
