@@ -65,7 +65,8 @@ Les tests unitaires `event_query_status_conversion_distinguishes_complete_pendin
 La CI existante couvre déjà :
 - `cargo fmt --all -- --check` ;
 - `cargo test --workspace --all-targets` ;
-- `cargo check -p claymore-memory --features cuda-driver` ;
+- `cargo check -p claymore-cuda --features cuda-driver --all-targets` ;
+- `cargo check -p claymore-memory --features cuda-driver --all-targets` ;
 - `cargo check -p claymore-cli --features cuda-driver` ;
 - Clippy standard et avec `cuda-driver` ;
 - tests workspace sur Rust 1.86.
@@ -74,7 +75,7 @@ Aucune CI standard ne doit exiger un GPU ni linker le pilote CUDA. Les tests mat
 
 ## 5. Limites
 
-- La validation réelle de `cuEventQuery`, `cuEventSynchronize`, `cuStreamSynchronize` et des transferts DMA sur RTX 5090 doit être exécutée sur la machine cible.
+- La campagne nominale générale M4/M5 a été exécutée sur RTX 5090 (24/24 PASS ; détails dans `docs/audits/m5-hardware-validation.md`). Le scénario ciblé `M5-HW-POLL-01` reste à exécuter sur le HEAD corrigé avant merge.
 - L'injection déterministe d'erreurs event/stream/free et les tests manager-level avec backend simulé sont différés dans l'issue #19 ; les conversions de codes seules ne couvrent pas ces chemins.
 - Aucun support multi-GPU/D2D ni implémentation du trait `Device` CUDA n'est ajouté.
 - Aucune dépendance Candle ou autre framework tensoriel externe n'est introduite.
