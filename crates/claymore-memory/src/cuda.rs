@@ -369,12 +369,16 @@ impl CudaMemoryManager {
         Ok(TransferToken { id: transfer_id, allocation_ids })
     }
 
-    /// Returns true only after this manager has synchronized the event associated
-    /// with the token (or a broader allocation wait has already done so).
-    pub fn is_transfer_complete(&self, token: &TransferToken) -> bool {
-        !self.pending.iter().any(|(id, ids, _)| {
+    /// Query the associated CUDA event without blocking. A missing pending
+    /// entry means an earlier explicit wait already confirmed completion.
+    pub fn is_transfer_complete(&self, token: &TransferToken) -> Result<bool, CudaMemoryError> {
+        if let Some((_, _, event)) = self.pending.iter().find(|(id, ids, _)| {
             *id == token.id && *ids == token.allocation_ids
-        })
+        }) {
+            Ok(event.is_complete()?)
+        } else {
+            Ok(true)
+        }
     }
 
     /// Wait for the exact transfer represented by the token. A synchronization
