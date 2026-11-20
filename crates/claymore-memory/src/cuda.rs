@@ -421,6 +421,8 @@ impl CudaMemoryManager {
 
     /// Query the associated CUDA event without blocking. A token is complete
     /// after its event query succeeds or an explicit wait synchronizes it.
+    /// This query does not retire the pending event or release allocation guards;
+    /// call wait_for_transfer (or wait_for_allocation) to retire the tracked work.
     pub fn is_transfer_complete(&self, token: &TransferToken) -> Result<bool, CudaMemoryError> {
         if token.manager_id != self.manager_id {
             return Err(CudaMemoryError::UnknownTransferToken(token.id));
