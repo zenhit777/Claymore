@@ -22,7 +22,8 @@ type CuEventRaw = *mut c_void;
 
 const CUDA_SUCCESS: CuResult = 0;
 const CUDA_ERROR_NOT_READY: CuResult = 600;
-const CU_STREAM_DEFAULT: c_uint = 0;
+// Do not implicitly synchronize with CUDA's legacy default stream.
+const CU_STREAM_NON_BLOCKING: c_uint = 1;
 const CU_EVENT_DEFAULT: c_uint = 0;
 const CU_MEMHOSTALLOC_PORTABLE: c_uint = 1;
 const CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR: c_int = 75;
@@ -269,7 +270,7 @@ impl CudaDriver {
         let mut raw = ptr::null_mut();
         // SAFETY: raw is valid output storage.
         check(
-            unsafe { cuStreamCreate(&mut raw, CU_STREAM_DEFAULT) },
+            unsafe { cuStreamCreate(&mut raw, CU_STREAM_NON_BLOCKING) },
             "cuStreamCreate",
         )?;
         Ok(CudaStream {
