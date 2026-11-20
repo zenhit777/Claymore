@@ -412,6 +412,7 @@ impl CudaMemoryManager {
         self.policy.touch(device_id, tick)?;
         self.policy.touch(pinned_id, tick)?;
         Ok(TransferToken {
+            manager_id: self.manager_id,
             id: transfer_id,
             allocation_ids,
             completed,
@@ -599,6 +600,21 @@ impl Drop for CudaMemoryManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transfer_token_clones_share_completion_state() {
+        let completed = Arc::new(AtomicBool::new(false));
+        let token = TransferToken {
+            manager_id: 1,
+            id: 2,
+            allocation_ids: vec!["device".to_owned(), "pinned".to_owned()],
+            completed: Arc::clone(&completed),
+        };
+        let clone = token.clone();
+
+        clone.completed.store(true, Ordering::Release);
+        assert!(token.completed.load(Ordering::Acquire));
+    }
 
     #[test]
     fn logical_ticks_must_be_monotonic() {
