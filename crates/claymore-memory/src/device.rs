@@ -177,9 +177,13 @@ impl<D: Device> DeviceMemoryManager<D> {
         if allocation.safe_after_tick > tick {
             return Err(MemoryError::AllocationBusy(id.to_owned()).into());
         }
-        // Destroy the backend allocation before releasing its logical budget.
-        // The policy entry and safe_after_tick were checked above, so confirmation
-        // cannot fail unless the policy implementation violates its contract.
+        // The backend must confirm release before the allocation is removed
+        // from ownership or logical accounting. On failure, both remain intact
+        // so the caller can diagnose or retry without inventing free capacity.
+        self.buffers
+            .get_mut(id)
+            .expect("buffer existence was checked above")
+            .release()?;
         let buffer = self
             .buffers
             .remove(id)
@@ -236,6 +240,17 @@ mod tests {
         manager.release("source", 6).unwrap();
         assert_eq!(manager.usage_bytes(MemoryTier::Host), 0);
         manager.synchronize().unwrap();
+    }
+
+    #[test]
+    fn release_confirms_backend_release_before_removing_accounting() {
+        let mut manager =
+            DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
+        manager.allocate("buffer", MemoryTier::Host, 16, 1, false).unwrap();
+        let released = manager.release("buffer", 2).unwrap();
+        assert_eq!(released.id, "buffer");
+        assert!(manager.allocation("buffer").is_none());
+        assert_eq!(manager.usage_bytes(MemoryTier::Host), 0);
     }
 
     #[test]
