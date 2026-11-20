@@ -4,7 +4,7 @@
 
 M2 introduit une frontière backend-neutre pour les périphériques, les buffers et les métadonnées de tenseurs, ainsi qu'un backend CPU déterministe permettant de tester les contrats et l'adaptateur mémoire sans GPU.
 
-Ce jalon ne livre ni opérateurs tensoriels, ni autograd, ni exécution de modèles, ni runtime, ni scheduler, ni intégration Candle, ni implémentation du trait Device par le backend CUDA existant.
+Ce jalon ne livre ni opérateurs tensoriels, ni autograd, ni exécution de modèles, ni runtime, ni scheduler, ni intégration d'une bibliothèque tensorielle tierce, ni implémentation du trait Device par le backend CUDA existant.
 
 ## Contrats livrés
 
@@ -45,11 +45,13 @@ Les tests CPU couvrent notamment :
 
 Ce manager générique est distinct du `CudaMemoryManager` spécifique M1, qui conserve actuellement son implémentation CUDA dédiée.
 
-## Frontière Candle
+## Indépendance du moteur tensoriel
 
-M2 ne remplace pas les tenseurs Candle. À M5, l'adaptateur modèle utilisera les objets `Tensor` de Candle comme représentation de calcul et les contrats Claymore pour les décisions de résidence, de capacité et de propriété des allocations lorsque l'API Candle retenue le permet.
+Les types `Device`, `DeviceBuffer` et `Tensor` définis dans ce jalon sont des abstractions propriétaires de Claymore. Ils constituent la base du futur moteur tensoriel et des chemins d'exécution des modèles.
 
-Aucun pointeur brut ne sera partagé entre Candle/cudarc et Claymore sans contrat documenté de contexte CUDA, d'ownership et de durée de vie. La version Candle, ses features et le mécanisme concret d'import/export seront fixés à M5 après vérification de l'API de cette version.
+Aucune bibliothèque tensorielle tierce n'est une dépendance requise ni une cible d'intégration de Claymore. Les choix de représentation, d'opérations, de propriété mémoire et d'exécution seront définis et validés dans l'architecture du projet. Les références externes peuvent servir à comparer des approches, sans dicter les contrats ni introduire de dépendance.
+
+Le raccordement du backend CUDA devra respecter les contrats Claymore de contexte, d'ownership, de synchronisation et de durée de vie des buffers.
 
 ## Limites et suites
 
