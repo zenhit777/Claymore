@@ -350,9 +350,13 @@ Le build par défaut reste indépendant du matériel. La feature CUDA requiert u
 
 **État :** livré sur `main` derrière la feature `cuda-driver` ; compilation et Clippy de la feature vérifiés en CI sans lien ni GPU ; validation matérielle réelle effectuée sous WSL2 sur RTX 5090 pour le SHA `a3ff0fd` de la branche `feat/m1-hardware-foundation` (compute capability 12.0, contexte primaire partagé, allocations pinned/device, roundtrip H2D/D2H de 1 Mio, intégrité et libération) ; détails et limites dans `docs/audits/m1-hardware-validation.md` ; pas de backend simulé.
 
-### 7.2 Non livré sur main / en cours de revue
+#### M2 — Device / Tensor (backend CPU)
 
-**M2 — PR #6 :** les contrats `Device` / `DeviceBuffer` / `Tensor`, `CpuDevice` et `DeviceMemoryManager<D>` sont implémentés sur la branche `feat/m2-device-tensor-abstractions`, mais ne sont pas encore livrés sur `main` tant que la PR #6 n'est pas fusionnée. L'implémentation initiale a été validée par la CI sur le SHA `de83b47bbf359a30166afa0130e06edf18869949` ; les corrections demandées par la revue architecturale sont intégrées dans cette branche et leur validation CI est en cours.
+**État :** livré sur `main` par la PR #6. Le crate `claymore-device` fournit les contrats `Device`, `DeviceBuffer`, `DeviceCapabilities`, le type `Tensor` et le simulateur `CpuDevice`. `claymore-memory` fournit `DeviceMemoryManager<D>` pour appliquer les politiques d'admission et d'éviction sur ces contrats.
+
+Ce jalon livre des abstractions backend-neutres et leur validation CPU ; il ne livre aucun calcul tensoriel ni opérateur. Le backend CUDA existant n'implémente pas encore `Device` et son raccordement reste conditionné à un contrat de libération faillible et de protection des allocations en vol (voir §7.3 et l'audit M2).
+
+### 7.2 Non livré sur main / en cours de revue
 
 Les éléments suivants ne doivent pas être considérés comme fonctionnels de bout en bout :
 
@@ -485,7 +489,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 |---|---|---|
 | M0 | Scaffold et configuration | Livré ; profil matériel versionné, non chargé automatiquement |
 | M1 | Consolidation de la fondation matérielle | Livré par la PR #5 ; contexte primaire, sûreté et contrats CUDA |
-| M2 | Abstractions Device / Tensor | Implémenté dans la PR #6 ; revue architecturale en cours, non fusionné |
+| M2 | Abstractions Device / Tensor | Livré par la PR #6 |
 | M3 | Runtime unifié | Planifié |
 | M4 | Scheduler et orchestration mémoire | Planifié |
 | M5 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
@@ -569,7 +573,7 @@ Critères d'acceptation :
 Travaux :
 - définir et stabiliser les primitives de calcul tensoriel natives de Claymore ;
 - définir le chargement et la représentation des poids ;
-- connecter les opérations tensorielle aux contrats Device / Tensor / Memory et au backend d'exécution Claymore ;
+- connecter les opérations tensorielles aux contrats Device / Tensor / Memory et au backend d'exécution Claymore ;
 - valider formes, précision, sorties et durée de vie des buffers.
 
 Critères d'acceptation :
@@ -668,7 +672,7 @@ Historique de référence :
 - **v0.3** : memory orchestrator host-side ;
 - **v0.4** : backend CUDA Driver API optionnel.
 
-Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in). La PR #6 porte M2 (`Device` / `Tensor` et simulateur CPU) ; son implémentation est en revue et n'est pas encore intégrée à `main`.
+Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in). La PR #6 a livré M2 (`Device` / `Tensor` et simulateur CPU).
 
 Une PR ne doit pas être déclarée prête uniquement parce que le code existe : elle doit préciser si les tests couvrent le build par défaut, la feature CUDA, le matériel réel ou seulement un backend simulé.
 
