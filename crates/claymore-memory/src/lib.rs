@@ -402,12 +402,12 @@ mod tests {
         let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
         for id in ["gamma", "alpha", "beta"] {
             manager
-                .record_allocation(allocation(id, 40, 5, 0))
+                .record_allocation(allocation(id, 30, 5, 0))
                 .unwrap();
         }
 
         for _ in 0..32 {
-            let plan = manager.plan_admission(MemoryTier::Vram, 1, 5).unwrap();
+            let plan = manager.plan_admission(MemoryTier::Vram, 20, 5).unwrap();
             assert_eq!(plan.evict_ids, vec!["alpha"]);
         }
     }
