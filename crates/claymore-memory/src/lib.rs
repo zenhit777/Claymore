@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use claymore_core::MemoryTier;
 use thiserror::Error;
 
+mod lifecycle;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EvictionPolicy {
     Lru,
