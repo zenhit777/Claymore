@@ -352,7 +352,7 @@ Le build par défaut reste indépendant du matériel. La feature CUDA requiert u
 
 ### 7.2 Non livré sur main / en cours de revue
 
-**M2 — PR #6 :** les contrats `Device` / `DeviceBuffer` / `Tensor`, `CpuDevice` et `DeviceMemoryManager<D>` sont implémentés sur la branche `feat/m2-device-tensor-abstractions`, mais ne sont pas encore livrés sur `main` tant que la PR #6 n'est pas fusionnée. La CI a validé le SHA `de83b47bbf359a30166afa0130e06edf18869949` ; les corrections demandées par la revue architecturale restent à intégrer et à revalider.
+**M2 — PR #6 :** les contrats `Device` / `DeviceBuffer` / `Tensor`, `CpuDevice` et `DeviceMemoryManager<D>` sont implémentés sur la branche `feat/m2-device-tensor-abstractions`, mais ne sont pas encore livrés sur `main` tant que la PR #6 n'est pas fusionnée. L'implémentation initiale a été validée par la CI sur le SHA `de83b47bbf359a30166afa0130e06edf18869949` ; les corrections demandées par la revue architecturale sont intégrées dans cette branche et leur validation CI est en cours.
 
 Les éléments suivants ne doivent pas être considérés comme fonctionnels de bout en bout :
 
