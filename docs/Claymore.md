@@ -95,7 +95,7 @@ Les travaux spécifiques prévus comprennent :
 - choix de précision par opération et validation numérique ;
 - allocation et libération prévisibles des buffers temporaires.
 
-**Point de vigilance :** la gestion d'un KV cache classique ne doit pas être supposée identique à celle d'un modèle autoregressif. La conception devra suivre les besoins effectifs de DiffusionGemma et de son implémentation Candle.
+**Point de vigilance :** la gestion d'un KV cache classique ne doit pas être supposée identique à celle d'un modèle autoregressif. La conception devra suivre les besoins effectifs de l'architecture DiffusionGemma et de son implémentation propre.
 
 ### 3.2 Clover-35B-A3B-preview
 
@@ -501,7 +501,7 @@ Critères d'acceptation :
 - tests unitaires des validations de contexte et des tailles, exécutés sur la cible matérielle avec `cargo test -p claymore-cuda -p claymore-memory --features cuda-driver --lib` ;
 - test matériel existant couvrant allocation VRAM, pinned host, H2D, D2H, vérification des octets et libération, exécuté sur RTX 5090 ;
 - preuves de validation versionnées dans `docs/audits/m1-hardware-validation.md` ;
-- compatibilité avec Candle/cudarc à confirmer par un test d'intégration ultérieur avant de déclarer l'interopérabilité validée.
+- raccordement du backend CUDA aux contrats Device/Tensor Claymore à confirmer par des tests d'intégration sur la cible matérielle ;
 
 **Périmètre de la PR M1 :** backend CUDA, adaptateur mémoire, documentation d'audit et mise à jour de cette feuille de route. Aucun scheduler, modèle ou moteur de génération n'est introduit dans ce jalon.
 
