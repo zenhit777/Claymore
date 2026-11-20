@@ -11,19 +11,17 @@ use crate::{
 use claymore_core::MemoryTier;
 use claymore_cuda::{CudaDriver, CudaError, CudaEvent, CudaStream, DeviceBuffer, PinnedHostBuffer};
 
-const IN_FLIGHT: u64 = u64::MAX;
+const IN_FLIGHT: u64 = crate::lifecycle::IN_FLIGHT_TICK;
 
 fn validate_monotonic_tick(previous: Option<u64>, provided: u64) -> Result<(), CudaMemoryError> {
-    if let Some(previous) = previous {
-        if provided < previous {
-            return Err(CudaMemoryError::NonMonotonicTick { previous, provided });
-        }
+    if let Some((previous, provided)) = crate::lifecycle::backwards_tick(previous, provided) {
+        return Err(CudaMemoryError::NonMonotonicTick { previous, provided });
     }
     Ok(())
 }
 
 fn ensure_release_safe(id: &str, safe_after_tick: u64, tick: u64) -> Result<(), CudaMemoryError> {
-    if safe_after_tick > tick {
+    if !crate::lifecycle::release_is_safe(safe_after_tick, tick) {
         return Err(MemoryError::AllocationBusy(id.to_owned()).into());
     }
     Ok(())
