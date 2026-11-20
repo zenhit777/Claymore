@@ -441,7 +441,9 @@ impl CudaMemoryManager {
             completed.store(true, Ordering::Release);
             for completed_id in ids {
                 let still_in_flight = self.pending.iter().any(|(_, pending_ids, _, _)| {
-                    pending_ids.iter().any(|pending_id| pending_id == &completed_id)
+                    pending_ids
+                        .iter()
+                        .any(|pending_id| pending_id == &completed_id)
                 });
                 if !still_in_flight {
                     self.policy.mark_in_flight_until(&completed_id, tick)?;
