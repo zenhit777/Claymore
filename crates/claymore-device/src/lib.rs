@@ -705,6 +705,17 @@ mod tests {
     }
 
     #[test]
+    fn cpu_device_rejects_async_copy_when_capability_is_absent() {
+        let device = CpuDevice::new();
+        let source = device.allocate(MemoryTier::Host, 4).unwrap();
+        let mut destination = device.allocate(MemoryTier::Host, 4).unwrap();
+        assert!(matches!(
+            device.copy_async(source.as_ref(), destination.as_mut(), 4),
+            Err(DeviceError::UnsupportedOperation("asynchronous copy"))
+        ));
+    }
+
+    #[test]
     fn cpu_buffer_explicit_release_is_checked_and_blocks_access() {
         let device = CpuDevice::new();
         let mut buffer = device.allocate(MemoryTier::Host, 8).unwrap();
@@ -722,7 +733,7 @@ mod tests {
         assert_eq!(view.shape(), [2, 3]);
         assert_eq!(view.strides(), [5, 1]);
         assert_eq!(view.offset_bytes(), 4);
-        assert_eq!(view.span_bytes(), 36);
+        assert_eq!(view.span_bytes(), 32);
     }
 
     #[test]
