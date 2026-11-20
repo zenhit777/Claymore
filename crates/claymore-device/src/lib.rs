@@ -565,6 +565,24 @@ impl<'a> TensorView<'a> {
 mod tests {
     use super::*;
 
+    struct FakeCompletionToken { complete: bool }
+
+    impl CompletionToken for FakeCompletionToken {
+        fn is_complete(&mut self) -> Result<bool, DeviceError> { Ok(self.complete) }
+        fn wait(&mut self) -> Result<(), DeviceError> {
+            self.complete = true;
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn completion_token_exposes_query_and_wait_semantics() {
+        let mut token = FakeCompletionToken { complete: false };
+        assert!(!token.is_complete().unwrap());
+        token.wait().unwrap();
+        assert!(token.is_complete().unwrap());
+    }
+
     #[test]
     fn cpu_device_allocates_and_roundtrips_bytes() {
         let device = CpuDevice::new();
