@@ -39,7 +39,7 @@ Le chemin d'admission appelle ce polling avant de calculer les victimes d'évict
 
 Les clés LRU/LFU/Adaptive ne distinguaient pas deux allocations de priorité identique. Comme les candidats proviennent d'une `HashMap`, l'ordre d'itération pouvait varier.
 
-Le comparateur ajoute l'identifiant d'allocation comme dernier critère lexicographique. Un test répète le même plan 32 fois avec des candidats de priorité identique et vérifie que le même identifiant est choisi.
+Le comparateur ajoute l'identifiant d'allocation comme dernier critère lexicographique. Un test couvre LRU, LFU et Adaptive, répète 32 fois le même plan avec des scores égaux et vérifie l'ordre `alpha`, `beta` lorsque deux victimes sont nécessaires.
 
 ### Fail-closed
 
