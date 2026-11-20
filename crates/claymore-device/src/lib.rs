@@ -22,12 +22,21 @@ pub struct DeviceInstanceId(u64);
 
 impl DeviceInstanceId {
     fn next() -> Self {
-        let id = NEXT_DEVICE_INSTANCE_ID
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
-                current.checked_add(1)
-            })
-            .expect("device instance identity space exhausted");
-        Self(id)
+        let mut current = NEXT_DEVICE_INSTANCE_ID.load(Ordering::Relaxed);
+        loop {
+            let next = current
+                .checked_add(1)
+                .expect("device instance identity space exhausted");
+            match NEXT_DEVICE_INSTANCE_ID.compare_exchange_weak(
+                current,
+                next,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => return Self(current),
+                Err(observed) => current = observed,
+            }
+        }
     }
 }
 
