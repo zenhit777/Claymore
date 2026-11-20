@@ -174,7 +174,10 @@ pub enum DeviceError {
     #[error("tensor requires {required} bytes but its buffer has {capacity}")]
     TensorBufferTooSmall { required: usize, capacity: usize },
     #[error("tensor shape rank {shape_rank} differs from stride rank {stride_rank}")]
-    TensorStrideRankMismatch { shape_rank: usize, stride_rank: usize },
+    TensorStrideRankMismatch {
+        shape_rank: usize,
+        stride_rank: usize,
+    },
 }
 
 fn checked_allocation_len(bytes: u64, platform_max: usize) -> Result<usize, DeviceError> {
@@ -500,7 +503,13 @@ impl Tensor {
         strides: impl Into<Vec<usize>>,
         offset_bytes: usize,
     ) -> Result<TensorView<'a>, DeviceError> {
-        TensorView::new(self.buffer.as_ref(), shape, strides, self.dtype, offset_bytes)
+        TensorView::new(
+            self.buffer.as_ref(),
+            shape,
+            strides,
+            self.dtype,
+            offset_bytes,
+        )
     }
 }
 
@@ -538,37 +547,75 @@ impl<'a> TensorView<'a> {
             if dimension == 0 {
                 return Err(DeviceError::EmptyTensorDimension);
             }
-            numel = numel.checked_mul(dimension).ok_or(DeviceError::TensorSizeOverflow)?;
-            let axis_span = (dimension - 1).checked_mul(stride).ok_or(DeviceError::TensorSizeOverflow)?;
-            max_element_offset = max_element_offset.checked_add(axis_span).ok_or(DeviceError::TensorSizeOverflow)?;
+            numel = numel
+                .checked_mul(dimension)
+                .ok_or(DeviceError::TensorSizeOverflow)?;
+            let axis_span = (dimension - 1)
+                .checked_mul(stride)
+                .ok_or(DeviceError::TensorSizeOverflow)?;
+            max_element_offset = max_element_offset
+                .checked_add(axis_span)
+                .ok_or(DeviceError::TensorSizeOverflow)?;
         }
-        let span_bytes = max_element_offset.checked_add(1)
+        let span_bytes = max_element_offset
+            .checked_add(1)
             .and_then(|elements| elements.checked_mul(dtype.element_size_bytes()))
             .ok_or(DeviceError::TensorSizeOverflow)?;
-        let end = offset_bytes.checked_add(span_bytes).ok_or(DeviceError::TensorSizeOverflow)?;
+        let end = offset_bytes
+            .checked_add(span_bytes)
+            .ok_or(DeviceError::TensorSizeOverflow)?;
         if end > buffer.len() {
-            return Err(DeviceError::TensorBufferTooSmall { required: end, capacity: buffer.len() });
+            return Err(DeviceError::TensorBufferTooSmall {
+                required: end,
+                capacity: buffer.len(),
+            });
         }
-        Ok(Self { buffer, shape, strides, dtype, numel, offset_bytes, span_bytes })
+        Ok(Self {
+            buffer,
+            shape,
+            strides,
+            dtype,
+            numel,
+            offset_bytes,
+            span_bytes,
+        })
     }
 
-    pub fn shape(&self) -> &[usize] { &self.shape }
-    pub fn strides(&self) -> &[usize] { &self.strides }
-    pub fn dtype(&self) -> DType { self.dtype }
-    pub fn numel(&self) -> usize { self.numel }
-    pub fn offset_bytes(&self) -> usize { self.offset_bytes }
-    pub fn span_bytes(&self) -> usize { self.span_bytes }
-    pub fn buffer(&self) -> &'a dyn DeviceBuffer { self.buffer }
+    pub fn shape(&self) -> &[usize] {
+        &self.shape
+    }
+    pub fn strides(&self) -> &[usize] {
+        &self.strides
+    }
+    pub fn dtype(&self) -> DType {
+        self.dtype
+    }
+    pub fn numel(&self) -> usize {
+        self.numel
+    }
+    pub fn offset_bytes(&self) -> usize {
+        self.offset_bytes
+    }
+    pub fn span_bytes(&self) -> usize {
+        self.span_bytes
+    }
+    pub fn buffer(&self) -> &'a dyn DeviceBuffer {
+        self.buffer
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    struct FakeCompletionToken { complete: bool }
+    struct FakeCompletionToken {
+        complete: bool,
+    }
 
     impl CompletionToken for FakeCompletionToken {
-        fn is_complete(&mut self) -> Result<bool, DeviceError> { Ok(self.complete) }
+        fn is_complete(&mut self) -> Result<bool, DeviceError> {
+            Ok(self.complete)
+        }
         fn wait(&mut self) -> Result<(), DeviceError> {
             self.complete = true;
             Ok(())
@@ -740,7 +787,10 @@ mod tests {
         buffer.release().unwrap();
         assert_eq!(buffer.len(), 0);
         assert_eq!(buffer.release(), Err(DeviceError::BufferReleased));
-        assert_eq!(device.read(buffer.as_ref(), 0, 1), Err(DeviceError::BufferReleased));
+        assert_eq!(
+            device.read(buffer.as_ref(), 0, 1),
+            Err(DeviceError::BufferReleased)
+        );
     }
 
     #[test]
