@@ -1,7 +1,9 @@
 //! Hardware validation of `CudaMemoryManager` contracts M4/M5 on a real GPU.
 //!
 //! These tests are ignored by default so the standard CI stays
-//! hardware-independent. Run them with:
+//! hardware-independent. Tests that assert an event is still pending immediately
+//! after enqueue must queue enough DMA work to make that observation robust across
+//! GPU load and host scheduling. Run them with:
 //!
 //! ```text
 //! RUSTFLAGS="-L native=/usr/lib/wsl/lib" \
@@ -616,7 +618,9 @@ fn hw_c5_02_shared_allocation_stays_protected_by_remaining_transfer() {
 #[ignore = "requires a CUDA driver and a usable NVIDIA device"]
 fn hw_c5_03_eviction_skips_protected_candidate() {
     let _serial = serial();
-    let len = 512 * 1024;
+    // Queue 8 x 256 MiB (2 GiB total): a 512 KiB transfer was too short to
+    // make the immediate pending-state assertion reliable across machines.
+    let len = 256 * 1024 * 1024;
     let mut manager = manager(2 * len as u64, len as u64);
     let mut tick = Ticker::new();
     manager
@@ -643,7 +647,7 @@ fn hw_c5_03_eviction_skips_protected_candidate() {
         !manager
             .is_transfer_complete(transfers.last().expect("token"))
             .expect("protected query"),
-        "the protected allocation must still have pending work"
+        "the protected allocation must still have pending work after 2 GiB is queued"
     );
 
     manager
