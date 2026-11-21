@@ -4,6 +4,7 @@
 //! deliberately completes each operation before returning to QueueRunner;
 //! asynchronous CUDA operations require their own event-backed executor.
 use std::collections::BTreeMap;
+use std::time::Instant;
 
 use claymore_core::MemoryTier;
 use claymore_device::Device;
@@ -53,11 +54,28 @@ pub enum MemoryTaskExecutorError {
     Memory(#[from] DeviceMemoryError),
 }
 
+/// Counters and timings for backend-neutral memory tasks.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MemoryExecutionMetrics {
+    pub allocations: u64,
+    pub writes: u64,
+    pub copies: u64,
+    pub releases: u64,
+    pub synchronizations: u64,
+    pub reload_cost_updates: u64,
+    pub bytes_written: u64,
+    pub bytes_copied: u64,
+    pub failed: u64,
+    pub total_execution_ns: u64,
+    pub max_execution_ns: u64,
+}
+
 /// Maps scheduler task IDs to concrete backend-neutral memory operations.
 pub struct MemoryTaskExecutor<D: Device> {
     manager: DeviceMemoryManager<D>,
     operations: BTreeMap<TaskId, MemoryTask>,
     logical_tick: u64,
+    metrics: MemoryExecutionMetrics,
 }
 
 impl<D: Device> MemoryTaskExecutor<D> {
@@ -66,6 +84,7 @@ impl<D: Device> MemoryTaskExecutor<D> {
             manager,
             operations: BTreeMap::new(),
             logical_tick: 0,
+            metrics: MemoryExecutionMetrics::default(),
         }
     }
 
@@ -93,6 +112,10 @@ impl<D: Device> MemoryTaskExecutor<D> {
         self.operations.len()
     }
 
+    pub fn metrics(&self) -> MemoryExecutionMetrics {
+        self.metrics
+    }
+
     fn next_tick(&mut self) -> Result<u64, MemoryTaskExecutorError> {
         self.logical_tick = self.logical_tick.checked_add(1)
             .ok_or(MemoryTaskExecutorError::TickExhausted)?;
@@ -104,24 +127,35 @@ impl<D: Device> MemoryTaskExecutor<D> {
             MemoryTask::Allocate { allocation_id, tier, bytes, expert } => {
                 let tick = self.next_tick()?;
                 self.manager.allocate(allocation_id, tier, bytes, tick, expert)?;
+                self.metrics.allocations = self.metrics.allocations.saturating_add(1);
             }
             MemoryTask::Write { allocation_id, offset, data } => {
+                let bytes = data.len() as u64;
                 let tick = self.next_tick()?;
                 self.manager.write(&allocation_id, offset, &data, tick)?;
+                self.metrics.writes = self.metrics.writes.saturating_add(1);
+                self.metrics.bytes_written = self.metrics.bytes_written.saturating_add(bytes);
             }
             MemoryTask::Copy { source_id, destination_id, bytes } => {
                 let tick = self.next_tick()?;
                 self.manager.copy(&source_id, &destination_id, bytes, tick)?;
+                self.metrics.copies = self.metrics.copies.saturating_add(1);
+                self.metrics.bytes_copied = self.metrics.bytes_copied.saturating_add(bytes as u64);
             }
             MemoryTask::Release { allocation_id } => {
                 let tick = self.next_tick()?;
                 self.manager.release(&allocation_id, tick)?;
+                self.metrics.releases = self.metrics.releases.saturating_add(1);
             }
             MemoryTask::RecordReloadCost { allocation_id, estimated_ns } => {
                 let tick = self.next_tick()?;
                 self.manager.record_reload_cost(&allocation_id, estimated_ns, tick)?;
+                self.metrics.reload_cost_updates = self.metrics.reload_cost_updates.saturating_add(1);
             }
-            MemoryTask::Synchronize => self.manager.synchronize()?,
+            MemoryTask::Synchronize => {
+                self.manager.synchronize()?;
+                self.metrics.synchronizations = self.metrics.synchronizations.saturating_add(1);
+            }
         }
         Ok(())
     }
@@ -138,7 +172,15 @@ impl<D: Device> TaskExecutor for MemoryTaskExecutor<D> {
         let operation = self.operations.remove(&task.id)
             .ok_or(MemoryTaskExecutorError::MissingTask(task.id))
             .map_err(|error| error.to_string())?;
-        self.execute_operation(operation).map_err(|error| error.to_string())
+        let started_at = Instant::now();
+        let result = self.execute_operation(operation);
+        let elapsed_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+        self.metrics.total_execution_ns = self.metrics.total_execution_ns.saturating_add(elapsed_ns);
+        self.metrics.max_execution_ns = self.metrics.max_execution_ns.max(elapsed_ns);
+        if result.is_err() {
+            self.metrics.failed = self.metrics.failed.saturating_add(1);
+        }
+        result.map_err(|error| error.to_string())
     }
 }
 
@@ -208,6 +250,29 @@ mod tests {
             runner.executor_mut().manager_mut().read("destination", 0, 4, 6).unwrap(),
             [9, 8, 7, 6]
         );
+    }
+
+    #[test]
+    fn memory_executor_reports_operation_counts_and_bytes() {
+        let manager = DeviceMemoryManager::new(CpuDevice::new(), budgets(), crate::EvictionPolicy::Lru).unwrap();
+        let mut executor = MemoryTaskExecutor::new(manager);
+        let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
+        let allocate = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        let write = scheduler.submit(TaskSpec::new(TaskKind::Transfer).depends_on(allocate)).unwrap();
+        executor.register(allocate, MemoryTask::Allocate {
+            allocation_id: "buffer".into(), tier: MemoryTier::Host, bytes: 16, expert: false,
+        }).unwrap();
+        executor.register(write, MemoryTask::Write {
+            allocation_id: "buffer".into(), offset: 0, data: vec![1, 2, 3, 4],
+        }).unwrap();
+        let mut runner = QueueRunner::new(TaskKind::Transfer, executor);
+        runner.run_one(&mut scheduler).unwrap();
+        runner.run_one(&mut scheduler).unwrap();
+        let metrics = runner.executor().metrics();
+        assert_eq!(metrics.allocations, 1);
+        assert_eq!(metrics.writes, 1);
+        assert_eq!(metrics.bytes_written, 4);
+        assert_eq!(metrics.failed, 0);
     }
 
     #[test]
