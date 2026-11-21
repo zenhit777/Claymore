@@ -197,6 +197,14 @@ mod tests {
     }
 
     #[test]
+    fn hardware_profile_supplies_scheduler_configuration() {
+        let profile = HardwareProfile::from_json(include_str!("../../../config/rtx5090-7950x3d.json")).unwrap();
+        let runtime = ScheduledRuntime::from_profile(&profile, Echo).unwrap();
+        assert_eq!(runtime.scheduler_config().cpu_workers, 10);
+        assert_eq!(runtime.scheduler_config().max_prefetches, 2);
+    }
+
+    #[test]
     fn dependent_request_waits_for_predecessor_completion() {
         let mut runtime = runtime(Echo);
         let first = runtime.submit_request(
