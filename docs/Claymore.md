@@ -325,12 +325,25 @@ La PR #16 a livré les issues #11 et #12. Elle introduit une libération explici
 
 Le contrat `CompletionToken` et la méthode `Device::copy_async` sont définis, mais aucun raccordement de `CudaDeviceBuffer` au trait `Device` n'est effectué. Le backend CUDA reste confiné au thread propriétaire. M4 est intégré dans `main` ; M5 ajoute le polling non bloquant et la finalisation automatique avant admission.
 
-#### M5 — Robustesse CUDA (livré par la PR #17)
+#### M5 — Robustesse CUDA (livré par les PR #17 et #18)
 
-M5 est livré par la PR #17 : stream de transfert `CU_STREAM_NON_BLOCKING`, `poll_completed_transfers`, finalisation des événements terminés avant admission/éviction et départage déterministe des évictions. La campagne générale RTX 5090 a réussi (24/24) et le scénario ciblé M5-HW-POLL-01 a également réussi au SHA `c7d81f4ded02411ae2054d8e07786ae1f468b499` : polling direct jusqu'à `retired == 1`, puis admission sous pression avec éviction effective sans attente explicite de complétion. La preuve versionnée figure dans `docs/audits/m5-hardware-validation.md`. L'injection de fautes backend reste différée dans l'issue #19 ; elle n'est pas un critère de clôture de M5.
+M5 est livré : stream de transfert `CU_STREAM_NON_BLOCKING`, `poll_completed_transfers`, finalisation des événements terminés avant admission/éviction, départage déterministe des évictions et validation matérielle RTX 5090. La revalidation B1 a exécuté 25 tests matériels trois fois (75/75 PASS) sur le SHA de code `385db116f4c2cce6138ee530f7bec7771f355d95`; le rapport complet et ses limites sont versionnés dans `docs/audits/m4-m5-rtx5090-hardware-validation.md`. L'injection déterministe des erreurs event/stream/free reste un chantier séparé dans l'issue #19 et ne constitue pas une validation matérielle réussie.
 
 ### 7.1 Livré sur main
 
+#### M6 — Runtime unifié (implémentation initiale)
+
+Le crate `claymore-runtime` fournit un noyau d'exécution synchrone et indépendant des modèles :
+
+- identifiants de requête monotones et contexte isolé par requête ;
+- enveloppes d'entrée/sortie opaques, sans hypothèse de tokenizer, de tenseur ou de modalité ;
+- machine d'états `Created → Running → Completed | Failed | Cancelled` et rapport de transitions ;
+- erreurs de stratégie propagées dans le rapport sans confondre échec et annulation ;
+- annulation coopérative via `CancellationToken`, vérifiable par la stratégie ;
+- limite configurable sur la taille d'entrée et validation de configuration ;
+- frontière `GenerationStrategy` sans contrainte `Send`/`Sync`, afin de ne pas imposer un modèle de concurrence incompatible avec le backend CUDA actuel.
+
+Cette livraison est volontairement synchrone et mono-exécution : elle ne crée aucun stream CUDA, ne planifie pas de tâches concurrentes, ne charge pas de modèle et n'implémente aucun moteur de génération. Les stratégies concrètes, le scheduler et le propriétaire des opérations CUDA restent les phases suivantes. Les tests du crate démontrent un parcours CPU simulé de bout en bout, les transitions d'état, les erreurs, l'annulation et le rejet des entrées trop volumineuses.
 
 #### v0.3 — Memory Orchestrator (politiques host-side)
 
@@ -398,7 +411,8 @@ Les éléments suivants ne doivent pas être considérés comme fonctionnels de 
 - chargement du profil matériel JSON par le runtime ou la CLI ;
 - application effective du budget souple VRAM de 26 Gio ;
 - enforcement de la cible/max du cache d'experts et de son inclusion dans un working set explicite ;
-- logique de scheduling, files de tâches et préchargement ;
+- logique de scheduling, files de tâches et préchargement (M7) ;
+- exécution concurrente/asynchrone des requêtes, stratégie de génération concrète et intégration de modèles dans le runtime (extensions futures de M6/M8+) ;
 - adaptateur CUDA spécifique injectable et tests du cycle de vie CUDA avec backend simulé (différés dans l'issue #19) ;
 - pool allocator VRAM, réutilisation de blocs et défragmentation ;
 - moteur de transfert piloté par le scheduler ;
@@ -529,8 +543,8 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M2 | Abstractions Device / Tensor | Livré par la PR #6 |
 | M3 | Durcissement des fondations Device (issues #7 à #10) | Livré par la PR #15 |
 | M4 | Contrat Device et sûreté mémoire (issues #11 et #12) | Livré par la PR #16 |
-| M5 | Robustesse et validation CUDA (issue #13) | Livré par la PR #17 ; chemin nominal validé sur RTX 5090 ; injection de fautes différée dans l'issue #19 |
-| M6 | Runtime unifié | Planifié |
+| M5 | Robustesse et validation CUDA (issues #13, PR #17 et #18) | Livré ; chemin nominal validé sur RTX 5090 ; injection de fautes isolée dans l'issue #19 |
+| M6 | Runtime unifié | Première tranche livrée : cycle de vie synchrone, contexte, erreurs et annulation ; extensions concurrentes différées |
 | M7 | Scheduler et orchestration mémoire | Planifié |
 | M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
 | M9 | Stratégie autoregressive | Planifié |
@@ -609,10 +623,15 @@ Travaux : finalisation automatique des transferts terminés avant admission/évi
 
 **Objectif :** introduire le cycle de vie des requêtes, les contextes d'exécution, les états, les erreurs, les annulations et l'orchestration de haut niveau.
 
-Critères d'acceptation :
+**Première tranche livrée :** crate `claymore-runtime`, contrat `GenerationStrategy`, contexte par requête, identifiants monotones, machine d'états explicite, rapports d'exécution, erreurs, annulation coopérative et validation de taille/configuration. L'implémentation reste synchrone et ne suppose ni `Send` ni `Sync` pour les stratégies.
+
+Critères de la tranche livrée :
 - exécution d'une requête simulée de bout en bout sur CPU ;
-- frontières nettes entre runtime, architecture de modèle, stratégie de génération et mode d'exécution ;
-- aucune dépendance à un modèle particulier dans le cœur runtime.
+- frontières nettes entre runtime et stratégie de génération ;
+- aucune dépendance à un modèle particulier dans le cœur runtime ;
+- tests des chemins succès, échec, annulation avant/après démarrage et rejet d'entrée invalide.
+
+Extensions restant à traiter avant de déclarer M6 entièrement achevé : politique de concurrence, exécution asynchrone et intégration explicite du propriétaire des ressources CUDA. Ces éléments ne doivent pas être ajoutés sans contrat de thread-affinity et de cancellation adapté.
 
 ### M7 — Scheduler et orchestration mémoire
 
