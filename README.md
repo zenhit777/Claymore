@@ -14,12 +14,13 @@ Claymore is an experimental Rust inference runtime with its own device, memory, 
 
 **Minimum supported Rust version (MSRV): 1.86.0.** Every workspace crate inherits this version from the root manifest, and CI runs the complete workspace test suite on Rust 1.86 as well as stable. Raise the MSRV only with an explicit compatibility review and synchronized manifest, CI, and documentation updates.
 
-The workspace is split into eight crates:
+The workspace is split into nine crates:
 
 - `claymore-core`: shared runtime types and configuration
 - `claymore-device`: backend-neutral Device/Buffer/Tensor contracts and CPU simulator
 - `claymore-memory`: memory budgets, placement policies, and expert-cache policy
 - `claymore-scheduler`: work scheduling and prefetch policy
+- `claymore-runtime`: model-agnostic request lifecycle, execution context, and cancellation
 - `claymore-model-gemma`: DiffusionGemma integration boundary
 - `claymore-model-clover`: Clover model integration boundary
 - `claymore-cuda`: optional CUDA Driver API backend (feature-gated)
@@ -31,7 +32,7 @@ The optimization roadmap includes a memory orchestrator, adaptive expert cache, 
 
 This repository is an early-stage runtime. The v0.3 memory crate contains deterministic budget validation, allocation accounting, admission planning, LRU/LFU/adaptive eviction policy hooks, and an event-horizon safety check. These are host-side policies only: they do not yet orchestrate real CUDA allocation, pinned memory, asynchronous transfers, native Claymore model execution, or specialized kernels.
 
-The CUDA backend is opt-in and links directly to the NVIDIA Driver API. The default workspace build remains hardware-independent. The CUDA feature has not yet been compiled or exercised on the target WSL2 machine. Validate locally with:
+The CUDA backend is opt-in and links directly to the NVIDIA Driver API. The default workspace build remains hardware-independent. The M4/M5 CUDA path has been validated on the target RTX 5090 for the commits and scenarios documented in `docs/audits/m4-m5-rtx5090-hardware-validation.md`; this does not imply that every CUDA path or model execution path is hardware-validated. Validate locally with:
 
 ```bash
 cargo fmt --all

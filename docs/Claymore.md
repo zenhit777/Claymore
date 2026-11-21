@@ -6,7 +6,7 @@
 > **Dépôt :** https://github.com/zenhit777/Claymore  
 > **Version de référence du workspace :** 0.5.0  
 > **État du document :** référence vivante, à mettre à jour à chaque jalon  
-> **Dernière mise à jour :** 20 novembre 2026
+> **Dernière mise à jour :** 21 novembre 2026
 
 ---
 
@@ -271,6 +271,7 @@ L'architecture est organisée en couches avec des frontières explicites.
 | `claymore-device` | Contrats Device/Buffer/Tensor indépendants du backend et simulateur CPU |
 | `claymore-memory` | Budgets, comptabilité, admission et politiques d'éviction |
 | `claymore-scheduler` | Planification du travail et politique de préchargement |
+| `claymore-runtime` | Cycle de vie des requêtes, contexte d'exécution et orchestration synchrone indépendante des modèles |
 | `claymore-model-gemma` | Frontière d'intégration du modèle DiffusionGemma (`google/diffusiongemma-26B-A4B-it`) |
 | `claymore-model-clover` | Frontière d'intégration Clover |
 | `claymore-cuda` | Backend optionnel CUDA Driver API |
@@ -325,12 +326,11 @@ La PR #16 a livré les issues #11 et #12. Elle introduit une libération explici
 
 Le contrat `CompletionToken` et la méthode `Device::copy_async` sont définis, mais aucun raccordement de `CudaDeviceBuffer` au trait `Device` n'est effectué. Le backend CUDA reste confiné au thread propriétaire. M4 est intégré dans `main` ; M5 ajoute le polling non bloquant et la finalisation automatique avant admission.
 
-#### M5 — Robustesse CUDA (livré par la PR #17)
+#### M5 — Robustesse CUDA (livré par les PR #17 et #18)
 
-M5 est livré par la PR #17 : stream de transfert `CU_STREAM_NON_BLOCKING`, `poll_completed_transfers`, finalisation des événements terminés avant admission/éviction et départage déterministe des évictions. La campagne générale RTX 5090 a réussi (24/24) et le scénario ciblé M5-HW-POLL-01 a également réussi au SHA `c7d81f4ded02411ae2054d8e07786ae1f468b499` : polling direct jusqu'à `retired == 1`, puis admission sous pression avec éviction effective sans attente explicite de complétion. La preuve versionnée figure dans `docs/audits/m5-hardware-validation.md`. L'injection de fautes backend reste différée dans l'issue #19 ; elle n'est pas un critère de clôture de M5.
+M5 est livré : stream de transfert `CU_STREAM_NON_BLOCKING`, `poll_completed_transfers`, finalisation des événements terminés avant admission/éviction, départage déterministe des évictions et validation matérielle RTX 5090. La revalidation B1 a exécuté 25 tests matériels trois fois (75/75 PASS) sur le SHA de code `385db116f4c2cce6138ee530f7bec7771f355d95`; le rapport complet et ses limites sont versionnés dans `docs/audits/m4-m5-rtx5090-hardware-validation.md`. L'injection déterministe des erreurs event/stream/free reste un chantier séparé dans l'issue #19 et ne constitue pas une validation matérielle réussie.
 
 ### 7.1 Livré sur main
-
 
 #### v0.3 — Memory Orchestrator (politiques host-side)
 
@@ -387,18 +387,25 @@ Le build par défaut reste indépendant du matériel. La feature CUDA requiert u
 
 Ce jalon livre des abstractions backend-neutres et leur validation CPU ; il ne livre aucun calcul tensoriel ni opérateur. Le backend CUDA existant n'implémente pas encore `Device` et son raccordement reste conditionné à un contrat de libération faillible et de protection des allocations en vol (voir §7.3 et l'audit M2).
 
-#### M5 — Robustesse CUDA (PR #17)
-
-Le gestionnaire mémoire CUDA utilise un stream de transfert non bloquant, interroge les events sans attendre et retire les protections uniquement après complétion confirmée. Le chemin d'admission poll les transferts avant de planifier les évictions ; une erreur de polling bloque l'admission en mode fail-closed. Les évictions à priorité égale sont départagées par identifiant lexicographique. Le scénario nominal ciblé a réussi sur RTX 5090 ; les injections de fautes et le backend CUDA simulable restent différés dans l'issue #19.
-
 ### 7.2 Non livré sur main
 
 Les éléments suivants ne doivent pas être considérés comme fonctionnels de bout en bout :
 
+#### M6 — Runtime unifié (première tranche proposée par la PR #20, non encore sur main)
+
+Le crate `claymore-runtime` fournit un noyau synchrone, mono-exécution et indépendant des modèles : identifiants monotones, contexte isolé par requête, enveloppes opaques, états explicites, rapport d'exécution, stratégie `GenerationStrategy`, erreurs et annulation coopérative. Aucun trait `Send`/`Sync` n'est imposé à la stratégie.
+
+La limite `max_payload_bytes` porte explicitement sur les seuls octets du payload ; les métadonnées ne sont pas comptabilisées. Si une stratégie panique, la panique se propage, l'identifiant a déjà été consommé et aucun rapport n'est produit : l'instance du runtime doit être abandonnée. Si l'annulation est observée après le retour de la stratégie, elle prévaut sur son résultat ; une éventuelle erreur de stratégie simultanée est écartée du rapport.
+
+**Statut : partiel — première tranche livrée dans la PR #20, en attente de merge.** La portée historique initiale de M6 incluait aussi l'orchestration de haut niveau et des frontières explicites entre runtime, architecture de modèle, stratégie et mode d'exécution. Ces éléments ne sont pas implémentés dans cette tranche : l'orchestration, l'ownership des ressources et le scheduling sont reportés à M7 ; l'intégration des moteurs tensoriels et les modes d'exécution concrets sont reportés à M8 et aux phases modèles ultérieures. Cette répartition est un amendement explicite du périmètre, pas une déclaration d'achèvement de ces critères.
+
+La tranche actuelle n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâches, ne charge pas de modèle et n'effectue aucun calcul tensoriel. Elle est validée par des tests CPU.
+
 - chargement du profil matériel JSON par le runtime ou la CLI ;
 - application effective du budget souple VRAM de 26 Gio ;
 - enforcement de la cible/max du cache d'experts et de son inclusion dans un working set explicite ;
-- logique de scheduling, files de tâches et préchargement ;
+- logique de scheduling, files de tâches et préchargement (M7) ;
+- exécution concurrente/asynchrone des requêtes, stratégie de génération concrète et intégration de modèles dans le runtime (extensions futures de M6/M8+) ;
 - adaptateur CUDA spécifique injectable et tests du cycle de vie CUDA avec backend simulé (différés dans l'issue #19) ;
 - pool allocator VRAM, réutilisation de blocs et défragmentation ;
 - moteur de transfert piloté par le scheduler ;
@@ -413,6 +420,17 @@ Les éléments suivants ne doivent pas être considérés comme fonctionnels de 
 Les crates modèles constituent à ce stade des frontières de workspace, pas la preuve que les modèles sont exécutables.
 
 ### 7.3 Limites connues du backend CUDA actuel
+
+#### Contrats et limites du runtime M6 (première tranche PR #20)
+
+- `RuntimeConfig::max_payload_bytes` borne uniquement `RequestInput::payload`, pas la taille cumulée des métadonnées ; ces dernières restent des données de contrôle non bornées par ce paramètre.
+- Une panique de `GenerationStrategy::execute` n'est pas interceptée : elle traverse `Runtime::execute`, consomme l'identifiant déjà alloué et ne produit aucun `ExecutionReport`. Le runtime concerné doit être abandonné, car l'état interne de la stratégie après unwinding n'est pas garanti.
+- L'annulation observée après le retour de la stratégie prévaut sur le résultat de celle-ci. Si la stratégie renvoie simultanément une erreur, le rapport contient `Cancelled` et l'erreur de stratégie n'est pas conservée.
+- L'exécution reste synchrone et mono-requête ; aucune interruption forcée d'un appel backend bloquant n'est garantie. Le jeton est coopératif.
+- Le contrat d'erreur de stratégie est encore une `String` ; son évolution vers un type structuré est une décision préalable à l'intégration des moteurs en M8/M9.
+- L'ownership des ressources `Device` / `DeviceMemoryManager` n'est pas encore défini dans le contexte d'exécution : il sera décidé avec le propriétaire CUDA et le scheduler en M7/M8.
+- `RequestOutput` représente une sortie complète ; une API de sortie incrémentale (blocs/tokens) reste à concevoir pour les stratégies qui en auront besoin.
+- L'épuisement des identifiants est détecté sans wraparound ; l'identifiant `u64::MAX` n'est pas émis car son incrément ne peut pas être représenté.
 
 - compute capability exposée via `CudaDeviceInfo` ;
 - sélection du device par ordinal uniquement ;
@@ -529,8 +547,8 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M2 | Abstractions Device / Tensor | Livré par la PR #6 |
 | M3 | Durcissement des fondations Device (issues #7 à #10) | Livré par la PR #15 |
 | M4 | Contrat Device et sûreté mémoire (issues #11 et #12) | Livré par la PR #16 |
-| M5 | Robustesse et validation CUDA (issue #13) | Livré par la PR #17 ; chemin nominal validé sur RTX 5090 ; injection de fautes différée dans l'issue #19 |
-| M6 | Runtime unifié | Planifié |
+| M5 | Robustesse et validation CUDA (issues #13, PR #17 et #18) | Livré ; chemin nominal validé sur RTX 5090 ; injection de fautes isolée dans l'issue #19 |
+| M6 | Runtime unifié | **Partiel : première tranche livrée dans la PR #20 (en attente de merge)** ; orchestration haut niveau et frontières mode d'exécution reportées à M7/M8 |
 | M7 | Scheduler et orchestration mémoire | Planifié |
 | M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
 | M9 | Stratégie autoregressive | Planifié |
@@ -609,10 +627,15 @@ Travaux : finalisation automatique des transferts terminés avant admission/évi
 
 **Objectif :** introduire le cycle de vie des requêtes, les contextes d'exécution, les états, les erreurs, les annulations et l'orchestration de haut niveau.
 
-Critères d'acceptation :
+**Première tranche livrée :** crate `claymore-runtime`, contrat `GenerationStrategy`, contexte par requête, identifiants monotones, machine d'états explicite, rapports d'exécution, erreurs, annulation coopérative et validation de taille/configuration. L'implémentation reste synchrone et ne suppose ni `Send` ni `Sync` pour les stratégies.
+
+Critères de la tranche livrée :
 - exécution d'une requête simulée de bout en bout sur CPU ;
-- frontières nettes entre runtime, architecture de modèle, stratégie de génération et mode d'exécution ;
-- aucune dépendance à un modèle particulier dans le cœur runtime.
+- frontières nettes entre runtime et stratégie de génération ;
+- aucune dépendance à un modèle particulier dans le cœur runtime ;
+- tests des chemins succès, échec, annulation avant/après démarrage et rejet d'entrée invalide.
+
+La concurrence, l'exécution asynchrone, les files compute/transfer et l'intégration du propriétaire des ressources CUDA relèvent de M7. Ils ne sont pas des critères implicites de la première tranche M6 et ne doivent pas être ajoutés sans contrat de thread-affinity et de cancellation adapté.
 
 ### M7 — Scheduler et orchestration mémoire
 
@@ -760,6 +783,9 @@ Une PR ne doit pas être déclarée prête uniquement parce que le code existe :
 | Précision mixte | Dégradation numérique | Comparaison de qualité avant activation |
 | Kernels spécialisés | Complexité sans gain démontré | Développer après profiling |
 | Performances | Paramètres scheduler non optimaux | Benchmarks et tuning sur cible |
+| Contrat d'erreur des stratégies | `String` ne conserve pas les causes ni les types d'erreur | Décider avant M8 si le trait expose un type d'erreur associé ou une chaîne de causes typée |
+| Ownership des ressources du runtime | Le contexte M6 n'expose pas encore Device / DeviceMemoryManager | Trancher en M7/M8 si les ressources sont détenues par la stratégie ou injectées dans le contexte, en respectant l'affinité du thread CUDA |
+| Sorties de génération | Le rapport M6 contient une sortie complète unique | Concevoir une sortie incrémentale seulement avec les besoins concrets des stratégies M9/M10 |
 
 Les choix non tranchés doivent être consignés dans une PR ou une décision d'architecture avant d'être codés comme comportement permanent.
 
@@ -820,6 +846,7 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-20 | Claymore ne fonde pas son moteur tensoriel sur un runtime tensoriel externe : les contrats Device/Buffer/Tensor, l'ownership, la synchronisation, la politique mémoire et l'exécution des modèles doivent rester cohérents et maîtrisés dans le projet, sans adapter les invariants Claymore au cycle de vie d'un framework tiers. Ce choix évite une dépendance structurante et les frictions d'interopérabilité autour des contextes CUDA, des buffers et des transferts ; il augmente en contrepartie fortement l'effort d'implémentation, de maintenance, de correction numérique et d'optimisation. Claymore pourra s'appuyer sur des bibliothèques de calcul bas niveau et des outils CUDA selon §6.4, sans leur déléguer ses abstractions ni son runtime. |
 | 2026-11-20 | Candle et les autres projets externes restent des références d'étude uniquement ; Claymore possède ses contrats Device/Buffer/Tensor et son futur moteur tensoriel natif. DiffusionGemma est référencé par son identifiant Hugging Face exact. |
 | 2026-11-20 | M4 introduit une libération de buffer explicite et faillible, des tokens de complétion H2D/D2H vérifiables par CUDA event et des vues tensor stridées ; aucun raccordement CUDA au trait Device n'est autorisé avant validation de ces contrats. |
+| 2026-11-21 | M6 (PR #20, tranche initiale) : runtime synchrone et mono-exécution, enveloppes opaques, stratégie sans contrainte `Send`/`Sync`, contexte par requête et annulation coopérative. Le périmètre initial est explicitement partiel : orchestration haut niveau et frontières de mode d'exécution reportées à M7/M8 ; panique de stratégie propagée (runtime à abandonner), annulation prioritaire sur le résultat simultané, limite `max_payload_bytes` appliquée au seul payload. Les choix de type d'erreur, ownership Device/Memory et sortie incrémentale restent ouverts avant M8/M9. |
 | 2026-11-21 | M5 utilise un stream de transfert `CU_STREAM_NON_BLOCKING` : les consommateurs compute futurs doivent exprimer explicitement leurs dépendances avec les transferts (par exemple `cuStreamWaitEvent`). Une erreur de polling dans `make_room` bloque l'admission en mode fail-closed. L'injection de fautes et le backend CUDA simulable sont suivis séparément dans l'issue #19. |
 
 ### Correspondance de la feuille de route historique
