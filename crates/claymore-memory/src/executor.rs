@@ -415,7 +415,10 @@ mod tests {
             runner.run_one(&mut scheduler).unwrap(),
             ExecutionOutcome::Failed { task_id, .. } if task_id == failing
         ));
-        assert_eq!(scheduler.task(dependent).unwrap().state, claymore_scheduler::TaskState::Cancelled);
+        assert_eq!(
+            scheduler.task(dependent).unwrap().state,
+            claymore_scheduler::TaskState::Cancelled
+        );
         assert_eq!(runner.executor().pending_operations(), 0);
     }
 
