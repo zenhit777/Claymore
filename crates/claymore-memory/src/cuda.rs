@@ -179,6 +179,12 @@ impl CudaMemoryManager {
             return Err(CudaMemoryError::ZeroSizedAllocation);
         }
         self.ensure_new_id(&id)?;
+        if expert {
+            let expert_plan = self.policy.plan_expert_admission(bytes, tick)?;
+            for evict_id in expert_plan.evict_ids {
+                self.release(&evict_id, tick)?;
+            }
+        }
         self.make_room(MemoryTier::Vram, bytes, tick)?;
         let (free, _) = self.driver.memory_info()?;
         if bytes > free {
