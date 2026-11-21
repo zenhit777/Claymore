@@ -285,7 +285,7 @@ impl<S: GenerationStrategy> Runtime<S> {
         };
 
         let result = self.strategy.execute(&mut context, &input);
-        if cancellation.is_cancelled() || matches!(result, Err(ref e) if e == "cancelled") {
+        if cancellation.is_cancelled() {
             report.transition(RequestState::Cancelled);
             report.error = Some(RuntimeError::Cancelled);
         } else {
