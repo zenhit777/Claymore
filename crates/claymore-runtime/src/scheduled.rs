@@ -14,8 +14,8 @@ use claymore_scheduler::{
 use thiserror::Error;
 
 use crate::{
-    CancellationToken, ExecutionReport, GenerationStrategy, RequestInput, RequestState, Runtime,
-    HardwareProfile, HardwareProfileError, RuntimeConfig, RuntimeError,
+    CancellationToken, ExecutionReport, GenerationStrategy, HardwareProfile,
+    HardwareProfileError, RequestInput, RequestState, Runtime, RuntimeConfig, RuntimeError,
 };
 
 #[derive(Debug, Error, PartialEq, Eq)]
