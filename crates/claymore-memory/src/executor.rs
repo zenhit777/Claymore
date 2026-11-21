@@ -150,7 +150,10 @@ impl<D: Device> MemoryTaskExecutor<D> {
             MemoryTask::RecordReloadCost { allocation_id, estimated_ns } => {
                 let tick = self.next_tick()?;
                 self.manager.record_reload_cost(&allocation_id, estimated_ns, tick)?;
-                self.metrics.reload_cost_updates = self.metrics.reload_cost_updates.saturating_add(1);
+                self.metrics.reload_cost_updates = self
+                    .metrics
+                    .reload_cost_updates
+                    .saturating_add(1);
             }
             MemoryTask::Synchronize => {
                 self.manager.synchronize()?;
@@ -177,7 +180,10 @@ impl<D: Device> TaskExecutor for MemoryTaskExecutor<D> {
         let started_at = Instant::now();
         let result = self.execute_operation(operation);
         let elapsed_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64;
-        self.metrics.total_execution_ns = self.metrics.total_execution_ns.saturating_add(elapsed_ns);
+        self.metrics.total_execution_ns = self
+            .metrics
+            .total_execution_ns
+            .saturating_add(elapsed_ns);
         self.metrics.max_execution_ns = self.metrics.max_execution_ns.max(elapsed_ns);
         if result.is_err() {
             self.metrics.failed = self.metrics.failed.saturating_add(1);
@@ -205,7 +211,12 @@ mod tests {
 
     #[test]
     fn scheduler_drives_cpu_memory_operations_in_dependency_order() {
-        let manager = DeviceMemoryManager::new(CpuDevice::new(), budgets(), crate::EvictionPolicy::Lru).unwrap();
+        let manager = DeviceMemoryManager::new(
+            CpuDevice::new(),
+            budgets(),
+            crate::EvictionPolicy::Lru,
+        )
+        .unwrap();
         let mut executor = MemoryTaskExecutor::new(manager);
         let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
 
@@ -246,7 +257,10 @@ mod tests {
                 ExecutionOutcome::Completed(expected)
             );
         }
-        assert_eq!(scheduler.task(release).unwrap().state, claymore_scheduler::TaskState::Completed);
+        assert_eq!(
+            scheduler.task(release).unwrap().state,
+            claymore_scheduler::TaskState::Completed
+        );
         assert_eq!(runner.executor().pending_operations(), 0);
         assert_eq!(
             runner.executor_mut().manager_mut().read("destination", 0, 4, 6).unwrap(),
@@ -260,7 +274,9 @@ mod tests {
         let mut executor = MemoryTaskExecutor::new(manager);
         let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
         let allocate = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
-        let write = scheduler.submit(TaskSpec::new(TaskKind::Transfer).depends_on(allocate)).unwrap();
+        let write = scheduler
+            .submit(TaskSpec::new(TaskKind::Transfer).depends_on(allocate))
+            .unwrap();
         executor.register(allocate, MemoryTask::Allocate {
             allocation_id: "buffer".into(), tier: MemoryTier::Host, bytes: 16, expert: false,
         }).unwrap();
