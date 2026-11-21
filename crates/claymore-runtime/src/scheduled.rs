@@ -183,7 +183,10 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
 
     fn record_execution_time(&mut self, started_at: Instant) {
         let elapsed_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64;
-        self.metrics.total_execution_ns = self.metrics.total_execution_ns.saturating_add(elapsed_ns);
+        self.metrics.total_execution_ns = self
+            .metrics
+            .total_execution_ns
+            .saturating_add(elapsed_ns);
         self.metrics.max_execution_ns = self.metrics.max_execution_ns.max(elapsed_ns);
     }
 
@@ -267,7 +270,10 @@ mod tests {
 
     #[test]
     fn hardware_profile_supplies_scheduler_configuration() {
-        let profile = HardwareProfile::from_json(include_str!("../../../config/rtx5090-7950x3d.json")).unwrap();
+        let profile = HardwareProfile::from_json(include_str!(
+            "../../../config/rtx5090-7950x3d.json"
+        ))
+        .unwrap();
         let runtime = ScheduledRuntime::from_profile(&profile, Echo).unwrap();
         assert_eq!(runtime.scheduler_config().cpu_workers, 10);
         assert_eq!(runtime.scheduler_config().max_prefetches, 2);
