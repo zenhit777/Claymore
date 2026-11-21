@@ -449,7 +449,7 @@ mod tests {
         }
     }
 
-    struct ContextProbe(Rc<RefCell<Vec<(u64, BTreeMap<String, String>)>>>);
+    type ObservedContexts = Rc<RefCell<Vec<(u64, BTreeMap<String, String>)>>>;\n\n    struct ContextProbe(ObservedContexts);
 
     impl GenerationStrategy for ContextProbe {
         fn execute(
