@@ -337,19 +337,89 @@ cargo check -p claymore-memory --features cuda-driver --all-targets
 Les tests sont isolés par un mutex GPU dans chaque binaire et doivent être lancés avec `--test-threads=1` pour garantir l'absence de compétition entre contextes/streams de tests.
 
 
-### 3.6 Revalidation B1 sur le code final de la PR #18
+### 3.6 Revalidation B1 sur le code corrigé de la PR #18
 
-**Statut : EN ATTENTE — ne pas assimiler la campagne historique ci-dessus à une validation du code final.**
+<badge>VALIDÉ — PASS</badge>
 
-La campagne doit être exécutée après les corrections B2/B3, sur le SHA exact du code final indiqué ci-dessous. Elle couvre les tests ignorés des deux crates, y compris les tests matériels unitaires, d'intégration et les deux tests matériels du module mémoire.
+La campagne B1 a été exécutée sur la NVIDIA RTX 5090 au SHA exact demandé. Trois exécutions consécutives de la suite matérielle complète ont réussi, sans échec ni test ignoré parmi les 25 sélectionnés.
 
-- **SHA du code à tester :** `385db116f4c2cce6138ee530f7bec7771f355d95` (HEAD de la PR après corrections B2 et clarifications de test).
-- **Commande exacte (depuis le SHA ci-dessus) :**
-  ```bash
-  export RUSTFLAGS="-L native=/usr/lib/wsl/lib"
-  export LD_LIBRARY_PATH=/usr/lib/wsl/lib
-  cargo test -p claymore-cuda -p claymore-memory --features cuda-driver -- --ignored --nocapture --test-threads=1
-  ```
-- **Résultat, durée et sortie complète :** à renseigner après exécution réelle sur RTX 5090.
-- **Nombre attendu :** 25 tests ignorés ; tout écart doit être expliqué à partir de la sortie Cargo.
-- **Verdict B1 :** PENDING.
+#### Code et traçabilité
+
+- **Dépôt :** `zenhit777/Claymore`
+- **SHA testé :** `385db116f4c2cce6138ee530f7bec7771f355d95`
+- **Commit :** `test(cuda): clarify freed-buffer negative probe`
+- **État :** HEAD détaché sur le SHA exact ; aucun fichier suivi modifié et aucun commit poussé pendant la campagne.
+- Le SHA testé est un ancêtre des commits documentaires `af81ce3` et `dcfb999`. Selon le rapport d'exécution, les répertoires `crates/` sont identiques entre le SHA testé et le HEAD documentaire `dcfb999`.
+
+#### Environnement matériel et logiciel
+
+| Élément | Valeur |
+|---|---|
+| GPU | NVIDIA GeForce RTX 5090 |
+| Compute capability | 12.0 |
+| VRAM totale | 32 607 MiB |
+| Système | WSL2, noyau `6.18.58.1-microsoft-standard-WSL2` |
+| Pilote NVIDIA / KMD | 616.64 |
+| CUDA UMD | 13.4 |
+| CUDA Driver API | 13.4 (13040) |
+| Rust / Cargo | 1.100.0 / 1.100.0 |
+| Bibliothèque | `/usr/lib/wsl/lib/libcuda.so.1` |
+
+Variables exportées et vérifiées avant chaque campagne :
+
+```bash
+export RUSTFLAGS="-L native=/usr/lib/wsl/lib"
+export LD_LIBRARY_PATH=/usr/lib/wsl/lib
+```
+
+#### Commande exacte
+
+```bash
+cargo test -p claymore-cuda -p claymore-memory \
+  --features cuda-driver \
+  -- --ignored --nocapture --test-threads=1
+```
+
+La commande sélectionne 25 tests matériels : 3 tests unitaires du wrapper CUDA, 5 tests d'intégration `claymore-cuda`, 2 tests matériels unitaires de `claymore-memory` et 15 tests d'intégration mémoire.
+
+#### Résultats
+
+| Campagne | Exécutés | Réussis | Échoués | Ignorés | Code retour | Durée murale |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 25 | 25 | 0 | 0 | 0 | 29,170 s |
+| 2 | 25 | 25 | 0 | 0 | 0 | 28,802 s |
+| 3 | 25 | 25 | 0 | 0 | 0 | 28,685 s |
+| **Total** | **75** | **75** | **0** | **0** | **0** | — |
+
+Répartition identique à chaque campagne :
+
+| Binaire | Tests réussis |
+|---|---:|
+| `claymore-cuda` — tests unitaires matériels | 3/3 |
+| `hardware_cuda_driver.rs` | 5/5 |
+| `claymore-memory` — tests unitaires matériels | 2/2 |
+| `hardware_cuda_memory.rs` | 15/15 |
+| **Total** | **25/25** |
+
+Les mentions Cargo `5 filtered out` et `22 filtered out` concernent les tests CPU non sélectionnés par `--ignored` ; les résultats des 25 tests sélectionnés indiquent tous `0 ignored`.
+
+#### Confirmation ciblée de B2
+
+`hw_c5_03_eviction_skips_protected_candidate` a réussi **3/3**. Le scénario alloue un buffer host pinned de 256 MiB et deux allocations device de 256 MiB, avec un budget VRAM logique de 512 MiB. Il enfile huit transferts H2D de 256 MiB (2 GiB au total) vers l'allocation protégée, puis vérifie immédiatement que le dernier transfert est encore pending. L'éviction choisit ensuite le candidat inactif et préserve l'allocation protégée.
+
+#### Tests et anomalies observés
+
+- Les tests streams non bloquants, synchronisation, cycle de vie des allocations, polling, protection en vol, éviction, comptabilité, répétitions et alternances ont tous réussi lors des trois campagnes.
+- Aucune panique, erreur d'assertion ou erreur pilote n'a été relevée dans les sorties communiquées.
+- Avertissements Cargo bénins : champ `workspace.package.repository` inutilisé et dépendance `claymore-core` inutilisée dans `claymore-cuda`.
+- GPU partagé avec Xwayland (environ 1 322 MiB utilisés au démarrage) ; aucune réinitialisation du pilote.
+- `compute-sanitizer` n'a pas été exécuté ; aucun succès sanitizer n'est revendiqué.
+- Les logs complets ont été conservés par l'agent dans `/tmp/opencode/claymore-b1/campaign{1,2,3}.log` sur sa machine d'exécution ; ils n'ont pas été publiés dans le dépôt. Empreintes SHA-256 rapportées :
+  - campagne 1 : `410027d0e6919854321f54624280759429947188d099b29fd081e238359f8f4a`
+  - campagne 2 : `fe53bfbef8e8c876b8d999408263437bb4507bbff8574594e430cee3f4f06551`
+  - campagne 3 : `666bbc8b42bd5600b480fd8f9b223ab6a592157aeccf3b8a8279d676bb97115a`
+- L'agent n'a pas pu publier de commit depuis son environnement faute d'authentification GitHub ; aucun changement de code n'a été effectué durant la validation.
+
+**Verdict B1 : `PASS` — 75/75 tests matériels réussis, trois codes retour nuls, sur le SHA exact demandé.**
+
+Les limites historiques restent inchangées : `compute-sanitizer` sous WSL2/WDDM et l'injection réelle d'erreurs CUDA (`cuStreamSynchronize`, `cuEventQuery`, `cuMemFree`) ne sont pas couvertes par cette campagne. Ces dernières restent suivies dans l'issue #19.
