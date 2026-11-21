@@ -645,16 +645,16 @@ La concurrence, l'exécution asynchrone et l'intégration du propriétaire des r
 
 **Complément d'exécution CPU et d'orchestration :** 
 - `claymore-scheduler` expose `QueueRunner` et `TaskExecutor`. Un runner exécute au plus une tâche de sa file sur le thread appelant, sans worker ni borne `Send`/`Sync`.
-- `claymore-runtime` expose `ScheduledRuntime`, qui soumet les requêtes comme tâches Compute, respecte priorité/dépendances, puis traduit les rapports Completed/Failed/Cancelled en transitions du scheduler. Les échecs et annulations propagent leurs effets aux descendants.
+- `claymore-runtime` expose `ScheduledRuntime`, qui soumet les requêtes comme tâches Compute, respecte priorité/dépendances, puis traduit les rapports Completed/Failed/Cancelled en transitions du scheduler. `submit_task` et `run_queue_one` permettent aux tâches Transfer/Prefetch de partager exactement le même graphe de dépendances ; une requête Compute peut donc attendre un transfert confirmé.
 - `claymore-memory` expose `MemoryTaskExecutor`, qui relie les tâches Transfer/Prefetch à l'adaptateur `DeviceMemoryManager<D>` backend-neutre. Les opérations CPU synchrones (allocation, écriture, copie, libération, synchronisation et enregistrement du coût de rechargement) sont exécutées par `QueueRunner` et couvertes par des tests avec `CpuDevice`.
-- `QueueRunnerMetrics` fournit les durées et compteurs par file ; `MemoryExecutionMetrics` fournit les compteurs d'opérations, volumes d'octets et durées du chemin mémoire.
+- `QueueRunnerMetrics` fournit les durées et compteurs par file ; `ScheduledRuntimeMetrics` mesure le calcul des requêtes ; `MemoryExecutionMetrics` fournit les compteurs d'opérations, volumes d'octets et durées du chemin mémoire ; `CudaTransferMetrics` isole les volumes H2D/D2H et le temps d'attente des events.
 - Le gestionnaire mémoire applique le budget VRAM souple comme cible d'éviction proactive et le plafond dur comme limite d'admission ; si la cible souple est inatteignable, il n'admet que si le plafond dur reste respecté.
 - Le plafond dur du cache d'experts est appliqué à chaque admission, avec éviction déterministe des experts inactifs ; la politique adaptive tient compte du coût de rechargement enregistré.
 - Les gardes de ressources exposées par `DeviceMemoryManager` refusent les horizons antérieurs au tick courant et toute régression de complétion.
 
 Ces interfaces restent mono-propriétaires et synchrones. Elles ne prétendent pas que le backend CUDA implémente `Device` : `CudaTransferExecutor` possède son `CudaMemoryManager` dédié et s'exécute sur le thread propriétaire. Les tâches H2D/D2H ne retournent le succès qu'après `wait_for_transfer` sur l'event réel ; les lectures pinned, allocations et libérations sont également exposées comme tâches. La validation matérielle reste nécessaire pour démontrer ce comportement sur la RTX 5090.
 
-Travaux restants :
+Travaux restants (campagne matérielle) :
 - valider sur RTX 5090 le `CudaTransferExecutor` avec des dépendances réelles et vérifier qu'aucune tâche dépendante ne démarre avant la complétion de l'event ;
 - vérifier sous pression VRAM que les admissions, évictions et gardes restent cohérentes ;
 - relever les métriques CUDA réelles (H2D/D2H, event wait, pic VRAM) et vérifier leur cohérence avec les métriques des files ;
