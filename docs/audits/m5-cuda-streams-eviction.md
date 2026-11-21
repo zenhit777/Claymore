@@ -75,7 +75,7 @@ Aucune CI standard ne doit exiger un GPU ni linker le pilote CUDA. Les tests mat
 
 ## 5. Limites
 
-- La campagne nominale générale M4/M5 a été exécutée sur RTX 5090 (24/24 PASS ; détails dans `docs/audits/m5-hardware-validation.md`). Le scénario ciblé `M5-HW-POLL-01` reste à exécuter sur le HEAD corrigé avant merge.
+- La campagne nominale générale M4/M5 a été exécutée sur RTX 5090 (24/24 PASS ; détails dans `docs/audits/m5-hardware-validation.md`). Le scénario ciblé `M5-HW-POLL-01` a réussi sur RTX 5090 au SHA `c7d81f4ded02411ae2054d8e07786ae1f468b499` ; la preuve complète (commande, sortie, environnement et critères) est versionnée dans `docs/audits/m5-hardware-validation.md`.
 - L'injection déterministe d'erreurs event/stream/free et les tests manager-level avec backend simulé sont différés dans l'issue #19 ; les conversions de codes seules ne couvrent pas ces chemins.
 - Aucun support multi-GPU/D2D ni implémentation du trait `Device` CUDA n'est ajouté.
 - Aucune dépendance Candle ou autre framework tensoriel externe n'est introduite.
@@ -88,10 +88,10 @@ Aucune CI standard ne doit exiger un GPU ni linker le pilote CUDA. Les tests mat
 - [x] Les allocations restent protégées tant qu'un event associé reste en vol.
 - [x] Départage déterministe des évictions de priorité égale pour LRU, LFU et Adaptive, y compris un plan nécessitant deux victimes.
 - [x] Tests de conversion des codes d'état CUDA au niveau du wrapper ; ils ne démontrent pas l'exécution des chemins event/stream ni le comportement de `poll_completed_transfers` et ne sont pas exécutés par la CI actuelle.
-- [ ] Scénario matériel ciblé `M5-HW-POLL-01` : `poll_completed_transfers` retire un event confirmé terminé, puis une admission sous pression évince l'allocation sans `wait_for_*` ; exécution RTX 5090 et preuve à consigner dans `docs/audits/m5-hardware-validation.md` avant merge.
-- [x] CI verte sur le HEAD `0b7314d3a9388ef528426cdb8e55e1c4831fc025` : format, tests workspace, Clippy standard/CUDA, compilation des cibles `cuda-driver` avec `--all-targets` et MSRV Rust 1.86 (runs push et pull request [44840317161](https://github.com/zenhit777/Claymore/actions/runs/44840317161) et [44840312918](https://github.com/zenhit777/Claymore/actions/runs/44840312918)). Les tests `cuda-driver` sont compilés par le contrôle `--all-targets`, mais ne sont pas exécutés par la CI.
+- [x] Scénario matériel ciblé `M5-HW-POLL-01` : PASS sur RTX 5090 au SHA `c7d81f4ded02411ae2054d8e07786ae1f468b499` ; `poll_completed_transfers` retire l'event terminé, puis l'admission sous pression évince la victime sans attente explicite de complétion. Preuve : `docs/audits/m5-hardware-validation.md`.
+- [x] CI verte sur le SHA `c7d81f4ded02411ae2054d8e07786ae1f468b499` : format, tests workspace, Clippy standard/CUDA, compilation des cibles `cuda-driver` avec `--all-targets` et MSRV Rust 1.86 (run pull request [44840542977](https://github.com/zenhit777/Claymore/actions/runs/44840542977), 2 jobs sur 2 réussis). Les tests `cuda-driver` sont compilés par le contrôle `--all-targets`, mais ne sont pas exécutés par la CI.
 - [ ] Revue architecturale et fusion.
-- [ ] Validation matérielle RTX 5090 ciblée et preuve versionnée.
+- [x] Validation matérielle RTX 5090 ciblée et preuve versionnée (`M5-HW-POLL-01`, voir `docs/audits/m5-hardware-validation.md`).
 
 
 ## 7. Suivi hors M5
