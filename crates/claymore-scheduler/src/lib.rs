@@ -337,6 +337,27 @@ impl Scheduler {
         Ok(())
     }
 
+    /// Mark a running task cancelled after its executor has cooperatively
+    /// stopped the underlying operation. This is distinct from cancelling
+    /// queued work: callers must not use it while backend work is still active.
+    pub fn cancel_running(&mut self, id: TaskId) -> Result<(), SchedulerError> {
+        let task = self.task_mut(id, "cancel_running")?;
+        if task.state != TaskState::Running {
+            return Err(SchedulerError::InvalidTransition {
+                task_id: id,
+                state: task.state,
+                operation: "cancel_running",
+            });
+        }
+        let was_prefetch = task.kind == TaskKind::Prefetch;
+        task.state = TaskState::Cancelled;
+        if was_prefetch {
+            self.running_prefetches -= 1;
+        }
+        self.refresh_blocked_tasks();
+        Ok(())
+    }
+
     pub fn task(&self, id: TaskId) -> Result<TaskSnapshot, SchedulerError> {
         let task = self.tasks.get(&id).ok_or(SchedulerError::UnknownTask(id))?;
         Ok(TaskSnapshot {
@@ -562,6 +583,17 @@ mod tests {
             scheduler.submit(TaskSpec::new(TaskKind::Prefetch)),
             Err(SchedulerError::PrefetchWindowFull { limit: 0 })
         );
+    }
+
+    #[test]
+    fn cancelling_running_prefetch_releases_concurrency_slot() {
+        let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
+        let id = scheduler.submit(TaskSpec::new(TaskKind::Prefetch)).unwrap();
+        assert_eq!(scheduler.start_next(TaskKind::Prefetch), Some(id));
+        assert_eq!(scheduler.running_prefetches(), 1);
+        scheduler.cancel_running(id).unwrap();
+        assert_eq!(scheduler.running_prefetches(), 0);
+        assert_eq!(scheduler.task(id).unwrap().state, TaskState::Cancelled);
     }
 
     #[test]
