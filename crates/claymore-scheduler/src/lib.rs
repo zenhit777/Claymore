@@ -611,4 +611,4 @@ mod tests {
 
 /// Synchronous, owner-thread task execution adapters.
 pub mod executor;
-pub use executor::{ExecutionOutcome, QueueRunner, TaskExecutor};
+pub use executor::{ExecutionOutcome, QueueRunner, QueueRunnerMetrics, TaskExecutor};
