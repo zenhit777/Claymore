@@ -175,7 +175,9 @@ impl MemoryOrchestrator {
             .usage_bytes(allocation.tier)
             .saturating_add(allocation.bytes);
         if allocation.expert && allocation.tier == MemoryTier::Vram {
-            let expert_projected = self.expert_cache_usage_bytes().saturating_add(allocation.bytes);
+            let expert_projected = self
+                .expert_cache_usage_bytes()
+                .saturating_add(allocation.bytes);
             if expert_projected > self.budgets.expert_cache_max_bytes {
                 return Err(MemoryError::InsufficientReclaimable {
                     tier: MemoryTier::Vram,
@@ -271,11 +273,14 @@ impl MemoryOrchestrator {
         // admission boundary. If the target cannot be reached, reclaim every
         // safe candidate and admit only if the hard ceiling is still respected.
         let needed_for_soft = projected - soft_limit;
-        let mut candidates: Vec<&Allocation> = self.allocations.values()
+        let mut candidates: Vec<&Allocation> = self
+            .allocations
+            .values()
             .filter(|a| a.tier == tier && a.safe_after_tick <= now_tick)
             .collect();
         candidates.sort_by(|a, b| {
-            self.eviction_key(a, now_tick).cmp(&self.eviction_key(b, now_tick))
+            self.eviction_key(a, now_tick)
+                .cmp(&self.eviction_key(b, now_tick))
                 // HashMap iteration order is intentionally unspecified. An ID
                 // tie-break makes equal-priority eviction plans reproducible.
                 .then_with(|| a.id.cmp(&b.id))
@@ -336,11 +341,14 @@ impl MemoryOrchestrator {
             });
         }
         let needed = projected - limit;
-        let mut candidates: Vec<&Allocation> = self.allocations.values()
+        let mut candidates: Vec<&Allocation> = self
+            .allocations
+            .values()
             .filter(|a| a.expert && a.tier == MemoryTier::Vram && a.safe_after_tick <= now_tick)
             .collect();
         candidates.sort_by(|a, b| {
-            self.eviction_key(a, now_tick).cmp(&self.eviction_key(b, now_tick))
+            self.eviction_key(a, now_tick)
+                .cmp(&self.eviction_key(b, now_tick))
                 .then_with(|| a.id.cmp(&b.id))
         });
         let mut selected = Vec::new();
@@ -348,7 +356,9 @@ impl MemoryOrchestrator {
         for candidate in candidates {
             selected.push(candidate.id.clone());
             reclaimed = reclaimed.saturating_add(candidate.bytes);
-            if reclaimed >= needed { break; }
+            if reclaimed >= needed {
+                break;
+            }
         }
         if reclaimed < needed {
             return Err(MemoryError::InsufficientReclaimable {
@@ -392,10 +402,15 @@ impl MemoryOrchestrator {
             EvictionPolicy::Adaptive => {
                 // Prefer cold, old, cheap-to-reload allocations.
                 let recency_penalty = allocation.last_used_tick;
-                let reload_cost = self.reload_costs_ns.get(&allocation.id).copied().unwrap_or(0);
+                let reload_cost = self
+                    .reload_costs_ns
+                    .get(&allocation.id)
+                    .copied()
+                    .unwrap_or(0);
                 (
                     0,
-                    allocation.hit_count
+                    allocation
+                        .hit_count
                         .saturating_mul(2)
                         .saturating_add(recency_penalty / 8)
                         .saturating_add(reload_cost),
@@ -425,7 +440,9 @@ mod device;
 pub use device::{DeviceMemoryError, DeviceMemoryManager};
 
 mod executor;
-pub use executor::{MemoryExecutionMetrics, MemoryTask, MemoryTaskExecutor, MemoryTaskExecutorError};
+pub use executor::{
+    MemoryExecutionMetrics, MemoryTask, MemoryTaskExecutor, MemoryTaskExecutorError,
+};
 
 #[cfg(feature = "cuda-driver")]
 mod cuda;
@@ -480,8 +497,12 @@ mod tests {
     #[test]
     fn vram_soft_budget_triggers_proactive_eviction_before_hard_ceiling() {
         let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
-        manager.record_allocation(allocation("old", 50, 1, 0)).unwrap();
-        manager.record_allocation(allocation("new", 35, 9, 0)).unwrap();
+        manager
+            .record_allocation(allocation("old", 50, 1, 0))
+            .unwrap();
+        manager
+            .record_allocation(allocation("new", 35, 9, 0))
+            .unwrap();
 
         let plan = manager.plan_admission(MemoryTier::Vram, 10, 10).unwrap();
         assert_eq!(plan.evict_ids, vec!["old"]);
@@ -492,7 +513,9 @@ mod tests {
     #[test]
     fn vram_soft_target_is_best_effort_but_hard_ceiling_is_mandatory() {
         let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
-        manager.record_allocation(allocation("busy", 90, 1, 50)).unwrap();
+        manager
+            .record_allocation(allocation("busy", 90, 1, 50))
+            .unwrap();
 
         let plan = manager.plan_admission(MemoryTier::Vram, 5, 10).unwrap();
         assert!(plan.evict_ids.is_empty());
@@ -546,8 +569,12 @@ mod tests {
     #[test]
     fn adaptive_eviction_prefers_the_lower_reload_cost() {
         let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Adaptive).unwrap();
-        manager.record_allocation(allocation("expensive", 40, 5, 0)).unwrap();
-        manager.record_allocation(allocation("cheap", 40, 5, 0)).unwrap();
+        manager
+            .record_allocation(allocation("expensive", 40, 5, 0))
+            .unwrap();
+        manager
+            .record_allocation(allocation("cheap", 40, 5, 0))
+            .unwrap();
         manager.record_reload_cost("expensive", 10_000).unwrap();
         manager.record_reload_cost("cheap", 10).unwrap();
 
@@ -586,8 +613,12 @@ mod tests {
     #[test]
     fn expert_cache_admission_enforces_max_and_selects_only_idle_experts() {
         let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
-        manager.record_allocation(allocation("expert-old", 50, 1, 0)).unwrap();
-        manager.record_allocation(allocation("expert-busy", 30, 2, 50)).unwrap();
+        manager
+            .record_allocation(allocation("expert-old", 50, 1, 0))
+            .unwrap();
+        manager
+            .record_allocation(allocation("expert-busy", 30, 2, 50))
+            .unwrap();
         let mut ordinary = allocation("ordinary", 10, 0, 0);
         ordinary.expert = false;
         manager.record_allocation(ordinary).unwrap();
