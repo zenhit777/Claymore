@@ -35,7 +35,7 @@ pub enum MemoryTask {
     Synchronize,
 }
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, thiserror::Error)]
 pub enum MemoryTaskExecutorError {
     #[error("task {0:?} already has a registered memory operation")]
     DuplicateTask(TaskId),
