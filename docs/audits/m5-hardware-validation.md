@@ -4,8 +4,10 @@
 **Branche :** `feat/m5-cuda-streams-eviction-hardening`.  
 **Base M5 de la campagne générale :** `c465100202370d7b3246bb2cd656a435fbff4fc6`.  
 **HEAD contenant le correctif B2, le test M5-HW-POLL-01 et la couverture des égalités LRU/LFU/Adaptive :** `0b7314d3a9388ef528426cdb8e55e1c4831fc025`.  
+**SHA exact exécuté pour la preuve B1 :** `c7d81f4ded02411ae2054d8e07786ae1f468b499` (descendant documentaire de `0b7314d` ; seule la documentation de `poll_completed_transfers` diffère, sans changement de comportement).\
+**Date d'exécution :** 2026-11-21.\
 **Campagne générale :** 24 tests matériels PASS, 0 FAIL, documentés initialement dans la campagne M4/M5.  
-**Statut de la preuve ciblée B1 :** scénario dédié ajouté dans cette PR ; CI stable et MSRV verte sur le HEAD indiqué ; exécution sur RTX 5090 requise avant merge.
+**Statut de la preuve ciblée B1 :** PASS sur RTX 5090 au SHA `c7d81f4ded02411ae2054d8e07786ae1f468b499`.
 
 ## 1. Environnement observé
 
@@ -72,24 +74,67 @@ Procédure attendue :
 5. Demander une allocation `replacement` qui dépasse le budget disponible.
 6. Vérifier que l'admission réussit, que `victim` a été évincée et que la comptabilité correspond à `replacement`.
 
-**Résultat : NOT RUN — exécution ciblée sur RTX 5090 requise sur le HEAD corrigé de cette PR (`0b7314d3a9388ef528426cdb8e55e1c4831fc025` ou son descendant documentaire).**
+**Résultat : PASS — exécuté le 2026-11-21 sur `c7d81f4ded02411ae2054d8e07786ae1f468b499`.**
 
-Aucun résultat n'est inféré de la campagne précédente. Après exécution, consigner ici le SHA exact, la commande, la sortie du test et sa durée.
-
-## 4. Commandes reproductibles
-
-Sous WSL2 :
+Commande ciblée :
 
 ```bash
 export RUSTFLAGS="-L native=/usr/lib/wsl/lib"
 export LD_LIBRARY_PATH=/usr/lib/wsl/lib
 
-# Compile et exécute les tests unitaires CUDA de la bibliothèque.
-cargo test -p claymore-cuda -p claymore-memory --features cuda-driver --lib
-
-# Exécute les tests matériels ignorés, dont M5-HW-POLL-01.
-cargo test -p claymore-memory --features cuda-driver --lib -- --ignored --nocapture --test-threads=1
+cargo test -p claymore-memory --features cuda-driver --lib \
+  hardware_poll_retires_completed_transfer_before_admission_without_wait \
+  -- --ignored --nocapture --test-threads=1
 ```
+
+Sortie observée :
+
+```text
+running 1 test
+test cuda::tests::hardware_poll_retires_completed_transfer_before_admission_without_wait ... M5-HW-POLL-01 retired=1; admission evicted completed victim without explicit wait
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.24s
+```
+
+Durée : **0,24 s** pour le test (0,26 s de temps mural pour la commande complète).
+
+Critères vérifiés :
+
+| Critère | Preuve observée |
+|---|---|
+| Transfert H2D réel terminé | `copy_h2d` enqueué sur le stream de transfert, puis event positivement complété par `cuEventQuery` |
+| Polling direct | Seul `poll_completed_transfers` est appelé dans la boucle de complétion |
+| `retired == 1` avant expiration | La boucle retourne `1` bien avant la borne de 10 s |
+| Aucun wait explicite de complétion | Le corps du test n'appelle ni `wait_for_transfer` ni `wait_for_allocation` après l'enqueue H2D. L'admission passe par `make_room` → `poll_completed_transfers` non bloquant → `release` ; l'appel interne de `release` à `wait_for_allocation` ne trouve plus aucun event en vol une fois l'event retiré. |
+| Admission sous pression | `allocate_device("replacement", 512 Kio)` réussit |
+| Victime effectivement évincée | `release("victim")` retourne `UnknownAllocation`, et l'usage VRAM passe de 768 Kio à 512 Kio |
+| Comptabilité VRAM | `usage_bytes(Vram) == 768 Kio` après retirement, puis `512 Kio` après admission |
+
+Précision sur les waits internes : le `write_pinned` de préparation (antérieur au transfert) et le `release` d'éviction traversent `wait_for_allocation` comme garde-fou. Dans les deux cas aucun transfert n'est en vol, donc ces appels ne bloquent pas et ne participent pas à la complétion. Aucune attente n'est utilisée pour forcer la complétion H2D ou l'admission.
+
+Aucun résultat n'est inféré de la campagne précédente. La preuve B1 est désormais attachée au SHA exact ci-dessus.
+
+## 4. Commandes reproductibles
+
+Sous WSL2, commandes exactement exécutées au SHA `c7d81f4ded02411ae2054d8e07786ae1f468b499` :
+
+```bash
+export RUSTFLAGS="-L native=/usr/lib/wsl/lib"
+export LD_LIBRARY_PATH=/usr/lib/wsl/lib
+
+# Tests unitaires CUDA non ignorés (bibliothèques claymore-cuda et claymore-memory).
+cargo test -p claymore-cuda -p claymore-memory --features cuda-driver --lib -- --test-threads=1
+
+# Tests matériels ignorés, dont M5-HW-POLL-01.
+cargo test -p claymore-cuda -p claymore-memory --features cuda-driver --lib -- --ignored --nocapture --test-threads=1
+```
+
+Résultats :
+
+- Tests non ignorés : `claymore-cuda` 5 PASS, 0 FAIL ; `claymore-memory` 22 PASS, 0 FAIL, 2 ignorés. Durée 0,68 s.
+- Tests ignorés : 2 PASS, 0 FAIL (`cuda_manager_reports_device_memory` et M5-HW-POLL-01). Durée 0,41 s.
+- Aucun échec, aucun test filtré par erreur.
 
 La campagne générale du wrapper peut être rejouée avec :
 
@@ -103,11 +148,12 @@ cargo test -p claymore-cuda --features cuda-driver -- --ignored --nocapture --te
 - Les erreurs réelles `cuEventQuery`, `cuStreamSynchronize` et `cuMemFree` n'ont pas été injectées sur le pilote ; l'utilisation de handles CUDA synthétiques contre le pilote réel n'est pas sûre.
 - Le chemin de conservation de l'ownership et de la comptabilité lors d'un véritable échec de `cuMemFree` n'est donc pas démontré sur matériel.
 - La campagne matérielle nominale n'est pas une preuve de comportement multi-thread ; le manager reste confiné au thread propriétaire.
+- M5-HW-POLL-01 est une exécution unique avec un transfert H2D de 4 Kio et une borne de 10 s ; il démontre le chemin nominal de retirement par polling, pas un stress de latence sous charge GPU concurrente.
 - L'injection déterministe et les tests manager-level avec backend CUDA simulable sont différés dans l'issue [#19](https://github.com/zenhit777/Claymore/issues/19).
 
 ## 6. Verdict
 
 **Campagne nominale générale :** `HARDWARE VALIDATION PASSED WITH LIMITATIONS` (24/24).  
-**Critère matériel ciblé B1 :** `PENDING` tant que M5-HW-POLL-01 n'a pas été exécuté avec succès sur RTX 5090.
+**Critère matériel ciblé B1 :** `PASSED` sur RTX 5090 au SHA `c7d81f4ded02411ae2054d8e07786ae1f468b499` (M5-HW-POLL-01, `retired == 1`, admission sous pression sans wait explicite).
 
-La PR #17 ne doit pas être considérée comme matériellement validée au regard de B1 avant l'ajout de la preuve du test ciblé sur son HEAD final.
+La preuve B1 est désormais attachée au HEAD final de la PR #17. Les limitations résiduelles de la section 5 restent applicables.
