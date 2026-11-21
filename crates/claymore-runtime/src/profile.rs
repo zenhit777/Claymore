@@ -126,7 +126,9 @@ impl HardwareProfile {
                 "VRAM soft/hard/reserve limits are inconsistent",
             ));
         }
-        let planned_working_set = self.vram.model_working_set_gib
+        let planned_working_set = self
+            .vram
+            .model_working_set_gib
             .saturating_add(self.vram.state_kv_canvas_gib)
             .saturating_add(self.vram.cuda_workspace_gib)
             .saturating_add(self.vram.transfer_gib)
@@ -143,9 +145,13 @@ impl HardwareProfile {
                 "expert cache must fit inside the model working set",
             ));
         }
-        let host_committed = self.host_memory.claymore_budget_gib
+        let host_committed = self
+            .host_memory
+            .claymore_budget_gib
             .saturating_add(self.host_memory.system_reserve_gib);
-        let host_working_set = self.host_memory.weights_pool_target_gib
+        let host_working_set = self
+            .host_memory
+            .weights_pool_target_gib
             .saturating_add(self.host_memory.staging_and_state_gib);
         if host_committed > self.hardware.ram_gib
             || host_working_set > self.host_memory.claymore_budget_gib
@@ -165,12 +171,13 @@ impl HardwareProfile {
             || self.scheduler.transfer_streams != 1
             || self.scheduler.tick_us == 0
         {
-            return Err(HardwareProfileError::Invalid("scheduler limits are inconsistent"));
+            return Err(HardwareProfileError::Invalid(
+                "scheduler limits are inconsistent",
+            ));
         }
         if self.precision.policy.trim().is_empty()
             || !["bf16", "fp16", "fp32"].contains(&self.precision.preferred.as_str())
-            || !["bf16", "fp16", "fp32"]
-                .contains(&self.precision.sensitive_accumulation.as_str())
+            || !["bf16", "fp16", "fp32"].contains(&self.precision.sensitive_accumulation.as_str())
             || !["bf16", "fp16", "fp32"].contains(&self.precision.fallback.as_str())
         {
             return Err(HardwareProfileError::Invalid(
@@ -203,7 +210,9 @@ impl HardwareProfile {
 }
 
 fn gib(value: u64) -> Result<u64, HardwareProfileError> {
-    value.checked_mul(GIB).ok_or(HardwareProfileError::SizeOverflow)
+    value
+        .checked_mul(GIB)
+        .ok_or(HardwareProfileError::SizeOverflow)
 }
 
 #[cfg(test)]
