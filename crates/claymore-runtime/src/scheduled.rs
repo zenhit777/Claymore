@@ -81,10 +81,10 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
         let Some(task_id) = self.scheduler.start_next(TaskKind::Compute) else {
             return Ok(None);
         };
-        let (input, cancellation) = self
-            .pending
-            .remove(&task_id)
-            .ok_or(ScheduledRuntimeError::MissingRequest(task_id))?;
+        let Some((input, cancellation)) = self.pending.remove(&task_id) else {
+            self.scheduler.fail(task_id)?;
+            return Err(ScheduledRuntimeError::MissingRequest(task_id));
+        };
         let report = match self.runtime.execute(input, cancellation) {
             Ok(report) => report,
             Err(error) => {
