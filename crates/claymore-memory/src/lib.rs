@@ -275,6 +275,63 @@ impl MemoryOrchestrator {
         })
     }
 
+    /// Plan expert-cache admission independently from the general VRAM budget.
+    /// Only idle expert allocations are candidates; the plan never mutates state.
+    pub fn plan_expert_admission(
+        &self,
+        requested_bytes: u64,
+        now_tick: u64,
+    ) -> Result<AdmissionPlan, MemoryError> {
+        let limit = self.budgets.expert_cache_max_bytes;
+        if requested_bytes > limit {
+            return Err(MemoryError::RequestTooLarge {
+                tier: MemoryTier::Vram,
+                requested: requested_bytes,
+                limit,
+            });
+        }
+        let current = self.expert_cache_usage_bytes();
+        let projected = current.saturating_add(requested_bytes);
+        if projected <= limit {
+            return Ok(AdmissionPlan {
+                tier: MemoryTier::Vram,
+                requested_bytes,
+                evict_ids: Vec::new(),
+                projected_usage_bytes: projected,
+                limit_bytes: limit,
+            });
+        }
+        let needed = projected - limit;
+        let mut candidates: Vec<&Allocation> = self.allocations.values()
+            .filter(|a| a.expert && a.tier == MemoryTier::Vram && a.safe_after_tick <= now_tick)
+            .collect();
+        candidates.sort_by(|a, b| {
+            self.eviction_key(a, now_tick).cmp(&self.eviction_key(b, now_tick))
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        let mut selected = Vec::new();
+        let mut reclaimed = 0_u64;
+        for candidate in candidates {
+            selected.push(candidate.id.clone());
+            reclaimed = reclaimed.saturating_add(candidate.bytes);
+            if reclaimed >= needed { break; }
+        }
+        if reclaimed < needed {
+            return Err(MemoryError::InsufficientReclaimable {
+                tier: MemoryTier::Vram,
+                needed,
+                reclaimable: reclaimed,
+            });
+        }
+        Ok(AdmissionPlan {
+            tier: MemoryTier::Vram,
+            requested_bytes,
+            evict_ids: selected,
+            projected_usage_bytes: current.saturating_sub(reclaimed).saturating_add(requested_bytes),
+            limit_bytes: limit,
+        })
+    }
+
     /// Confirm that the backend has actually freed an allocation.
     pub fn confirm_eviction(&mut self, id: &str, now_tick: u64) -> Result<Allocation, MemoryError> {
         let allocation = self
@@ -443,6 +500,29 @@ mod tests {
         let removed = manager.confirm_eviction("expert-1", 1).unwrap();
         assert_eq!(removed.bytes, 70);
         assert_eq!(manager.usage_bytes(MemoryTier::Vram), 0);
+    }
+
+    #[test]
+    fn expert_cache_admission_enforces_max_and_selects_only_idle_experts() {
+        let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
+        manager.record_allocation(allocation("expert-old", 50, 1, 0)).unwrap();
+        manager.record_allocation(allocation("expert-busy", 30, 2, 50)).unwrap();
+        let mut ordinary = allocation("ordinary", 10, 0, 0);
+        ordinary.expert = false;
+        manager.record_allocation(ordinary).unwrap();
+
+        let plan = manager.plan_expert_admission(50, 10).unwrap();
+        assert_eq!(plan.evict_ids, vec!["expert-old"]);
+        assert_eq!(plan.limit_bytes, 90);
+        assert_eq!(manager.expert_cache_usage_bytes(), 80);
+        assert!(matches!(
+            manager.plan_expert_admission(91, 10),
+            Err(MemoryError::RequestTooLarge { limit: 90, .. })
+        ));
+        assert!(matches!(
+            manager.plan_expert_admission(70, 10),
+            Err(MemoryError::InsufficientReclaimable { .. })
+        ));
     }
 
     #[test]
