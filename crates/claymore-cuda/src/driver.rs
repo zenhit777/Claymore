@@ -651,8 +651,9 @@ mod tests {
         let mut destination = driver.allocate(4096).expect("device allocation");
         // SAFETY: no work is queued on this allocation.
         unsafe { destination.free().expect("device free") };
-        // SAFETY: the freed buffer is deliberately used to verify fail-closed
-        // driver error propagation; the pointer is never dereferenced by Rust.
+        // SAFETY: this is a deliberately invalid CUDA API usage probe, limited
+        // to verifying that the wrapper's nulled pointer fails closed after free.
+        // Do not generalize this pattern or use a freed allocation in production.
         let error = unsafe {
             destination
                 .copy_from_pinned_async(&source, 4096, &stream)
