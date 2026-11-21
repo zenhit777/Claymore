@@ -16,8 +16,8 @@ use std::time::Instant;
 
 use claymore_core::MemoryTier;
 use claymore_memory::{
-    CudaMemoryError, CudaMemoryManager, CudaMemoryTask, CudaTransferExecutor,
-    EvictionPolicy, MemoryBudgets, MemoryError,
+    CudaMemoryError, CudaMemoryManager, CudaMemoryTask, CudaTransferExecutor, EvictionPolicy,
+    MemoryBudgets, MemoryError,
 };
 use claymore_scheduler::{
     ExecutionOutcome, QueueRunner, Scheduler, SchedulerConfig, TaskKind, TaskSpec,
@@ -979,8 +979,8 @@ fn hw_m7_cuda_transfer_executor_runs_scheduler_tasks_after_event_completion() {
     let _serial = serial();
     let expected = pattern(1024 * 1024, 73);
     let budgets = budgets(64 * 1024 * 1024, 64 * 1024 * 1024);
-    let executor = CudaTransferExecutor::new(0, budgets, EvictionPolicy::Lru)
-        .expect("CUDA transfer executor");
+    let executor =
+        CudaTransferExecutor::new(0, budgets, EvictionPolicy::Lru).expect("CUDA transfer executor");
     let mut executor = executor;
     let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
 
@@ -991,9 +991,15 @@ fn hw_m7_cuda_transfer_executor_runs_scheduler_tasks_after_event_completion() {
     let write_host = scheduler
         .submit(TaskSpec::new(TaskKind::Transfer).depends_on(allocate_device))
         .unwrap();
-    let h2d = scheduler.submit(TaskSpec::new(TaskKind::Transfer).depends_on(write_host)).unwrap();
-    let d2h = scheduler.submit(TaskSpec::new(TaskKind::Transfer).depends_on(h2d)).unwrap();
-    let read_host = scheduler.submit(TaskSpec::new(TaskKind::Transfer).depends_on(d2h)).unwrap();
+    let h2d = scheduler
+        .submit(TaskSpec::new(TaskKind::Transfer).depends_on(write_host))
+        .unwrap();
+    let d2h = scheduler
+        .submit(TaskSpec::new(TaskKind::Transfer).depends_on(h2d))
+        .unwrap();
+    let read_host = scheduler
+        .submit(TaskSpec::new(TaskKind::Transfer).depends_on(d2h))
+        .unwrap();
     let release_device = scheduler
         .submit(TaskSpec::new(TaskKind::Transfer).depends_on(read_host))
         .unwrap();
@@ -1001,38 +1007,97 @@ fn hw_m7_cuda_transfer_executor_runs_scheduler_tasks_after_event_completion() {
         .submit(TaskSpec::new(TaskKind::Transfer).depends_on(release_device))
         .unwrap();
 
-    executor.register(allocate_host, CudaMemoryTask::AllocatePinned {
-        id: "host".into(), bytes: expected.len() as u64,
-    }).unwrap();
-    executor.register(allocate_device, CudaMemoryTask::AllocateDevice {
-        id: "device".into(), bytes: expected.len() as u64, expert: false,
-    }).unwrap();
-    executor.register(write_host, CudaMemoryTask::WritePinned {
-        id: "host".into(), offset: 0, data: expected.clone(),
-    }).unwrap();
-    executor.register(h2d, CudaMemoryTask::CopyH2d {
-        pinned_id: "host".into(), device_id: "device".into(), bytes: expected.len(),
-    }).unwrap();
-    executor.register(d2h, CudaMemoryTask::CopyD2h {
-        device_id: "device".into(), pinned_id: "host".into(), bytes: expected.len(),
-    }).unwrap();
-    executor.register(read_host, CudaMemoryTask::ReadPinned {
-        id: "host".into(), offset: 0, len: expected.len(),
-    }).unwrap();
-    executor.register(release_device, CudaMemoryTask::Release { id: "device".into() }).unwrap();
-    executor.register(release_host, CudaMemoryTask::Release { id: "host".into() }).unwrap();
+    executor
+        .register(
+            allocate_host,
+            CudaMemoryTask::AllocatePinned {
+                id: "host".into(),
+                bytes: expected.len() as u64,
+            },
+        )
+        .unwrap();
+    executor
+        .register(
+            allocate_device,
+            CudaMemoryTask::AllocateDevice {
+                id: "device".into(),
+                bytes: expected.len() as u64,
+                expert: false,
+            },
+        )
+        .unwrap();
+    executor
+        .register(
+            write_host,
+            CudaMemoryTask::WritePinned {
+                id: "host".into(),
+                offset: 0,
+                data: expected.clone(),
+            },
+        )
+        .unwrap();
+    executor
+        .register(
+            h2d,
+            CudaMemoryTask::CopyH2d {
+                pinned_id: "host".into(),
+                device_id: "device".into(),
+                bytes: expected.len(),
+            },
+        )
+        .unwrap();
+    executor
+        .register(
+            d2h,
+            CudaMemoryTask::CopyD2h {
+                device_id: "device".into(),
+                pinned_id: "host".into(),
+                bytes: expected.len(),
+            },
+        )
+        .unwrap();
+    executor
+        .register(
+            read_host,
+            CudaMemoryTask::ReadPinned {
+                id: "host".into(),
+                offset: 0,
+                len: expected.len(),
+            },
+        )
+        .unwrap();
+    executor
+        .register(
+            release_device,
+            CudaMemoryTask::Release {
+                id: "device".into(),
+            },
+        )
+        .unwrap();
+    executor
+        .register(release_host, CudaMemoryTask::Release { id: "host".into() })
+        .unwrap();
 
     let mut runner = QueueRunner::new(TaskKind::Transfer, executor);
     for task_id in [
-        allocate_host, allocate_device, write_host, h2d, d2h, read_host,
-        release_device, release_host,
+        allocate_host,
+        allocate_device,
+        write_host,
+        h2d,
+        d2h,
+        read_host,
+        release_device,
+        release_host,
     ] {
         assert_eq!(
             runner.run_one(&mut scheduler).unwrap(),
             ExecutionOutcome::Completed(task_id)
         );
     }
-    assert_eq!(runner.executor_mut().take_read_result(read_host), Some(expected));
+    assert_eq!(
+        runner.executor_mut().take_read_result(read_host),
+        Some(expected)
+    );
     let metrics = runner.executor().metrics();
     assert_eq!(metrics.h2d_transfers, 1);
     assert_eq!(metrics.d2h_transfers, 1);
@@ -1050,7 +1115,6 @@ fn hw_m7_cuda_transfer_executor_runs_scheduler_tasks_after_event_completion() {
     );
 }
 
-
 #[test]
 #[ignore = "requires a CUDA driver and a usable NVIDIA device"]
 fn hw_m7_expert_cache_max_is_enforced_before_device_allocation() {
@@ -1064,8 +1128,8 @@ fn hw_m7_expert_cache_max_is_enforced_before_device_allocation() {
         expert_cache_target_bytes: mib,
         expert_cache_max_bytes: 2 * mib,
     };
-    let mut manager = CudaMemoryManager::new(0, budgets, EvictionPolicy::Lru)
-        .expect("CUDA memory manager");
+    let mut manager =
+        CudaMemoryManager::new(0, budgets, EvictionPolicy::Lru).expect("CUDA memory manager");
     let mut tick = Ticker::new();
 
     manager
@@ -1086,4 +1150,3 @@ fn hw_m7_expert_cache_max_is_enforced_before_device_allocation() {
     assert_eq!(manager.usage_bytes(MemoryTier::Vram), 0);
     println!("M7 expert cache maximum enforced with deterministic idle eviction");
 }
-
