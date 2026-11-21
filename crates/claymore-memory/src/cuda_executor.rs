@@ -13,13 +13,38 @@ use crate::{CudaMemoryError, CudaMemoryManager, EvictionPolicy, MemoryBudgets};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CudaMemoryTask {
-    AllocateDevice { id: String, bytes: u64, expert: bool },
-    AllocatePinned { id: String, bytes: u64 },
-    WritePinned { id: String, offset: usize, data: Vec<u8> },
-    CopyH2d { pinned_id: String, device_id: String, bytes: usize },
-    CopyD2h { device_id: String, pinned_id: String, bytes: usize },
-    ReadPinned { id: String, offset: usize, len: usize },
-    Release { id: String },
+    AllocateDevice {
+        id: String,
+        bytes: u64,
+        expert: bool,
+    },
+    AllocatePinned {
+        id: String,
+        bytes: u64,
+    },
+    WritePinned {
+        id: String,
+        offset: usize,
+        data: Vec<u8>,
+    },
+    CopyH2d {
+        pinned_id: String,
+        device_id: String,
+        bytes: usize,
+    },
+    CopyD2h {
+        device_id: String,
+        pinned_id: String,
+        bytes: usize,
+    },
+    ReadPinned {
+        id: String,
+        offset: usize,
+        len: usize,
+    },
+    Release {
+        id: String,
+    },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -135,36 +160,50 @@ impl CudaTransferExecutor {
                 let tick = self.next_tick()?;
                 self.manager.write_pinned(&id, offset, &data, tick)?;
             }
-            CudaMemoryTask::CopyH2d { pinned_id, device_id, bytes } => {
+            CudaMemoryTask::CopyH2d {
+                pinned_id,
+                device_id,
+                bytes,
+            } => {
                 let transfer_started = Instant::now();
                 let enqueue_tick = self.next_tick()?;
-                let token = self.manager.copy_h2d(&pinned_id, &device_id, bytes, enqueue_tick)?;
+                let token = self
+                    .manager
+                    .copy_h2d(&pinned_id, &device_id, bytes, enqueue_tick)?;
                 let wait_tick = self.next_tick()?;
                 let wait_started = Instant::now();
                 self.manager.wait_for_transfer(&token, wait_tick)?;
-                self.metrics.event_wait_ns = self.metrics.event_wait_ns.saturating_add(
-                    wait_started.elapsed().as_nanos().min(u64::MAX as u128) as u64
-                );
+                self.metrics.event_wait_ns = self
+                    .metrics
+                    .event_wait_ns
+                    .saturating_add(wait_started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
                 self.metrics.h2d_transfers = self.metrics.h2d_transfers.saturating_add(1);
                 self.metrics.h2d_bytes = self.metrics.h2d_bytes.saturating_add(bytes as u64);
                 self.metrics.h2d_total_ns = self.metrics.h2d_total_ns.saturating_add(
-                    transfer_started.elapsed().as_nanos().min(u64::MAX as u128) as u64
+                    transfer_started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
                 );
             }
-            CudaMemoryTask::CopyD2h { device_id, pinned_id, bytes } => {
+            CudaMemoryTask::CopyD2h {
+                device_id,
+                pinned_id,
+                bytes,
+            } => {
                 let transfer_started = Instant::now();
                 let enqueue_tick = self.next_tick()?;
-                let token = self.manager.copy_d2h(&device_id, &pinned_id, bytes, enqueue_tick)?;
+                let token = self
+                    .manager
+                    .copy_d2h(&device_id, &pinned_id, bytes, enqueue_tick)?;
                 let wait_tick = self.next_tick()?;
                 let wait_started = Instant::now();
                 self.manager.wait_for_transfer(&token, wait_tick)?;
-                self.metrics.event_wait_ns = self.metrics.event_wait_ns.saturating_add(
-                    wait_started.elapsed().as_nanos().min(u64::MAX as u128) as u64
-                );
+                self.metrics.event_wait_ns = self
+                    .metrics
+                    .event_wait_ns
+                    .saturating_add(wait_started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
                 self.metrics.d2h_transfers = self.metrics.d2h_transfers.saturating_add(1);
                 self.metrics.d2h_bytes = self.metrics.d2h_bytes.saturating_add(bytes as u64);
                 self.metrics.d2h_total_ns = self.metrics.d2h_total_ns.saturating_add(
-                    transfer_started.elapsed().as_nanos().min(u64::MAX as u128) as u64
+                    transfer_started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
                 );
             }
             CudaMemoryTask::ReadPinned { id, offset, len } => {
@@ -193,7 +232,8 @@ impl TaskExecutor for CudaTransferExecutor {
             return Err(CudaTransferExecutorError::WrongQueue {
                 task_id: task.id,
                 kind: task.kind,
-            }.to_string());
+            }
+            .to_string());
         }
         let Some(operation) = self.operations.remove(&task.id) else {
             self.metrics.failed = self.metrics.failed.saturating_add(1);
@@ -202,10 +242,8 @@ impl TaskExecutor for CudaTransferExecutor {
         let started_at = Instant::now();
         let result = self.execute_operation(task.id, operation);
         let elapsed_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64;
-        self.metrics.total_execution_ns = self
-            .metrics
-            .total_execution_ns
-            .saturating_add(elapsed_ns);
+        self.metrics.total_execution_ns =
+            self.metrics.total_execution_ns.saturating_add(elapsed_ns);
         self.metrics.max_execution_ns = self.metrics.max_execution_ns.max(elapsed_ns);
         if result.is_err() {
             self.metrics.failed = self.metrics.failed.saturating_add(1);
