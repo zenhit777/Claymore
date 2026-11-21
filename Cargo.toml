@@ -5,6 +5,7 @@ members = [
   "crates/claymore-device",
   "crates/claymore-memory",
   "crates/claymore-scheduler",
+  "crates/claymore-runtime",
   "crates/claymore-model-gemma",
   "crates/claymore-model-clover",
   "crates/claymore-cuda",
