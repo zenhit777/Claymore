@@ -290,7 +290,9 @@ impl MemoryOrchestrator {
             }
         }
 
-        let projected_after_eviction = current.saturating_sub(reclaimed).saturating_add(requested_bytes);
+        let projected_after_eviction = current
+            .saturating_sub(reclaimed)
+            .saturating_add(requested_bytes);
         if projected_after_eviction > hard_limit {
             return Err(MemoryError::InsufficientReclaimable {
                 tier,
@@ -359,7 +361,9 @@ impl MemoryOrchestrator {
             tier: MemoryTier::Vram,
             requested_bytes,
             evict_ids: selected,
-            projected_usage_bytes: current.saturating_sub(reclaimed).saturating_add(requested_bytes),
+            projected_usage_bytes: current
+                .saturating_sub(reclaimed)
+                .saturating_add(requested_bytes),
             limit_bytes: limit,
         })
     }
