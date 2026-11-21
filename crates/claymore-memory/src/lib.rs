@@ -136,6 +136,7 @@ pub struct MemoryOrchestrator {
     budgets: MemoryBudgets,
     policy: EvictionPolicy,
     allocations: HashMap<String, Allocation>,
+    reload_costs_ns: HashMap<String, u64>,
 }
 
 impl MemoryOrchestrator {
@@ -145,6 +146,7 @@ impl MemoryOrchestrator {
             budgets,
             policy,
             allocations: HashMap::new(),
+            reload_costs_ns: HashMap::new(),
         })
     }
 
@@ -191,6 +193,20 @@ impl MemoryOrchestrator {
         }
         self.allocations.insert(allocation.id.clone(), allocation);
         Ok(())
+    }
+
+    /// Record the observed or estimated cost of reloading an allocation.
+    /// Adaptive eviction retains allocations with higher reload costs.
+    pub fn record_reload_cost(&mut self, id: &str, cost_ns: u64) -> Result<(), MemoryError> {
+        if !self.allocations.contains_key(id) {
+            return Err(MemoryError::AllocationNotFound(id.to_owned()));
+        }
+        self.reload_costs_ns.insert(id.to_owned(), cost_ns);
+        Ok(())
+    }
+
+    pub fn reload_cost_ns(&self, id: &str) -> Option<u64> {
+        self.reload_costs_ns.get(id).copied()
     }
 
     pub fn touch(&mut self, id: &str, tick: u64) -> Result<(), MemoryError> {
@@ -357,6 +373,7 @@ impl MemoryOrchestrator {
         if allocation.safe_after_tick > now_tick {
             return Err(MemoryError::AllocationBusy(id.to_owned()));
         }
+        self.reload_costs_ns.remove(id);
         Ok(self
             .allocations
             .remove(id)
@@ -369,14 +386,15 @@ impl MemoryOrchestrator {
             EvictionPolicy::Lru => (0, u64::MAX - age, allocation.hit_count),
             EvictionPolicy::Lfu => (0, allocation.hit_count, u64::MAX - age),
             EvictionPolicy::Adaptive => {
-                // Prefer cold, old allocations. The tuple keeps ordering stable.
+                // Prefer cold, old, cheap-to-reload allocations.
                 let recency_penalty = allocation.last_used_tick;
+                let reload_cost = self.reload_costs_ns.get(&allocation.id).copied().unwrap_or(0);
                 (
                     0,
-                    allocation
-                        .hit_count
+                    allocation.hit_count
                         .saturating_mul(2)
-                        .saturating_add(recency_penalty / 8),
+                        .saturating_add(recency_penalty / 8)
+                        .saturating_add(reload_cost),
                     allocation.bytes,
                 )
             }
@@ -519,6 +537,19 @@ mod tests {
                 assert_eq!(plan.evict_ids, vec!["alpha", "beta"], "policy: {policy:?}");
             }
         }
+    }
+
+    #[test]
+    fn adaptive_eviction_prefers_the_lower_reload_cost() {
+        let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Adaptive).unwrap();
+        manager.record_allocation(allocation("expensive", 40, 5, 0)).unwrap();
+        manager.record_allocation(allocation("cheap", 40, 5, 0)).unwrap();
+        manager.record_reload_cost("expensive", 10_000).unwrap();
+        manager.record_reload_cost("cheap", 10).unwrap();
+
+        let plan = manager.plan_admission(MemoryTier::Vram, 20, 5).unwrap();
+        assert_eq!(plan.evict_ids, vec!["cheap"]);
+        assert_eq!(manager.reload_cost_ns("expensive"), Some(10_000));
     }
 
     #[test]
