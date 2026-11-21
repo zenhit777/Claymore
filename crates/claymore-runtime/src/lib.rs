@@ -597,3 +597,7 @@ mod tests {
         ));
     }
 }
+
+/// Scheduled request orchestration built on the deterministic M7 scheduler.
+pub mod scheduled;
+pub use scheduled::{ScheduledExecution, ScheduledRuntime, ScheduledRuntimeError};
