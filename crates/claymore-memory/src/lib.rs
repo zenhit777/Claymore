@@ -421,7 +421,7 @@ mod device;
 pub use device::{DeviceMemoryError, DeviceMemoryManager};
 
 mod executor;
-pub use executor::{MemoryTask, MemoryTaskExecutor, MemoryTaskExecutorError};
+pub use executor::{MemoryExecutionMetrics, MemoryTask, MemoryTaskExecutor, MemoryTaskExecutorError};
 
 #[cfg(feature = "cuda-driver")]
 mod cuda;
