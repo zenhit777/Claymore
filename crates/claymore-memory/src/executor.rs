@@ -208,6 +208,10 @@ impl<D: Device> TaskExecutor for MemoryTaskExecutor<D> {
         }
         result.map_err(|error| error.to_string())
     }
+
+    fn discard(&mut self, task_id: TaskId) {
+        self.operations.remove(&task_id);
+    }
 }
 
 #[cfg(test)]
@@ -368,6 +372,51 @@ mod tests {
         assert_eq!(metrics.writes, 1);
         assert_eq!(metrics.bytes_written, 4);
         assert_eq!(metrics.failed, 0);
+    }
+
+    #[test]
+    fn failed_prerequisite_discards_cancelled_memory_payloads() {
+        let manager = DeviceMemoryManager::new(
+            CpuDevice::new(),
+            budgets(),
+            crate::EvictionPolicy::Lru,
+        )
+        .unwrap();
+        let mut executor = MemoryTaskExecutor::new(manager);
+        let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
+        let failing = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        let dependent = scheduler
+            .submit(TaskSpec::new(TaskKind::Transfer).depends_on(failing))
+            .unwrap();
+        executor
+            .register(
+                failing,
+                MemoryTask::Allocate {
+                    allocation_id: "zero".into(),
+                    tier: MemoryTier::Host,
+                    bytes: 0,
+                    expert: false,
+                },
+            )
+            .unwrap();
+        executor
+            .register(
+                dependent,
+                MemoryTask::Write {
+                    allocation_id: "cancelled-buffer".into(),
+                    offset: 0,
+                    data: vec![0; 1024],
+                },
+            )
+            .unwrap();
+
+        let mut runner = QueueRunner::new(TaskKind::Transfer, executor);
+        assert!(matches!(
+            runner.run_one(&mut scheduler).unwrap(),
+            ExecutionOutcome::Failed { task_id, .. } if task_id == failing
+        ));
+        assert_eq!(scheduler.task(dependent).unwrap().state, claymore_scheduler::TaskState::Cancelled);
+        assert_eq!(runner.executor().pending_operations(), 0);
     }
 
     #[test]
