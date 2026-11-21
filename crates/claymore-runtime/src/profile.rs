@@ -105,16 +105,26 @@ impl HardwareProfile {
             || self.hardware.cpu.trim().is_empty()
             || self.hardware.environment.trim().is_empty()
         {
-            return Err(HardwareProfileError::Invalid("profile and hardware identifiers must not be empty"));
+            return Err(HardwareProfileError::Invalid(
+                "profile and hardware identifiers must not be empty",
+            ));
         }
         if self.hardware.vram_gib == 0 || self.hardware.ram_gib == 0 {
-            return Err(HardwareProfileError::Invalid("physical memory capacities must be positive"));
+            return Err(HardwareProfileError::Invalid(
+                "physical memory capacities must be positive",
+            ));
         }
         if self.vram.soft_budget_gib == 0
             || self.vram.soft_budget_gib > self.vram.hard_ceiling_gib
-            || self.vram.hard_ceiling_gib.saturating_add(self.vram.safety_reserve_gib) > self.hardware.vram_gib
+            || self
+                .vram
+                .hard_ceiling_gib
+                .saturating_add(self.vram.safety_reserve_gib)
+                > self.hardware.vram_gib
         {
-            return Err(HardwareProfileError::Invalid("VRAM soft/hard/reserve limits are inconsistent"));
+            return Err(HardwareProfileError::Invalid(
+                "VRAM soft/hard/reserve limits are inconsistent",
+            ));
         }
         let planned_working_set = self.vram.model_working_set_gib
             .saturating_add(self.vram.state_kv_canvas_gib)
@@ -122,12 +132,16 @@ impl HardwareProfile {
             .saturating_add(self.vram.transfer_gib)
             .saturating_add(self.vram.allocator_slack_gib);
         if planned_working_set > self.vram.soft_budget_gib {
-            return Err(HardwareProfileError::Invalid("planned VRAM working set exceeds the soft budget"));
+            return Err(HardwareProfileError::Invalid(
+                "planned VRAM working set exceeds the soft budget",
+            ));
         }
         if self.vram.expert_cache_target_gib > self.vram.expert_cache_max_gib
             || self.vram.expert_cache_max_gib > self.vram.model_working_set_gib
         {
-            return Err(HardwareProfileError::Invalid("expert cache must fit inside the model working set"));
+            return Err(HardwareProfileError::Invalid(
+                "expert cache must fit inside the model working set",
+            ));
         }
         let host_committed = self.host_memory.claymore_budget_gib
             .saturating_add(self.host_memory.system_reserve_gib);
@@ -137,7 +151,9 @@ impl HardwareProfile {
             || host_working_set > self.host_memory.claymore_budget_gib
             || self.host_memory.pinned_ceiling_gib > self.host_memory.claymore_budget_gib
         {
-            return Err(HardwareProfileError::Invalid("host memory budgets exceed their enclosing limits"));
+            return Err(HardwareProfileError::Invalid(
+                "host memory budgets exceed their enclosing limits",
+            ));
         }
         if self.scheduler.cpu_workers_min == 0
             || self.scheduler.cpu_workers_min > self.scheduler.cpu_workers
@@ -151,10 +167,13 @@ impl HardwareProfile {
             return Err(HardwareProfileError::Invalid("scheduler limits are inconsistent"));
         }
         if !["bf16", "fp16", "fp32"].contains(&self.precision.preferred.as_str())
-            || !["bf16", "fp16", "fp32"].contains(&self.precision.sensitive_accumulation.as_str())
+            || !["bf16", "fp16", "fp32"]
+                .contains(&self.precision.sensitive_accumulation.as_str())
             || !["bf16", "fp16", "fp32"].contains(&self.precision.fallback.as_str())
         {
-            return Err(HardwareProfileError::Invalid("precision values must be bf16, fp16 or fp32"));
+            return Err(HardwareProfileError::Invalid(
+                "precision values must be bf16, fp16 or fp32",
+            ));
         }
         Ok(())
     }
