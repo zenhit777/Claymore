@@ -15,6 +15,9 @@ pub trait TaskExecutor {
     /// Execute the task. Returning `Ok(())` confirms completion; returning an
     /// error marks the task failed and cancels its blocked descendants.
     fn execute(&mut self, task: &TaskSnapshot) -> Result<(), String>;
+
+    /// Release executor-owned payloads for work cancelled before execution.
+    fn discard(&mut self, _task_id: TaskId) {}
 }
 
 /// Result of one scheduler/executor polling step.
@@ -86,12 +89,19 @@ impl<E> QueueRunner<E> {
 }
 
 impl<E: TaskExecutor> QueueRunner<E> {
+    fn prune_cancelled(&mut self, scheduler: &Scheduler) {
+        for task_id in scheduler.cancelled_task_ids() {
+            self.executor.discard(task_id);
+        }
+    }
+
     /// Start and execute at most one ready task. The method is deliberately
     /// synchronous so the caller retains control over thread affinity.
     pub fn run_one(
         &mut self,
         scheduler: &mut Scheduler,
     ) -> Result<ExecutionOutcome, SchedulerError> {
+        self.prune_cancelled(scheduler);
         let Some(task_id) = scheduler.start_next(self.kind) else {
             self.metrics.idle_polls = self.metrics.idle_polls.saturating_add(1);
             return Ok(ExecutionOutcome::Idle);
@@ -112,6 +122,7 @@ impl<E: TaskExecutor> QueueRunner<E> {
             }
             Err(reason) => {
                 scheduler.fail(task_id)?;
+                self.prune_cancelled(scheduler);
                 self.metrics.failed = self.metrics.failed.saturating_add(1);
                 Ok(ExecutionOutcome::Failed { task_id, reason })
             }
