@@ -68,7 +68,8 @@ La CI existante couvre déjà :
 - `cargo check -p claymore-cuda --features cuda-driver --all-targets` ;
 - `cargo check -p claymore-memory --features cuda-driver --all-targets` ;
 - `cargo check -p claymore-cli --features cuda-driver` ;
-- Clippy standard et avec `cuda-driver` ;
+- `cargo clippy --workspace --all-targets -- -D warnings` ;
+- `cargo clippy -p claymore-cuda -p claymore-memory -p claymore-cli --features cuda-driver --all-targets -- -D warnings` (les trois crates CUDA concernées sont lintées) ;
 - tests workspace sur Rust 1.86.
 
 Aucune CI standard ne doit exiger un GPU ni linker le pilote CUDA. Les tests matériels sont explicitement ignorés sans pilote et périphérique NVIDIA. La CI compile les cibles de tests CUDA avec `--all-targets`, sans les exécuter : la compilation des tests et leur exécution sur un GPU sont deux validations distinctes.
@@ -90,7 +91,7 @@ Aucune CI standard ne doit exiger un GPU ni linker le pilote CUDA. Les tests mat
 - [x] Tests de conversion des codes d'état CUDA au niveau du wrapper ; ils ne démontrent pas l'exécution des chemins event/stream ni le comportement de `poll_completed_transfers` et ne sont pas exécutés par la CI actuelle.
 - [x] Scénario matériel ciblé `M5-HW-POLL-01` : PASS sur RTX 5090 au SHA `c7d81f4ded02411ae2054d8e07786ae1f468b499` ; `poll_completed_transfers` retire l'event terminé, puis l'admission sous pression évince la victime sans attente explicite de complétion. Preuve : `docs/audits/m5-hardware-validation.md`.
 - [x] CI verte sur le SHA `c7d81f4ded02411ae2054d8e07786ae1f468b499` : format, tests workspace, Clippy standard/CUDA, compilation des cibles `cuda-driver` avec `--all-targets` et MSRV Rust 1.86 (run pull request [44840542977](https://github.com/zenhit777/Claymore/actions/runs/44840542977), 2 jobs sur 2 réussis). Les tests `cuda-driver` sont compilés par le contrôle `--all-targets`, mais ne sont pas exécutés par la CI.
-- [ ] Revue architecturale et fusion.
+- [x] Revue architecturale : verdict favorable sous réserve des corrections B1–B3, traitées dans la PR corrective dédiée ; fusion de M5 après CI verte sur le HEAD corrigé.
 - [x] Validation matérielle RTX 5090 ciblée et preuve versionnée (`M5-HW-POLL-01`, voir `docs/audits/m5-hardware-validation.md`).
 
 
