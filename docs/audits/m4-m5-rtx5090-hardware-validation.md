@@ -313,17 +313,17 @@ Justification :
 
 ## 6. Reproductibilité
 
+La campagne B1 de revalidation doit être exécutée sur le SHA de code corrigé, sans dépendre du nom de branche :
+
 ```bash
 git checkout 385db116f4c2cce6138ee530f7bec7771f355d95
 
 export RUSTFLAGS="-L native=/usr/lib/wsl/lib"
 export LD_LIBRARY_PATH=/usr/lib/wsl/lib
 
-# Tests matériels wrapper CUDA (3 unitaires + 5 intégration)
-cargo test -p claymore-cuda --features cuda-driver -- --ignored --nocapture --test-threads=1
-
-# Tests matériels manager CUDA (1 test M5 existant + 15 intégration)
-cargo test -p claymore-memory --features cuda-driver -- --ignored --nocapture --test-threads=1
+# Rejoue les 25 tests CUDA ignorés (3 unitaires + 5 intégration CUDA,
+# 15 intégration mémoire + 2 tests matériels du module mémoire).
+cargo test -p claymore-cuda -p claymore-memory --features cuda-driver -- --ignored --nocapture --test-threads=1
 
 # Validation logicielle / CI locale
 cargo fmt --all -- --check
