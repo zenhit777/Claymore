@@ -358,6 +358,15 @@ impl Scheduler {
         Ok(())
     }
 
+    /// Return cancelled task IDs in deterministic submission order.
+    pub fn cancelled_task_ids(&self) -> Vec<TaskId> {
+        self.tasks
+            .values()
+            .filter(|task| task.state == TaskState::Cancelled)
+            .map(|task| task.id)
+            .collect()
+    }
+
     pub fn task(&self, id: TaskId) -> Result<TaskSnapshot, SchedulerError> {
         let task = self.tasks.get(&id).ok_or(SchedulerError::UnknownTask(id))?;
         Ok(TaskSnapshot {
