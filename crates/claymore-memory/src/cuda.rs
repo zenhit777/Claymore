@@ -192,12 +192,10 @@ impl CudaMemoryManager {
         }
         self.ensure_new_id(&id)?;
         if expert {
-            let expert_plan = self.policy.plan_expert_admission(bytes, tick)?;
-            for evict_id in expert_plan.evict_ids {
-                self.release(&evict_id, tick)?;
-            }
+            self.make_room_for_expert(bytes, tick)?;
+        } else {
+            self.make_room(MemoryTier::Vram, bytes, tick)?;
         }
-        self.make_room(MemoryTier::Vram, bytes, tick)?;
         let (free, _) = self.driver.memory_info()?;
         if bytes > free {
             return Err(CudaMemoryError::InsufficientDeviceMemory {
@@ -615,6 +613,25 @@ impl CudaMemoryManager {
             || self.pinned.contains_key(id)
         {
             return Err(MemoryError::DuplicateAllocation(id.to_owned()).into());
+        }
+        Ok(())
+    }
+
+    fn make_room_for_expert(
+        &mut self,
+        bytes: u64,
+        tick: u64,
+    ) -> Result<(), CudaMemoryError> {
+        self.poll_completed_transfers(tick)?;
+        // Plan both independent limits before freeing any allocation.
+        let expert_plan = self.policy.plan_expert_admission(bytes, tick)?;
+        let vram_plan = self.policy.plan_admission(MemoryTier::Vram, bytes, tick)?;
+        let mut evict_ids = expert_plan.evict_ids;
+        evict_ids.extend(vram_plan.evict_ids);
+        evict_ids.sort();
+        evict_ids.dedup();
+        for id in evict_ids {
+            self.release(&id, tick)?;
         }
         Ok(())
     }
