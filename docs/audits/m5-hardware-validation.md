@@ -57,7 +57,7 @@ La campagne M4/M5 générale a exécuté **24 tests matériels sur la RTX 5090 :
 | HW-C6 (3 tests) | Polling avant admission, déterminisme matériel LRU et comptabilité | 3 PASS |
 | HW-C7 (3 tests) | Répétition, polling rapproché et alternance transfert/éviction | 3 PASS |
 
-Les détails des procédures et sorties de ces 24 tests sont conservés dans le [rapport détaillé de la campagne M4/M5 sur la branche de validation](https://github.com/zenhit777/Claymore/blob/test/m4-m5-rtx5090-validation/docs/audits/m4-m5-rtx5090-hardware-validation.md). Le scénario HW-C6-01 existant attendait la complétion via `is_transfer_complete` avant de demander l'admission : il ne remplaçait donc pas le test ciblé demandé par la revue architecturale.
+Les détails des procédures et sorties de la campagne M4/M5 sont conservés dans le [rapport détaillé](m4-m5-rtx5090-hardware-validation.md). Le scénario HW-C6-01 existant attendait la complétion via `is_transfer_complete` avant de demander l'admission : il ne remplaçait donc pas le test ciblé demandé par la revue architecturale.
 
 ## 3. Scénario ciblé M5-HW-POLL-01 — preuve B1
 
