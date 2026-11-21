@@ -75,6 +75,12 @@ impl<D: Device> DeviceMemoryManager<D> {
             return Err(DeviceMemoryError::ExpertMustUseVram);
         }
 
+        if expert {
+            let expert_plan = self.policy.plan_expert_admission(bytes, tick)?;
+            for evict_id in expert_plan.evict_ids {
+                self.release_inner(&evict_id, tick)?;
+            }
+        }
         let plan = self.policy.plan_admission(tier, bytes, tick)?;
         for evict_id in plan.evict_ids {
             self.release_inner(&evict_id, tick)?;
@@ -153,6 +159,26 @@ impl<D: Device> DeviceMemoryManager<D> {
             .copy(source.as_ref(), destination.as_mut(), bytes)?;
         self.policy.touch(source_id, tick)?;
         self.policy.touch(destination_id, tick)?;
+        Ok(())
+    }
+
+    /// Mark an allocation as protected until the backend-reported logical tick.
+    /// This is the CPU/backend-neutral guard used by schedulers and executors;
+    /// callers must not advance the horizon until their operation is complete.
+    pub fn mark_in_flight_until(
+        &mut self,
+        id: &str,
+        safe_after_tick: u64,
+        tick: u64,
+    ) -> Result<(), DeviceMemoryError> {
+        self.advance_tick(tick)?;
+        if safe_after_tick < tick {
+            return Err(DeviceMemoryError::NonMonotonicTick {
+                previous: tick,
+                provided: safe_after_tick,
+            });
+        }
+        self.policy.mark_in_flight_until(id, safe_after_tick)?;
         Ok(())
     }
 
@@ -448,6 +474,37 @@ mod tests {
             Err(DeviceMemoryError::AliasedCopy)
         ));
         assert_eq!(manager.read("buffer", 0, 4, 4).unwrap(), [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn in_flight_guard_prevents_release_and_eviction_until_horizon() {
+        let mut manager =
+            DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
+        manager.allocate("protected", MemoryTier::Vram, 80, 1, true).unwrap();
+        manager.mark_in_flight_until("protected", 10, 2).unwrap();
+
+        assert!(matches!(
+            manager.release("protected", 9),
+            Err(DeviceMemoryError::Policy(MemoryError::AllocationBusy(_)))
+        ));
+        assert!(matches!(
+            manager.allocate("replacement", MemoryTier::Vram, 80, 9, false),
+            Err(DeviceMemoryError::Policy(MemoryError::InsufficientReclaimable { .. }))
+        ));
+
+        manager.release("protected", 10).unwrap();
+        manager.allocate("replacement", MemoryTier::Vram, 80, 11, false).unwrap();
+    }
+
+    #[test]
+    fn expert_cache_max_is_enforced_by_cpu_device_manager() {
+        let mut manager =
+            DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
+        manager.allocate("expert-a", MemoryTier::Vram, 60, 1, true).unwrap();
+        manager.allocate("expert-b", MemoryTier::Vram, 40, 2, true).unwrap();
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 40);
+        assert!(manager.allocation("expert-a").is_none());
+        assert!(manager.allocation("expert-b").is_some());
     }
 
     #[test]
