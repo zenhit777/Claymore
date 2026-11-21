@@ -6,6 +6,8 @@
 //! thread. A backend must return success only after the operation has reached
 //! the completion point required by its resource-lifetime contract (for CUDA,
 //! normally after observing the associated event).
+use std::time::Instant;
+
 use crate::{Scheduler, SchedulerError, TaskId, TaskKind, TaskSnapshot};
 
 /// Executes one scheduled task synchronously on the caller's thread.
@@ -26,19 +28,48 @@ pub enum ExecutionOutcome {
     Failed { task_id: TaskId, reason: String },
 }
 
+/// Cumulative wall-clock measurements for one owner-thread queue runner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QueueRunnerMetrics {
+    pub kind: TaskKind,
+    pub started: u64,
+    pub completed: u64,
+    pub failed: u64,
+    pub idle_polls: u64,
+    pub total_execution_ns: u64,
+    pub max_execution_ns: u64,
+}
+
 /// Drives one logical queue without creating threads or moving its executor.
 pub struct QueueRunner<E> {
     kind: TaskKind,
     executor: E,
+    metrics: QueueRunnerMetrics,
 }
 
 impl<E> QueueRunner<E> {
     pub fn new(kind: TaskKind, executor: E) -> Self {
-        Self { kind, executor }
+        Self {
+            kind,
+            executor,
+            metrics: QueueRunnerMetrics {
+                kind,
+                started: 0,
+                completed: 0,
+                failed: 0,
+                idle_polls: 0,
+                total_execution_ns: 0,
+                max_execution_ns: 0,
+            },
+        }
     }
 
     pub fn kind(&self) -> TaskKind {
         self.kind
+    }
+
+    pub fn metrics(&self) -> QueueRunnerMetrics {
+        self.metrics
     }
 
     pub fn executor(&self) -> &E {
@@ -62,16 +93,25 @@ impl<E: TaskExecutor> QueueRunner<E> {
         scheduler: &mut Scheduler,
     ) -> Result<ExecutionOutcome, SchedulerError> {
         let Some(task_id) = scheduler.start_next(self.kind) else {
+            self.metrics.idle_polls = self.metrics.idle_polls.saturating_add(1);
             return Ok(ExecutionOutcome::Idle);
         };
+        self.metrics.started = self.metrics.started.saturating_add(1);
         let snapshot = scheduler.task(task_id)?;
-        match self.executor.execute(&snapshot) {
+        let started_at = Instant::now();
+        let result = self.executor.execute(&snapshot);
+        let elapsed_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+        self.metrics.total_execution_ns = self.metrics.total_execution_ns.saturating_add(elapsed_ns);
+        self.metrics.max_execution_ns = self.metrics.max_execution_ns.max(elapsed_ns);
+        match result {
             Ok(()) => {
                 scheduler.complete(task_id)?;
+                self.metrics.completed = self.metrics.completed.saturating_add(1);
                 Ok(ExecutionOutcome::Completed(task_id))
             }
             Err(reason) => {
                 scheduler.fail(task_id)?;
+                self.metrics.failed = self.metrics.failed.saturating_add(1);
                 Ok(ExecutionOutcome::Failed { task_id, reason })
             }
         }
@@ -148,6 +188,21 @@ mod tests {
         );
         assert_eq!(scheduler.task(transfer).unwrap().state, TaskState::Failed);
         assert_eq!(scheduler.task(compute).unwrap().state, TaskState::Cancelled);
+    }
+
+    #[test]
+    fn queue_runner_metrics_are_scoped_to_its_logical_queue() {
+        let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
+        let task = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        let mut runner = QueueRunner::new(TaskKind::Transfer, RecordingExecutor::default());
+        assert_eq!(runner.run_one(&mut scheduler).unwrap(), ExecutionOutcome::Completed(task));
+        assert_eq!(runner.run_one(&mut scheduler).unwrap(), ExecutionOutcome::Idle);
+        let metrics = runner.metrics();
+        assert_eq!(metrics.kind, TaskKind::Transfer);
+        assert_eq!(metrics.started, 1);
+        assert_eq!(metrics.completed, 1);
+        assert_eq!(metrics.failed, 0);
+        assert_eq!(metrics.idle_polls, 1);
     }
 
     #[test]
