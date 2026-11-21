@@ -125,7 +125,11 @@ impl SchedulerConfig {
     }
 
     const fn prefetch_window(self) -> usize {
-        self.max_prefetches.saturating_add(self.lookahead)
+        if self.max_prefetches == 0 {
+            0
+        } else {
+            self.max_prefetches.saturating_add(self.lookahead)
+        }
     }
 }
 
@@ -544,6 +548,20 @@ mod tests {
             scheduler.complete(task),
             Err(SchedulerError::InvalidTransition { .. })
         ));
+    }
+
+    #[test]
+    fn zero_prefetch_concurrency_disables_prefetch_admission() {
+        let config = SchedulerConfig {
+            max_prefetches: 0,
+            lookahead: 3,
+            ..SchedulerConfig::default()
+        };
+        let mut scheduler = Scheduler::new(config).unwrap();
+        assert_eq!(
+            scheduler.submit(TaskSpec::new(TaskKind::Prefetch)),
+            Err(SchedulerError::PrefetchWindowFull { limit: 0 })
+        );
     }
 
     #[test]
