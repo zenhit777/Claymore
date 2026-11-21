@@ -56,11 +56,13 @@ pub use driver::CudaRuntime;
 #[cfg(feature = "cuda-driver")]
 pub use driver::{CudaDeviceBuffer, CudaDriver, CudaEvent, CudaStream, PinnedHostBuffer};
 
-#[cfg(all(test, not(feature = "cuda-driver")))]
+#[cfg(test)]
 mod tests {
+    #[cfg(not(feature = "cuda-driver"))]
     use super::*;
     #[test]
     fn disabled_backend_reports_actionable_error() {
+        #[cfg(not(feature = "cuda-driver"))]
         assert!(matches!(
             CudaRuntime::new(),
             Err(CudaError::FeatureDisabled)

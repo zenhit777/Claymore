@@ -1,10 +1,10 @@
 # Validation matérielle M4/M5 — NVIDIA RTX 5090
 
 **Date :** 2026-11-20  
-**Branche de validation :** `test/m4-m5-rtx5090-validation`  
+**Branche de validation d'origine :** `test/m4-m5-rtx5090-validation` (preuves et résultats conservés dans le présent rapport)  
 **Base :** `feat/m5-cuda-streams-eviction-hardening` @ `c465100202370d7b3246bb2cd656a435fbff4fc6`  
 **Base M4 (main au moment de l'audit) :** `b576a112725a245c657113786026fedf70ffa283` (`feat(m4): harden Device lifecycle and async completion contracts (#16)`)  
-**PR #17 :** ouverte, non fusionnée ; branche et PR non modifiées pendant cette campagne.  
+**État de PR #17 au début de la campagne (2026-11-20) :** ouverte, non fusionnée ; branche et PR non modifiées pendant cette campagne. La PR #17 a depuis été fusionnée dans `main` par le commit `29b138177bf8e90c9815d6b7bc03a2f261934bf0`.  
 **Périmètre :** contrats CUDA M4/M5 uniquement. Aucun framework tensoriel externe, aucun kernel, aucun benchmark généraliste, aucun travail M6.
 
 ---
@@ -289,7 +289,7 @@ Ces résultats ne sont **pas** comptés comme validation matérielle CUDA.
 1. Ajouter un point d'injection contrôlé, réservé aux tests, dans le wrapper CUDA (event/stream/free) afin de couvrir matériellement les chemins fail-closed sans handles synthétiques dangereux.
 2. Conserver la garde CI ajoutée : `cargo check ... --features cuda-driver --all-targets` empêche la réapparition de D1.
 3. Exécuter la campagne sur un runner Linux natif (pas WSL2/WDDM) pour rendre `compute-sanitizer` exploitable et vérifier les chemins de panne.
-4. Exécuter le job MSRV 1.86 ou installer la toolchain localement avant de clore la validation.
+4. Le job workspace MSRV 1.86 est exécuté par la CI ; la PR #18 ajoute également la compilation de toutes les cibles `cuda-driver` sur Rust 1.86 afin de couvrir les tests conditionnés par cette feature.
 5. Documenter dans `docs/wsl2.md` que `LD_LIBRARY_PATH=/usr/lib/wsl/lib` est nécessaire au runtime, en plus de `RUSTFLAGS` au linkage.
 6. Ne pas fusionner M5 sur la seule base de cette campagne si les chemins d'erreur backend sont considérés bloquants pour la release ; sinon, les contrats nominaux M4/M5 sont validés sur RTX 5090.
 

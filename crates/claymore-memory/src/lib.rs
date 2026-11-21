@@ -399,14 +399,22 @@ mod tests {
 
     #[test]
     fn equal_priority_evictions_use_lexicographic_allocation_id() {
-        let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
-        for id in ["gamma", "alpha", "beta"] {
-            manager.record_allocation(allocation(id, 30, 5, 0)).unwrap();
-        }
+        for policy in [
+            EvictionPolicy::Lru,
+            EvictionPolicy::Lfu,
+            EvictionPolicy::Adaptive,
+        ] {
+            let mut manager = MemoryOrchestrator::new(budgets(), policy).unwrap();
+            for id in ["gamma", "alpha", "beta"] {
+                manager.record_allocation(allocation(id, 30, 5, 0)).unwrap();
+            }
 
-        for _ in 0..32 {
-            let plan = manager.plan_admission(MemoryTier::Vram, 20, 5).unwrap();
-            assert_eq!(plan.evict_ids, vec!["alpha"]);
+            // A 50-byte admission needs two 30-byte victims. Equal policy
+            // scores must therefore use the stable ID tie-break for both.
+            for _ in 0..32 {
+                let plan = manager.plan_admission(MemoryTier::Vram, 50, 5).unwrap();
+                assert_eq!(plan.evict_ids, vec!["alpha", "beta"], "policy: {policy:?}");
+            }
         }
     }
 
