@@ -7,4 +7,7 @@ license.workspace = true
 
 [dependencies]
 thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+claymore-memory = { path = "../claymore-memory" }
 claymore-scheduler = { path = "../claymore-scheduler" }
