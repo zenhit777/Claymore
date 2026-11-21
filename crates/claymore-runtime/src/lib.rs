@@ -99,7 +99,7 @@ impl RequestState {
 /// Error returned by runtime construction or request admission.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum RuntimeError {
-    #[error("max_input_bytes must be greater than zero")]
+    #[error("max_payload_bytes must be greater than zero")]
     InvalidConfig,
     #[error("request payload is {actual_bytes} bytes; configured maximum is {max_bytes}")]
     InputTooLarge {
@@ -117,20 +117,20 @@ pub enum RuntimeError {
 /// Limits that can be enforced without knowing the model architecture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RuntimeConfig {
-    pub max_input_bytes: usize,
+    pub max_payload_bytes: usize,
 }
 
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
-            max_input_bytes: 1024 * 1024,
+            max_payload_bytes: 1024 * 1024,
         }
     }
 }
 
 impl RuntimeConfig {
     pub fn validate(self) -> Result<Self, RuntimeError> {
-        if self.max_input_bytes == 0 {
+        if self.max_payload_bytes == 0 {
             return Err(RuntimeError::InvalidConfig);
         }
         Ok(self)
@@ -251,15 +251,28 @@ impl<S: GenerationStrategy> Runtime<S> {
         &mut self.strategy
     }
 
+    /// Execute one request synchronously.
+    ///
+    /// The payload limit applies only to `RequestInput::payload`; metadata is
+    /// intentionally not included in the byte budget.
+    ///
+    /// Cancellation takes precedence over the strategy result. If cancellation
+    /// is observed after the strategy returns, the report is `Cancelled` and
+    /// any strategy error returned at the same time is discarded.
+    ///
+    /// A panic raised by the strategy is not caught: it unwinds through this
+    /// method after consuming the request ID and produces no execution report.
+    /// The caller must discard this runtime instance after such a panic because
+    /// the strategy may have been left in an unknown state.
     pub fn execute(
         &mut self,
         input: RequestInput,
         cancellation: CancellationToken,
     ) -> Result<ExecutionReport, RuntimeError> {
-        if input.payload.len() > self.config.max_input_bytes {
+        if input.payload.len() > self.config.max_payload_bytes {
             return Err(RuntimeError::InputTooLarge {
                 actual_bytes: input.payload.len(),
-                max_bytes: self.config.max_input_bytes,
+                max_bytes: self.config.max_payload_bytes,
             });
         }
 
@@ -306,7 +319,8 @@ impl<S: GenerationStrategy> Runtime<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
+    use std::rc::Rc;
 
     struct EchoStrategy;
 
@@ -422,6 +436,47 @@ mod tests {
         assert_eq!(report.error, Some(RuntimeError::Cancelled));
     }
 
+    struct CancelAndFailStrategy(CancellationToken);
+
+    impl GenerationStrategy for CancelAndFailStrategy {
+        fn execute(
+            &mut self,
+            _context: &mut ExecutionContext<'_>,
+            _input: &RequestInput,
+        ) -> Result<RequestOutput, String> {
+            self.0.cancel();
+            Err("failure concurrent with cancellation".to_owned())
+        }
+    }
+
+    struct ContextProbe(Rc<RefCell<Vec<(u64, BTreeMap<String, String>)>>>);
+
+    impl GenerationStrategy for ContextProbe {
+        fn execute(
+            &mut self,
+            context: &mut ExecutionContext<'_>,
+            _input: &RequestInput,
+        ) -> Result<RequestOutput, String> {
+            self.0.borrow_mut().push((
+                context.request_id().get(),
+                context.metadata().clone(),
+            ));
+            Ok(RequestOutput::new([]))
+        }
+    }
+
+    struct PanickingStrategy;
+
+    impl GenerationStrategy for PanickingStrategy {
+        fn execute(
+            &mut self,
+            _context: &mut ExecutionContext<'_>,
+            _input: &RequestInput,
+        ) -> Result<RequestOutput, String> {
+            panic!("synthetic strategy panic");
+        }
+    }
+
     #[test]
     fn strategy_failure_is_reported_as_failed_request() {
         let mut runtime = Runtime::new(RuntimeConfig::default(), FailingStrategy).unwrap();
@@ -439,7 +494,7 @@ mod tests {
 
     #[test]
     fn oversized_input_is_rejected_before_request_id_is_consumed() {
-        let config = RuntimeConfig { max_input_bytes: 2 };
+        let config = RuntimeConfig { max_payload_bytes: 2 };
         let mut runtime = Runtime::new(config, EchoStrategy).unwrap();
         assert_eq!(
             runtime.execute(RequestInput::new([1, 2, 3]), CancellationToken::new()),
@@ -455,9 +510,81 @@ mod tests {
     }
 
     #[test]
+    fn strategy_receives_its_own_request_id_and_metadata() {
+        let observed = Rc::new(RefCell::new(Vec::new()));
+        let mut runtime = Runtime::new(
+            RuntimeConfig::default(),
+            ContextProbe(observed.clone()),
+        )
+        .unwrap();
+
+        runtime
+            .execute(
+                RequestInput::new([1]).with_metadata("trace", "first"),
+                CancellationToken::new(),
+            )
+            .unwrap();
+        runtime
+            .execute(
+                RequestInput::new([2]).with_metadata("trace", "second"),
+                CancellationToken::new(),
+            )
+            .unwrap();
+
+        assert_eq!(
+            *observed.borrow(),
+            vec![
+                (1, BTreeMap::from([("trace".to_owned(), "first".to_owned())])),
+                (2, BTreeMap::from([("trace".to_owned(), "second".to_owned())])),
+            ]
+        );
+    }
+
+    #[test]
+    fn cancellation_takes_precedence_over_a_simultaneous_strategy_error() {
+        let token = CancellationToken::new();
+        let mut runtime = Runtime::new(
+            RuntimeConfig::default(),
+            CancelAndFailStrategy(token.clone()),
+        )
+        .unwrap();
+
+        let report = runtime
+            .execute(RequestInput::new([1]), token)
+            .unwrap();
+
+        assert_eq!(report.state, RequestState::Cancelled);
+        assert_eq!(report.error, Some(RuntimeError::Cancelled));
+        assert_eq!(report.output, None);
+    }
+
+    #[test]
+    fn strategy_panic_propagates_and_consumes_the_request_id() {
+        let mut runtime =
+            Runtime::new(RuntimeConfig::default(), PanickingStrategy).unwrap();
+        let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = runtime.execute(RequestInput::new([1]), CancellationToken::new());
+        }));
+        assert!(panic.is_err());
+        assert_eq!(runtime.next_request_id, 2);
+    }
+
+    #[test]
+    fn request_id_exhaustion_is_reported_without_wrapping() {
+        let mut runtime = Runtime::new(RuntimeConfig::default(), EchoStrategy).unwrap();
+        runtime.next_request_id = u64::MAX;
+
+        assert_eq!(
+            runtime.execute(RequestInput::new([1]), CancellationToken::new()),
+            Err(RuntimeError::RequestIdExhausted)
+        );
+        assert_eq!(runtime.next_request_id, u64::MAX);
+    }
+
+    #[test]
     fn invalid_runtime_configuration_is_rejected() {
         assert!(matches!(
-            Runtime::new(RuntimeConfig { max_input_bytes: 0 }, EchoStrategy),
+            Runtime::new(RuntimeConfig { max_payload_bytes: 0 }, EchoStrategy),
             Err(RuntimeError::InvalidConfig)
         ));
     }
