@@ -32,6 +32,10 @@ pub enum DeviceMemoryError {
     ExpertMustUseVram,
     #[error("source and destination allocations must be distinct")]
     AliasedCopy,
+    #[error("completion horizon {safe_after_tick} precedes current tick {current_tick}")]
+    InvalidCompletionHorizon { current_tick: u64, safe_after_tick: u64 },
+    #[error("completion horizon regressed from {previous} to {provided}")]
+    CompletionHorizonRegression { previous: u64, provided: u64 },
 }
 
 impl<D: Device> DeviceMemoryManager<D> {
@@ -173,8 +177,17 @@ impl<D: Device> DeviceMemoryManager<D> {
     ) -> Result<(), DeviceMemoryError> {
         self.advance_tick(tick)?;
         if safe_after_tick < tick {
-            return Err(DeviceMemoryError::NonMonotonicTick {
-                previous: tick,
+            return Err(DeviceMemoryError::InvalidCompletionHorizon {
+                current_tick: tick,
+                safe_after_tick,
+            });
+        }
+        let previous = self.policy.allocation(id)
+            .ok_or_else(|| DeviceMemoryError::UnknownAllocation(id.to_owned()))?
+            .safe_after_tick;
+        if safe_after_tick < previous {
+            return Err(DeviceMemoryError::CompletionHorizonRegression {
+                previous,
                 provided: safe_after_tick,
             });
         }
@@ -505,6 +518,28 @@ mod tests {
         assert_eq!(manager.usage_bytes(MemoryTier::Vram), 40);
         assert!(manager.allocation("expert-a").is_none());
         assert!(manager.allocation("expert-b").is_some());
+    }
+
+    #[test]
+    fn completion_horizon_cannot_be_moved_backwards() {
+        let mut manager =
+            DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
+        manager.allocate("guarded", MemoryTier::Host, 8, 1, false).unwrap();
+        manager.mark_in_flight_until("guarded", 10, 2).unwrap();
+        assert!(matches!(
+            manager.mark_in_flight_until("guarded", 8, 3),
+            Err(DeviceMemoryError::CompletionHorizonRegression {
+                previous: 10,
+                provided: 8
+            })
+        ));
+        assert!(matches!(
+            manager.mark_in_flight_until("guarded", 2, 3),
+            Err(DeviceMemoryError::InvalidCompletionHorizon {
+                current_tick: 3,
+                safe_after_tick: 2
+            })
+        ));
     }
 
     #[test]
