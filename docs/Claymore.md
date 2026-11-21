@@ -327,7 +327,7 @@ Le contrat `CompletionToken` et la méthode `Device::copy_async` sont définis, 
 
 #### M5 — Robustesse CUDA (PR #17 en revue)
 
-La PR #17 ajoute le stream de transfert `CU_STREAM_NON_BLOCKING`, `poll_completed_transfers`, la finalisation des événements terminés avant admission/éviction et le départage déterministe des évictions. La validation nominale M4/M5 a été exécutée sur RTX 5090 ; le scénario ciblé qui démontre la retraite explicite par polling puis l'éviction sans attente est ajouté dans la PR et doit être exécuté sur la cible avant merge. L'injection de fautes backend est différée dans l'issue #19.
+La PR #17 ajoute le stream de transfert `CU_STREAM_NON_BLOCKING`, `poll_completed_transfers`, la finalisation des événements terminés avant admission/éviction et le départage déterministe des évictions. La campagne générale RTX 5090 a réussi (24/24) et le scénario ciblé M5-HW-POLL-01 a également réussi au SHA `c7d81f4ded02411ae2054d8e07786ae1f468b499` : polling direct jusqu'à `retired == 1`, puis admission sous pression avec éviction effective sans attente explicite de complétion. La preuve versionnée figure dans `docs/audits/m5-hardware-validation.md`. L'injection de fautes backend reste différée dans l'issue #19. La PR attend la revalidation architecturale et la fusion.
 
 ### 7.1 Livré sur main
 
@@ -525,7 +525,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M2 | Abstractions Device / Tensor | Livré par la PR #6 |
 | M3 | Durcissement des fondations Device (issues #7 à #10) | Livré par la PR #15 |
 | M4 | Contrat Device et sûreté mémoire (issues #11 et #12) | Livré par la PR #16 |
-| M5 | Robustesse et validation CUDA (issue #13) | En revue dans la PR #17 ; validation nominale RTX 5090 documentée, scénario ciblé poll → éviction à exécuter avant merge |
+| M5 | Robustesse et validation CUDA (issue #13) | Implémentation et validation matérielle livrées dans la PR #17 (B1 PASS sur RTX 5090) ; revalidation architecturale et fusion en attente |
 | M6 | Runtime unifié | Planifié |
 | M7 | Scheduler et orchestration mémoire | Planifié |
 | M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
