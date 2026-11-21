@@ -62,6 +62,18 @@ impl<D: Device> DeviceMemoryManager<D> {
         self.policy.allocation(id)
     }
 
+    /// Store an observed/estimated reload cost for adaptive eviction.
+    pub fn record_reload_cost(
+        &mut self,
+        id: &str,
+        cost_ns: u64,
+        tick: u64,
+    ) -> Result<(), DeviceMemoryError> {
+        self.advance_tick(tick)?;
+        self.policy.record_reload_cost(id, cost_ns)?;
+        Ok(())
+    }
+
     pub fn allocate(
         &mut self,
         id: impl Into<String>,
