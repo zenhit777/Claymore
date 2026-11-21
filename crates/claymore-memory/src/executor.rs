@@ -302,7 +302,12 @@ mod tests {
 
     #[test]
     fn executor_rejects_compute_queue_without_consuming_operation() {
-        let manager = DeviceMemoryManager::new(CpuDevice::new(), budgets(), crate::EvictionPolicy::Lru).unwrap();
+        let manager = DeviceMemoryManager::new(
+            CpuDevice::new(),
+            budgets(),
+            crate::EvictionPolicy::Lru,
+        )
+        .unwrap();
         let mut executor = MemoryTaskExecutor::new(manager);
         let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
         let task = scheduler.submit(TaskSpec::new(TaskKind::Compute)).unwrap();
