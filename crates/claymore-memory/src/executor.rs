@@ -117,7 +117,9 @@ impl<D: Device> MemoryTaskExecutor<D> {
     }
 
     fn next_tick(&mut self) -> Result<u64, MemoryTaskExecutorError> {
-        self.logical_tick = self.logical_tick.checked_add(1)
+        self.logical_tick = self
+            .logical_tick
+            .checked_add(1)
             .ok_or(MemoryTaskExecutorError::TickExhausted)?;
         Ok(self.logical_tick)
     }
@@ -270,7 +272,12 @@ mod tests {
 
     #[test]
     fn memory_executor_reports_operation_counts_and_bytes() {
-        let manager = DeviceMemoryManager::new(CpuDevice::new(), budgets(), crate::EvictionPolicy::Lru).unwrap();
+        let manager = DeviceMemoryManager::new(
+            CpuDevice::new(),
+            budgets(),
+            crate::EvictionPolicy::Lru,
+        )
+        .unwrap();
         let mut executor = MemoryTaskExecutor::new(manager);
         let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
         let allocate = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
