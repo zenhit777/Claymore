@@ -166,6 +166,18 @@ impl CudaMemoryManager {
         self.policy.usage_bytes(tier)
     }
 
+    /// Store an observed/estimated reload cost for adaptive eviction.
+    pub fn record_reload_cost(
+        &mut self,
+        id: &str,
+        cost_ns: u64,
+        tick: u64,
+    ) -> Result<(), CudaMemoryError> {
+        self.advance_tick(tick)?;
+        self.policy.record_reload_cost(id, cost_ns)?;
+        Ok(())
+    }
+
     pub fn allocate_device(
         &mut self,
         id: impl Into<String>,
