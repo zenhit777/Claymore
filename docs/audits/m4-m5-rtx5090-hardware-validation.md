@@ -1,7 +1,7 @@
 # Validation matérielle M4/M5 — NVIDIA RTX 5090
 
-**Date :** 2026-11-20  
-**Branche de validation d'origine :** `test/m4-m5-rtx5090-validation` (preuves et résultats conservés dans le présent rapport)  
+**Date de campagne initiale :** 2026-11-20  
+**Branche de validation d'origine :** conservée uniquement comme contexte historique ; la procédure reproductible utilise un SHA immuable.  
 **Base :** `feat/m5-cuda-streams-eviction-hardening` @ `c465100202370d7b3246bb2cd656a435fbff4fc6`  
 **Base M4 (main au moment de l'audit) :** `b576a112725a245c657113786026fedf70ffa283` (`feat(m4): harden Device lifecycle and async completion contracts (#16)`)  
 **État de PR #17 au début de la campagne (2026-11-20) :** ouverte, non fusionnée ; branche et PR non modifiées pendant cette campagne. La PR #17 a depuis été fusionnée dans `main` par le commit `29b138177bf8e90c9815d6b7bc03a2f261934bf0`.  
@@ -166,36 +166,38 @@ cargo test -p claymore-cuda --features cuda-driver -- --ignored --nocapture --te
 cargo test -p claymore-memory --features cuda-driver -- --ignored --nocapture --test-threads=1
 ```
 
-### 3.3 Résultats — 24 tests exécutés sur RTX 5090
+### 3.3 Résultats — campagne matérielle initiale (24 tests, exécutée sur la base antérieure)
+
+> Cette campagne historique ne valide pas le code final après la PR #17. La campagne de revalidation B1 sur le SHA final de la PR #18 doit être consignée dans la section 3.6 ci-dessous ; aucun résultat antérieur ne doit être présenté comme preuve du code final.
 
 Tous les tests ci-dessous ont réellement été exécutés sur la RTX 5090 avec le pilote NVIDIA. Durées de suite observées : `claymore-cuda` unitaires 0,61 s + intégration 0,70 s ; test M5 existant 0,24 s ; intégration `claymore-memory` 23,56 s (23,43–23,75 s sur trois exécutions).
 
-| ID | Contrat vérifié | Procédure | Résultat | Preuve / sortie | Limitation |
+| ID | Fonction de test | Contrat vérifié | Procédure | Résultat | Preuve / sortie | Limitation |
 |---|---|---|---|---|---|
-| HW-C1-01 | Initialisation CUDA, contexte primaire, inventaire | `CudaDriver::new(0)`, `memory_info`, second handle, ordinal invalide | **PASS** | `device=NVIDIA GeForce RTX 5090 cc=12.0 total=34162016256 free=32429309952` ; handles partagent le contexte ; ordinal 99 rejeté | GPU partagé avec l'affichage |
-| HW-C1-02 | Création/destruction streams et events | 64 streams + 64 events, synchronisation de chacun | **PASS** | `created/destroyed 64 streams and 64 events` | Aucune |
-| HW-C1-03 | Flag `CU_STREAM_NON_BLOCKING` | `cuStreamGetFlags` sur le stream créé par Claymore + 32 streams supplémentaires | **PASS** | `flags & 0x1 == 0x1` pour tous | Vérifie le flag rapporté par le pilote ; pas de test temporel séparé du legacy default stream |
-| HW-C1-04 | Interopérabilité de contexte et transfert asynchrone | Buffers alloués par un handle, stream créé par un second handle, H2D + D2H 1 MiB | **PASS** | `verified 1048576 bytes across two driver handles` | Aucune |
-| HW-C1-05 | Synchronisation explicite du stream | H2D 64 MiB, event, `cuStreamSynchronize`, query | **PASS** | Event complété après synchronisation | Aucune |
-| HW-C1-06 | Smoke test M5 existant | `cuda_manager_reports_device_memory`, conservé | **PASS** | Test existant vert en 0,24 s | Petit transfert uniquement |
-| HW-C2-01 | Libération explicite et double libération | Allocations 1 B, 37 B, 4 KiB, 1 MiB ; `free()` deux fois ; copie après libération | **PASS** | Double free = no-op ; copie après free renvoie `Driver { operation: "cuMemcpyHtoDAsync_v2", code != 0 }` | L'erreur de copie est une erreur d'enqueue, pas une erreur DMA asynchrone |
-| HW-C2-02 | Allocation device/pinned et libération | 1 B à 64 MiB, pinned 4 KiB, free explicite | **PASS** | Toutes tailles allouées/libérées sans erreur | Aucune |
-| HW-C2-03 | Rejet zéro, dépassement, bornes | `allocate(0)`, `allocate_pinned(0)`, `allocate(u64::MAX)`, copies hors bornes | **PASS** | Zéro rejeté ; `u64::MAX` rejeté par `cuMemAlloc_v2` ; `BufferTooSmall` avant tout appel DMA | `SizeOverflow` non atteignable en 64 bits |
-| HW-C2-04 | Libération manager, comptabilité, accès après libération | Allocations, H2D, release, double release, copies vers allocation libérée, doublon, zéro | **PASS** | Comptage VRAM/pinned cohérent ; `UnknownAllocation` après release ; `DuplicateAllocation` | L'échec réel de `cuMemFree` n'est pas injecté (voir HW-C2-05) |
-| HW-C3-01 | Transferts H2D/D2H de tailles variées, intégrité octet par octet | 1 B, 37 B, 4 KiB, 1 MiB, 64 MiB ; motif déterministe ; clear puis D2H | **PASS** | `size=1/37/4096/1048576/67108864 byte_exact=yes` | Taille maximale 64 MiB pour ce test |
-| HW-C3-02 | Transferts successifs sur plusieurs allocations | 2 paires pinned/device, H2D enchaînés, D2H enchaînés, vérification | **PASS** | Deux motifs distincts vérifiés après D2H | Aucune |
-| HW-C4-01 | Token, polling non bloquant, états pending/completed, wait | 8 H2D de 256 MiB enchaînés, query immédiat, poll, wait, re-poll, D2H | **PASS** | `retired=0/8 before wait` ; dernier token NON_READY ; après wait tous complétés ; poll final = 0 | Le nombre d'events retirés par un poll immédiat peut varier ; le test exige `< 8` |
-| HW-C4-02 | `wait_for_allocation` ciblé | Petit transfert et transfert 256 MiB en parallèle ; wait sur la petite allocation | **PASS** | Le petit token est complété ; le gros reste pending ; wait ciblé sur le gros le complète | Aucune |
-| HW-C4-03 | Tokens liés à leur manager | Token du manager A présenté au manager B | **PASS** | `UnknownTransferToken` pour query et wait | Aucune |
-| HW-C5-01 | Protection d'une allocation en vol | 8 H2D de 512 MiB sur une allocation occupant tout le budget ; admission 64 MiB | **PASS** | Admission refusée (`InsufficientReclaimable`), `retired=0/8`, comptage inchangé ; admission réussie après wait | Budget logique contrôlé par le test, pas de saturation GPU globale |
-| HW-C5-02 | Protection partagée entre plusieurs transferts | Transfert A + 8 transferts B vers la même allocation ; wait sur A seulement | **PASS** | L'allocation reste protégée par les events B ; éviction possible seulement après wait sur l'allocation | Aucune |
-| HW-C5-03 | Exclusion des allocations protégées du plan d'éviction | Deux allocations de 512 KiB, 8 transferts sur `protected`, admission d'une troisième | **PASS** | `candidate` évincée, `protected` survit et est libérable ensuite | Aucune |
-| HW-C6-01 | Polling avant planification d'éviction | Victime 768 KiB, petit transfert, attente de complétion par query, admission 512 KiB | **PASS** | Éviction après 41 queries ; comptage 768 KiB → 512 KiB | Le test utilise une boucle de query/yield, pas un sleep arbitraire |
-| HW-C6-02 | Départage déterministe à priorité égale | 3 allocations 1 MiB au même tick, admission 1 MiB, 12 rounds | **PASS** | `alpha` évincé 12/12 | Politique LRU testée ; LFU/Adaptive couverts par tests logiciels |
-| HW-C6-03 | Comptabilité et erreurs d'admission | Allocations 1 MiB + 512 KiB, doublon, requête 3 MiB, release, release inconnue | **PASS** | Comptage 1536 KiB → 512 KiB → 0 ; `RequestTooLarge`, `DuplicateAllocation`, `UnknownAllocation` | Aucune |
-| HW-C7-01 | Répétition allocations/transferts/libérations | 128 cycles H2D + clear + D2H 64 KiB avec vérification | **PASS** | `128 H2D/D2H cycles verified in 100.85 ms` | Aucune |
-| HW-C7-02 | Polling rapproché et idempotence | 8 transferts 64 KiB, 1000 polls + queries par token, puis wait | **PASS** | `1000 polls, retired_total=8/8, state stayed coherent` ; poll final = 0 | Aucune |
-| HW-C7-03 | Alternance transfert/éviction | 16 rounds : allocation 768 KiB, H2D, wait, allocation 512 KiB forçant l'éviction | **PASS** | 16 alternances, comptage final 0 | Aucune |
+| HW-C1-01 | `hw_c1_01_driver_initializes_primary_context` | Initialisation CUDA, contexte primaire, inventaire | `CudaDriver::new(0)`, `memory_info`, second handle, ordinal invalide | **PASS** | `device=NVIDIA GeForce RTX 5090 cc=12.0 total=34162016256 free=32429309952` ; handles partagent le contexte ; ordinal 99 rejeté | GPU partagé avec l'affichage |
+| HW-C1-02 | `hw_c1_02_stream_and_event_lifecycle` | Création/destruction streams et events | 64 streams + 64 events, synchronisation de chacun | **PASS** | `created/destroyed 64 streams and 64 events` | Aucune |
+| HW-C1-03 | `hardware_streams_are_explicitly_non_blocking` | Flag `CU_STREAM_NON_BLOCKING` | `cuStreamGetFlags` sur le stream créé par Claymore + 32 streams supplémentaires | **PASS** | `flags & 0x1 == 0x1` pour tous | Vérifie le flag rapporté par le pilote ; pas de test temporel séparé du legacy default stream |
+| HW-C1-04 | `hw_c1_03_context_interop_and_async_round_trip` | Interopérabilité de contexte et transfert asynchrone | Buffers alloués par un handle, stream créé par un second handle, H2D + D2H 1 MiB | **PASS** | `verified 1048576 bytes across two driver handles` | Aucune |
+| HW-C1-05 | `hardware_stream_synchronize_completes_async_copy` | Synchronisation explicite du stream | H2D 64 MiB, event, `cuStreamSynchronize`, query | **PASS** | Event complété après synchronisation | Aucune |
+| HW-C1-06 | `cuda_manager_reports_device_memory` | Smoke test M5 existant | `cuda_manager_reports_device_memory`, conservé | **PASS** | Test existant vert en 0,24 s | Petit transfert uniquement |
+| HW-C2-01 | `hardware_device_buffer_free_is_explicit_and_idempotent` | Libération explicite et double libération | Allocations 1 B, 37 B, 4 KiB, 1 MiB ; `free()` deux fois ; copie après libération | **PASS** | Double free = no-op ; copie après free renvoie `Driver { operation: "cuMemcpyHtoDAsync_v2", code != 0 }` | L'erreur de copie est une erreur d'enqueue, pas une erreur DMA asynchrone |
+| HW-C2-02 | `hw_c2_01_allocation_sizes_and_explicit_free` | Allocation device/pinned et libération | 1 B à 64 MiB, pinned 4 KiB, free explicite | **PASS** | Toutes tailles allouées/libérées sans erreur | Aucune |
+| HW-C2-03 | `hw_c2_02_zero_size_and_bounds_are_rejected` | Rejet zéro, dépassement, bornes | `allocate(0)`, `allocate_pinned(0)`, `allocate(u64::MAX)`, copies hors bornes | **PASS** | Zéro rejeté ; `u64::MAX` rejeté par `cuMemAlloc_v2` ; `BufferTooSmall` avant tout appel DMA | `SizeOverflow` non atteignable en 64 bits |
+| HW-C2-04 | `hw_c2_03_manager_release_semantics` | Libération manager, comptabilité, accès après libération | Allocations, H2D, release, double release, copies vers allocation libérée, doublon, zéro | **PASS** | Comptage VRAM/pinned cohérent ; `UnknownAllocation` après release ; `DuplicateAllocation` | L'échec réel de `cuMemFree` n'est pas injecté (voir HW-C2-05) |
+| HW-C3-01 | `hw_c3_01_transfer_sizes_are_byte_exact` | Transferts H2D/D2H de tailles variées, intégrité octet par octet | 1 B, 37 B, 4 KiB, 1 MiB, 64 MiB ; motif déterministe ; clear puis D2H | **PASS** | `size=1/37/4096/1048576/67108864 byte_exact=yes` | Taille maximale 64 MiB pour ce test |
+| HW-C3-02 | `hw_c3_02_multiple_allocations_and_successive_transfers` | Transferts successifs sur plusieurs allocations | 2 paires pinned/device, H2D enchaînés, D2H enchaînés, vérification | **PASS** | Deux motifs distincts vérifiés après D2H | Aucune |
+| HW-C4-01 | `hw_c4_01_nonblocking_polling_and_completion` | Token, polling non bloquant, états pending/completed, wait | 8 H2D de 256 MiB enchaînés, query immédiat, poll, wait, re-poll, D2H | **PASS** | `retired=0/8 before wait` ; dernier token NON_READY ; après wait tous complétés ; poll final = 0 | Le nombre d'events retirés par un poll immédiat peut varier ; le test exige `< 8` |
+| HW-C4-02 | `hw_c4_02_wait_for_allocation_is_scoped` | `wait_for_allocation` ciblé | Petit transfert et transfert 256 MiB en parallèle ; wait sur la petite allocation | **PASS** | Le petit token est complété ; le gros reste pending ; wait ciblé sur le gros le complète | Aucune |
+| HW-C4-03 | `hw_c4_03_tokens_are_manager_scoped` | Tokens liés à leur manager | Token du manager A présenté au manager B | **PASS** | `UnknownTransferToken` pour query et wait | Aucune |
+| HW-C5-01 | `hw_c5_01_in_flight_allocation_cannot_be_evicted` | Protection d'une allocation en vol | 8 H2D de 512 MiB sur une allocation occupant tout le budget ; admission 64 MiB | **PASS** | Admission refusée (`InsufficientReclaimable`), `retired=0/8`, comptage inchangé ; admission réussie après wait | Budget logique contrôlé par le test, pas de saturation GPU globale |
+| HW-C5-02 | `hw_c5_02_shared_allocation_stays_protected_by_remaining_transfer` | Protection partagée entre plusieurs transferts | Transfert A + 8 transferts B vers la même allocation ; wait sur A seulement | **PASS** | L'allocation reste protégée par les events B ; éviction possible seulement après wait sur l'allocation | Aucune |
+| HW-C5-03 | `hw_c5_03_eviction_skips_protected_candidate` | Exclusion des allocations protégées du plan d'éviction | Deux allocations de 512 KiB, 8 transferts sur `protected`, admission d'une troisième | **PASS** | `candidate` évincée, `protected` survit et est libérable ensuite | Aucune |
+| HW-C6-01 | `hw_c6_01_polling_precedes_eviction_planning` | Polling avant planification d'éviction | Victime 768 KiB, petit transfert, attente de complétion par query, admission 512 KiB | **PASS** | Éviction après 41 queries ; comptage 768 KiB → 512 KiB | Le test utilise une boucle de query/yield, pas un sleep arbitraire |
+| HW-C6-02 | `hw_c6_02_equal_priority_eviction_is_deterministic` | Départage déterministe à priorité égale | 3 allocations 1 MiB au même tick, admission 1 MiB, 12 rounds | **PASS** | `alpha` évincé 12/12 | Politique LRU testée ; LFU/Adaptive couverts par tests logiciels |
+| HW-C6-03 | `hw_c6_03_accounting_and_admission_errors` | Comptabilité et erreurs d'admission | Allocations 1 MiB + 512 KiB, doublon, requête 3 MiB, release, release inconnue | **PASS** | Comptage 1536 KiB → 512 KiB → 0 ; `RequestTooLarge`, `DuplicateAllocation`, `UnknownAllocation` | Aucune |
+| HW-C7-01 | `hw_c7_01_repeated_allocate_transfer_free_cycles` | Répétition allocations/transferts/libérations | 128 cycles H2D + clear + D2H 64 KiB avec vérification | **PASS** | `128 H2D/D2H cycles verified in 100.85 ms` | Aucune |
+| HW-C7-02 | `hw_c7_02_tight_polling_is_idempotent` | Polling rapproché et idempotence | 8 transferts 64 KiB, 1000 polls + queries par token, puis wait | **PASS** | `1000 polls, retired_total=8/8, state stayed coherent` ; poll final = 0 | Aucune |
+| HW-C7-03 | `hw_c7_03_transfer_and_eviction_alternation` | Alternance transfert/éviction | 16 rounds : allocation 768 KiB, H2D, wait, allocation 512 KiB forçant l'éviction | **PASS** | 16 alternances, comptage final 0 | Aucune |
 
 **Synthèse : 24/24 tests matériels PASS, 0 FAIL.**
 
@@ -203,11 +205,11 @@ Tous les tests ci-dessous ont réellement été exécutés sur la RTX 5090 avec 
 
 | ID | Contrat visé | Statut | Raison et couverture de substitution |
 |---|---|---|---|
-| HW-C1-07 | Propagation d'une vraie erreur `cuStreamSynchronize` | **BLOCKED** | Aucun moyen sûr de provoquer une erreur de synchronisation DMA sur le pilote réel. L'injection de handles synthétiques a provoqué un SIGSEGV dans la sonde ; `0x1` est `CU_STREAM_LEGACY`, pas un handle invalide. Les handles d'un contexte privé sont acceptés par ce pilote. La conversion d'erreur est couverte par le test logiciel `stream_synchronization_driver_errors_are_propagated`. |
-| HW-C2-05 | Échec réel de `cuMemFree` et conservation de l'allocation | **BLOCKED** | Libérer un buffer avec du travail en vol est une utilisation indéfinie du pilote ; aucun échec fiable et sûr n'a pu être produit. Le contrat générique est couvert par `device::tests::failed_backend_release_keeps_buffer_and_accounting_for_retry` (fake backend), exécuté avec succès. Le chemin CUDA `release()` n'a pas été exercé en échec sur matériel. |
-| HW-C4-04 | Erreur `cuEventQuery` et état du manager | **BLOCKED** | Même limitation : pas d'injection sûre d'une erreur d'event sur le pilote réel. La traduction `CUDA_ERROR_NOT_READY`/erreur est couverte par `event_query_distinguishes_complete_pending_and_driver_failure`. |
-| HW-C5-04 | Erreur de polling sans corruption de l'état | **BLOCKED** | Dépend de HW-C4-04. Les invariants de non-mutation avant retrait sont couverts par inspection du code et par les tests logiciels de mapping ; aucun test matériel d'erreur n'est possible. |
-| HW-C6-04 | `compute-sanitizer` memcheck | **BLOCKED** | Sous WSL2/WDDM : `Failed to initialize WDDM debugger interface` et `Device not supported`. Le test a tourné sans instrumentation ; aucun résultat sanitizer exploitable. |
+| HW-C1-07 | `À compléter` | Propagation d'une vraie erreur `cuStreamSynchronize` | **BLOCKED** | Aucun moyen sûr de provoquer une erreur de synchronisation DMA sur le pilote réel. L'injection de handles synthétiques a provoqué un SIGSEGV dans la sonde ; `0x1` est `CU_STREAM_LEGACY`, pas un handle invalide. Les handles d'un contexte privé sont acceptés par ce pilote. La conversion d'erreur est couverte par le test logiciel `stream_synchronization_driver_errors_are_propagated`. |
+| HW-C2-05 | `À compléter` | Échec réel de `cuMemFree` et conservation de l'allocation | **BLOCKED** | Libérer un buffer avec du travail en vol est une utilisation indéfinie du pilote ; aucun échec fiable et sûr n'a pu être produit. Le contrat générique est couvert par `device::tests::failed_backend_release_keeps_buffer_and_accounting_for_retry` (fake backend), exécuté avec succès. Le chemin CUDA `release()` n'a pas été exercé en échec sur matériel. |
+| HW-C4-04 | `À compléter` | Erreur `cuEventQuery` et état du manager | **BLOCKED** | Même limitation : pas d'injection sûre d'une erreur d'event sur le pilote réel. La traduction `CUDA_ERROR_NOT_READY`/erreur est couverte par `event_query_distinguishes_complete_pending_and_driver_failure`. |
+| HW-C5-04 | `À compléter` | Erreur de polling sans corruption de l'état | **BLOCKED** | Dépend de HW-C4-04. Les invariants de non-mutation avant retrait sont couverts par inspection du code et par les tests logiciels de mapping ; aucun test matériel d'erreur n'est possible. |
+| HW-C6-04 | `À compléter` | `compute-sanitizer` memcheck | **BLOCKED** | Sous WSL2/WDDM : `Failed to initialize WDDM debugger interface` et `Device not supported`. Le test a tourné sans instrumentation ; aucun résultat sanitizer exploitable. |
 
 ### 3.5 Validation logicielle (hors matériel)
 
@@ -222,8 +224,8 @@ Ces résultats ne sont **pas** comptés comme validation matérielle CUDA.
 | `cargo check -p claymore-cuda --features cuda-driver --all-targets` | PASS (sans linkage GPU) |
 | `cargo check -p claymore-memory --features cuda-driver --all-targets` | PASS (sans linkage GPU) |
 | `cargo check -p claymore-memory --features cuda-driver` et `claymore-cli` | PASS |
-| `cargo test -p claymore-cuda --features cuda-driver --lib` | PASS — 4 tests, 3 ignorés |
-| `cargo test -p claymore-memory --features cuda-driver --lib` | PASS — 22 tests, 1 ignoré |
+| `cargo test -p claymore-cuda --features cuda-driver --lib` | PASS — 5 tests réussis, 3 ignorés (comptage vérifié par la revue architecturale) |
+| `cargo test -p claymore-memory --features cuda-driver --lib` | PASS — 22 tests réussis, 2 ignorés (comptage vérifié par la revue architecturale) |
 | `device::tests::failed_backend_release_keeps_buffer_and_accounting_for_retry` | PASS (injection fake) |
 | MSRV Rust 1.86 | **NOT RUN** localement (toolchain non installée) ; le job CI `msrv` reste la référence |
 
@@ -312,7 +314,7 @@ Justification :
 ## 6. Reproductibilité
 
 ```bash
-git switch test/m4-m5-rtx5090-validation
+git checkout <SHA_VALIDATED_CODE>
 
 export RUSTFLAGS="-L native=/usr/lib/wsl/lib"
 export LD_LIBRARY_PATH=/usr/lib/wsl/lib
@@ -333,3 +335,21 @@ cargo check -p claymore-memory --features cuda-driver --all-targets
 ```
 
 Les tests sont isolés par un mutex GPU dans chaque binaire et doivent être lancés avec `--test-threads=1` pour garantir l'absence de compétition entre contextes/streams de tests.
+
+
+### 3.6 Revalidation B1 sur le code final de la PR #18
+
+**Statut : EN ATTENTE — ne pas assimiler la campagne historique ci-dessus à une validation du code final.**
+
+La campagne doit être exécutée après les corrections B2/B3, sur le SHA exact du code final indiqué ci-dessous. Elle couvre les tests ignorés des deux crates, y compris les tests matériels unitaires, d'intégration et les deux tests matériels du module mémoire.
+
+- **SHA du code testé :** à renseigner après publication du commit de corrections.
+- **Commande exacte :**
+  ```bash
+  export RUSTFLAGS="-L native=/usr/lib/wsl/lib"
+  export LD_LIBRARY_PATH=/usr/lib/wsl/lib
+  cargo test -p claymore-cuda -p claymore-memory --features cuda-driver -- --ignored --nocapture --test-threads=1
+  ```
+- **Résultat, durée et sortie complète :** à renseigner après exécution réelle sur RTX 5090.
+- **Nombre attendu :** 25 tests ignorés ; tout écart doit être expliqué à partir de la sortie Cargo.
+- **Verdict B1 :** PENDING.
