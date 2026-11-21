@@ -172,6 +172,16 @@ impl MemoryOrchestrator {
         let projected = self
             .usage_bytes(allocation.tier)
             .saturating_add(allocation.bytes);
+        if allocation.expert && allocation.tier == MemoryTier::Vram {
+            let expert_projected = self.expert_cache_usage_bytes().saturating_add(allocation.bytes);
+            if expert_projected > self.budgets.expert_cache_max_bytes {
+                return Err(MemoryError::InsufficientReclaimable {
+                    tier: MemoryTier::Vram,
+                    needed: expert_projected - self.budgets.expert_cache_max_bytes,
+                    reclaimable: 0,
+                });
+            }
+        }
         if projected > limit {
             return Err(MemoryError::InsufficientReclaimable {
                 tier: allocation.tier,
