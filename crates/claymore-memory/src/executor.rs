@@ -164,14 +164,16 @@ impl<D: Device> MemoryTaskExecutor<D> {
 impl<D: Device> TaskExecutor for MemoryTaskExecutor<D> {
     fn execute(&mut self, task: &TaskSnapshot) -> Result<(), String> {
         if !matches!(task.kind, TaskKind::Transfer | TaskKind::Prefetch) {
+            self.metrics.failed = self.metrics.failed.saturating_add(1);
             return Err(MemoryTaskExecutorError::WrongQueue {
                 task_id: task.id,
                 kind: task.kind,
             }.to_string());
         }
-        let operation = self.operations.remove(&task.id)
-            .ok_or(MemoryTaskExecutorError::MissingTask(task.id))
-            .map_err(|error| error.to_string())?;
+        let Some(operation) = self.operations.remove(&task.id) else {
+            self.metrics.failed = self.metrics.failed.saturating_add(1);
+            return Err(MemoryTaskExecutorError::MissingTask(task.id).to_string());
+        };
         let started_at = Instant::now();
         let result = self.execute_operation(operation);
         let elapsed_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64;
@@ -288,5 +290,6 @@ mod tests {
             ExecutionOutcome::Failed { .. }
         ));
         assert_eq!(runner.executor().pending_operations(), 1);
+        assert_eq!(runner.executor().metrics().failed, 1);
     }
 }
