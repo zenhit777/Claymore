@@ -54,8 +54,7 @@ fn show_device() {
 }
 
 fn show_profile() {
-    const EMBEDDED_PROFILE: &str =
-        include_str!("../../../config/rtx5090-7950x3d.json");
+    const EMBEDDED_PROFILE: &str = include_str!("../../../config/rtx5090-7950x3d.json");
     let profile = match std::env::var("CLAYMORE_HARDWARE_PROFILE") {
         Ok(path) => HardwareProfile::load(path),
         Err(_) => HardwareProfile::from_json(EMBEDDED_PROFILE),
@@ -88,15 +87,24 @@ fn show_profile() {
     println!("vram_total_gib={}", profile.hardware.vram_gib);
     println!("vram_soft_budget_bytes={}", memory.vram_soft_bytes);
     println!("vram_hard_ceiling_bytes={}", memory.vram_hard_bytes);
-    println!("vram_safety_reserve_gib={}", profile.vram.safety_reserve_gib);
-    println!("expert_cache_target_bytes={}", memory.expert_cache_target_bytes);
+    println!(
+        "vram_safety_reserve_gib={}",
+        profile.vram.safety_reserve_gib
+    );
+    println!(
+        "expert_cache_target_bytes={}",
+        memory.expert_cache_target_bytes
+    );
     println!("expert_cache_max_bytes={}", memory.expert_cache_max_bytes);
     println!("host_budget_bytes={}", memory.host_bytes);
     println!("pinned_host_budget_bytes={}", memory.pinned_host_bytes);
     println!("cpu_workers={}", scheduler.cpu_workers);
     println!("max_prefetches={}", scheduler.max_prefetches);
     println!("lookahead={}", scheduler.lookahead);
-    println!("cuda_compute_streams={}", profile.scheduler.cuda_compute_streams);
+    println!(
+        "cuda_compute_streams={}",
+        profile.scheduler.cuda_compute_streams
+    );
     println!("transfer_streams={}", profile.scheduler.transfer_streams);
     println!("scheduler_tick_us={}", profile.scheduler.tick_us);
     println!("cuda_driver_feature={}", cfg!(feature = "cuda-driver"));
