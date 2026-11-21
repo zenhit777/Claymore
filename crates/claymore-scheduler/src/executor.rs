@@ -101,10 +101,8 @@ impl<E: TaskExecutor> QueueRunner<E> {
         let started_at = Instant::now();
         let result = self.executor.execute(&snapshot);
         let elapsed_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64;
-        self.metrics.total_execution_ns = self
-            .metrics
-            .total_execution_ns
-            .saturating_add(elapsed_ns);
+        self.metrics.total_execution_ns =
+            self.metrics.total_execution_ns.saturating_add(elapsed_ns);
         self.metrics.max_execution_ns = self.metrics.max_execution_ns.max(elapsed_ns);
         match result {
             Ok(()) => {
@@ -157,7 +155,10 @@ mod tests {
             runner.run_one(&mut scheduler).unwrap(),
             ExecutionOutcome::Completed(transfer)
         );
-        assert_eq!(scheduler.task(transfer).unwrap().state, TaskState::Completed);
+        assert_eq!(
+            scheduler.task(transfer).unwrap().state,
+            TaskState::Completed
+        );
         assert_eq!(scheduler.task(compute).unwrap().state, TaskState::Ready);
         assert_eq!(runner.executor().seen.borrow().as_slice(), &[transfer]);
     }
@@ -166,7 +167,10 @@ mod tests {
     fn runner_reports_idle_without_invoking_executor() {
         let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
         let mut runner = QueueRunner::new(TaskKind::Compute, RecordingExecutor::default());
-        assert_eq!(runner.run_one(&mut scheduler).unwrap(), ExecutionOutcome::Idle);
+        assert_eq!(
+            runner.run_one(&mut scheduler).unwrap(),
+            ExecutionOutcome::Idle
+        );
         assert!(runner.executor().seen.borrow().is_empty());
     }
 
@@ -179,7 +183,10 @@ mod tests {
             .unwrap();
         let mut runner = QueueRunner::new(
             TaskKind::Transfer,
-            RecordingExecutor { seen: RefCell::new(Vec::new()), fail: true },
+            RecordingExecutor {
+                seen: RefCell::new(Vec::new()),
+                fail: true,
+            },
         );
 
         assert_eq!(
@@ -198,8 +205,14 @@ mod tests {
         let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
         let task = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
         let mut runner = QueueRunner::new(TaskKind::Transfer, RecordingExecutor::default());
-        assert_eq!(runner.run_one(&mut scheduler).unwrap(), ExecutionOutcome::Completed(task));
-        assert_eq!(runner.run_one(&mut scheduler).unwrap(), ExecutionOutcome::Idle);
+        assert_eq!(
+            runner.run_one(&mut scheduler).unwrap(),
+            ExecutionOutcome::Completed(task)
+        );
+        assert_eq!(
+            runner.run_one(&mut scheduler).unwrap(),
+            ExecutionOutcome::Idle
+        );
         let metrics = runner.metrics();
         assert_eq!(metrics.kind, TaskKind::Transfer);
         assert_eq!(metrics.started, 1);
@@ -215,8 +228,7 @@ mod tests {
             .submit(TaskSpec::new(TaskKind::Compute).with_priority(TaskPriority::High))
             .unwrap();
         let transfer = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
-        let mut compute_runner =
-            QueueRunner::new(TaskKind::Compute, RecordingExecutor::default());
+        let mut compute_runner = QueueRunner::new(TaskKind::Compute, RecordingExecutor::default());
 
         assert_eq!(
             compute_runner.run_one(&mut scheduler).unwrap(),
