@@ -343,15 +343,9 @@ Le crate `claymore-memory` contient :
 - politiques LRU, LFU et adaptive ;
 - protection logique des allocations avec `safe_after_tick` ;
 - confirmation explicite d'éviction avant mise à jour de la comptabilité ;
-- getters de configuration et compteur d'usage du cache d'experts ; la cible de 14 Gio et le maximum de 16 Gio ne sont pas appliqués à l'admission.
-
-Le budget souple VRAM de 26 Gio est actuellement validé par rapport au plafond dur, mais n'est pas appliqué comme limite d'admission : `limit_for(Vram)` renvoie le plafond dur de 28 Gio. Le champ working set de 18 Gio n'existe pas dans `MemoryBudgets` ; l'inclusion du cache d'experts dans ce working set reste donc un invariant documentaire non vérifié par le code.
-
-Cette version est une couche de politique host-side. Elle n'alloue pas elle-même la VRAM, ne réserve pas réellement de pages épinglées et ne réalise pas de transfert CUDA.
-
-#### Scheduler et profil CLI — état réel
-
-`claymore-scheduler` ne contient qu'une configuration et une méthode `validate()` ; il ne planifie pas de tâches et ne pilote aucun préchargement. Le fichier `config/rtx5090-7950x3d.json` est versionné mais n'est pas chargé par le runtime. La commande `claymore-cli profile` affiche les valeurs de `SchedulerConfig::default()` et ne reflète donc pas le profil matériel JSON.
+- Les enveloppes RAM sont disjointes : Host = weights pool + staging/state (80 Gio sur le profil de référence), PinnedHost = 8 Gio ; leur somme est validée contre le budget Claymore de 88 Gio.
+- Le budget souple VRAM de 26 Gio est une cible d'éviction proactive ; le plafond dur de 28 Gio reste la limite d'admission. Le plafond maximal du cache d'experts est appliqué à chaque admission.
+- Cette couche de politiques reste backend-neutre ; les allocations réelles, transferts et libérations sont exécutés par les adaptateurs correspondants.
 
 #### v0.4 — CUDA Driver Backend
 
@@ -387,6 +381,14 @@ Le build par défaut reste indépendant du matériel. La feature CUDA requiert u
 
 Ce jalon livre des abstractions backend-neutres et leur validation CPU ; il ne livre aucun calcul tensoriel ni opérateur. Le backend CUDA existant n'implémente pas encore `Device` et son raccordement reste conditionné à un contrat de libération faillible et de protection des allocations en vol (voir §7.3 et l'audit M2).
 
+#### M7 — Scheduler et orchestration mémoire (PR #21)
+
+**État : livré par la PR #21 sur la branche de développement ; à considérer livré sur `main` après fusion.** Le jalon relie les requêtes Compute, les tâches Transfer/Prefetch, les exécuteurs mémoire backend-neutres et l'exécuteur CUDA event-backed.
+
+Le scheduler et les exécuteurs sont mono-propriétaires et synchrones. `CudaTransferExecutor` attend l'event CUDA après chaque copie H2D/D2H avant de retourner le succès à `QueueRunner`. Le périmètre ne fournit donc ni recouvrement transfert/calcul, ni préchargement concurrent, ni exécution asynchrone des requêtes Compute. La campagne RTX 5090 versionnée rapporte 34/34 exécutions de tests matériels réussies sur le SHA de code indiqué dans le rapport ; ses limites (transfert M7 de 1 MiB, cache expert à petite échelle, absence de kernels et d'injection de fautes) restent applicables.
+
+Le coût de rechargement est exposé par l'API mémoire, mais aucun chargeur de poids ou d'experts ne l'alimente encore automatiquement ; `CudaTransferExecutor` ne propose pas de tâche `RecordReloadCost`.
+
 ### 7.2 Fonctionnalités et extensions non livrées de bout en bout
 
 Les éléments suivants ne doivent pas être considérés comme fonctionnels de bout en bout :
@@ -401,11 +403,7 @@ La limite `max_payload_bytes` porte explicitement sur les seuls octets du payloa
 
 La tranche M6 n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâches, ne charge pas de modèle et n'effectue aucun calcul tensoriel. Elle est validée par des tests CPU.
 
-- chargement et validation du profil matériel JSON par le runtime et la CLI (la conversion en budgets mémoire et configuration scheduler est livrée) ;
-- application effective du budget souple VRAM de 26 Gio ;
-- enforcement de la cible du cache d'experts et son inclusion dans un working set explicite (le plafond maximal est désormais appliqué par les admissions mémoire) ;
-- exécution CUDA pilotée par events depuis les files du scheduler (le raccordement CPU/backend-neutre est livré dans M7) ;
-- exécution concurrente/asynchrone des requêtes, stratégie de génération concrète et intégration de modèles dans le runtime (extensions futures de M6/M8+) ;
+ - exécution concurrente/asynchrone des requêtes, stratégie de génération concrète et intégration de modèles dans le runtime (extensions futures de M6/M8+) ;
 - adaptateur CUDA spécifique injectable et tests du cycle de vie CUDA avec backend simulé (différés dans l'issue #19) ;
 - pool allocator VRAM, réutilisation de blocs et défragmentation ;
 - moteur de transfert piloté par le scheduler ;
@@ -490,49 +488,16 @@ Chaque moteur de modèle doit pouvoir préparer, exécuter et libérer ses état
 
 ## 8 bis. Couverture actuelle des exigences
 
-| Exigence | Statut sur `main` | Justification |
+| Exigence | Statut sur la branche M7 (future référence après merge de la PR #21) | Justification |
 |---|---|---|
-| FR-01 — Configuration du runtime | **Non livré** | Le profil JSON existe, mais aucun chargeur ne l'applique ; la CLI utilise `SchedulerConfig::default()`. |
-| FR-02 — Gestion des budgets | **Partiel** | Comptabilité host-side et validation des budgets ; le budget souple VRAM n'est pas appliqué à l'admission. |
-| FR-03 — Admission et éviction | **Livré (host-side) ; exécution CUDA opt-in validée sur RTX 5090 pour le SHA `a3ff0fd`** | Adaptateur d'allocation/libération CUDA et confirmation après free livrés derrière `cuda-driver` ; validation matérielle disponible dans `docs/audits/m1-hardware-validation.md` ; tests avec backend simulé encore manquants. |
-| FR-04 — Sûreté asynchrone | **Partiel : chemin nominal M5 validé sur RTX 5090 ; injection de fautes différée (#19)** | Events réels reliés aux transferts ; allocations protégées jusqu'à complétion confirmée ; polling non bloquant et finalisation avant admission. Campagne nominale et scénario ciblé poll → éviction documentés dans `docs/audits/m5-hardware-validation.md`. Les tests d'injection de fautes et le backend simulable restent suivis dans l'issue #19. |
-| FR-05 — Gestion des experts | **Non livré** | Getters/compteur seulement ; cible et maximum non appliqués à l'admission. |
-| FR-06 — Scheduling et prefetch | **Non livré** | Configuration seulement ; aucune logique de scheduling/prefetch. |
-| FR-07 — Diagnostics | **Partiel** | CLI de base et diagnostic device optionnel ; le profil JSON n'est pas chargé. |
-| FR-08 — Exécution des modèles | **Non livré** | Pas de moteur tensoriel complet ni d'inférence réelle des deux modèles. |
-
-## 9. Exigences non fonctionnelles et invariants
-
-### NFR-01 — Sécurité mémoire
-
-Pas de use-after-free GPU, pas de libération anticipée d'un buffer en vol, pas de confirmation comptable d'une éviction non effectuée.
-
-### NFR-02 — Résilience
-
-L'indisponibilité du backend CUDA ne doit pas empêcher les tests des politiques host-side ni le build par défaut.
-
-### NFR-03 — Observabilité
-
-Les futures versions doivent exposer les allocations par tier, les budgets, les évictions, les transferts, les temps d'attente et les raisons d'échec d'admission.
-
-### NFR-04 — Reproductibilité
-
-Les tests de politiques doivent être déterministes. Les benchmarks doivent documenter modèle, paramètres, précision, warmup, nombre d'itérations, consommation mémoire et environnement.
-
-### NFR-05 — Qualité Rust
-
-Chaque changement doit passer le formatage, les tests et Clippy sur les configurations prises en charge. Les blocs `unsafe` doivent être minimisés, documentés et entourés de contrats vérifiables.
-
-### Invariants impératifs
-
-1. Un budget est une limite de planification, pas une mesure de mémoire libre.
-2. La VRAM ne doit jamais être planifiée à 100 %.
-3. Le swap n'est pas un tier de poids.
-4. Un candidat à l'éviction n'est pas une éviction confirmée.
-5. Une allocation en vol n'est pas libérable.
-6. Objectif d'architecture : le cache d'experts doit être inclus dans le working set ; cet invariant n'est pas encore représenté ni vérifié par `MemoryBudgets`.
-7. Une validation CI sans CUDA ne prouve pas le fonctionnement du backend CUDA.
-8. Une compilation réussie ne prouve pas la correction numérique ni la performance d'un modèle.
+| FR-01 — Configuration du runtime | **Livré** | `HardwareProfile` charge et valide le profil JSON ; la CLI utilise le profil embarqué ou `CLAYMORE_HARDWARE_PROFILE`. |
+| FR-02 — Gestion des budgets | **Livré pour les budgets déclarés** | Budgets VRAM souple/dur, Host et PinnedHost validés sans chevauchement ; le soft-budget est une cible d'éviction proactive et le hard-ceiling reste la limite d'admission. |
+| FR-03 — Admission et éviction | **Livré pour les chemins CPU et CUDA couverts** | Plans déterministes, confirmation après libération backend et exécution CUDA opt-in ; l'injection de fautes reste séparée dans l'issue #19. |
+| FR-04 — Sûreté asynchrone | **Chemin nominal livré et validé** | Les allocations en vol restent protégées jusqu'à la complétion de l'event ; les transferts CUDA M7 attendent l'event avant de libérer les dépendances. L'injection de fautes reste hors périmètre. |
+| FR-05 — Gestion des experts | **Plafond livré ; cible de working set** | Le maximum est imposé à l'admission et le coût de rechargement peut être enregistré. Aucun chargeur de poids/expert ne l'alimente automatiquement. |
+| FR-06 — Scheduling et prefetch | **Ordonnanceur et exécution des files livrés, synchrones** | Graphe commun Compute/Transfer/Prefetch, priorités, dépendances, propagation des échecs et limites de préchargement. Pas de recouvrement concurrent transfert/calcul. |
+| FR-07 — Diagnostics | **Livré pour profil et détection CUDA** | La CLI affiche le profil actif et la commande `device` interroge le backend CUDA lorsque la feature est activée. |
+| FR-08 — Exécution des modèles | **Non livré** | Les moteurs modèles et le calcul tensoriel natif restent des jalons ultérieurs. |
 
 ---
 
@@ -803,7 +768,7 @@ Une PR ne doit pas être déclarée prête uniquement parce que le code existe :
 | Kernels spécialisés | Complexité sans gain démontré | Développer après profiling |
 | Performances | Paramètres scheduler non optimaux | Benchmarks et tuning sur cible |
 | Contrat d'erreur des stratégies | `String` ne conserve pas les causes ni les types d'erreur | Décider avant M8 si le trait expose un type d'erreur associé ou une chaîne de causes typée |
-| Ownership des ressources du runtime | Le contexte M6 n'expose pas encore Device / DeviceMemoryManager | Le scheduler M7 est explicitement `!Send + !Sync` ; le thread propriétaire CUDA est préservé. Le choix entre ressources détenues par l'exécuteur ou injectées dans le contexte reste à trancher avant le raccordement memory/runtime |
+| Ownership des ressources du runtime | Les ressources CUDA sont thread-affines | M7 conserve un scheduler et des exécuteurs `!Send + !Sync` sur leur thread propriétaire ; `CudaTransferExecutor` détient son `CudaMemoryManager`. Aucun recouvrement concurrent transfert/calcul n'est livré. |
 | Sorties de génération | Le rapport M6 contient une sortie complète unique | Concevoir une sortie incrémentale seulement avec les besoins concrets des stratégies M9/M10 |
 
 Les choix non tranchés doivent être consignés dans une PR ou une décision d'architecture avant d'être codés comme comportement permanent.
@@ -867,6 +832,10 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-20 | M4 introduit une libération de buffer explicite et faillible, des tokens de complétion H2D/D2H vérifiables par CUDA event et des vues tensor stridées ; aucun raccordement CUDA au trait Device n'est autorisé avant validation de ces contrats. |
 | 2026-11-21 | M6 (PR #20, tranche initiale) : runtime synchrone et mono-exécution, enveloppes opaques, stratégie sans contrainte `Send`/`Sync`, contexte par requête et annulation coopérative. Le périmètre initial est explicitement partiel : orchestration haut niveau et frontières de mode d'exécution reportées à M7/M8 ; panique de stratégie propagée (runtime à abandonner), annulation prioritaire sur le résultat simultané, limite `max_payload_bytes` appliquée au seul payload. Les choix de type d'erreur, ownership Device/Memory et sortie incrémentale restent ouverts avant M8/M9. |
 | 2026-11-21 | M5 utilise un stream de transfert `CU_STREAM_NON_BLOCKING` : les consommateurs compute futurs doivent exprimer explicitement leurs dépendances avec les transferts (par exemple `cuStreamWaitEvent`). Une erreur de polling dans `make_room` bloque l'admission en mode fail-closed. L'injection de fautes et le backend CUDA simulable sont suivis séparément dans l'issue #19. |
+| 2026-11-22 | RAM hôte M7 : les tiers sont disjoints ; Host = weights pool + staging/state (80 Gio), PinnedHost = 8 Gio, total = budget Claymore 88 Gio. Le profil rejette tout dépassement de cette somme. |
+| 2026-11-22 | VRAM M7 : le soft-budget de 26 Gio est une cible d'éviction proactive, le hard-ceiling de 28 Gio est la limite stricte d'admission ; le cache experts (cible 14 Gio, maximum 16 Gio) est inclus dans le working set VRAM. |
+| 2026-11-22 | M7 : scheduler, `QueueRunner` et exécuteur CUDA sont synchrones et mono-propriétaires ; H2D/D2H ne complètent une tâche qu'après attente de l'event. Aucun overlap transfert/calcul ou prefetch concurrent n'est revendiqué. |
+| 2026-11-22 | Éviction Adaptive : comparer d'abord la chaleur (hit count), puis la récence (tick), et utiliser le coût de rechargement en nanosecondes uniquement comme départage ; un coût inconnu vaut zéro pour ce seul départage. Aucun chargeur ne l'alimente automatiquement à ce stade. |
 
 ### Correspondance de la feuille de route historique
 

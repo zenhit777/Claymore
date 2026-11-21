@@ -394,28 +394,18 @@ impl MemoryOrchestrator {
             .expect("allocation was checked above"))
     }
 
-    fn eviction_key(&self, allocation: &Allocation, now_tick: u64) -> (u64, u64, u64) {
+    fn eviction_key(&self, allocation: &Allocation, now_tick: u64) -> (u64, u64, u64, u64) {
         let age = now_tick.saturating_sub(allocation.last_used_tick);
         match self.policy {
-            EvictionPolicy::Lru => (0, u64::MAX - age, allocation.hit_count),
-            EvictionPolicy::Lfu => (0, allocation.hit_count, u64::MAX - age),
+            EvictionPolicy::Lru => (0, 0, u64::MAX - age, allocation.bytes),
+            EvictionPolicy::Lfu => (0, allocation.hit_count, u64::MAX - age, allocation.bytes),
             EvictionPolicy::Adaptive => {
-                // Prefer cold, old, cheap-to-reload allocations.
-                let recency_penalty = allocation.last_used_tick;
-                let reload_cost = self
-                    .reload_costs_ns
-                    .get(&allocation.id)
-                    .copied()
-                    .unwrap_or(0);
-                (
-                    0,
-                    allocation
-                        .hit_count
-                        .saturating_mul(2)
-                        .saturating_add(recency_penalty / 8)
-                        .saturating_add(reload_cost),
-                    allocation.bytes,
-                )
+                // Heat and recency are compared before reload cost: nanoseconds
+                // must never be added to hit counts or logical ticks. Unknown
+                // reload cost defaults to zero and is considered only as a
+                // tie-break after heat and recency.
+                let reload_cost = self.reload_costs_ns.get(&allocation.id).copied().unwrap_or(0);
+                (allocation.hit_count, allocation.last_used_tick, reload_cost, allocation.bytes)
             }
         }
     }
@@ -564,6 +554,28 @@ mod tests {
                 assert_eq!(plan.evict_ids, vec!["alpha", "beta"], "policy: {policy:?}");
             }
         }
+    }
+
+    #[test]
+    fn adaptive_eviction_prioritizes_coldness_before_reload_cost() {
+        let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Adaptive).unwrap();
+        let mut hot = allocation("hot", 40, 10, 0);
+        hot.hit_count = 100;
+        manager.record_allocation(hot).unwrap();
+        manager.record_allocation(allocation("cold-expensive", 40, 1, 0)).unwrap();
+        manager.record_reload_cost("hot", 0).unwrap();
+        manager.record_reload_cost("cold-expensive", 300_000_000).unwrap();
+        assert_eq!(manager.plan_admission(MemoryTier::Vram, 20, 10).unwrap().evict_ids, vec!["cold-expensive"]);
+    }
+
+    #[test]
+    fn adaptive_eviction_treats_unknown_reload_cost_as_zero_only_after_heat_and_recency() {
+        let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Adaptive).unwrap();
+        let mut hot = allocation("hot", 40, 5, 0);
+        hot.hit_count = 100;
+        manager.record_allocation(hot).unwrap();
+        manager.record_allocation(allocation("cold-unknown-cost", 40, 1, 0)).unwrap();
+        assert_eq!(manager.plan_admission(MemoryTier::Vram, 20, 10).unwrap().evict_ids, vec!["cold-unknown-cost"]);
     }
 
     #[test]

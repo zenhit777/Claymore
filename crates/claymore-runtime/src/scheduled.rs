@@ -97,7 +97,9 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
         if spec.kind == TaskKind::Compute {
             return Err(ScheduledRuntimeError::ComputeTaskRequiresRequest);
         }
-        Ok(self.scheduler.submit(spec)?)
+        let task_id = self.scheduler.submit(spec)?;
+        self.prune_cancelled_requests();
+        Ok(task_id)
     }
 
     /// Drive a non-Compute queue against this runtime's shared scheduler.
@@ -128,6 +130,7 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
         }
         let task_id = self.scheduler.submit(spec)?;
         self.pending.insert(task_id, (input, cancellation));
+        self.prune_cancelled_requests();
         Ok(task_id)
     }
 
@@ -384,6 +387,28 @@ mod tests {
         ));
         assert_eq!(runtime.pending_request_count(), 0);
         assert!(runtime.run_one().unwrap().is_none());
+    }
+
+    #[test]
+    fn request_submitted_after_failed_dependency_is_cancelled_and_payload_pruned() {
+        let mut runtime = runtime(Echo);
+        let failed = runtime.submit_task(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        let mut runner = QueueRunner::new(TaskKind::Transfer, FailingTransfer);
+        assert!(matches!(runtime.run_queue_one(&mut runner).unwrap(), ExecutionOutcome::Failed { task_id, .. } if task_id == failed));
+        let request = runtime.submit_request(RequestInput::new([9, 8, 7]), CancellationToken::new(), TaskPriority::Normal, [failed]).unwrap();
+        assert_eq!(runtime.task(request).unwrap().state, TaskState::Cancelled);
+        assert_eq!(runtime.pending_request_count(), 0);
+        assert!(runtime.run_one().unwrap().is_none());
+    }
+
+    #[test]
+    fn request_submitted_after_cancelled_dependency_is_cancelled_and_payload_pruned() {
+        let mut runtime = runtime(Echo);
+        let cancelled = runtime.submit_task(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        runtime.cancel_queued(cancelled).unwrap();
+        let request = runtime.submit_request(RequestInput::new([6, 5, 4]), CancellationToken::new(), TaskPriority::Normal, [cancelled]).unwrap();
+        assert_eq!(runtime.task(request).unwrap().state, TaskState::Cancelled);
+        assert_eq!(runtime.pending_request_count(), 0);
     }
 
     #[test]

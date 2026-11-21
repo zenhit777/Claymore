@@ -123,7 +123,7 @@ vram_hard_ceiling_bytes=30064771072
 vram_safety_reserve_gib=4
 expert_cache_target_bytes=15032385536
 expert_cache_max_bytes=17179869184
-host_budget_bytes=94489280512
+host_budget_bytes=85899345920
 pinned_host_budget_bytes=8589934592
 cpu_workers=10
 max_prefetches=2
@@ -142,8 +142,10 @@ status=profile_validated
 | Réserve de sécurité | 4 GiB | 4 GiB | PASS |
 | Cache experts — cible | 14 GiB | 15 032 385 536 octets = 14 GiB | PASS |
 | Cache experts — maximum | 16 GiB | 17 179 869 184 octets = 16 GiB | PASS |
-| Budget RAM Claymore | 88 GiB | 94 489 280 512 octets = 88 GiB | PASS |
-| Mémoire pinned | 8 GiB | 8 589 934 592 octets = 8 GiB | PASS |
+| Budget RAM Claymore (enveloppe totale) | 88 GiB | 88 GiB | PASS |
+| Tier Host (weights 64 + staging/state 16) | 80 GiB | 85 899 345 920 octets = 80 GiB | PASS |
+| Tier PinnedHost | 8 GiB | 8 589 934 592 octets = 8 GiB | PASS |
+| Somme Host + PinnedHost | 88 GiB maximum | 88 GiB | PASS |
 | Workers CPU | 10 | 10 | PASS |
 | Préchargements max | 2 | 2 | PASS |
 | Lookahead | 1 | 1 | PASS |
@@ -152,7 +154,7 @@ status=profile_validated
 | Tick scheduler | 500 µs | 500 µs | PASS |
 | Validation du profil | valide | `status=profile_validated` | PASS |
 
-Le champ `cuda_driver_feature=false` est attendu pour cette commande : le profil est validé sans activer la feature CUDA. La détection CUDA est réalisée séparément à la section 4.
+Le tier Host est calculé comme la somme disjointe du pool weights (64 GiB) et de staging/state (16 GiB), soit 80 GiB. Le tier PinnedHost est limité à 8 GiB ; la somme des enveloppes est exactement égale au budget Claymore de 88 GiB et est validée par `HardwareProfile::validate()`. Le champ `cuda_driver_feature=false` est attendu pour cette commande : le profil est validé sans activer la feature CUDA. La détection CUDA est réalisée séparément à la section 4.
 
 ---
 
