@@ -101,7 +101,10 @@ impl<E: TaskExecutor> QueueRunner<E> {
         let started_at = Instant::now();
         let result = self.executor.execute(&snapshot);
         let elapsed_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64;
-        self.metrics.total_execution_ns = self.metrics.total_execution_ns.saturating_add(elapsed_ns);
+        self.metrics.total_execution_ns = self
+            .metrics
+            .total_execution_ns
+            .saturating_add(elapsed_ns);
         self.metrics.max_execution_ns = self.metrics.max_execution_ns.max(elapsed_ns);
         match result {
             Ok(()) => {
