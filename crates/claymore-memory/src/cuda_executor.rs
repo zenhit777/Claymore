@@ -106,7 +106,9 @@ impl CudaTransferExecutor {
     }
 
     fn next_tick(&mut self) -> Result<u64, CudaTransferExecutorError> {
-        self.logical_tick = self.logical_tick.checked_add(1)
+        self.logical_tick = self
+            .logical_tick
+            .checked_add(1)
             .ok_or(CudaTransferExecutorError::TickExhausted)?;
         Ok(self.logical_tick)
     }
