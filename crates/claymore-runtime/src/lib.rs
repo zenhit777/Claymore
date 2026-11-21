@@ -457,10 +457,9 @@ mod tests {
             context: &mut ExecutionContext<'_>,
             _input: &RequestInput,
         ) -> Result<RequestOutput, String> {
-            self.0.borrow_mut().push((
-                context.request_id().get(),
-                context.metadata().clone(),
-            ));
+            self.0
+                .borrow_mut()
+                .push((context.request_id().get(), context.metadata().clone()));
             Ok(RequestOutput::new([]))
         }
     }
@@ -494,7 +493,7 @@ mod tests {
 
     #[test]
     fn oversized_input_is_rejected_before_request_id_is_consumed() {
-        let config = RuntimeConfig { max_payload_bytes: 2 };
+        let config = RuntimeConfig {\n            max_payload_bytes: 2,\n        };
         let mut runtime = Runtime::new(config, EchoStrategy).unwrap();
         assert_eq!(
             runtime.execute(RequestInput::new([1, 2, 3]), CancellationToken::new()),
@@ -512,11 +511,8 @@ mod tests {
     #[test]
     fn strategy_receives_its_own_request_id_and_metadata() {
         let observed = Rc::new(RefCell::new(Vec::new()));
-        let mut runtime = Runtime::new(
-            RuntimeConfig::default(),
-            ContextProbe(observed.clone()),
-        )
-        .unwrap();
+        let mut runtime =
+            Runtime::new(RuntimeConfig::default(), ContextProbe(observed.clone())).unwrap();
 
         runtime
             .execute(
@@ -534,8 +530,14 @@ mod tests {
         assert_eq!(
             *observed.borrow(),
             vec![
-                (1, BTreeMap::from([("trace".to_owned(), "first".to_owned())])),
-                (2, BTreeMap::from([("trace".to_owned(), "second".to_owned())])),
+                (
+                    1,
+                    BTreeMap::from([("trace".to_owned(), "first".to_owned())])
+                ),
+                (
+                    2,
+                    BTreeMap::from([("trace".to_owned(), "second".to_owned())])
+                ),
             ]
         );
     }
@@ -549,9 +551,7 @@ mod tests {
         )
         .unwrap();
 
-        let report = runtime
-            .execute(RequestInput::new([1]), token)
-            .unwrap();
+        let report = runtime.execute(RequestInput::new([1]), token).unwrap();
 
         assert_eq!(report.state, RequestState::Cancelled);
         assert_eq!(report.error, Some(RuntimeError::Cancelled));
@@ -560,8 +560,7 @@ mod tests {
 
     #[test]
     fn strategy_panic_propagates_and_consumes_the_request_id() {
-        let mut runtime =
-            Runtime::new(RuntimeConfig::default(), PanickingStrategy).unwrap();
+        let mut runtime = Runtime::new(RuntimeConfig::default(), PanickingStrategy).unwrap();
         let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let _ = runtime.execute(RequestInput::new([1]), CancellationToken::new());
         }));
@@ -584,7 +583,12 @@ mod tests {
     #[test]
     fn invalid_runtime_configuration_is_rejected() {
         assert!(matches!(
-            Runtime::new(RuntimeConfig { max_payload_bytes: 0 }, EchoStrategy),
+            Runtime::new(
+                RuntimeConfig {
+                    max_payload_bytes: 0
+                },
+                EchoStrategy
+            ),
             Err(RuntimeError::InvalidConfig)
         ));
     }
