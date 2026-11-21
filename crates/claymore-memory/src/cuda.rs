@@ -419,6 +419,54 @@ impl CudaMemoryManager {
         })
     }
 
+    /// Poll every pending transfer without blocking and retire only events
+    /// that CUDA positively reports as complete.
+    ///
+    /// If any event query fails, the error is returned and that event remains
+    /// tracked with its allocation guards intact. A completed event is also kept
+    /// tracked until every guard no longer covered by another pending transfer
+    /// has been lifted successfully; policy errors therefore remain retryable.
+    /// Earlier completed events may already have been retired; an error is never
+    /// treated as success.
+    pub fn poll_completed_transfers(&mut self, tick: u64) -> Result<usize, CudaMemoryError> {
+        self.advance_tick(tick)?;
+        let mut retired = 0;
+        let mut index = 0;
+        while index < self.pending.len() {
+            // Query before mutating the tracker. Any driver error leaves this
+            // event and every allocation it protects untouched.
+            if !self.pending[index].2.is_complete()? {
+                index += 1;
+                continue;
+            }
+
+            // Keep the completed event tracked until every allocation guard
+            // it owns has been safely lifted. If policy bookkeeping fails partway
+            // through, a later poll can retry while this event remains discoverable.
+            let ids = self.pending[index].1.clone();
+            for completed_id in &ids {
+                let still_in_flight = self.pending.iter().enumerate().any(
+                    |(pending_index, (_, pending_ids, _, _))| {
+                        pending_index != index
+                            && pending_ids
+                                .iter()
+                                .any(|pending_id| pending_id == completed_id)
+                    },
+                );
+                if !still_in_flight {
+                    self.policy.mark_in_flight_until(completed_id, tick)?;
+                }
+            }
+
+            // All guards are now safely lifted. Only now may the event stop
+            // being tracked and its shared completion state become observable.
+            let (_, _, _event, completed) = self.pending.remove(index);
+            completed.store(true, Ordering::Release);
+            retired += 1;
+        }
+        Ok(retired)
+    }
+
     /// Query the associated CUDA event without blocking. A token is complete
     /// after its event query succeeds or an explicit wait synchronizes it.
     /// This query does not retire the pending event or release allocation guards;
@@ -559,6 +607,9 @@ impl CudaMemoryManager {
         bytes: u64,
         tick: u64,
     ) -> Result<(), CudaMemoryError> {
+        // Reclaim transfers already completed by the device before planning
+        // evictions. Polling is non-blocking; pending/error states stay guarded.
+        self.poll_completed_transfers(tick)?;
         let plan = self.policy.plan_admission(tier, bytes, tick)?;
         for id in plan.evict_ids {
             self.release(&id, tick)?;
@@ -640,6 +691,76 @@ mod tests {
 
     #[test]
     #[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+    fn hardware_poll_retires_completed_transfer_before_admission_without_wait() {
+        use std::time::{Duration, Instant};
+
+        let budgets = MemoryBudgets {
+            vram_soft_bytes: 1024 * 1024,
+            vram_hard_bytes: 1024 * 1024,
+            host_bytes: 2 * 1024 * 1024,
+            pinned_host_bytes: 64 * 1024,
+            expert_cache_target_bytes: 0,
+            expert_cache_max_bytes: 0,
+        };
+        let mut manager =
+            CudaMemoryManager::new(0, budgets, EvictionPolicy::Lru).expect("CUDA memory manager");
+        manager
+            .allocate_pinned("host", 4096, 1)
+            .expect("pinned allocation");
+        manager
+            .allocate_device("victim", 768 * 1024, 2, false)
+            .expect("victim allocation");
+        let expected = vec![0x5a_u8; 4096];
+        manager
+            .write_pinned("host", 0, &expected, 3)
+            .expect("pinned write");
+        manager
+            .copy_h2d("host", "victim", expected.len(), 4)
+            .expect("H2D enqueue");
+
+        // Exercise the actual manager-level polling API until the event is
+        // positively completed and retired. No token wait or allocation wait
+        // is permitted in this scenario.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut tick = 5_u64;
+        let retired = loop {
+            let count = manager
+                .poll_completed_transfers(tick)
+                .expect("non-blocking transfer poll");
+            tick += 1;
+            if count == 1 {
+                break count;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "completed H2D event was not retired within the deadline"
+            );
+            std::thread::yield_now();
+        };
+        assert_eq!(retired, 1);
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 768 * 1024);
+
+        // Admission pressure must now evict the completed victim without an
+        // explicit wait_for_transfer or wait_for_allocation call.
+        manager
+            .allocate_device("replacement", 512 * 1024, tick, false)
+            .expect("admission after poll-driven retirement");
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 512 * 1024);
+        assert!(matches!(
+            manager.release("victim", tick + 1),
+            Err(CudaMemoryError::UnknownAllocation(id)) if id == "victim"
+        ));
+        manager
+            .release("replacement", tick + 1)
+            .expect("replacement release");
+        manager.release("host", tick + 1).expect("pinned release");
+        println!(
+            "M5-HW-POLL-01 retired={retired}; admission evicted completed victim without explicit wait"
+        );
+    }
+
+    #[test]
+    #[ignore = "requires a CUDA driver and a usable NVIDIA device"]
     fn cuda_manager_reports_device_memory() {
         let gib = 1024_u64.pow(3);
         let budgets = MemoryBudgets {
@@ -665,17 +786,22 @@ mod tests {
             .allocate_device("device", expected.len() as u64, 1, false)
             .unwrap();
         manager.write_pinned("host", 0, expected, 2).unwrap();
-        manager
+        let h2d = manager
             .copy_h2d("host", "device", expected.len(), 3)
             .unwrap();
-        manager
-            .copy_d2h("device", "host", expected.len(), 4)
+        // Polling is explicitly non-blocking; the transfer may or may not have
+        // completed by this point. Either result is valid.
+        let _ = manager.is_transfer_complete(&h2d).unwrap();
+        manager.wait_for_transfer(&h2d, 4).unwrap();
+        let d2h = manager
+            .copy_d2h("device", "host", expected.len(), 5)
             .unwrap();
+        manager.wait_for_transfer(&d2h, 6).unwrap();
         assert_eq!(
-            manager.read_pinned("host", 0, expected.len(), 5).unwrap(),
+            manager.read_pinned("host", 0, expected.len(), 7).unwrap(),
             expected
         );
-        manager.release("device", 6).unwrap();
-        manager.release("host", 6).unwrap();
+        manager.release("device", 8).unwrap();
+        manager.release("host", 8).unwrap();
     }
 }

@@ -58,6 +58,7 @@ pub use driver::{CudaDeviceBuffer, CudaDriver, CudaEvent, CudaStream, PinnedHost
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(feature = "cuda-driver"))]
     use super::*;
     #[test]
     fn disabled_backend_reports_actionable_error() {
