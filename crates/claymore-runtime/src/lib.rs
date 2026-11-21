@@ -600,7 +600,7 @@ mod tests {
 
 /// Scheduled request orchestration built on the deterministic M7 scheduler.
 pub mod scheduled;
-pub use scheduled::{ScheduledExecution, ScheduledRuntime, ScheduledRuntimeError};
+pub use scheduled::{ScheduledExecution, ScheduledRuntime, ScheduledRuntimeError, ScheduledRuntimeMetrics};
 
 /// Validated hardware profile and runtime configuration conversion.
 pub mod profile;
