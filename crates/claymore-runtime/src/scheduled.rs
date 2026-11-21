@@ -14,7 +14,7 @@ use thiserror::Error;
 
 use crate::{
     CancellationToken, ExecutionReport, GenerationStrategy, RequestInput, RequestState, Runtime,
-    RuntimeConfig, RuntimeError,
+    HardwareProfile, HardwareProfileError, RuntimeConfig, RuntimeError,
 };
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -23,6 +23,8 @@ pub enum ScheduledRuntimeError {
     Runtime(#[from] RuntimeError),
     #[error(transparent)]
     Scheduler(#[from] SchedulerError),
+    #[error(transparent)]
+    Profile(#[from] HardwareProfileError),
     #[error("scheduled request payload missing for task {0:?}")]
     MissingRequest(TaskId),
 }
@@ -57,6 +59,14 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
             scheduler: Scheduler::new(scheduler_config)?,
             pending: BTreeMap::new(),
         })
+    }
+
+    /// Construct the scheduler from a validated hardware profile.
+    pub fn from_profile(
+        profile: &HardwareProfile,
+        strategy: S,
+    ) -> Result<Self, ScheduledRuntimeError> {
+        Self::new(RuntimeConfig::default(), profile.scheduler_config()?, strategy)
     }
 
     pub fn submit_request(
