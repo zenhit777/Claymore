@@ -91,14 +91,17 @@ impl<D: Device> DeviceMemoryManager<D> {
             return Err(DeviceMemoryError::ExpertMustUseVram);
         }
 
+        // Compute every applicable plan before releasing anything. This
+        // avoids evicting expert weights and then discovering that the general
+        // VRAM admission is impossible.
+        let mut evict_ids = Vec::new();
         if expert {
-            let expert_plan = self.policy.plan_expert_admission(bytes, tick)?;
-            for evict_id in expert_plan.evict_ids {
-                self.release_inner(&evict_id, tick)?;
-            }
+            evict_ids.extend(self.policy.plan_expert_admission(bytes, tick)?.evict_ids);
         }
-        let plan = self.policy.plan_admission(tier, bytes, tick)?;
-        for evict_id in plan.evict_ids {
+        evict_ids.extend(self.policy.plan_admission(tier, bytes, tick)?.evict_ids);
+        evict_ids.sort();
+        evict_ids.dedup();
+        for evict_id in evict_ids {
             self.release_inner(&evict_id, tick)?;
         }
 
