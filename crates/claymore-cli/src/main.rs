@@ -85,7 +85,7 @@ fn show_profile() {
     println!("Claymore v0.5.0");
     println!("profile={}", profile.profile);
     println!("gpu={}", profile.hardware.gpu);
-    println!("vram_total_bytes={}", profile.hardware.vram_gib * 1024 * 1024 * 1024);
+    println!("vram_total_gib={}", profile.hardware.vram_gib);
     println!("vram_soft_budget_bytes={}", memory.vram_soft_bytes);
     println!("vram_hard_ceiling_bytes={}", memory.vram_hard_bytes);
     println!("vram_safety_reserve_gib={}", profile.vram.safety_reserve_gib);
