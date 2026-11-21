@@ -544,7 +544,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M3 | Durcissement des fondations Device (issues #7 à #10) | Livré par la PR #15 |
 | M4 | Contrat Device et sûreté mémoire (issues #11 et #12) | Livré par la PR #16 |
 | M5 | Robustesse et validation CUDA (issues #13, PR #17 et #18) | Livré ; chemin nominal validé sur RTX 5090 ; injection de fautes isolée dans l'issue #19 |
-| M6 | Runtime unifié | Première tranche livrée : cycle de vie synchrone, contexte, erreurs et annulation ; extensions concurrentes différées |
+| M6 | Runtime unifié | Livré dans sa tranche définie : cycle de vie synchrone, contexte, erreurs, annulation et stratégie indépendante du modèle |
 | M7 | Scheduler et orchestration mémoire | Planifié |
 | M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
 | M9 | Stratégie autoregressive | Planifié |
@@ -631,7 +631,7 @@ Critères de la tranche livrée :
 - aucune dépendance à un modèle particulier dans le cœur runtime ;
 - tests des chemins succès, échec, annulation avant/après démarrage et rejet d'entrée invalide.
 
-Extensions restant à traiter avant de déclarer M6 entièrement achevé : politique de concurrence, exécution asynchrone et intégration explicite du propriétaire des ressources CUDA. Ces éléments ne doivent pas être ajoutés sans contrat de thread-affinity et de cancellation adapté.
+La concurrence, l'exécution asynchrone, les files compute/transfer et l'intégration du propriétaire des ressources CUDA relèvent de M7. Ils ne sont pas des critères implicites de M6 et ne doivent pas être ajoutés sans contrat de thread-affinity et de cancellation adapté.
 
 ### M7 — Scheduler et orchestration mémoire
 
