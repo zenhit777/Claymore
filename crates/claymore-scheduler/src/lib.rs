@@ -426,9 +426,7 @@ mod tests {
     #[test]
     fn dispatches_by_priority_then_fifo_within_each_queue() {
         let mut scheduler = scheduler();
-        let normal = scheduler
-            .submit(TaskSpec::new(TaskKind::Compute))
-            .unwrap();
+        let normal = scheduler.submit(TaskSpec::new(TaskKind::Compute)).unwrap();
         let high_first = scheduler
             .submit(TaskSpec::new(TaskKind::Compute).with_priority(TaskPriority::High))
             .unwrap();
@@ -511,9 +509,7 @@ mod tests {
         scheduler.submit(TaskSpec::new(TaskKind::Prefetch)).unwrap();
         scheduler.submit(TaskSpec::new(TaskKind::Prefetch)).unwrap();
         scheduler.cancel(first).unwrap();
-        assert!(scheduler
-            .submit(TaskSpec::new(TaskKind::Prefetch))
-            .is_ok());
+        assert!(scheduler.submit(TaskSpec::new(TaskKind::Prefetch)).is_ok());
     }
 
     #[test]
@@ -556,6 +552,9 @@ mod tests {
             cpu_workers: 0,
             ..SchedulerConfig::default()
         };
-        assert_eq!(Scheduler::new(config).err(), Some(SchedulerError::InvalidConfig));
+        assert_eq!(
+            Scheduler::new(config).err(),
+            Some(SchedulerError::InvalidConfig)
+        );
     }
 }
