@@ -469,9 +469,7 @@ mod tests {
     #[test]
     fn submission_cancels_tasks_with_already_failed_or_cancelled_dependencies() {
         let mut scheduler = scheduler();
-        let failed = scheduler
-            .submit(TaskSpec::new(TaskKind::Transfer))
-            .unwrap();
+        let failed = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
         scheduler.start_next(TaskKind::Transfer).unwrap();
         scheduler.fail(failed).unwrap();
         let after_failure = scheduler
@@ -481,9 +479,7 @@ mod tests {
             scheduler.task(after_failure).unwrap().state,
             TaskState::Cancelled
         );
-        let cancelled = scheduler
-            .submit(TaskSpec::new(TaskKind::Transfer))
-            .unwrap();
+        let cancelled = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
         scheduler.cancel(cancelled).unwrap();
         let after_cancellation = scheduler
             .submit(TaskSpec::new(TaskKind::Compute).depends_on(cancelled))
