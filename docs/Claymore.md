@@ -387,11 +387,11 @@ Le build par défaut reste indépendant du matériel. La feature CUDA requiert u
 
 Ce jalon livre des abstractions backend-neutres et leur validation CPU ; il ne livre aucun calcul tensoriel ni opérateur. Le backend CUDA existant n'implémente pas encore `Device` et son raccordement reste conditionné à un contrat de libération faillible et de protection des allocations en vol (voir §7.3 et l'audit M2).
 
-### 7.2 Non livré sur main
+### 7.2 Fonctionnalités et extensions non livrées de bout en bout
 
 Les éléments suivants ne doivent pas être considérés comme fonctionnels de bout en bout :
 
-#### M6 — Runtime unifié (PR #20 fusionnée)
+#### M6 — Runtime unifié (première tranche livrée ; extensions restantes)
 
 Le crate `claymore-runtime` fournit un noyau synchrone, mono-exécution et indépendant des modèles : identifiants monotones, contexte isolé par requête, enveloppes opaques, états explicites, rapport d'exécution, stratégie `GenerationStrategy`, erreurs et annulation coopérative. Aucun trait `Send`/`Sync` n'est imposé à la stratégie.
 
@@ -399,7 +399,7 @@ La limite `max_payload_bytes` porte explicitement sur les seuls octets du payloa
 
 **Statut : première tranche livrée sur `main` par la PR #20.** La portée historique initiale de M6 incluait aussi l'orchestration de haut niveau et des frontières explicites entre runtime, architecture de modèle, stratégie et mode d'exécution. Ces éléments ne sont pas implémentés dans cette tranche : l'orchestration, l'ownership des ressources et le scheduling sont reportés à M7 ; l'intégration des moteurs tensoriels et les modes d'exécution concrets sont reportés à M8 et aux phases modèles ultérieures. Cette répartition est un amendement explicite du périmètre, pas une déclaration d'achèvement de ces critères.
 
-La tranche actuelle n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâches, ne charge pas de modèle et n'effectue aucun calcul tensoriel. Elle est validée par des tests CPU.
+La tranche M6 n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâches, ne charge pas de modèle et n'effectue aucun calcul tensoriel. Elle est validée par des tests CPU.
 
 - chargement du profil matériel JSON par le runtime ou la CLI ;
 - application effective du budget souple VRAM de 26 Gio ;
@@ -549,7 +549,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M4 | Contrat Device et sûreté mémoire (issues #11 et #12) | Livré par la PR #16 |
 | M5 | Robustesse et validation CUDA (issues #13, PR #17 et #18) | Livré ; chemin nominal validé sur RTX 5090 ; injection de fautes isolée dans l'issue #19 |
 | M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
-| M7 | Scheduler et orchestration mémoire | **En cours : noyau déterministe de tâches et files livré dans la PR M7 ; raccordement mémoire/exécution restant** |
+| M7 | Scheduler et orchestration mémoire | **En cours : noyau déterministe de tâches et files livré dans la PR #21 ; raccordement mémoire/exécution restant** |
 | M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
 | M9 | Stratégie autoregressive | Planifié |
 | M10 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
@@ -641,7 +641,7 @@ La concurrence, l'exécution asynchrone et l'intégration du propriétaire des r
 
 **Objectif :** coordonner calcul, résidence mémoire, transferts et préchargements sans violer l'affinité du backend CUDA.
 
-**Première tranche implémentée dans la PR M7 :** graphe de tâches acyclique par construction (dépendances vers des tâches déjà soumises), files logiques Compute/Transfer/Prefetch, sélection priorité-descendante/FIFO, états explicites, propagation des échecs vers les descendants et limites séparées de concurrence et de lookahead pour les préchargements. Le scheduler est mono-propriétaire (`!Send + !Sync`) et ne lance pas lui-même les tâches.
+**Première tranche implémentée dans la PR #21 :** graphe de tâches acyclique par construction (dépendances vers des tâches déjà soumises), files logiques Compute/Transfer/Prefetch, sélection priorité-descendante/FIFO, états explicites, propagation des échecs vers les descendants et limites séparées de concurrence et de lookahead pour les préchargements. Le scheduler est mono-propriétaire (`!Send + !Sync`) et ne lance pas lui-même les tâches.
 
 Travaux restants :
 - connecter l'ordonnanceur au cycle de vie des requêtes `claymore-runtime` ;
