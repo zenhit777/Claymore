@@ -110,7 +110,9 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
         if runner.kind() == TaskKind::Compute {
             return Err(ScheduledRuntimeError::ComputeQueueReserved);
         }
-        Ok(runner.run_one(&mut self.scheduler)?)
+        let outcome = runner.run_one(&mut self.scheduler)?;
+        self.prune_cancelled_requests();
+        Ok(outcome)
     }
 
     pub fn submit_request(
@@ -147,6 +149,7 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
                 self.record_execution_time(started_at);
                 self.metrics.requests_failed = self.metrics.requests_failed.saturating_add(1);
                 self.scheduler.fail(task_id)?;
+                self.prune_cancelled_requests();
                 return Err(error.into());
             }
         };
@@ -158,16 +161,19 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
             }
             RequestState::Failed => {
                 self.scheduler.fail(task_id)?;
+                self.prune_cancelled_requests();
                 self.metrics.requests_failed = self.metrics.requests_failed.saturating_add(1);
             }
             RequestState::Cancelled => {
                 self.scheduler.cancel_running(task_id)?;
+                self.prune_cancelled_requests();
                 self.metrics.requests_cancelled = self.metrics.requests_cancelled.saturating_add(1);
             }
             RequestState::Created | RequestState::Running => {
                 // Runtime::execute is synchronous and must always return a
                 // terminal report. Treat a contract violation as a task failure.
                 self.scheduler.fail(task_id)?;
+                self.prune_cancelled_requests();
                 self.metrics.requests_failed = self.metrics.requests_failed.saturating_add(1);
                 return Err(ScheduledRuntimeError::Runtime(
                     RuntimeError::StrategyFailed(
@@ -183,8 +189,18 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
     /// cancelled through their shared CancellationToken.
     pub fn cancel_queued(&mut self, task_id: TaskId) -> Result<(), ScheduledRuntimeError> {
         self.scheduler.cancel(task_id)?;
-        self.pending.remove(&task_id);
+        self.prune_cancelled_requests();
         Ok(())
+    }
+
+    fn prune_cancelled_requests(&mut self) {
+        for task_id in self.scheduler.cancelled_task_ids() {
+            self.pending.remove(&task_id);
+        }
+    }
+
+    pub fn pending_request_count(&self) -> usize {
+        self.pending.len()
     }
 
     fn record_execution_time(&mut self, started_at: Instant) {
