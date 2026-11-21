@@ -32,6 +32,10 @@ pub enum MemoryTask {
     Release {
         allocation_id: String,
     },
+    RecordReloadCost {
+        allocation_id: String,
+        estimated_ns: u64,
+    },
     Synchronize,
 }
 
@@ -112,6 +116,10 @@ impl<D: Device> MemoryTaskExecutor<D> {
             MemoryTask::Release { allocation_id } => {
                 let tick = self.next_tick()?;
                 self.manager.release(&allocation_id, tick)?;
+            }
+            MemoryTask::RecordReloadCost { allocation_id, estimated_ns } => {
+                let tick = self.next_tick()?;
+                self.manager.record_reload_cost(&allocation_id, estimated_ns, tick)?;
             }
             MemoryTask::Synchronize => self.manager.synchronize()?,
         }
