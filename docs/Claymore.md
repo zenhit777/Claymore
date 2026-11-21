@@ -652,12 +652,12 @@ La concurrence, l'exécution asynchrone et l'intégration du propriétaire des r
 - Le plafond dur du cache d'experts est appliqué à chaque admission, avec éviction déterministe des experts inactifs ; la politique adaptive tient compte du coût de rechargement enregistré.
 - Les gardes de ressources exposées par `DeviceMemoryManager` refusent les horizons antérieurs au tick courant et toute régression de complétion.
 
-Ces interfaces restent mono-propriétaires et synchrones. Elles ne prétendent pas que le backend CUDA implémente `Device` : les opérations CUDA gardent leur `CudaMemoryManager` dédié et doivent être exécutées sur le thread propriétaire. La validation matérielle reste nécessaire pour démontrer les transferts et événements réels.
+Ces interfaces restent mono-propriétaires et synchrones. Elles ne prétendent pas que le backend CUDA implémente `Device` : `CudaTransferExecutor` possède son `CudaMemoryManager` dédié et s'exécute sur le thread propriétaire. Les tâches H2D/D2H ne retournent le succès qu'après `wait_for_transfer` sur l'event réel ; les lectures pinned, allocations et libérations sont également exposées comme tâches. La validation matérielle reste nécessaire pour démontrer ce comportement sur la RTX 5090.
 
 Travaux restants :
-- connecter le moteur de transfert CUDA au contrat `TaskExecutor` et au scheduler, sans contourner l'ownership du contexte ;
-- faire confirmer les tâches de transfert par les événements CUDA réels avant de libérer leurs dépendances ;
-- alimenter les métriques par file et mémoire avec les mesures CUDA réelles ; les temps d'attente d'events et les durées de transfert H2D/D2H restent à instrumenter sur le backend matériel ;
+- valider sur RTX 5090 le `CudaTransferExecutor` avec des dépendances réelles et vérifier qu'aucune tâche dépendante ne démarre avant la complétion de l'event ;
+- vérifier sous pression VRAM que les admissions, évictions et gardes restent cohérentes ;
+- relever les métriques CUDA réelles (H2D/D2H, event wait, pic VRAM) et vérifier leur cohérence avec les métriques des files ;
 - alimenter la politique adaptive avec les coûts observés par les futurs chargeurs de poids/expert (l'API d'enregistrement et le classement par coût sont livrés) ;
 - relier les métriques matérielles CUDA et les streams compute au profil, avec réserve explicite.
 
