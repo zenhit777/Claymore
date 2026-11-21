@@ -354,6 +354,36 @@ mod tests {
         assert_eq!(runtime.task(request).unwrap().state, TaskState::Completed);
     }
 
+    struct FailingTransfer;
+    impl TaskExecutor for FailingTransfer {
+        fn execute(&mut self, _task: &TaskSnapshot) -> Result<(), String> {
+            Err("transfer failed".into())
+        }
+    }
+
+    #[test]
+    fn failed_transfer_discards_dependent_request_payload() {
+        let mut runtime = runtime(Echo);
+        let transfer = runtime.submit_task(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        runtime
+            .submit_request(
+                RequestInput::new([4, 5, 6]),
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                [transfer],
+            )
+            .unwrap();
+        assert_eq!(runtime.pending_request_count(), 1);
+
+        let mut runner = QueueRunner::new(TaskKind::Transfer, FailingTransfer);
+        assert!(matches!(
+            runtime.run_queue_one(&mut runner).unwrap(),
+            ExecutionOutcome::Failed { task_id, .. } if task_id == transfer
+        ));
+        assert_eq!(runtime.pending_request_count(), 0);
+        assert!(runtime.run_one().unwrap().is_none());
+    }
+
     #[test]
     fn scheduled_runtime_reserves_compute_queue_for_request_payloads() {
         let mut runtime = runtime(Echo);
