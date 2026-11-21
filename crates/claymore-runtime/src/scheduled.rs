@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 use claymore_scheduler::{
     Scheduler, SchedulerConfig, SchedulerError, TaskId, TaskKind, TaskPriority, TaskSnapshot,
-    TaskSpec, TaskState,
+    TaskSpec,
 };
 use thiserror::Error;
 
@@ -141,6 +141,7 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
 mod tests {
     use super::*;
     use crate::{ExecutionContext, RequestOutput};
+    use claymore_scheduler::TaskState;
     use std::cell::Cell;
 
     struct Echo;
