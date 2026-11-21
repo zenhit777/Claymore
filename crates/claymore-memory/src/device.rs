@@ -33,7 +33,10 @@ pub enum DeviceMemoryError {
     #[error("source and destination allocations must be distinct")]
     AliasedCopy,
     #[error("completion horizon {safe_after_tick} precedes current tick {current_tick}")]
-    InvalidCompletionHorizon { current_tick: u64, safe_after_tick: u64 },
+    InvalidCompletionHorizon {
+        current_tick: u64,
+        safe_after_tick: u64,
+    },
     #[error("completion horizon regressed from {previous} to {provided}")]
     CompletionHorizonRegression { previous: u64, provided: u64 },
 }
@@ -197,7 +200,9 @@ impl<D: Device> DeviceMemoryManager<D> {
                 safe_after_tick,
             });
         }
-        let previous = self.policy.allocation(id)
+        let previous = self
+            .policy
+            .allocation(id)
             .ok_or_else(|| DeviceMemoryError::UnknownAllocation(id.to_owned()))?
             .safe_after_tick;
         if safe_after_tick < previous {
@@ -508,7 +513,9 @@ mod tests {
     fn in_flight_guard_prevents_release_and_eviction_until_horizon() {
         let mut manager =
             DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
-        manager.allocate("protected", MemoryTier::Vram, 80, 1, true).unwrap();
+        manager
+            .allocate("protected", MemoryTier::Vram, 80, 1, true)
+            .unwrap();
         manager.mark_in_flight_until("protected", 10, 2).unwrap();
 
         assert!(matches!(
@@ -517,19 +524,27 @@ mod tests {
         ));
         assert!(matches!(
             manager.allocate("replacement", MemoryTier::Vram, 80, 9, false),
-            Err(DeviceMemoryError::Policy(MemoryError::InsufficientReclaimable { .. }))
+            Err(DeviceMemoryError::Policy(
+                MemoryError::InsufficientReclaimable { .. }
+            ))
         ));
 
         manager.release("protected", 10).unwrap();
-        manager.allocate("replacement", MemoryTier::Vram, 80, 11, false).unwrap();
+        manager
+            .allocate("replacement", MemoryTier::Vram, 80, 11, false)
+            .unwrap();
     }
 
     #[test]
     fn expert_cache_max_is_enforced_by_cpu_device_manager() {
         let mut manager =
             DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
-        manager.allocate("expert-a", MemoryTier::Vram, 60, 1, true).unwrap();
-        manager.allocate("expert-b", MemoryTier::Vram, 40, 2, true).unwrap();
+        manager
+            .allocate("expert-a", MemoryTier::Vram, 60, 1, true)
+            .unwrap();
+        manager
+            .allocate("expert-b", MemoryTier::Vram, 40, 2, true)
+            .unwrap();
         assert_eq!(manager.usage_bytes(MemoryTier::Vram), 40);
         assert!(manager.allocation("expert-a").is_none());
         assert!(manager.allocation("expert-b").is_some());
@@ -539,7 +554,9 @@ mod tests {
     fn completion_horizon_cannot_be_moved_backwards() {
         let mut manager =
             DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
-        manager.allocate("guarded", MemoryTier::Host, 8, 1, false).unwrap();
+        manager
+            .allocate("guarded", MemoryTier::Host, 8, 1, false)
+            .unwrap();
         manager.mark_in_flight_until("guarded", 10, 2).unwrap();
         assert!(matches!(
             manager.mark_in_flight_until("guarded", 8, 3),
