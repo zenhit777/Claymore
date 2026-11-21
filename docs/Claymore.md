@@ -325,9 +325,9 @@ La PR #16 a livré les issues #11 et #12. Elle introduit une libération explici
 
 Le contrat `CompletionToken` et la méthode `Device::copy_async` sont définis, mais aucun raccordement de `CudaDeviceBuffer` au trait `Device` n'est effectué. Le backend CUDA reste confiné au thread propriétaire. M4 est intégré dans `main` ; M5 ajoute le polling non bloquant et la finalisation automatique avant admission.
 
-#### M5 — Robustesse CUDA (PR #17 en revue)
+#### M5 — Robustesse CUDA (livré par la PR #17)
 
-La PR #17 ajoute le stream de transfert `CU_STREAM_NON_BLOCKING`, `poll_completed_transfers`, la finalisation des événements terminés avant admission/éviction et le départage déterministe des évictions. La campagne générale RTX 5090 a réussi (24/24) et le scénario ciblé M5-HW-POLL-01 a également réussi au SHA `c7d81f4ded02411ae2054d8e07786ae1f468b499` : polling direct jusqu'à `retired == 1`, puis admission sous pression avec éviction effective sans attente explicite de complétion. La preuve versionnée figure dans `docs/audits/m5-hardware-validation.md`. L'injection de fautes backend reste différée dans l'issue #19. La PR attend la revalidation architecturale et la fusion.
+M5 est livré par la PR #17 : stream de transfert `CU_STREAM_NON_BLOCKING`, `poll_completed_transfers`, finalisation des événements terminés avant admission/éviction et départage déterministe des évictions. La campagne générale RTX 5090 a réussi (24/24) et le scénario ciblé M5-HW-POLL-01 a également réussi au SHA `c7d81f4ded02411ae2054d8e07786ae1f468b499` : polling direct jusqu'à `retired == 1`, puis admission sous pression avec éviction effective sans attente explicite de complétion. La preuve versionnée figure dans `docs/audits/m5-hardware-validation.md`. L'injection de fautes backend reste différée dans l'issue #19 ; elle n'est pas un critère de clôture de M5.
 
 ### 7.1 Livré sur main
 
@@ -387,7 +387,11 @@ Le build par défaut reste indépendant du matériel. La feature CUDA requiert u
 
 Ce jalon livre des abstractions backend-neutres et leur validation CPU ; il ne livre aucun calcul tensoriel ni opérateur. Le backend CUDA existant n'implémente pas encore `Device` et son raccordement reste conditionné à un contrat de libération faillible et de protection des allocations en vol (voir §7.3 et l'audit M2).
 
-### 7.2 Non livré sur main / en cours de revue
+#### M5 — Robustesse CUDA (PR #17)
+
+Le gestionnaire mémoire CUDA utilise un stream de transfert non bloquant, interroge les events sans attendre et retire les protections uniquement après complétion confirmée. Le chemin d'admission poll les transferts avant de planifier les évictions ; une erreur de polling bloque l'admission en mode fail-closed. Les évictions à priorité égale sont départagées par identifiant lexicographique. Le scénario nominal ciblé a réussi sur RTX 5090 ; les injections de fautes et le backend CUDA simulable restent différés dans l'issue #19.
+
+### 7.2 Non livré sur main
 
 Les éléments suivants ne doivent pas être considérés comme fonctionnels de bout en bout :
 
@@ -473,7 +477,7 @@ Chaque moteur de modèle doit pouvoir préparer, exécuter et libérer ses état
 | FR-01 — Configuration du runtime | **Non livré** | Le profil JSON existe, mais aucun chargeur ne l'applique ; la CLI utilise `SchedulerConfig::default()`. |
 | FR-02 — Gestion des budgets | **Partiel** | Comptabilité host-side et validation des budgets ; le budget souple VRAM n'est pas appliqué à l'admission. |
 | FR-03 — Admission et éviction | **Livré (host-side) ; exécution CUDA opt-in validée sur RTX 5090 pour le SHA `a3ff0fd`** | Adaptateur d'allocation/libération CUDA et confirmation après free livrés derrière `cuda-driver` ; validation matérielle disponible dans `docs/audits/m1-hardware-validation.md` ; tests avec backend simulé encore manquants. |
-| FR-04 — Sûreté asynchrone | **Contrats M4 livrés ; polling et admission automatique M5 en revue dans la PR #17** | Events réels reliés aux transferts ; allocations protégées jusqu'à complétion confirmée ; polling non bloquant et finalisation avant admission ajoutés en M5. Campagne nominale RTX 5090 documentée dans `docs/audits/m5-hardware-validation.md` ; scénario ciblé poll → éviction en attente d'exécution sur le HEAD corrigé. Injection de fautes et backend simulé différés dans l'issue #19. |
+| FR-04 — Sûreté asynchrone | **Partiel : chemin nominal M5 validé sur RTX 5090 ; injection de fautes différée (#19)** | Events réels reliés aux transferts ; allocations protégées jusqu'à complétion confirmée ; polling non bloquant et finalisation avant admission. Campagne nominale et scénario ciblé poll → éviction documentés dans `docs/audits/m5-hardware-validation.md`. Les tests d'injection de fautes et le backend simulable restent suivis dans l'issue #19. |
 | FR-05 — Gestion des experts | **Non livré** | Getters/compteur seulement ; cible et maximum non appliqués à l'admission. |
 | FR-06 — Scheduling et prefetch | **Non livré** | Configuration seulement ; aucune logique de scheduling/prefetch. |
 | FR-07 — Diagnostics | **Partiel** | CLI de base et diagnostic device optionnel ; le profil JSON n'est pas chargé. |
@@ -525,7 +529,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M2 | Abstractions Device / Tensor | Livré par la PR #6 |
 | M3 | Durcissement des fondations Device (issues #7 à #10) | Livré par la PR #15 |
 | M4 | Contrat Device et sûreté mémoire (issues #11 et #12) | Livré par la PR #16 |
-| M5 | Robustesse et validation CUDA (issue #13) | Implémentation et validation matérielle livrées dans la PR #17 (B1 PASS sur RTX 5090) ; revalidation architecturale et fusion en attente |
+| M5 | Robustesse et validation CUDA (issue #13) | Livré par la PR #17 ; chemin nominal validé sur RTX 5090 ; injection de fautes différée dans l'issue #19 |
 | M6 | Runtime unifié | Planifié |
 | M7 | Scheduler et orchestration mémoire | Planifié |
 | M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
@@ -734,7 +738,7 @@ Historique de référence :
 - **v0.3** : memory orchestrator host-side ;
 - **v0.4** : backend CUDA Driver API optionnel.
 
-Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in). La PR #6 a livré M2 (`Device` / `Tensor` et simulateur CPU). Les PR #15 et #16 ont livré M3 et M4 ; la PR #17 porte M5 et reste soumise à revue architecturale et validation matérielle ciblée.
+Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in). La PR #6 a livré M2 (`Device` / `Tensor` et simulateur CPU). Les PR #15 et #16 ont livré M3 et M4 ; la PR #17 livre M5, dont le chemin nominal a été validé sur RTX 5090. L'injection de fautes reste hors périmètre dans l'issue #19.
 
 Une PR ne doit pas être déclarée prête uniquement parce que le code existe : elle doit préciser si les tests couvrent le build par défaut, la feature CUDA, le matériel réel ou seulement un backend simulé.
 
