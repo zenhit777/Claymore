@@ -378,6 +378,11 @@ impl Scheduler {
 
     fn refresh_blocked_tasks(&mut self) {
         loop {
+            let states: BTreeMap<_, _> = self
+                .tasks
+                .iter()
+                .map(|(id, task)| (*id, task.state))
+                .collect();
             let mut changed = false;
             for task in self.tasks.values_mut() {
                 if task.state != TaskState::Blocked {
@@ -386,7 +391,7 @@ impl Scheduler {
                 let dependency_states: Vec<_> = task
                     .dependencies
                     .iter()
-                    .filter_map(|id| self.tasks.get(id).map(|dependency| dependency.state))
+                    .filter_map(|id| states.get(id).copied())
                     .collect();
                 if dependency_states
                     .iter()
