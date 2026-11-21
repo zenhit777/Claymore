@@ -12,3 +12,8 @@ cuda-driver = []
 [dependencies]
 claymore-core = { path = "../claymore-core" }
 thiserror.workspace = true
+
+[[test]]
+name = "hardware_cuda_driver"
+path = "tests/hardware_cuda_driver.rs"
+required-features = ["cuda-driver"]

@@ -18,4 +18,11 @@ RUSTFLAGS="-L native=/usr/lib/wsl/lib" cargo check -p claymore-cuda --features c
 RUSTFLAGS="-L native=/usr/lib/wsl/lib" cargo test -p claymore-memory --features cuda-driver -- --ignored
 ```
 
+At runtime, expose the same directory to the dynamic loader so `libcuda.so.1` can be resolved:
+
+```bash
+export LD_LIBRARY_PATH=/usr/lib/wsl/lib
+echo "$LD_LIBRARY_PATH"
+```
+
 Restart WSL after changing the file (`wsl --shutdown`). Keep swap out of the model-weight tier; use it only as an emergency system mechanism.

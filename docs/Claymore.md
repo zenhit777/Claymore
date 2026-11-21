@@ -791,6 +791,7 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 - `docs/cuda-backend-v0.4.md` — détails du backend CUDA.
 - `docs/memory-profile.md` — profil mémoire RTX 5090.
 - `docs/wsl2.md` — configuration WSL2.
+- `docs/audits/m4-m5-rtx5090-hardware-validation.md` — campagne et preuves matérielles M4/M5 sur RTX 5090 (incluant la procédure de revalidation B1).
 - `docs/audits/m2-device-tensor-design.md` — contrats Device/Tensor et validation CPU.
 - `docs/audits/m3-device-foundations.md` — audit et durcissement des fondations Device.
 - `docs/audits/m4-device-lifecycle-contracts.md` — audit des contrats de libération, complétion asynchrone et vues tensor.
