@@ -376,12 +376,9 @@ mod tests {
 
     #[test]
     fn failed_prerequisite_discards_cancelled_memory_payloads() {
-        let manager = DeviceMemoryManager::new(
-            CpuDevice::new(),
-            budgets(),
-            crate::EvictionPolicy::Lru,
-        )
-        .unwrap();
+        let manager =
+            DeviceMemoryManager::new(CpuDevice::new(), budgets(), crate::EvictionPolicy::Lru)
+                .unwrap();
         let mut executor = MemoryTaskExecutor::new(manager);
         let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
         let failing = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
