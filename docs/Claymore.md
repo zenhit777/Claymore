@@ -401,7 +401,7 @@ La limite `max_payload_bytes` porte explicitement sur les seuls octets du payloa
 
 La tranche M6 n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâches, ne charge pas de modèle et n'effectue aucun calcul tensoriel. Elle est validée par des tests CPU.
 
-- chargement du profil matériel JSON par le runtime ou la CLI ;
+- chargement et validation du profil matériel JSON par le runtime et la CLI (la conversion en budgets mémoire et configuration scheduler est livrée) ;
 - application effective du budget souple VRAM de 26 Gio ;
 - enforcement de la cible du cache d'experts et son inclusion dans un working set explicite (le plafond maximal est désormais appliqué par les admissions mémoire) ;
 - exécution CUDA pilotée par events depuis les files du scheduler (le raccordement CPU/backend-neutre est livré dans M7) ;
@@ -646,17 +646,20 @@ La concurrence, l'exécution asynchrone et l'intégration du propriétaire des r
 **Complément d'exécution CPU et d'orchestration :** 
 - `claymore-scheduler` expose `QueueRunner` et `TaskExecutor`. Un runner exécute au plus une tâche de sa file sur le thread appelant, sans worker ni borne `Send`/`Sync`.
 - `claymore-runtime` expose `ScheduledRuntime`, qui soumet les requêtes comme tâches Compute, respecte priorité/dépendances, puis traduit les rapports Completed/Failed/Cancelled en transitions du scheduler. Les échecs et annulations propagent leurs effets aux descendants.
-- `claymore-memory` expose `MemoryTaskExecutor`, qui relie les tâches Transfer/Prefetch à l'adaptateur `DeviceMemoryManager<D>` backend-neutre. Les opérations CPU synchrones (allocation, écriture, copie, libération, synchronisation) sont exécutées par `QueueRunner` et couvertes par des tests avec `CpuDevice`.
-- Le gestionnaire mémoire applique désormais le plafond dur du cache d'experts à chaque admission, planifie l'éviction déterministe des experts inactifs si nécessaire, et expose une garde de ressource dont l'horizon de complétion ne peut pas régresser.
+- `claymore-memory` expose `MemoryTaskExecutor`, qui relie les tâches Transfer/Prefetch à l'adaptateur `DeviceMemoryManager<D>` backend-neutre. Les opérations CPU synchrones (allocation, écriture, copie, libération, synchronisation et enregistrement du coût de rechargement) sont exécutées par `QueueRunner` et couvertes par des tests avec `CpuDevice`.
+- `QueueRunnerMetrics` fournit les durées et compteurs par file ; `MemoryExecutionMetrics` fournit les compteurs d'opérations, volumes d'octets et durées du chemin mémoire.
+- Le gestionnaire mémoire applique le budget VRAM souple comme cible d'éviction proactive et le plafond dur comme limite d'admission ; si la cible souple est inatteignable, il n'admet que si le plafond dur reste respecté.
+- Le plafond dur du cache d'experts est appliqué à chaque admission, avec éviction déterministe des experts inactifs ; la politique adaptive tient compte du coût de rechargement enregistré.
+- Les gardes de ressources exposées par `DeviceMemoryManager` refusent les horizons antérieurs au tick courant et toute régression de complétion.
 
 Ces interfaces restent mono-propriétaires et synchrones. Elles ne prétendent pas que le backend CUDA implémente `Device` : les opérations CUDA gardent leur `CudaMemoryManager` dédié et doivent être exécutées sur le thread propriétaire. La validation matérielle reste nécessaire pour démontrer les transferts et événements réels.
 
 Travaux restants :
 - connecter le moteur de transfert CUDA au contrat `TaskExecutor` et au scheduler, sans contourner l'ownership du contexte ;
 - faire confirmer les tâches de transfert par les événements CUDA réels avant de libérer leurs dépendances ;
-- intégrer les coûts de chargement et métriques observées aux politiques LRU/LFU/adaptive ;
-- mesurer séparément transfert, attente et calcul ;
-- appliquer le profil matériel et le budget souple VRAM de 26 Gio au runtime, avec réserve explicite.
+- mesurer séparément les durées d'exécution par file et les opérations/volumes du gestionnaire mémoire ; les temps d'attente CUDA réels restent à instrumenter ;
+- intégrer les observations de coût de rechargement à la politique adaptive (les coûts sont enregistrables et influencent désormais le classement) ;
+- relier les métriques matérielles CUDA et les streams compute au profil, avec réserve explicite.
 
 Critères de la tranche CPU livrée :
 - tests déterministes couvrant priorité/FIFO, isolation des files, dépendances, échec en cascade, annulation et bornes de préchargement ;
