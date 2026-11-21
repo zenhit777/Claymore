@@ -14,8 +14,8 @@ use claymore_scheduler::{
 use thiserror::Error;
 
 use crate::{
-    CancellationToken, ExecutionReport, GenerationStrategy, HardwareProfile,
-    HardwareProfileError, RequestInput, RequestState, Runtime, RuntimeConfig, RuntimeError,
+    CancellationToken, ExecutionReport, GenerationStrategy, HardwareProfile, HardwareProfileError,
+    RequestInput, RequestState, Runtime, RuntimeConfig, RuntimeError,
 };
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -84,7 +84,11 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
         profile: &HardwareProfile,
         strategy: S,
     ) -> Result<Self, ScheduledRuntimeError> {
-        Self::new(RuntimeConfig::default(), profile.scheduler_config()?, strategy)
+        Self::new(
+            RuntimeConfig::default(),
+            profile.scheduler_config()?,
+            strategy,
+        )
     }
 
     /// Submit a Transfer or Prefetch task into the same dependency graph
@@ -165,9 +169,11 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
                 // terminal report. Treat a contract violation as a task failure.
                 self.scheduler.fail(task_id)?;
                 self.metrics.requests_failed = self.metrics.requests_failed.saturating_add(1);
-                return Err(ScheduledRuntimeError::Runtime(RuntimeError::StrategyFailed(
-                    "runtime returned a non-terminal execution report".to_owned(),
-                )));
+                return Err(ScheduledRuntimeError::Runtime(
+                    RuntimeError::StrategyFailed(
+                        "runtime returned a non-terminal execution report".to_owned(),
+                    ),
+                ));
             }
         }
         Ok(Some(ScheduledExecution { task_id, report }))
@@ -183,10 +189,8 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
 
     fn record_execution_time(&mut self, started_at: Instant) {
         let elapsed_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64;
-        self.metrics.total_execution_ns = self
-            .metrics
-            .total_execution_ns
-            .saturating_add(elapsed_ns);
+        self.metrics.total_execution_ns =
+            self.metrics.total_execution_ns.saturating_add(elapsed_ns);
         self.metrics.max_execution_ns = self.metrics.max_execution_ns.max(elapsed_ns);
     }
 
@@ -265,15 +269,15 @@ mod tests {
             RuntimeConfig::default(),
             SchedulerConfig::default(),
             strategy,
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     #[test]
     fn hardware_profile_supplies_scheduler_configuration() {
-        let profile = HardwareProfile::from_json(include_str!(
-            "../../../config/rtx5090-7950x3d.json"
-        ))
-        .unwrap();
+        let profile =
+            HardwareProfile::from_json(include_str!("../../../config/rtx5090-7950x3d.json"))
+                .unwrap();
         let runtime = ScheduledRuntime::from_profile(&profile, Echo).unwrap();
         assert_eq!(runtime.scheduler_config().cpu_workers, 10);
         assert_eq!(runtime.scheduler_config().max_prefetches, 2);
@@ -289,12 +293,14 @@ mod tests {
     #[test]
     fn scheduled_runtime_collects_compute_request_metrics() {
         let mut runtime = runtime(Echo);
-        runtime.submit_request(
-            RequestInput::new([1]),
-            CancellationToken::new(),
-            TaskPriority::Normal,
-            [],
-        ).unwrap();
+        runtime
+            .submit_request(
+                RequestInput::new([1]),
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                [],
+            )
+            .unwrap();
         runtime.run_one().unwrap().unwrap();
         let metrics = runtime.metrics();
         assert_eq!(metrics.requests_started, 1);
@@ -306,13 +312,17 @@ mod tests {
     #[test]
     fn transfer_task_and_compute_request_share_one_dependency_graph() {
         let mut runtime = runtime(Echo);
-        let transfer = runtime.submit_task(TaskSpec::new(TaskKind::Transfer)).unwrap();
-        let request = runtime.submit_request(
-            RequestInput::new([7, 8]),
-            CancellationToken::new(),
-            TaskPriority::Normal,
-            [transfer],
-        ).unwrap();
+        let transfer = runtime
+            .submit_task(TaskSpec::new(TaskKind::Transfer))
+            .unwrap();
+        let request = runtime
+            .submit_request(
+                RequestInput::new([7, 8]),
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                [transfer],
+            )
+            .unwrap();
 
         assert_eq!(runtime.ready_count_for(TaskKind::Transfer), 1);
         assert_eq!(runtime.ready_count(), 0);
@@ -345,18 +355,22 @@ mod tests {
     #[test]
     fn dependent_request_waits_for_predecessor_completion() {
         let mut runtime = runtime(Echo);
-        let first = runtime.submit_request(
-            RequestInput::new([1]),
-            CancellationToken::new(),
-            TaskPriority::Normal,
-            [],
-        ).unwrap();
-        let second = runtime.submit_request(
-            RequestInput::new([2]),
-            CancellationToken::new(),
-            TaskPriority::High,
-            [first],
-        ).unwrap();
+        let first = runtime
+            .submit_request(
+                RequestInput::new([1]),
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                [],
+            )
+            .unwrap();
+        let second = runtime
+            .submit_request(
+                RequestInput::new([2]),
+                CancellationToken::new(),
+                TaskPriority::High,
+                [first],
+            )
+            .unwrap();
 
         assert_eq!(runtime.ready_count(), 1);
         assert_eq!(runtime.run_one().unwrap().unwrap().task_id, first);
@@ -368,18 +382,22 @@ mod tests {
     #[test]
     fn failed_request_cancels_dependent_request() {
         let mut runtime = runtime(Fail);
-        let first = runtime.submit_request(
-            RequestInput::new([1]),
-            CancellationToken::new(),
-            TaskPriority::Normal,
-            [],
-        ).unwrap();
-        let second = runtime.submit_request(
-            RequestInput::new([2]),
-            CancellationToken::new(),
-            TaskPriority::Normal,
-            [first],
-        ).unwrap();
+        let first = runtime
+            .submit_request(
+                RequestInput::new([1]),
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                [],
+            )
+            .unwrap();
+        let second = runtime
+            .submit_request(
+                RequestInput::new([2]),
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                [first],
+            )
+            .unwrap();
 
         let result = runtime.run_one().unwrap().unwrap();
         assert_eq!(result.report.state, RequestState::Failed);
@@ -392,12 +410,9 @@ mod tests {
         let mut runtime = runtime(Echo);
         let token = CancellationToken::new();
         token.cancel();
-        let id = runtime.submit_request(
-            RequestInput::new([1]),
-            token,
-            TaskPriority::Normal,
-            [],
-        ).unwrap();
+        let id = runtime
+            .submit_request(RequestInput::new([1]), token, TaskPriority::Normal, [])
+            .unwrap();
 
         let result = runtime.run_one().unwrap().unwrap();
         assert_eq!(result.report.state, RequestState::Cancelled);
@@ -407,12 +422,14 @@ mod tests {
     #[test]
     fn queued_cancellation_prevents_strategy_execution() {
         let mut runtime = runtime(Count(Cell::new(0)));
-        let id = runtime.submit_request(
-            RequestInput::new([1]),
-            CancellationToken::new(),
-            TaskPriority::Normal,
-            [],
-        ).unwrap();
+        let id = runtime
+            .submit_request(
+                RequestInput::new([1]),
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                [],
+            )
+            .unwrap();
         runtime.cancel_queued(id).unwrap();
         assert_eq!(runtime.runtime().strategy().0.get(), 0);
         assert_eq!(runtime.task(id).unwrap().state, TaskState::Cancelled);
