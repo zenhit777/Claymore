@@ -1041,8 +1041,12 @@ fn hw_m7_cuda_transfer_executor_runs_scheduler_tasks_after_event_completion() {
     assert_eq!(metrics.failed, 0);
     assert_eq!(runner.executor().pending_operations(), 0);
     println!(
-        "M7 CUDA executor: H2D={} bytes D2H={} bytes event_wait={} ns",
-        metrics.h2d_bytes, metrics.d2h_bytes, metrics.event_wait_ns
+        "M7 CUDA executor: H2D={} bytes in {} ns; D2H={} bytes in {} ns; event_wait={} ns",
+        metrics.h2d_bytes,
+        metrics.h2d_total_ns,
+        metrics.d2h_bytes,
+        metrics.d2h_total_ns,
+        metrics.event_wait_ns
     );
 }
 
