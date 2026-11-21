@@ -1024,7 +1024,7 @@ fn hw_m7_cuda_transfer_executor_runs_scheduler_tasks_after_event_completion() {
             ExecutionOutcome::Completed(task_id)
         );
     }
-    assert_eq!(runner.executor().take_read_result(read_host), Some(expected));
+    assert_eq!(runner.executor_mut().take_read_result(read_host), Some(expected));
     let metrics = runner.executor().metrics();
     assert_eq!(metrics.h2d_transfers, 1);
     assert_eq!(metrics.d2h_transfers, 1);
