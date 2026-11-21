@@ -158,7 +158,10 @@ impl CudaTransferExecutor {
             CudaMemoryTask::ReadPinned { id, offset, len } => {
                 let tick = self.next_tick()?;
                 let bytes = self.manager.read_pinned(&id, offset, len, tick)?;
-                self.metrics.pinned_read_bytes = self.metrics.pinned_read_bytes.saturating_add(bytes.len() as u64);
+                self.metrics.pinned_read_bytes = self
+                    .metrics
+                    .pinned_read_bytes
+                    .saturating_add(bytes.len() as u64);
                 self.read_results.insert(task_id, bytes);
             }
             CudaMemoryTask::Release { id } => {
@@ -187,7 +190,10 @@ impl TaskExecutor for CudaTransferExecutor {
         let started_at = Instant::now();
         let result = self.execute_operation(task.id, operation);
         let elapsed_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64;
-        self.metrics.total_execution_ns = self.metrics.total_execution_ns.saturating_add(elapsed_ns);
+        self.metrics.total_execution_ns = self
+            .metrics
+            .total_execution_ns
+            .saturating_add(elapsed_ns);
         self.metrics.max_execution_ns = self.metrics.max_execution_ns.max(elapsed_ns);
         if result.is_err() {
             self.metrics.failed = self.metrics.failed.saturating_add(1);
