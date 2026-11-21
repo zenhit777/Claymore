@@ -240,7 +240,12 @@ mod tests {
     fn profile_rejects_pinned_budget_that_overcommits_disjoint_host_envelopes() {
         let mut profile = HardwareProfile::from_json(PROFILE).unwrap();
         profile.host_memory.pinned_ceiling_gib = 88;
-        assert_eq!(profile.validate(), Err(HardwareProfileError::Invalid("host memory budgets exceed their enclosing limits")));
+        assert_eq!(
+            profile.validate(),
+            Err(HardwareProfileError::Invalid(
+                "host memory budgets exceed their enclosing limits"
+            ))
+        );
     }
 
     #[test]

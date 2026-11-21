@@ -426,7 +426,7 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 - L'annulation observée après le retour de la stratégie prévaut sur le résultat de celle-ci. Si la stratégie renvoie simultanément une erreur, le rapport contient `Cancelled` et l'erreur de stratégie n'est pas conservée.
 - L'exécution reste synchrone et mono-requête ; aucune interruption forcée d'un appel backend bloquant n'est garantie. Le jeton est coopératif.
 - Le contrat d'erreur de stratégie est encore une `String` ; son évolution vers un type structuré est une décision préalable à l'intégration des moteurs en M8/M9.
-- L'ownership des ressources `Device` / `DeviceMemoryManager` n'est pas encore défini dans le contexte d'exécution : il sera décidé avec le propriétaire CUDA et le scheduler en M7/M8.
+- L'ownership des ressources CUDA est défini pour M7 : scheduler et exécuteurs restent mono-propriétaires (`!Send + !Sync`) ; `CudaTransferExecutor` détient son `CudaMemoryManager` et attend chaque event H2D/D2H. Le raccordement du backend CUDA au trait générique `Device` reste un chantier distinct.
 - `RequestOutput` représente une sortie complète ; une API de sortie incrémentale (blocs/tokens) reste à concevoir pour les stratégies qui en auront besoin.
 - L'épuisement des identifiants est détecté sans wraparound ; l'identifiant `u64::MAX` n'est pas émis car son incrément ne peut pas être représenté.
 
@@ -617,14 +617,13 @@ La concurrence, l'exécution asynchrone et l'intégration du propriétaire des r
 - Le plafond dur du cache d'experts est appliqué à chaque admission, avec éviction déterministe des experts inactifs ; la politique adaptive tient compte du coût de rechargement enregistré.
 - Les gardes de ressources exposées par `DeviceMemoryManager` refusent les horizons antérieurs au tick courant et toute régression de complétion.
 
-Ces interfaces restent mono-propriétaires et synchrones. Elles ne prétendent pas que le backend CUDA implémente `Device` : `CudaTransferExecutor` possède son `CudaMemoryManager` dédié et s'exécute sur le thread propriétaire. Les tâches H2D/D2H ne retournent le succès qu'après `wait_for_transfer` sur l'event réel ; les lectures pinned, allocations et libérations sont également exposées comme tâches. La validation matérielle reste nécessaire pour démontrer ce comportement sur la RTX 5090.
+Ces interfaces restent mono-propriétaires et synchrones. Elles ne prétendent pas que le backend CUDA implémente `Device` : `CudaTransferExecutor` possède son `CudaMemoryManager` dédié et s'exécute sur le thread propriétaire. Les tâches H2D/D2H ne retournent le succès qu'après `wait_for_transfer` sur l'event réel ; les lectures pinned, allocations et libérations sont également exposées comme tâches. La campagne matérielle RTX 5090 est versionnée dans `docs/audits/m7-rtx5090-hardware-validation.md` : 17 tests matériels exécutés deux fois (34/34 PASS) sur le SHA de code documenté. Cette preuve couvre le périmètre testé, pas les kernels, l'inférence, les grosses charges soutenues du cache d'experts ni les scénarios d'injection de fautes.
 
-Travaux restants (campagne matérielle) :
-- valider sur RTX 5090 le `CudaTransferExecutor` avec des dépendances réelles et vérifier qu'aucune tâche dépendante ne démarre avant la complétion de l'event ;
-- vérifier sous pression VRAM que les admissions, évictions et gardes restent cohérentes ;
-- relever les métriques CUDA réelles (H2D/D2H, event wait, pic VRAM) et vérifier leur cohérence avec les métriques des files ;
-- alimenter la politique adaptive avec les coûts observés par les futurs chargeurs de poids/expert (l'API d'enregistrement et le classement par coût sont livrés) ;
-- relier les métriques matérielles CUDA et les streams compute au profil, avec réserve explicite.
+Limites et travaux ultérieurs :
+- les copies H2D/D2H sont synchronisées par attente d'event avant le retour de l'exécuteur ; aucun recouvrement transfert/calcul n'est livré ;
+- les queues Prefetch et Transfer sont ordonnancées, mais leurs exécuteurs restent synchrones et mono-propriétaires ; aucun préchargement concurrent n'est revendiqué ;
+- le coût de rechargement est exposé par l'API mémoire, mais aucun chargeur ne l'alimente automatiquement à ce stade ;
+- la campagne matérielle doit être relancée après les corrections B1/B3, car elles changent la conversion du profil mémoire et l'ordre d'éviction ; les nouvelles mesures devront être consignées sur le SHA final.
 
 Critères de la tranche CPU livrée :
 - tests déterministes couvrant priorité/FIFO, isolation des files, dépendances, échec en cascade, annulation et bornes de préchargement ;

@@ -404,8 +404,17 @@ impl MemoryOrchestrator {
                 // must never be added to hit counts or logical ticks. Unknown
                 // reload cost defaults to zero and is considered only as a
                 // tie-break after heat and recency.
-                let reload_cost = self.reload_costs_ns.get(&allocation.id).copied().unwrap_or(0);
-                (allocation.hit_count, allocation.last_used_tick, reload_cost, allocation.bytes)
+                let reload_cost = self
+                    .reload_costs_ns
+                    .get(&allocation.id)
+                    .copied()
+                    .unwrap_or(0);
+                (
+                    allocation.hit_count,
+                    allocation.last_used_tick,
+                    reload_cost,
+                    allocation.bytes,
+                )
             }
         }
     }
@@ -565,7 +574,13 @@ mod tests {
         manager.record_allocation(allocation("cold-expensive", 40, 1, 0)).unwrap();
         manager.record_reload_cost("hot", 0).unwrap();
         manager.record_reload_cost("cold-expensive", 300_000_000).unwrap();
-        assert_eq!(manager.plan_admission(MemoryTier::Vram, 20, 10).unwrap().evict_ids, vec!["cold-expensive"]);
+        assert_eq!(
+            manager
+                .plan_admission(MemoryTier::Vram, 20, 10)
+                .unwrap()
+                .evict_ids,
+            vec!["cold-expensive"]
+        );
     }
 
     #[test]
@@ -575,7 +590,13 @@ mod tests {
         hot.hit_count = 100;
         manager.record_allocation(hot).unwrap();
         manager.record_allocation(allocation("cold-unknown-cost", 40, 1, 0)).unwrap();
-        assert_eq!(manager.plan_admission(MemoryTier::Vram, 20, 10).unwrap().evict_ids, vec!["cold-unknown-cost"]);
+        assert_eq!(
+            manager
+                .plan_admission(MemoryTier::Vram, 20, 10)
+                .unwrap()
+                .evict_ids,
+            vec!["cold-unknown-cost"]
+        );
     }
 
     #[test]

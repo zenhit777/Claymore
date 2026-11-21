@@ -232,8 +232,15 @@ impl Scheduler {
             .checked_add(1)
             .ok_or(SchedulerError::TaskIdExhausted)?;
 
-        let dependency_states: Vec<_> = spec.dependencies.iter().filter_map(|dependency| self.tasks.get(dependency).map(|task| task.state)).collect();
-        let state = if dependency_states.iter().any(|state| matches!(state, TaskState::Failed | TaskState::Cancelled)) {
+        let dependency_states: Vec<_> = spec
+            .dependencies
+            .iter()
+            .filter_map(|dependency| self.tasks.get(dependency).map(|task| task.state))
+            .collect();
+        let state = if dependency_states
+            .iter()
+            .any(|state| matches!(state, TaskState::Failed | TaskState::Cancelled))
+        {
             TaskState::Cancelled
         } else if dependency_states.iter().all(|state| *state == TaskState::Completed) {
             TaskState::Ready
@@ -468,7 +475,9 @@ mod tests {
         scheduler.cancel(cancelled).unwrap();
         let after_cancellation = scheduler.submit(TaskSpec::new(TaskKind::Compute).depends_on(cancelled)).unwrap();
         assert_eq!(scheduler.task(after_cancellation).unwrap().state, TaskState::Cancelled);
-        let descendant = scheduler.submit(TaskSpec::new(TaskKind::Compute).depends_on(after_failure)).unwrap();
+        let descendant = scheduler
+            .submit(TaskSpec::new(TaskKind::Compute).depends_on(after_failure))
+            .unwrap();
         assert_eq!(scheduler.task(descendant).unwrap().state, TaskState::Cancelled);
     }
 
