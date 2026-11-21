@@ -493,7 +493,9 @@ mod tests {
 
     #[test]
     fn oversized_input_is_rejected_before_request_id_is_consumed() {
-        let config = RuntimeConfig {\n            max_payload_bytes: 2,\n        };
+        let config = RuntimeConfig {
+            max_payload_bytes: 2,
+        };
         let mut runtime = Runtime::new(config, EchoStrategy).unwrap();
         assert_eq!(
             runtime.execute(RequestInput::new([1, 2, 3]), CancellationToken::new()),
