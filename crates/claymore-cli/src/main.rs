@@ -96,6 +96,9 @@ fn show_profile() {
     println!("cpu_workers={}", scheduler.cpu_workers);
     println!("max_prefetches={}", scheduler.max_prefetches);
     println!("lookahead={}", scheduler.lookahead);
+    println!("cuda_compute_streams={}", profile.scheduler.cuda_compute_streams);
+    println!("transfer_streams={}", profile.scheduler.transfer_streams);
+    println!("scheduler_tick_us={}", profile.scheduler.tick_us);
     println!("cuda_driver_feature={}", cfg!(feature = "cuda-driver"));
     println!("status=profile_validated");
 }
