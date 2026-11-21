@@ -270,7 +270,7 @@ L'architecture est organisée en couches avec des frontières explicites.
 | `claymore-core` | Types partagés, configuration et contrats transverses |
 | `claymore-device` | Contrats Device/Buffer/Tensor indépendants du backend et simulateur CPU |
 | `claymore-memory` | Budgets, comptabilité, admission et politiques d'éviction |
-| `claymore-scheduler` | Planification du travail et politique de préchargement |
+| `claymore-scheduler` | Graphe de tâches, files compute/transfer/prefetch, priorités et limites de préchargement |
 | `claymore-runtime` | Cycle de vie des requêtes, contexte d'exécution et orchestration synchrone indépendante des modèles |
 | `claymore-model-gemma` | Frontière d'intégration du modèle DiffusionGemma (`google/diffusiongemma-26B-A4B-it`) |
 | `claymore-model-clover` | Frontière d'intégration Clover |
@@ -279,7 +279,7 @@ L'architecture est organisée en couches avec des frontières explicites.
 
 Le workspace utilise Cargo, resolver 2, Rust edition 2021. La version de référence actuelle est 0.5.0.
 
-`claymore-scheduler` ne fournit actuellement qu'une structure `SchedulerConfig` (`cpu_workers`, `max_prefetches`, `lookahead`) et sa validation ; aucune boucle ni logique de planification n'est implémentée. La validation accepte de 1 à 12 workers. Les valeurs minimales de 6 workers, les nombres de streams et le tick de 500 µs figurant dans le profil JSON sont des paramètres documentaires, pas des contraintes appliquées par le code.
+`claymore-scheduler` fournit désormais un ordonnanceur déterministe de tâches avec dépendances, priorités, files logiques Compute/Transfer/Prefetch, fenêtre de préchargement bornée et transitions explicites. Il ne crée pas de workers, ne lance pas les opérations et ne crée aucun stream CUDA : l'exécuteur reste responsable du travail réel. Le scheduler est `!Send + !Sync` afin de préserver le confinement au thread propriétaire. La validation de `SchedulerConfig` accepte de 1 à 12 workers et au plus deux préchargements simultanés.
 
 ### 6.3 Principes de conception
 
@@ -391,20 +391,20 @@ Ce jalon livre des abstractions backend-neutres et leur validation CPU ; il ne l
 
 Les éléments suivants ne doivent pas être considérés comme fonctionnels de bout en bout :
 
-#### M6 — Runtime unifié (première tranche proposée par la PR #20, non encore sur main)
+#### M6 — Runtime unifié (PR #20 fusionnée)
 
 Le crate `claymore-runtime` fournit un noyau synchrone, mono-exécution et indépendant des modèles : identifiants monotones, contexte isolé par requête, enveloppes opaques, états explicites, rapport d'exécution, stratégie `GenerationStrategy`, erreurs et annulation coopérative. Aucun trait `Send`/`Sync` n'est imposé à la stratégie.
 
 La limite `max_payload_bytes` porte explicitement sur les seuls octets du payload ; les métadonnées ne sont pas comptabilisées. Si une stratégie panique, la panique se propage, l'identifiant a déjà été consommé et aucun rapport n'est produit : l'instance du runtime doit être abandonnée. Si l'annulation est observée après le retour de la stratégie, elle prévaut sur son résultat ; une éventuelle erreur de stratégie simultanée est écartée du rapport.
 
-**Statut : partiel — première tranche livrée dans la PR #20, en attente de merge.** La portée historique initiale de M6 incluait aussi l'orchestration de haut niveau et des frontières explicites entre runtime, architecture de modèle, stratégie et mode d'exécution. Ces éléments ne sont pas implémentés dans cette tranche : l'orchestration, l'ownership des ressources et le scheduling sont reportés à M7 ; l'intégration des moteurs tensoriels et les modes d'exécution concrets sont reportés à M8 et aux phases modèles ultérieures. Cette répartition est un amendement explicite du périmètre, pas une déclaration d'achèvement de ces critères.
+**Statut : première tranche livrée sur `main` par la PR #20.** La portée historique initiale de M6 incluait aussi l'orchestration de haut niveau et des frontières explicites entre runtime, architecture de modèle, stratégie et mode d'exécution. Ces éléments ne sont pas implémentés dans cette tranche : l'orchestration, l'ownership des ressources et le scheduling sont reportés à M7 ; l'intégration des moteurs tensoriels et les modes d'exécution concrets sont reportés à M8 et aux phases modèles ultérieures. Cette répartition est un amendement explicite du périmètre, pas une déclaration d'achèvement de ces critères.
 
 La tranche actuelle n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâches, ne charge pas de modèle et n'effectue aucun calcul tensoriel. Elle est validée par des tests CPU.
 
 - chargement du profil matériel JSON par le runtime ou la CLI ;
 - application effective du budget souple VRAM de 26 Gio ;
 - enforcement de la cible/max du cache d'experts et de son inclusion dans un working set explicite ;
-- logique de scheduling, files de tâches et préchargement (M7) ;
+- orchestration effective des tâches, exécution des files et raccordement au gestionnaire mémoire/backend (tranches ultérieures de M7) ;
 - exécution concurrente/asynchrone des requêtes, stratégie de génération concrète et intégration de modèles dans le runtime (extensions futures de M6/M8+) ;
 - adaptateur CUDA spécifique injectable et tests du cycle de vie CUDA avec backend simulé (différés dans l'issue #19) ;
 - pool allocator VRAM, réutilisation de blocs et défragmentation ;
@@ -548,8 +548,8 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M3 | Durcissement des fondations Device (issues #7 à #10) | Livré par la PR #15 |
 | M4 | Contrat Device et sûreté mémoire (issues #11 et #12) | Livré par la PR #16 |
 | M5 | Robustesse et validation CUDA (issues #13, PR #17 et #18) | Livré ; chemin nominal validé sur RTX 5090 ; injection de fautes isolée dans l'issue #19 |
-| M6 | Runtime unifié | **Partiel : première tranche livrée dans la PR #20 (en attente de merge)** ; orchestration haut niveau et frontières mode d'exécution reportées à M7/M8 |
-| M7 | Scheduler et orchestration mémoire | Planifié |
+| M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
+| M7 | Scheduler et orchestration mémoire | **En cours : noyau déterministe de tâches et files livré dans la PR M7 ; raccordement mémoire/exécution restant** |
 | M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
 | M9 | Stratégie autoregressive | Planifié |
 | M10 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
@@ -627,7 +627,7 @@ Travaux : finalisation automatique des transferts terminés avant admission/évi
 
 **Objectif :** introduire le cycle de vie des requêtes, les contextes d'exécution, les états, les erreurs, les annulations et l'orchestration de haut niveau.
 
-**Première tranche livrée :** crate `claymore-runtime`, contrat `GenerationStrategy`, contexte par requête, identifiants monotones, machine d'états explicite, rapports d'exécution, erreurs, annulation coopérative et validation de taille/configuration. L'implémentation reste synchrone et ne suppose ni `Send` ni `Sync` pour les stratégies.
+**État :** première tranche livrée sur `main` par la PR #20 : crate `claymore-runtime`, contrat `GenerationStrategy`, contexte par requête, identifiants monotones, machine d'états explicite, rapports d'exécution, erreurs, annulation coopérative et validation de taille/configuration. L'implémentation reste synchrone et ne suppose ni `Send` ni `Sync` pour les stratégies.
 
 Critères de la tranche livrée :
 - exécution d'une requête simulée de bout en bout sur CPU ;
@@ -635,7 +635,7 @@ Critères de la tranche livrée :
 - aucune dépendance à un modèle particulier dans le cœur runtime ;
 - tests des chemins succès, échec, annulation avant/après démarrage et rejet d'entrée invalide.
 
-La concurrence, l'exécution asynchrone, les files compute/transfer et l'intégration du propriétaire des ressources CUDA relèvent de M7. Ils ne sont pas des critères implicites de la première tranche M6 et ne doivent pas être ajoutés sans contrat de thread-affinity et de cancellation adapté.
+La concurrence, l'exécution asynchrone et l'intégration du propriétaire des ressources CUDA relèvent de M7 et des tranches ultérieures. La PR #20 ne les implémente pas.
 
 ### M7 — Scheduler et orchestration mémoire
 
@@ -761,7 +761,7 @@ Historique de référence :
 - **v0.3** : memory orchestrator host-side ;
 - **v0.4** : backend CUDA Driver API optionnel.
 
-Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in). La PR #6 a livré M2 (`Device` / `Tensor` et simulateur CPU). Les PR #15 et #16 ont livré M3 et M4 ; la PR #17 livre M5, dont le chemin nominal a été validé sur RTX 5090. L'injection de fautes reste hors périmètre dans l'issue #19.
+Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in). La PR #6 a livré M2 (`Device` / `Tensor` et simulateur CPU). Les PR #15 et #16 ont livré M3 et M4 ; les PR #17 et #18 ont livré M5, dont le chemin nominal a été validé sur RTX 5090. La PR #20 a livré la première tranche M6. L'injection de fautes reste suivie séparément dans l'issue #19.
 
 Une PR ne doit pas être déclarée prête uniquement parce que le code existe : elle doit préciser si les tests couvrent le build par défaut, la feature CUDA, le matériel réel ou seulement un backend simulé.
 
@@ -784,7 +784,7 @@ Une PR ne doit pas être déclarée prête uniquement parce que le code existe :
 | Kernels spécialisés | Complexité sans gain démontré | Développer après profiling |
 | Performances | Paramètres scheduler non optimaux | Benchmarks et tuning sur cible |
 | Contrat d'erreur des stratégies | `String` ne conserve pas les causes ni les types d'erreur | Décider avant M8 si le trait expose un type d'erreur associé ou une chaîne de causes typée |
-| Ownership des ressources du runtime | Le contexte M6 n'expose pas encore Device / DeviceMemoryManager | Trancher en M7/M8 si les ressources sont détenues par la stratégie ou injectées dans le contexte, en respectant l'affinité du thread CUDA |
+| Ownership des ressources du runtime | Le contexte M6 n'expose pas encore Device / DeviceMemoryManager | Le scheduler M7 est explicitement `!Send + !Sync` ; le thread propriétaire CUDA est préservé. Le choix entre ressources détenues par l'exécuteur ou injectées dans le contexte reste à trancher avant le raccordement memory/runtime |
 | Sorties de génération | Le rapport M6 contient une sortie complète unique | Concevoir une sortie incrémentale seulement avec les besoins concrets des stratégies M9/M10 |
 
 Les choix non tranchés doivent être consignés dans une PR ou une décision d'architecture avant d'être codés comme comportement permanent.
