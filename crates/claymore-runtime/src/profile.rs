@@ -160,13 +160,15 @@ impl HardwareProfile {
             || self.scheduler.cpu_workers > self.scheduler.cpu_workers_max
             || self.scheduler.cpu_workers_max > 12
             || self.scheduler.max_prefetches > 2
-            || self.scheduler.cuda_compute_streams == 0
-            || self.scheduler.transfer_streams == 0
+            || self.scheduler.lookahead > 32
+            || self.scheduler.cuda_compute_streams != 1
+            || self.scheduler.transfer_streams != 1
             || self.scheduler.tick_us == 0
         {
             return Err(HardwareProfileError::Invalid("scheduler limits are inconsistent"));
         }
-        if !["bf16", "fp16", "fp32"].contains(&self.precision.preferred.as_str())
+        if self.precision.policy.trim().is_empty()
+            || !["bf16", "fp16", "fp32"].contains(&self.precision.preferred.as_str())
             || !["bf16", "fp16", "fp32"]
                 .contains(&self.precision.sensitive_accumulation.as_str())
             || !["bf16", "fp16", "fp32"].contains(&self.precision.fallback.as_str())
@@ -225,6 +227,18 @@ mod tests {
         assert_eq!(scheduler.cpu_workers, 10);
         assert_eq!(scheduler.max_prefetches, 2);
         assert_eq!(scheduler.lookahead, 1);
+    }
+
+    #[test]
+    fn profile_rejects_unsupported_stream_topology() {
+        let mut profile = HardwareProfile::from_json(PROFILE).unwrap();
+        profile.scheduler.transfer_streams = 2;
+        assert_eq!(
+            profile.validate(),
+            Err(HardwareProfileError::Invalid(
+                "scheduler limits are inconsistent"
+            ))
+        );
     }
 
     #[test]
