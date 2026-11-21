@@ -250,4 +250,9 @@ impl TaskExecutor for CudaTransferExecutor {
         }
         result.map_err(|error| error.to_string())
     }
+
+    fn discard(&mut self, task_id: TaskId) {
+        self.operations.remove(&task_id);
+        self.read_results.remove(&task_id);
+    }
 }
