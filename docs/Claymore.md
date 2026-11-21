@@ -657,8 +657,8 @@ Ces interfaces restent mono-propriétaires et synchrones. Elles ne prétendent p
 Travaux restants :
 - connecter le moteur de transfert CUDA au contrat `TaskExecutor` et au scheduler, sans contourner l'ownership du contexte ;
 - faire confirmer les tâches de transfert par les événements CUDA réels avant de libérer leurs dépendances ;
-- mesurer séparément les durées d'exécution par file et les opérations/volumes du gestionnaire mémoire ; les temps d'attente CUDA réels restent à instrumenter ;
-- intégrer les observations de coût de rechargement à la politique adaptive (les coûts sont enregistrables et influencent désormais le classement) ;
+- alimenter les métriques par file et mémoire avec les mesures CUDA réelles ; les temps d'attente d'events et les durées de transfert H2D/D2H restent à instrumenter sur le backend matériel ;
+- alimenter la politique adaptive avec les coûts observés par les futurs chargeurs de poids/expert (l'API d'enregistrement et le classement par coût sont livrés) ;
 - relier les métriques matérielles CUDA et les streams compute au profil, avec réserve explicite.
 
 Critères de la tranche CPU livrée :
