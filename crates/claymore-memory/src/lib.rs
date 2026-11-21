@@ -226,34 +226,40 @@ impl MemoryOrchestrator {
         requested_bytes: u64,
         now_tick: u64,
     ) -> Result<AdmissionPlan, MemoryError> {
-        let limit = self.budgets.limit_for(tier);
-        if requested_bytes > limit {
+        let hard_limit = self.budgets.limit_for(tier);
+        let soft_limit = if tier == MemoryTier::Vram {
+            self.budgets.vram_soft_bytes
+        } else {
+            hard_limit
+        };
+        if requested_bytes > hard_limit {
             return Err(MemoryError::RequestTooLarge {
                 tier,
                 requested: requested_bytes,
-                limit,
+                limit: hard_limit,
             });
         }
         let current = self.usage_bytes(tier);
         let projected = current.saturating_add(requested_bytes);
-        if projected <= limit {
+        if projected <= soft_limit {
             return Ok(AdmissionPlan {
                 tier,
                 requested_bytes,
                 evict_ids: Vec::new(),
                 projected_usage_bytes: projected,
-                limit_bytes: limit,
+                limit_bytes: hard_limit,
             });
         }
-        let needed = projected - limit;
-        let mut candidates: Vec<&Allocation> = self
-            .allocations
-            .values()
+
+        // VRAM soft budget is an eviction target; the hard budget remains the
+        // admission boundary. If the target cannot be reached, reclaim every
+        // safe candidate and admit only if the hard ceiling is still respected.
+        let needed_for_soft = projected - soft_limit;
+        let mut candidates: Vec<&Allocation> = self.allocations.values()
             .filter(|a| a.tier == tier && a.safe_after_tick <= now_tick)
             .collect();
         candidates.sort_by(|a, b| {
-            self.eviction_key(a, now_tick)
-                .cmp(&self.eviction_key(b, now_tick))
+            self.eviction_key(a, now_tick).cmp(&self.eviction_key(b, now_tick))
                 // HashMap iteration order is intentionally unspecified. An ID
                 // tie-break makes equal-priority eviction plans reproducible.
                 .then_with(|| a.id.cmp(&b.id))
@@ -263,14 +269,16 @@ impl MemoryOrchestrator {
         for candidate in candidates {
             selected.push(candidate.id.clone());
             reclaimed = reclaimed.saturating_add(candidate.bytes);
-            if reclaimed >= needed {
+            if reclaimed >= needed_for_soft {
                 break;
             }
         }
-        if reclaimed < needed {
+
+        let projected_after_eviction = current.saturating_sub(reclaimed).saturating_add(requested_bytes);
+        if projected_after_eviction > hard_limit {
             return Err(MemoryError::InsufficientReclaimable {
                 tier,
-                needed,
+                needed: projected_after_eviction - hard_limit,
                 reclaimable: reclaimed,
             });
         }
@@ -278,10 +286,8 @@ impl MemoryOrchestrator {
             tier,
             requested_bytes,
             evict_ids: selected,
-            projected_usage_bytes: current
-                .saturating_sub(reclaimed)
-                .saturating_add(requested_bytes),
-            limit_bytes: limit,
+            projected_usage_bytes: projected_after_eviction,
+            limit_bytes: hard_limit,
         })
     }
 
@@ -447,6 +453,33 @@ mod tests {
         let plan = manager.plan_admission(MemoryTier::Vram, 40, 0).unwrap();
         assert!(plan.evict_ids.is_empty());
         assert_eq!(plan.projected_usage_bytes, 40);
+    }
+
+    #[test]
+    fn vram_soft_budget_triggers_proactive_eviction_before_hard_ceiling() {
+        let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
+        manager.record_allocation(allocation("old", 50, 1, 0)).unwrap();
+        manager.record_allocation(allocation("new", 35, 9, 0)).unwrap();
+
+        let plan = manager.plan_admission(MemoryTier::Vram, 10, 10).unwrap();
+        assert_eq!(plan.evict_ids, vec!["old"]);
+        assert_eq!(plan.projected_usage_bytes, 45);
+        assert_eq!(plan.limit_bytes, 100);
+    }
+
+    #[test]
+    fn vram_soft_target_is_best_effort_but_hard_ceiling_is_mandatory() {
+        let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
+        manager.record_allocation(allocation("busy", 90, 1, 50)).unwrap();
+
+        let plan = manager.plan_admission(MemoryTier::Vram, 5, 10).unwrap();
+        assert!(plan.evict_ids.is_empty());
+        assert_eq!(plan.projected_usage_bytes, 95);
+        assert_eq!(plan.limit_bytes, 100);
+        assert!(matches!(
+            manager.plan_admission(MemoryTier::Vram, 15, 10),
+            Err(MemoryError::InsufficientReclaimable { .. })
+        ));
     }
 
     #[test]
