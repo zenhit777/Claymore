@@ -618,4 +618,6 @@ mod tests {
 #[cfg(feature = "cuda-driver")]
 mod cuda_executor;
 #[cfg(feature = "cuda-driver")]
-pub use cuda_executor::{CudaMemoryTask, CudaTransferExecutor, CudaTransferExecutorError, CudaTransferMetrics};
+pub use cuda_executor::{
+    CudaMemoryTask, CudaTransferExecutor, CudaTransferExecutorError, CudaTransferMetrics,
+};
