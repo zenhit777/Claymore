@@ -617,11 +617,7 @@ impl CudaMemoryManager {
         Ok(())
     }
 
-    fn make_room_for_expert(
-        &mut self,
-        bytes: u64,
-        tick: u64,
-    ) -> Result<(), CudaMemoryError> {
+    fn make_room_for_expert(&mut self, bytes: u64, tick: u64) -> Result<(), CudaMemoryError> {
         self.poll_completed_transfers(tick)?;
         // Plan both independent limits before freeing any allocation.
         let expert_plan = self.policy.plan_expert_admission(bytes, tick)?;
