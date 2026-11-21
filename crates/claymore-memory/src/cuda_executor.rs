@@ -5,8 +5,8 @@
 //! returning success to QueueRunner, so scheduler dependents are not released
 //! while DMA may still reference either allocation.
 use std::collections::BTreeMap;
+use std::time::Instant;
 
-use claymore_core::MemoryTier;
 use claymore_scheduler::{TaskExecutor, TaskId, TaskKind, TaskSnapshot};
 
 use crate::{CudaMemoryError, CudaMemoryManager, EvictionPolicy, MemoryBudgets};
@@ -36,6 +36,22 @@ pub enum CudaTransferExecutorError {
     Memory(#[from] CudaMemoryError),
 }
 
+/// CUDA transfer counters and timings, including time spent waiting for events.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CudaTransferMetrics {
+    pub allocations: u64,
+    pub releases: u64,
+    pub h2d_transfers: u64,
+    pub d2h_transfers: u64,
+    pub h2d_bytes: u64,
+    pub d2h_bytes: u64,
+    pub pinned_read_bytes: u64,
+    pub event_wait_ns: u64,
+    pub failed: u64,
+    pub total_execution_ns: u64,
+    pub max_execution_ns: u64,
+}
+
 /// Drives CUDA memory tasks synchronously on the thread that owns the CUDA
 /// primary context. It intentionally has no Send/Sync implementation.
 pub struct CudaTransferExecutor {
@@ -43,6 +59,7 @@ pub struct CudaTransferExecutor {
     operations: BTreeMap<TaskId, CudaMemoryTask>,
     read_results: BTreeMap<TaskId, Vec<u8>>,
     logical_tick: u64,
+    metrics: CudaTransferMetrics,
 }
 
 impl CudaTransferExecutor {
@@ -56,6 +73,7 @@ impl CudaTransferExecutor {
             operations: BTreeMap::new(),
             read_results: BTreeMap::new(),
             logical_tick: 0,
+            metrics: CudaTransferMetrics::default(),
         })
     }
 
@@ -83,6 +101,10 @@ impl CudaTransferExecutor {
         self.operations.len()
     }
 
+    pub fn metrics(&self) -> CudaTransferMetrics {
+        self.metrics
+    }
+
     fn next_tick(&mut self) -> Result<u64, CudaTransferExecutorError> {
         self.logical_tick = self.logical_tick.checked_add(1)
             .ok_or(CudaTransferExecutorError::TickExhausted)?;
@@ -98,10 +120,12 @@ impl CudaTransferExecutor {
             CudaMemoryTask::AllocateDevice { id, bytes, expert } => {
                 let tick = self.next_tick()?;
                 self.manager.allocate_device(id, bytes, tick, expert)?;
+                self.metrics.allocations = self.metrics.allocations.saturating_add(1);
             }
             CudaMemoryTask::AllocatePinned { id, bytes } => {
                 let tick = self.next_tick()?;
                 self.manager.allocate_pinned(id, bytes, tick)?;
+                self.metrics.allocations = self.metrics.allocations.saturating_add(1);
             }
             CudaMemoryTask::WritePinned { id, offset, data } => {
                 let tick = self.next_tick()?;
@@ -111,22 +135,36 @@ impl CudaTransferExecutor {
                 let enqueue_tick = self.next_tick()?;
                 let token = self.manager.copy_h2d(&pinned_id, &device_id, bytes, enqueue_tick)?;
                 let wait_tick = self.next_tick()?;
+                let wait_started = Instant::now();
                 self.manager.wait_for_transfer(&token, wait_tick)?;
+                self.metrics.event_wait_ns = self.metrics.event_wait_ns.saturating_add(
+                    wait_started.elapsed().as_nanos().min(u64::MAX as u128) as u64
+                );
+                self.metrics.h2d_transfers = self.metrics.h2d_transfers.saturating_add(1);
+                self.metrics.h2d_bytes = self.metrics.h2d_bytes.saturating_add(bytes as u64);
             }
             CudaMemoryTask::CopyD2h { device_id, pinned_id, bytes } => {
                 let enqueue_tick = self.next_tick()?;
                 let token = self.manager.copy_d2h(&device_id, &pinned_id, bytes, enqueue_tick)?;
                 let wait_tick = self.next_tick()?;
+                let wait_started = Instant::now();
                 self.manager.wait_for_transfer(&token, wait_tick)?;
+                self.metrics.event_wait_ns = self.metrics.event_wait_ns.saturating_add(
+                    wait_started.elapsed().as_nanos().min(u64::MAX as u128) as u64
+                );
+                self.metrics.d2h_transfers = self.metrics.d2h_transfers.saturating_add(1);
+                self.metrics.d2h_bytes = self.metrics.d2h_bytes.saturating_add(bytes as u64);
             }
             CudaMemoryTask::ReadPinned { id, offset, len } => {
                 let tick = self.next_tick()?;
                 let bytes = self.manager.read_pinned(&id, offset, len, tick)?;
+                self.metrics.pinned_read_bytes = self.metrics.pinned_read_bytes.saturating_add(bytes.len() as u64);
                 self.read_results.insert(task_id, bytes);
             }
             CudaMemoryTask::Release { id } => {
                 let tick = self.next_tick()?;
                 self.manager.release(&id, tick)?;
+                self.metrics.releases = self.metrics.releases.saturating_add(1);
             }
         }
         Ok(())
@@ -136,20 +174,24 @@ impl CudaTransferExecutor {
 impl TaskExecutor for CudaTransferExecutor {
     fn execute(&mut self, task: &TaskSnapshot) -> Result<(), String> {
         if !matches!(task.kind, TaskKind::Transfer | TaskKind::Prefetch) {
+            self.metrics.failed = self.metrics.failed.saturating_add(1);
             return Err(CudaTransferExecutorError::WrongQueue {
                 task_id: task.id,
                 kind: task.kind,
             }.to_string());
         }
-        let operation = self.operations.remove(&task.id)
-            .ok_or(CudaTransferExecutorError::MissingTask(task.id))
-            .map_err(|error| error.to_string())?;
-        self.execute_operation(task.id, operation)
-            .map_err(|error| error.to_string())
+        let Some(operation) = self.operations.remove(&task.id) else {
+            self.metrics.failed = self.metrics.failed.saturating_add(1);
+            return Err(CudaTransferExecutorError::MissingTask(task.id).to_string());
+        };
+        let started_at = Instant::now();
+        let result = self.execute_operation(task.id, operation);
+        let elapsed_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+        self.metrics.total_execution_ns = self.metrics.total_execution_ns.saturating_add(elapsed_ns);
+        self.metrics.max_execution_ns = self.metrics.max_execution_ns.max(elapsed_ns);
+        if result.is_err() {
+            self.metrics.failed = self.metrics.failed.saturating_add(1);
+        }
+        result.map_err(|error| error.to_string())
     }
 }
-
-// Keep the memory tier import in this feature module's public dependency
-// surface explicit: CUDA device allocations are VRAM and pinned allocations
-// are PinnedHost; no generic Device trait implementation is implied.
-const _: Option<MemoryTier> = None;
