@@ -514,7 +514,7 @@ mod tests {
         let mut manager =
             DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
         manager
-            .allocate("protected", MemoryTier::Vram, 80, 1, true)
+            .allocate("protected", MemoryTier::Vram, 80, 1, false)
             .unwrap();
         manager.mark_in_flight_until("protected", 10, 2).unwrap();
 
