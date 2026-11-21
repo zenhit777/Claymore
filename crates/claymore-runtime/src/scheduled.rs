@@ -364,7 +364,9 @@ mod tests {
     #[test]
     fn failed_transfer_discards_dependent_request_payload() {
         let mut runtime = runtime(Echo);
-        let transfer = runtime.submit_task(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        let transfer = runtime
+            .submit_task(TaskSpec::new(TaskKind::Transfer))
+            .unwrap();
         runtime
             .submit_request(
                 RequestInput::new([4, 5, 6]),
