@@ -45,6 +45,8 @@ pub struct CudaTransferMetrics {
     pub d2h_transfers: u64,
     pub h2d_bytes: u64,
     pub d2h_bytes: u64,
+    pub h2d_total_ns: u64,
+    pub d2h_total_ns: u64,
     pub pinned_read_bytes: u64,
     pub event_wait_ns: u64,
     pub failed: u64,
@@ -134,6 +136,7 @@ impl CudaTransferExecutor {
                 self.manager.write_pinned(&id, offset, &data, tick)?;
             }
             CudaMemoryTask::CopyH2d { pinned_id, device_id, bytes } => {
+                let transfer_started = Instant::now();
                 let enqueue_tick = self.next_tick()?;
                 let token = self.manager.copy_h2d(&pinned_id, &device_id, bytes, enqueue_tick)?;
                 let wait_tick = self.next_tick()?;
@@ -144,8 +147,12 @@ impl CudaTransferExecutor {
                 );
                 self.metrics.h2d_transfers = self.metrics.h2d_transfers.saturating_add(1);
                 self.metrics.h2d_bytes = self.metrics.h2d_bytes.saturating_add(bytes as u64);
+                self.metrics.h2d_total_ns = self.metrics.h2d_total_ns.saturating_add(
+                    transfer_started.elapsed().as_nanos().min(u64::MAX as u128) as u64
+                );
             }
             CudaMemoryTask::CopyD2h { device_id, pinned_id, bytes } => {
+                let transfer_started = Instant::now();
                 let enqueue_tick = self.next_tick()?;
                 let token = self.manager.copy_d2h(&device_id, &pinned_id, bytes, enqueue_tick)?;
                 let wait_tick = self.next_tick()?;
@@ -156,6 +163,9 @@ impl CudaTransferExecutor {
                 );
                 self.metrics.d2h_transfers = self.metrics.d2h_transfers.saturating_add(1);
                 self.metrics.d2h_bytes = self.metrics.d2h_bytes.saturating_add(bytes as u64);
+                self.metrics.d2h_total_ns = self.metrics.d2h_total_ns.saturating_add(
+                    transfer_started.elapsed().as_nanos().min(u64::MAX as u128) as u64
+                );
             }
             CudaMemoryTask::ReadPinned { id, offset, len } => {
                 let tick = self.next_tick()?;
