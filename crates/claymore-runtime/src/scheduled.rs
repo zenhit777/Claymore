@@ -5,6 +5,7 @@
 //! ordering. It executes only Compute tasks; transfer and prefetch queues are
 //! driven by their own owner-thread QueueRunner instances.
 use std::collections::BTreeMap;
+use std::time::Instant;
 
 use claymore_scheduler::{
     ExecutionOutcome, QueueRunner, Scheduler, SchedulerConfig, SchedulerError, TaskExecutor,
@@ -40,6 +41,17 @@ pub struct ScheduledExecution {
     pub report: ExecutionReport,
 }
 
+/// Cumulative request/compute timing for one ScheduledRuntime instance.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ScheduledRuntimeMetrics {
+    pub requests_started: u64,
+    pub requests_completed: u64,
+    pub requests_failed: u64,
+    pub requests_cancelled: u64,
+    pub total_execution_ns: u64,
+    pub max_execution_ns: u64,
+}
+
 /// Bridges request lifecycle to deterministic Compute scheduling.
 ///
 /// The scheduler and strategy are both owned by this value and are never
@@ -50,6 +62,7 @@ pub struct ScheduledRuntime<S> {
     runtime: Runtime<S>,
     scheduler: Scheduler,
     pending: BTreeMap<TaskId, (RequestInput, CancellationToken)>,
+    metrics: ScheduledRuntimeMetrics,
 }
 
 impl<S: GenerationStrategy> ScheduledRuntime<S> {
@@ -62,6 +75,7 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
             runtime: Runtime::new(runtime_config, strategy)?,
             scheduler: Scheduler::new(scheduler_config)?,
             pending: BTreeMap::new(),
+            metrics: ScheduledRuntimeMetrics::default(),
         })
     }
 
@@ -121,21 +135,36 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
             self.scheduler.fail(task_id)?;
             return Err(ScheduledRuntimeError::MissingRequest(task_id));
         };
+        self.metrics.requests_started = self.metrics.requests_started.saturating_add(1);
+        let started_at = Instant::now();
         let report = match self.runtime.execute(input, cancellation) {
             Ok(report) => report,
             Err(error) => {
+                self.record_execution_time(started_at);
+                self.metrics.requests_failed = self.metrics.requests_failed.saturating_add(1);
                 self.scheduler.fail(task_id)?;
                 return Err(error.into());
             }
         };
+        self.record_execution_time(started_at);
         match report.state {
-            RequestState::Completed => self.scheduler.complete(task_id)?,
-            RequestState::Failed => self.scheduler.fail(task_id)?,
-            RequestState::Cancelled => self.scheduler.cancel_running(task_id)?,
+            RequestState::Completed => {
+                self.scheduler.complete(task_id)?;
+                self.metrics.requests_completed = self.metrics.requests_completed.saturating_add(1);
+            }
+            RequestState::Failed => {
+                self.scheduler.fail(task_id)?;
+                self.metrics.requests_failed = self.metrics.requests_failed.saturating_add(1);
+            }
+            RequestState::Cancelled => {
+                self.scheduler.cancel_running(task_id)?;
+                self.metrics.requests_cancelled = self.metrics.requests_cancelled.saturating_add(1);
+            }
             RequestState::Created | RequestState::Running => {
                 // Runtime::execute is synchronous and must always return a
                 // terminal report. Treat a contract violation as a task failure.
                 self.scheduler.fail(task_id)?;
+                self.metrics.requests_failed = self.metrics.requests_failed.saturating_add(1);
                 return Err(ScheduledRuntimeError::Runtime(RuntimeError::StrategyFailed(
                     "runtime returned a non-terminal execution report".to_owned(),
                 )));
@@ -150,6 +179,16 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
         self.scheduler.cancel(task_id)?;
         self.pending.remove(&task_id);
         Ok(())
+    }
+
+    fn record_execution_time(&mut self, started_at: Instant) {
+        let elapsed_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+        self.metrics.total_execution_ns = self.metrics.total_execution_ns.saturating_add(elapsed_ns);
+        self.metrics.max_execution_ns = self.metrics.max_execution_ns.max(elapsed_ns);
+    }
+
+    pub fn metrics(&self) -> ScheduledRuntimeMetrics {
+        self.metrics
     }
 
     pub fn task(&self, task_id: TaskId) -> Result<TaskSnapshot, SchedulerError> {
@@ -239,6 +278,23 @@ mod tests {
         fn execute(&mut self, _task: &TaskSnapshot) -> Result<(), String> {
             Ok(())
         }
+    }
+
+    #[test]
+    fn scheduled_runtime_collects_compute_request_metrics() {
+        let mut runtime = runtime(Echo);
+        runtime.submit_request(
+            RequestInput::new([1]),
+            CancellationToken::new(),
+            TaskPriority::Normal,
+            [],
+        ).unwrap();
+        runtime.run_one().unwrap().unwrap();
+        let metrics = runtime.metrics();
+        assert_eq!(metrics.requests_started, 1);
+        assert_eq!(metrics.requests_completed, 1);
+        assert_eq!(metrics.requests_failed, 0);
+        assert_eq!(metrics.requests_cancelled, 0);
     }
 
     #[test]
