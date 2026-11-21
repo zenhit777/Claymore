@@ -403,8 +403,8 @@ La tranche M6 n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâch
 
 - chargement du profil matériel JSON par le runtime ou la CLI ;
 - application effective du budget souple VRAM de 26 Gio ;
-- enforcement de la cible/max du cache d'experts et de son inclusion dans un working set explicite ;
-- orchestration effective des tâches, exécution des files et raccordement au gestionnaire mémoire/backend (tranches ultérieures de M7) ;
+- enforcement de la cible du cache d'experts et son inclusion dans un working set explicite (le plafond maximal est désormais appliqué par les admissions mémoire) ;
+- exécution CUDA pilotée par events depuis les files du scheduler (le raccordement CPU/backend-neutre est livré dans M7) ;
 - exécution concurrente/asynchrone des requêtes, stratégie de génération concrète et intégration de modèles dans le runtime (extensions futures de M6/M8+) ;
 - adaptateur CUDA spécifique injectable et tests du cycle de vie CUDA avec backend simulé (différés dans l'issue #19) ;
 - pool allocator VRAM, réutilisation de blocs et défragmentation ;
@@ -643,23 +643,30 @@ La concurrence, l'exécution asynchrone et l'intégration du propriétaire des r
 
 **Première tranche implémentée dans la PR #21 :** graphe de tâches acyclique par construction (dépendances vers des tâches déjà soumises), files logiques Compute/Transfer/Prefetch, sélection priorité-descendante/FIFO, états explicites, propagation des échecs vers les descendants et limites séparées de concurrence et de lookahead pour les préchargements. Le scheduler est mono-propriétaire (`!Send + !Sync`) et ne lance pas lui-même les tâches.
 
-**Complément d'exécution CPU :** `claymore-scheduler` expose désormais `QueueRunner` et le trait `TaskExecutor`. Un runner exécute au plus une tâche de sa file sur le thread appelant, puis confirme `Completed` ou `Failed` auprès du scheduler. Aucun worker n'est créé et aucune contrainte `Send`/`Sync` n'est ajoutée. Cette interface est testable avec un exécuteur simulé sans driver ni GPU ; un exécuteur CUDA devra rester construit et appelé sur le thread propriétaire et ne retourner `Ok(())` qu'après confirmation de complétion par l'event correspondant.
+**Complément d'exécution CPU et d'orchestration :** 
+- `claymore-scheduler` expose `QueueRunner` et `TaskExecutor`. Un runner exécute au plus une tâche de sa file sur le thread appelant, sans worker ni borne `Send`/`Sync`.
+- `claymore-runtime` expose `ScheduledRuntime`, qui soumet les requêtes comme tâches Compute, respecte priorité/dépendances, puis traduit les rapports Completed/Failed/Cancelled en transitions du scheduler. Les échecs et annulations propagent leurs effets aux descendants.
+- `claymore-memory` expose `MemoryTaskExecutor`, qui relie les tâches Transfer/Prefetch à l'adaptateur `DeviceMemoryManager<D>` backend-neutre. Les opérations CPU synchrones (allocation, écriture, copie, libération, synchronisation) sont exécutées par `QueueRunner` et couvertes par des tests avec `CpuDevice`.
+- Le gestionnaire mémoire applique désormais le plafond dur du cache d'experts à chaque admission, planifie l'éviction déterministe des experts inactifs si nécessaire, et expose une garde de ressource dont l'horizon de complétion ne peut pas régresser.
+
+Ces interfaces restent mono-propriétaires et synchrones. Elles ne prétendent pas que le backend CUDA implémente `Device` : les opérations CUDA gardent leur `CudaMemoryManager` dédié et doivent être exécutées sur le thread propriétaire. La validation matérielle reste nécessaire pour démontrer les transferts et événements réels.
 
 Travaux restants :
-- connecter l'ordonnanceur au cycle de vie des requêtes `claymore-runtime` ;
-- définir l'interface d'exécution des tâches et le propriétaire effectif des opérations CUDA ;
-- intégrer admission, éviction et gardes de ressources de `claymore-memory` ;
+- connecter le moteur de transfert CUDA au contrat `TaskExecutor` et au scheduler, sans contourner l'ownership du contexte ;
 - faire confirmer les tâches de transfert par les événements CUDA réels avant de libérer leurs dépendances ;
 - intégrer les coûts de chargement et métriques observées aux politiques LRU/LFU/adaptive ;
-- mesurer séparément transfert, attente et calcul.
+- mesurer séparément transfert, attente et calcul ;
+- appliquer le profil matériel et le budget souple VRAM de 26 Gio au runtime, avec réserve explicite.
 
-Critères de la tranche livrée :
-- tests CPU déterministes couvrant priorité/FIFO, isolation des files, dépendances, échec en cascade, annulation et bornes de préchargement ;
-- aucune tâche dépendante ne devient prête avant la confirmation de complétion de ses prérequis ;
+Critères de la tranche CPU livrée :
+- tests déterministes couvrant priorité/FIFO, isolation des files, dépendances, échec en cascade, annulation et bornes de préchargement ;
+- cycle de requête ScheduledRuntime ↔ Scheduler vérifié sur CPU ;
+- tâches Transfer exécutables via QueueRunner et DeviceMemoryManager sur CpuDevice ;
+- admission expert bornée par le plafond dur et allocations protégées jusqu'à l'horizon déclaré ;
 - aucun lancement implicite ni appel CUDA depuis le scheduler.
 
 Critères de clôture M7 complète :
-- aucun dépassement de budget mémoire ;
+- aucun dépassement des budgets effectifs, dont le working set expert ;
 - une allocation en vol reste protégée jusqu'à la complétion de son event ;
 - aucun buffer évincé avant complétion de toutes ses dépendances ;
 - exécution des files sur leurs propriétaires respectifs et métriques séparées transfert/attente/calcul.
