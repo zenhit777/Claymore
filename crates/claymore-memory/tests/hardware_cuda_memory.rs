@@ -1046,3 +1046,40 @@ fn hw_m7_cuda_transfer_executor_runs_scheduler_tasks_after_event_completion() {
     );
 }
 
+
+#[test]
+#[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+fn hw_m7_expert_cache_max_is_enforced_before_device_allocation() {
+    let _serial = serial();
+    let mib = 1024_u64 * 1024;
+    let budgets = MemoryBudgets {
+        vram_soft_bytes: 8 * mib,
+        vram_hard_bytes: 8 * mib,
+        host_bytes: 16 * mib,
+        pinned_host_bytes: 4 * mib,
+        expert_cache_target_bytes: mib,
+        expert_cache_max_bytes: 2 * mib,
+    };
+    let mut manager = CudaMemoryManager::new(0, budgets, EvictionPolicy::Lru)
+        .expect("CUDA memory manager");
+    let mut tick = Ticker::new();
+
+    manager
+        .allocate_device("expert-old", 1536 * 1024, tick.tick(), true)
+        .expect("first expert allocation");
+    manager
+        .allocate_device("expert-new", 1536 * 1024, tick.tick(), true)
+        .expect("second expert allocation within the hard cache maximum");
+
+    assert_eq!(manager.usage_bytes(MemoryTier::Vram), 1536 * 1024);
+    assert!(matches!(
+        manager.release("expert-old", tick.tick()),
+        Err(CudaMemoryError::UnknownAllocation(id)) if id == "expert-old"
+    ));
+    manager
+        .release("expert-new", tick.tick())
+        .expect("remaining expert release");
+    assert_eq!(manager.usage_bytes(MemoryTier::Vram), 0);
+    println!("M7 expert cache maximum enforced with deterministic idle eviction");
+}
+
