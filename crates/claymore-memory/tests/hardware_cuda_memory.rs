@@ -985,13 +985,21 @@ fn hw_m7_cuda_transfer_executor_runs_scheduler_tasks_after_event_completion() {
     let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
 
     let allocate_host = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
-    let allocate_device = scheduler.submit(TaskSpec::new(TaskKind::Transfer).depends_on(allocate_host)).unwrap();
-    let write_host = scheduler.submit(TaskSpec::new(TaskKind::Transfer).depends_on(allocate_device)).unwrap();
+    let allocate_device = scheduler
+        .submit(TaskSpec::new(TaskKind::Transfer).depends_on(allocate_host))
+        .unwrap();
+    let write_host = scheduler
+        .submit(TaskSpec::new(TaskKind::Transfer).depends_on(allocate_device))
+        .unwrap();
     let h2d = scheduler.submit(TaskSpec::new(TaskKind::Transfer).depends_on(write_host)).unwrap();
     let d2h = scheduler.submit(TaskSpec::new(TaskKind::Transfer).depends_on(h2d)).unwrap();
     let read_host = scheduler.submit(TaskSpec::new(TaskKind::Transfer).depends_on(d2h)).unwrap();
-    let release_device = scheduler.submit(TaskSpec::new(TaskKind::Transfer).depends_on(read_host)).unwrap();
-    let release_host = scheduler.submit(TaskSpec::new(TaskKind::Transfer).depends_on(release_device)).unwrap();
+    let release_device = scheduler
+        .submit(TaskSpec::new(TaskKind::Transfer).depends_on(read_host))
+        .unwrap();
+    let release_host = scheduler
+        .submit(TaskSpec::new(TaskKind::Transfer).depends_on(release_device))
+        .unwrap();
 
     executor.register(allocate_host, CudaMemoryTask::AllocatePinned {
         id: "host".into(), bytes: expected.len() as u64,
