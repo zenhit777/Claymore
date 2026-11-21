@@ -7,8 +7,8 @@
 use std::collections::BTreeMap;
 
 use claymore_scheduler::{
-    Scheduler, SchedulerConfig, SchedulerError, TaskId, TaskKind, TaskPriority, TaskSnapshot,
-    TaskSpec,
+    ExecutionOutcome, QueueRunner, Scheduler, SchedulerConfig, SchedulerError, TaskExecutor,
+    TaskId, TaskKind, TaskPriority, TaskSnapshot, TaskSpec,
 };
 use thiserror::Error;
 
@@ -27,6 +27,10 @@ pub enum ScheduledRuntimeError {
     Profile(#[from] HardwareProfileError),
     #[error("scheduled request payload missing for task {0:?}")]
     MissingRequest(TaskId),
+    #[error("Compute tasks must be submitted through submit_request")]
+    ComputeTaskRequiresRequest,
+    #[error("the Compute queue is reserved for ScheduledRuntime::run_one")]
+    ComputeQueueReserved,
 }
 
 /// A request report paired with the scheduler task that drove it.
@@ -67,6 +71,28 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
         strategy: S,
     ) -> Result<Self, ScheduledRuntimeError> {
         Self::new(RuntimeConfig::default(), profile.scheduler_config()?, strategy)
+    }
+
+    /// Submit a Transfer or Prefetch task into the same dependency graph
+    /// used by scheduled Compute requests.
+    pub fn submit_task(&mut self, spec: TaskSpec) -> Result<TaskId, ScheduledRuntimeError> {
+        if spec.kind == TaskKind::Compute {
+            return Err(ScheduledRuntimeError::ComputeTaskRequiresRequest);
+        }
+        Ok(self.scheduler.submit(spec)?)
+    }
+
+    /// Drive a non-Compute queue against this runtime's shared scheduler.
+    /// This is the integration point for MemoryTaskExecutor and
+    /// CudaTransferExecutor; their QueueRunner must stay on its owner thread.
+    pub fn run_queue_one<E: TaskExecutor>(
+        &mut self,
+        runner: &mut QueueRunner<E>,
+    ) -> Result<ExecutionOutcome, ScheduledRuntimeError> {
+        if runner.kind() == TaskKind::Compute {
+            return Err(ScheduledRuntimeError::ComputeQueueReserved);
+        }
+        Ok(runner.run_one(&mut self.scheduler)?)
     }
 
     pub fn submit_request(
@@ -132,6 +158,10 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
 
     pub fn ready_count(&self) -> usize {
         self.scheduler.ready_count(TaskKind::Compute)
+    }
+
+    pub fn ready_count_for(&self, kind: TaskKind) -> usize {
+        self.scheduler.ready_count(kind)
     }
 
     pub fn runtime(&self) -> &Runtime<S> {
@@ -202,6 +232,52 @@ mod tests {
         let runtime = ScheduledRuntime::from_profile(&profile, Echo).unwrap();
         assert_eq!(runtime.scheduler_config().cpu_workers, 10);
         assert_eq!(runtime.scheduler_config().max_prefetches, 2);
+    }
+
+    struct NoopTransfer;
+    impl TaskExecutor for NoopTransfer {
+        fn execute(&mut self, _task: &TaskSnapshot) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn transfer_task_and_compute_request_share_one_dependency_graph() {
+        let mut runtime = runtime(Echo);
+        let transfer = runtime.submit_task(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        let request = runtime.submit_request(
+            RequestInput::new([7, 8]),
+            CancellationToken::new(),
+            TaskPriority::Normal,
+            [transfer],
+        ).unwrap();
+
+        assert_eq!(runtime.ready_count_for(TaskKind::Transfer), 1);
+        assert_eq!(runtime.ready_count(), 0);
+        assert!(runtime.run_one().unwrap().is_none());
+
+        let mut transfer_runner = QueueRunner::new(TaskKind::Transfer, NoopTransfer);
+        assert_eq!(
+            runtime.run_queue_one(&mut transfer_runner).unwrap(),
+            ExecutionOutcome::Completed(transfer)
+        );
+        assert_eq!(runtime.task(request).unwrap().state, TaskState::Ready);
+        assert_eq!(runtime.run_one().unwrap().unwrap().task_id, request);
+        assert_eq!(runtime.task(request).unwrap().state, TaskState::Completed);
+    }
+
+    #[test]
+    fn scheduled_runtime_reserves_compute_queue_for_request_payloads() {
+        let mut runtime = runtime(Echo);
+        assert_eq!(
+            runtime.submit_task(TaskSpec::new(TaskKind::Compute)),
+            Err(ScheduledRuntimeError::ComputeTaskRequiresRequest)
+        );
+        let mut compute_runner = QueueRunner::new(TaskKind::Compute, NoopTransfer);
+        assert_eq!(
+            runtime.run_queue_one(&mut compute_runner),
+            Err(ScheduledRuntimeError::ComputeQueueReserved)
+        );
     }
 
     #[test]
