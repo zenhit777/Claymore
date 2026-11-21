@@ -639,21 +639,28 @@ La concurrence, l'exécution asynchrone et l'intégration du propriétaire des r
 
 ### M7 — Scheduler et orchestration mémoire
 
-**Objectif :** coordonner calcul, résidence mémoire, transferts et préchargements.
+**Objectif :** coordonner calcul, résidence mémoire, transferts et préchargements sans violer l'affinité du backend CUDA.
 
-Travaux :
-- formaliser tâches, états, dépendances et priorités ;
-- définir le propriétaire des opérations CUDA et leur file d'exécution ;
-- gérer les files compute et transfer, les limites de préchargement et le lookahead ;
-- intégrer les politiques LRU/LFU/adaptive aux coûts de chargement et aux métriques observées ;
-- protéger les ressources jusqu'à la fin de toutes les opérations dépendantes.
+**Première tranche implémentée dans la PR M7 :** graphe de tâches acyclique par construction (dépendances vers des tâches déjà soumises), files logiques Compute/Transfer/Prefetch, sélection priorité-descendante/FIFO, états explicites, propagation des échecs vers les descendants et limites séparées de concurrence et de lookahead pour les préchargements. Le scheduler est mono-propriétaire (`!Send + !Sync`) et ne lance pas lui-même les tâches.
 
-Critères d'acceptation :
-- tests déterministes avec backend simulé ;
-- aucun dépassement de budget ;
-- démonstration qu'une allocation en vol reste protégée jusqu'à la complétion de son event (critère de validation reporté de l'ancien M3) ;
-- aucun buffer évincé avant complétion de ses dépendances ;
-- mesures séparées du temps de transfert, d'attente et de calcul.
+Travaux restants :
+- connecter l'ordonnanceur au cycle de vie des requêtes `claymore-runtime` ;
+- définir l'interface d'exécution des tâches et le propriétaire effectif des opérations CUDA ;
+- intégrer admission, éviction et gardes de ressources de `claymore-memory` ;
+- faire confirmer les tâches de transfert par les événements CUDA réels avant de libérer leurs dépendances ;
+- intégrer les coûts de chargement et métriques observées aux politiques LRU/LFU/adaptive ;
+- mesurer séparément transfert, attente et calcul.
+
+Critères de la tranche livrée :
+- tests CPU déterministes couvrant priorité/FIFO, isolation des files, dépendances, échec en cascade, annulation et bornes de préchargement ;
+- aucune tâche dépendante ne devient prête avant la confirmation de complétion de ses prérequis ;
+- aucun lancement implicite ni appel CUDA depuis le scheduler.
+
+Critères de clôture M7 complète :
+- aucun dépassement de budget mémoire ;
+- une allocation en vol reste protégée jusqu'à la complétion de son event ;
+- aucun buffer évincé avant complétion de toutes ses dépendances ;
+- exécution des files sur leurs propriétaires respectifs et métriques séparées transfert/attente/calcul.
 
 ### M8 — Moteur tensoriel Claymore et premier chemin modèle
 
