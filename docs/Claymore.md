@@ -643,6 +643,8 @@ La concurrence, l'exécution asynchrone et l'intégration du propriétaire des r
 
 **Première tranche implémentée dans la PR #21 :** graphe de tâches acyclique par construction (dépendances vers des tâches déjà soumises), files logiques Compute/Transfer/Prefetch, sélection priorité-descendante/FIFO, états explicites, propagation des échecs vers les descendants et limites séparées de concurrence et de lookahead pour les préchargements. Le scheduler est mono-propriétaire (`!Send + !Sync`) et ne lance pas lui-même les tâches.
 
+**Complément d'exécution CPU :** `claymore-scheduler` expose désormais `QueueRunner` et le trait `TaskExecutor`. Un runner exécute au plus une tâche de sa file sur le thread appelant, puis confirme `Completed` ou `Failed` auprès du scheduler. Aucun worker n'est créé et aucune contrainte `Send`/`Sync` n'est ajoutée. Cette interface est testable avec un exécuteur simulé sans driver ni GPU ; un exécuteur CUDA devra rester construit et appelé sur le thread propriétaire et ne retourner `Ok(())` qu'après confirmation de complétion par l'event correspondant.
+
 Travaux restants :
 - connecter l'ordonnanceur au cycle de vie des requêtes `claymore-runtime` ;
 - définir l'interface d'exécution des tâches et le propriétaire effectif des opérations CUDA ;
