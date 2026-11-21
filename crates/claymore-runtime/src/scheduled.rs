@@ -392,7 +392,9 @@ mod tests {
     #[test]
     fn request_submitted_after_failed_dependency_is_cancelled_and_payload_pruned() {
         let mut runtime = runtime(Echo);
-        let failed = runtime.submit_task(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        let failed = runtime
+            .submit_task(TaskSpec::new(TaskKind::Transfer))
+            .unwrap();
         let mut runner = QueueRunner::new(TaskKind::Transfer, FailingTransfer);
         assert!(matches!(
             runtime.run_queue_one(&mut runner).unwrap(),
@@ -414,7 +416,9 @@ mod tests {
     #[test]
     fn request_submitted_after_cancelled_dependency_is_cancelled_and_payload_pruned() {
         let mut runtime = runtime(Echo);
-        let cancelled = runtime.submit_task(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        let cancelled = runtime
+            .submit_task(TaskSpec::new(TaskKind::Transfer))
+            .unwrap();
         runtime.cancel_queued(cancelled).unwrap();
         let request = runtime
             .submit_request(

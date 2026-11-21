@@ -154,7 +154,9 @@ impl HardwareProfile {
             .weights_pool_target_gib
             .saturating_add(self.host_memory.staging_and_state_gib);
         let host_total = host_working_set.saturating_add(self.host_memory.pinned_ceiling_gib);
-        if host_committed > self.hardware.ram_gib || host_total > self.host_memory.claymore_budget_gib {
+        if host_committed > self.hardware.ram_gib
+            || host_total > self.host_memory.claymore_budget_gib
+        {
             return Err(HardwareProfileError::Invalid(
                 "host memory budgets exceed their enclosing limits",
             ));
@@ -190,7 +192,10 @@ impl HardwareProfile {
         Ok(MemoryBudgets {
             vram_soft_bytes: gib(self.vram.soft_budget_gib)?,
             vram_hard_bytes: gib(self.vram.hard_ceiling_gib)?,
-            host_bytes: gib(self.host_memory.weights_pool_target_gib.saturating_add(self.host_memory.staging_and_state_gib))?,
+            host_bytes: gib(self
+                .host_memory
+                .weights_pool_target_gib
+                .saturating_add(self.host_memory.staging_and_state_gib))?,
             pinned_host_bytes: gib(self.host_memory.pinned_ceiling_gib)?,
             expert_cache_target_bytes: gib(self.vram.expert_cache_target_gib)?,
             expert_cache_max_bytes: gib(self.vram.expert_cache_max_gib)?,
@@ -252,7 +257,12 @@ mod tests {
     fn profile_rejects_host_working_set_plus_pinned_over_budget() {
         let mut profile = HardwareProfile::from_json(PROFILE).unwrap();
         profile.host_memory.pinned_ceiling_gib = 9;
-        assert_eq!(profile.validate(), Err(HardwareProfileError::Invalid("host memory budgets exceed their enclosing limits")));
+        assert_eq!(
+            profile.validate(),
+            Err(HardwareProfileError::Invalid(
+                "host memory budgets exceed their enclosing limits"
+            ))
+        );
     }
 
     #[test]

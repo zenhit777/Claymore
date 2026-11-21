@@ -571,9 +571,13 @@ mod tests {
         let mut hot = allocation("hot", 40, 10, 0);
         hot.hit_count = 100;
         manager.record_allocation(hot).unwrap();
-        manager.record_allocation(allocation("cold-expensive", 40, 1, 0)).unwrap();
+        manager
+            .record_allocation(allocation("cold-expensive", 40, 1, 0))
+            .unwrap();
         manager.record_reload_cost("hot", 0).unwrap();
-        manager.record_reload_cost("cold-expensive", 300_000_000).unwrap();
+        manager
+            .record_reload_cost("cold-expensive", 300_000_000)
+            .unwrap();
         assert_eq!(
             manager
                 .plan_admission(MemoryTier::Vram, 20, 10)
@@ -589,7 +593,9 @@ mod tests {
         let mut hot = allocation("hot", 40, 5, 0);
         hot.hit_count = 100;
         manager.record_allocation(hot).unwrap();
-        manager.record_allocation(allocation("cold-unknown-cost", 40, 1, 0)).unwrap();
+        manager
+            .record_allocation(allocation("cold-unknown-cost", 40, 1, 0))
+            .unwrap();
         assert_eq!(
             manager
                 .plan_admission(MemoryTier::Vram, 20, 10)
