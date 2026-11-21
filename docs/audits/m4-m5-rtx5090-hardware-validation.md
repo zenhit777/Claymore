@@ -191,7 +191,7 @@ Tous les tests ci-dessous ont réellement été exécutés sur la RTX 5090 avec 
 | HW-C4-03 | `hw_c4_03_tokens_are_manager_scoped` | Tokens liés à leur manager | Token du manager A présenté au manager B | **PASS** | `UnknownTransferToken` pour query et wait | Aucune |
 | HW-C5-01 | `hw_c5_01_in_flight_allocation_cannot_be_evicted` | Protection d'une allocation en vol | 8 H2D de 512 MiB sur une allocation occupant tout le budget ; admission 64 MiB | **PASS** | Admission refusée (`InsufficientReclaimable`), `retired=0/8`, comptage inchangé ; admission réussie après wait | Budget logique contrôlé par le test, pas de saturation GPU globale |
 | HW-C5-02 | `hw_c5_02_shared_allocation_stays_protected_by_remaining_transfer` | Protection partagée entre plusieurs transferts | Transfert A + 8 transferts B vers la même allocation ; wait sur A seulement | **PASS** | L'allocation reste protégée par les events B ; éviction possible seulement après wait sur l'allocation | Aucune |
-| HW-C5-03 | `hw_c5_03_eviction_skips_protected_candidate` | Exclusion des allocations protégées du plan d'éviction | Deux allocations de 512 KiB, 8 transferts sur `protected`, admission d'une troisième | **PASS** | `candidate` évincée, `protected` survit et est libérable ensuite | Aucune |
+| HW-C5-03 | `hw_c5_03_eviction_skips_protected_candidate` | Exclusion des allocations protégées du plan d'éviction | Deux allocations de 256 MiB, 8 transferts H2D (2 GiB en file) sur `protected`, admission d'une troisième | **PASS** | `candidate` évincée, `protected` survit et est libérable ensuite | Aucune |
 | HW-C6-01 | `hw_c6_01_polling_precedes_eviction_planning` | Polling avant planification d'éviction | Victime 768 KiB, petit transfert, attente de complétion par query, admission 512 KiB | **PASS** | Éviction après 41 queries ; comptage 768 KiB → 512 KiB | Le test utilise une boucle de query/yield, pas un sleep arbitraire |
 | HW-C6-02 | `hw_c6_02_equal_priority_eviction_is_deterministic` | Départage déterministe à priorité égale | 3 allocations 1 MiB au même tick, admission 1 MiB, 12 rounds | **PASS** | `alpha` évincé 12/12 | Politique LRU testée ; LFU/Adaptive couverts par tests logiciels |
 | HW-C6-03 | `hw_c6_03_accounting_and_admission_errors` | Comptabilité et erreurs d'admission | Allocations 1 MiB + 512 KiB, doublon, requête 3 MiB, release, release inconnue | **PASS** | Comptage 1536 KiB → 512 KiB → 0 ; `RequestTooLarge`, `DuplicateAllocation`, `UnknownAllocation` | Aucune |
@@ -314,7 +314,7 @@ Justification :
 ## 6. Reproductibilité
 
 ```bash
-git checkout <SHA_VALIDATED_CODE>
+git checkout 385db116f4c2cce6138ee530f7bec7771f355d95
 
 export RUSTFLAGS="-L native=/usr/lib/wsl/lib"
 export LD_LIBRARY_PATH=/usr/lib/wsl/lib
@@ -343,8 +343,8 @@ Les tests sont isolés par un mutex GPU dans chaque binaire et doivent être lan
 
 La campagne doit être exécutée après les corrections B2/B3, sur le SHA exact du code final indiqué ci-dessous. Elle couvre les tests ignorés des deux crates, y compris les tests matériels unitaires, d'intégration et les deux tests matériels du module mémoire.
 
-- **SHA du code testé :** à renseigner après publication du commit de corrections.
-- **Commande exacte :**
+- **SHA du code à tester :** `385db116f4c2cce6138ee530f7bec7771f355d95` (HEAD de la PR après corrections B2 et clarifications de test).
+- **Commande exacte (depuis le SHA ci-dessus) :**
   ```bash
   export RUSTFLAGS="-L native=/usr/lib/wsl/lib"
   export LD_LIBRARY_PATH=/usr/lib/wsl/lib
