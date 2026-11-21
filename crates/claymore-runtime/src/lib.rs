@@ -60,11 +60,7 @@ impl RequestInput {
         }
     }
 
-    pub fn with_metadata(
-        mut self,
-        key: impl Into<String>,
-        value: impl Into<String>,
-    ) -> Self {
+    pub fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.metadata.insert(key.into(), value.into());
         self
     }
@@ -203,7 +199,10 @@ impl ExecutionReport {
     }
 
     fn transition(&mut self, next: RequestState) {
-        debug_assert!(!self.state.is_terminal(), "terminal request state cannot transition");
+        debug_assert!(
+            !self.state.is_terminal(),
+            "terminal request state cannot transition"
+        );
         debug_assert!(
             matches!(
                 (self.state, next),
@@ -317,7 +316,9 @@ mod tests {
             context: &mut ExecutionContext<'_>,
             input: &RequestInput,
         ) -> Result<RequestOutput, String> {
-            context.check_cancelled().map_err(|error| error.to_string())?;
+            context
+                .check_cancelled()
+                .map_err(|error| error.to_string())?;
             Ok(RequestOutput::new(input.payload.clone()))
         }
     }
@@ -400,11 +401,12 @@ mod tests {
             Runtime::new(RuntimeConfig::default(), MustNotRunStrategy(called)).unwrap();
         let token = CancellationToken::new();
         token.cancel();
-        let report = runtime
-            .execute(RequestInput::new([1]), token)
-            .unwrap();
+        let report = runtime.execute(RequestInput::new([1]), token).unwrap();
         assert_eq!(report.state, RequestState::Cancelled);
-        assert_eq!(report.transitions, [RequestState::Created, RequestState::Cancelled]);
+        assert_eq!(
+            report.transitions,
+            [RequestState::Created, RequestState::Cancelled]
+        );
         assert_eq!(report.error, Some(RuntimeError::Cancelled));
         assert!(!runtime.strategy().0.get());
     }
@@ -412,14 +414,9 @@ mod tests {
     #[test]
     fn cancellation_during_strategy_discards_output() {
         let token = CancellationToken::new();
-        let mut runtime = Runtime::new(
-            RuntimeConfig::default(),
-            CancellingStrategy(token.clone()),
-        )
-        .unwrap();
-        let report = runtime
-            .execute(RequestInput::new([1, 2]), token)
-            .unwrap();
+        let mut runtime =
+            Runtime::new(RuntimeConfig::default(), CancellingStrategy(token.clone())).unwrap();
+        let report = runtime.execute(RequestInput::new([1, 2]), token).unwrap();
         assert_eq!(report.state, RequestState::Cancelled);
         assert_eq!(report.output, None);
         assert_eq!(report.error, Some(RuntimeError::Cancelled));
