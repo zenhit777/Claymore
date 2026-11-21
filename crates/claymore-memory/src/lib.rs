@@ -386,6 +386,9 @@ impl MemoryOrchestrator {
 mod device;
 pub use device::{DeviceMemoryError, DeviceMemoryManager};
 
+mod executor;
+pub use executor::{MemoryTask, MemoryTaskExecutor, MemoryTaskExecutorError};
+
 #[cfg(feature = "cuda-driver")]
 mod cuda;
 #[cfg(feature = "cuda-driver")]
