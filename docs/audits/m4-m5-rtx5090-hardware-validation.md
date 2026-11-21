@@ -339,7 +339,7 @@ Les tests sont isolés par un mutex GPU dans chaque binaire et doivent être lan
 
 ### 3.6 Revalidation B1 sur le code corrigé de la PR #18
 
-<badge>VALIDÉ — PASS</badge>
+**Statut : VALIDÉ — PASS**
 
 La campagne B1 a été exécutée sur la NVIDIA RTX 5090 au SHA exact demandé. Trois exécutions consécutives de la suite matérielle complète ont réussi, sans échec ni test ignoré parmi les 25 sélectionnés.
 
