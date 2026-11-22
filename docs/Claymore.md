@@ -330,7 +330,11 @@ Le contrat `CompletionToken` et la méthode `Device::copy_async` sont définis, 
 
 M5 est livré : stream de transfert `CU_STREAM_NON_BLOCKING`, `poll_completed_transfers`, finalisation des événements terminés avant admission/éviction, départage déterministe des évictions et validation matérielle RTX 5090. La revalidation B1 a exécuté 25 tests matériels trois fois (75/75 PASS) sur le SHA de code `385db116f4c2cce6138ee530f7bec7771f355d95`; le rapport complet et ses limites sont versionnés dans `docs/audits/m4-m5-rtx5090-hardware-validation.md`. L'injection déterministe des erreurs event/stream/free reste un chantier séparé dans l'issue #19 et ne constitue pas une validation matérielle réussie.
 
-### 7.1 Livré sur main
+### 7.1 Livré sur main et implémentations en attente de fusion
+
+#### M7.1 — implémenté dans la PR #22 (fusion en attente)
+
+Le périmètre logiciel M7.1 et sa préparation architecturale M8 sont implémentés dans la PR #22. La CI complète est verte sur le HEAD `63f7e3f76a9788f8e688982eeabd823f2865f45e` ; la revalidation matérielle des 17 tests CUDA sur RTX 5090 reste le dernier gate avant la fusion. Cette mention ne signifie pas que M7.1 est déjà présent sur `main`.
 
 #### v0.3 — Memory Orchestrator (politiques host-side)
 
