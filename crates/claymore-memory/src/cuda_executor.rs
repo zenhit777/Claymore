@@ -120,8 +120,20 @@ impl CudaTransferExecutor {
         &self.manager
     }
 
+    /// Consume the output of a completed ReadPinned task. The result is
+    /// removed from executor-owned storage as part of the read.
     pub fn take_read_result(&mut self, task_id: TaskId) -> Option<Vec<u8>> {
         self.read_results.remove(&task_id)
+    }
+
+    /// Explicitly discard a read output that the caller no longer needs.
+    pub fn discard_read_result(&mut self, task_id: TaskId) -> bool {
+        self.read_results.remove(&task_id).is_some()
+    }
+
+    /// Number of completed read outputs still owned by this executor.
+    pub fn pending_read_results(&self) -> usize {
+        self.read_results.len()
     }
 
     pub fn pending_operations(&self) -> usize {
