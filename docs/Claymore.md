@@ -683,7 +683,7 @@ Critères d'acceptation :
 
 ### M8 — Moteur tensoriel Claymore et premier chemin modèle
 
-**Objectif :** construire le premier chemin tensoriel natif de Claymore et obtenir un forward pass reproductible sur un modèle de référence.
+**Objectif :** construire le premier chemin tensoriel natif de Claymore et exécuter une étape représentative et reproductible d'un modèle de référence selon son véritable paradigme d'exécution. Le jalon ne présuppose pas un forward pass autoregressif ni une boucle unique commune aux modèles.
 
 Travaux :
 - définir et stabiliser les primitives de calcul tensoriel natives de Claymore ;
@@ -692,7 +692,7 @@ Travaux :
 - valider formes, précision, sorties et durée de vie des buffers.
 
 Critères d'acceptation :
-- forward pass reproductible sur CPU ou GPU selon le modèle ;
+- étape d'exécution représentative reproductible sur CPU ou GPU, avec les contrôles numériques propres au paradigme du modèle ;
 - test d'interopérabilité avec le contexte CUDA partagé ;
 - mesure du pic RAM/VRAM et libération propre des ressources.
 
