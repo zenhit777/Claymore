@@ -92,7 +92,7 @@ Ne sont pas des objectifs des premières versions :
 
 ## 3. Périmètre modèles
 
-Les deux cibles fonctionnelles initiales sont indépendantes et doivent disposer chacune de leur propre moteur/adaptateur.
+Les deux cibles fonctionnelles initiales sont indépendantes et disposent chacune d'un adaptateur spécialisé, construit au-dessus d'un runtime, d'un socle tensoriel et de services transverses communs. L'orchestration de diffusion est modulaire : les invariants communs sont factorisés, tandis que les stratégies préservent les différences réelles entre modèles.
 
 ### 3.1 DiffusionGemma
 
@@ -128,7 +128,7 @@ Le cache d'experts est une politique de résidence sous contrainte mémoire. Il 
 
 ### 3.3 Principe d'isolation
 
-Les moteurs DiffusionGemma et Clover peuvent partager le runtime, les abstractions de mémoire, le scheduler, le backend CUDA et les utilitaires de tenseurs. Ils ne doivent pas être forcés dans une abstraction commune qui masquerait des différences fondamentales de calcul ou de cycle de vie.
+DiffusionGemma et Clover partagent un seul runtime, le socle tensoriel natif, les abstractions de mémoire, le scheduler, le backend CUDA et une orchestration de diffusion modulaire. Les adaptateurs spécialisés conservent les différences fondamentales de graphe, de calcul et de cycle de vie ; ils ne deviennent pas des runtimes ou moteurs tensoriels indépendants.
 
 ---
 
@@ -548,10 +548,11 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
 | M7 | Scheduler et orchestration mémoire | **Livré sur `main` par la PR #21** |
 | M7.1 | Durcissement scheduler/runtime et préparation M8 | **Livré sur `main` par la PR #22** ; CI verte ; revalidation RTX 5090 réussie au SHA de code `c16e925` (17/17 requis par campagne, deux campagnes ; 27/27 tests workspace par campagne) ; limites restantes suivies dans l'issue #23 |
-| M8 | Moteur tensoriel Claymore et premier chemin modèle | **En cours — fondation Tensor CPU proposée dans la PR M8.1** |
-| M9 | Stratégie autoregressive | Planifié |
-| M10 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
-| M11 | Optimisation et validation de performance | Planifié |
+| M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **En cours — consolidation Tensor et premières opérations CPU dans la PR #24** |
+| M9 | Orchestration de diffusion modulaire commune | Planifié |
+| M10 | Adaptateur et intégration DiffusionGemma | Planifié |
+| M11 | Adaptateur et intégration Clover | Planifié |
+| M12 | Optimisation et validation de performance | Planifié |
 
 ### M0 — Scaffold et configuration
 
@@ -697,47 +698,68 @@ Critères d'acceptation :
 - tests démontrant la conservation des gardes et de la comptabilité en cas d'erreur backend ;
 - conception M8 relue, sans commencer l'implémentation du moteur tensoriel dans cette PR.
 
-### M8 — Moteur tensoriel Claymore et premier chemin modèle
+### M8 — Socle tensoriel natif Claymore
 
-**Objectif :** construire le premier chemin tensoriel natif de Claymore et exécuter une étape représentative et reproductible d'un modèle de référence selon son véritable paradigme d'exécution. Le jalon ne présuppose pas un forward pass autoregressif ni une boucle unique commune aux modèles.
+**Objectif :** livrer un seul modèle Tensor natif, les opérations de référence, le dispatch explicite et les backends CPU/CUDA qui serviront à l'orchestration de diffusion et aux deux adaptateurs. M8 ne développe aucune stratégie autoregressive ni boucle de génération de modèle.
 
-**État :** en cours. La première tranche M8.1 introduit `claymore-tensor` : layouts contigus/stridés validés, calculs de tailles vérifiés, ownership d'un buffer opaque et vues empruntées. Elle ne fournit encore aucune opération arithmétique ni aucun kernel.
+**État :** en cours dans la PR #24. Le crate claymore-tensor porte désormais les layouts validés, le Tensor propriétaire, les vues empruntées et les opérations CPU F32 de référence (add, matmul, softmax, RMSNorm). Les définitions Tensor concurrentes ont été retirées de claymore-device. Les contrats d'opérations complets, le dispatch, l'intégration mémoire/scheduler, les kernels CUDA et la validation RTX 5090 restent à livrer.
 
 Travaux :
-- définir et stabiliser les primitives de calcul tensoriel natives de Claymore ;
-- définir le chargement et la représentation des poids ;
-- connecter les opérations tensorielles aux contrats Device / Tensor / Memory et au backend d'exécution Claymore ;
-- sélectionner les premières opérations après inspection du graphe et des exigences numériques du modèle retenu, sans imposer de boucle de génération commune ;
-- valider formes, précision, sorties et durée de vie des buffers.
+- finaliser les contrats Tensor, layouts, vues, aliasing et durée de vie ;
+- formaliser les opérations, contraintes de shape/dtype/layout, erreurs et tolérances numériques ;
+- fournir les kernels CPU de référence et un dispatch explicite par capacités ;
+- raccorder les allocations et opérations aux services memory/scheduler, sans contourner les gardes ;
+- implémenter les kernels CUDA derrière la feature optionnelle ;
+- sélectionner les opérations additionnelles après inspection des graphes et checkpoints DiffusionGemma et Clover.
 
 Critères d'acceptation :
-- étape d'exécution représentative reproductible sur CPU ou GPU, avec les contrôles numériques propres au paradigme du modèle ;
-- test d'interopérabilité avec le contexte CUDA partagé ;
-- mesure du pic RAM/VRAM et libération propre des ressources.
+- un seul type Tensor canonique dans claymore-tensor ;
+- opérations de référence testées sur CPU, sans cast, broadcasting ou fallback implicite ;
+- dispatch déterministe et erreurs explicites pour les combinaisons non supportées ;
+- intégration des durées de vie et de l'admission mémoire avec les contrats M7/M7.1 ;
+- CI workspace, Clippy, format, MSRV et compilation CUDA sans GPU ;
+- tests différentiels et validation matérielle RTX 5090 documentés au SHA final.
 
-### M9 — Stratégie autoregressive
+### M9 — Orchestration de diffusion modulaire commune
 
-**Objectif :** fournir une stratégie de génération autoregressive réutilisant le runtime unifié.
+**Objectif :** construire le moteur d'orchestration de diffusion commun de Claymore, modulaire et extensible, au-dessus du runtime et du socle tensoriel M8.
 
-Travaux : prefill, décodage token par token, KV cache, sampling, arrêt et gestion de plusieurs requêtes.
+Travaux :
+- définir le cycle de génération, les états et les contrats de progression communs ;
+- factoriser les invariants partagés sans imposer une boucle ou un graphe unique ;
+- définir les interfaces de stratégies et points d'extension pour canvas/state, denoising, attention, block diffusion, GDN et routage expert ;
+- intégrer scheduler, mémoire, transferts, annulation et télémétrie ;
+- valider les transitions et erreurs par des stratégies simulées CPU.
 
-Critères d'acceptation : génération de référence reproductible, tests du cache et mesure de latence/débit.
+Critères d'acceptation :
+- un seul moteur d'orchestration de diffusion et des stratégies composables ;
+- aucune dépendance aux détails d'un modèle dans le cœur commun ;
+- tests démontrant l'extensibilité sans imposer de fausse abstraction commune ;
+- sûreté des ressources et annulation vérifiées de bout en bout.
 
-### M10 — Stratégie diffusion (DiffusionGemma / Clover)
+### M10 — Adaptateur DiffusionGemma
 
-**Objectif :** ajouter la génération itérative par canvas et les besoins propres aux architectures ciblées.
+**Objectif :** intégrer google/diffusiongemma-26B-A4B-it au moteur de diffusion commun, en conservant les exigences propres à son architecture.
 
-Travaux : états de canvas, denoising, politiques de confiance, commit, replay causal si requis, self-conditioning, GDN et routage MoE selon le modèle.
+Travaux : lecture du checkpoint et de sa configuration, représentation canvas/état, progression de denoising, attention bidirectionnelle, choix de précision et validation numérique, chargement des poids et gestion des tenseurs intermédiaires.
 
-Critères d'acceptation : cas de génération reproductible, cohérence des états, qualité comparée à une référence et mesures mémoire.
+Critères d'acceptation : étape réelle et reproductible du graphe du modèle, comparaison numérique à une référence fiable, gestion mémoire et campagne RTX 5090 versionnée.
 
-### M11 — Optimisation et validation de performance
+### M11 — Adaptateur Clover
 
-**Objectif :** optimiser les chemins réellement identifiés comme limitants.
+**Objectif :** intégrer Clover-35B-A3B-preview au même moteur de diffusion et aux services Claymore, sans effacer ses spécificités GDN, block diffusion et MoE.
 
-Travaux : profiling, expert cache, offloading, transferts groupés, kernels spécialisés si justifiés, quantification et tuning des streams/workers.
+Travaux : lecture du checkpoint/configuration, stratégies GDN et block diffusion, routage expert, cache/résidence/préchargement, synchronisation des transferts et états spécifiques.
 
-Critères d'acceptation : benchmarks reproductibles, gains mesurés, absence de régression de qualité non acceptée et respect des budgets mémoire.
+Critères d'acceptation : chemin représentatif réel, cohérence du routage et des états, validation numérique, mesures mémoire et campagne RTX 5090 versionnée.
+
+### M12 — Optimisation et validation de performance
+
+**Objectif :** optimiser les chemins réellement identifiés comme limitants sur les deux modèles.
+
+Travaux : profiling, kernels spécialisés, politiques de précision, quantification après validation qualité, offloading, transferts groupés et tuning scheduler/streams.
+
+Critères d'acceptation : benchmarks reproductibles, gains mesurés, respect des budgets et absence de régression de qualité non acceptée.
 
 ---
 
