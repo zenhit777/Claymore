@@ -314,6 +314,94 @@ impl MemoryOrchestrator {
         })
     }
 
+    /// Plan a single VRAM eviction set that satisfies both the general
+    /// VRAM ceiling and the expert-cache ceiling. Planning the two constraints
+    /// independently and unioning their victims can evict more memory than
+    /// necessary when their preferred candidates differ.
+    pub fn plan_expert_vram_admission(
+        &self,
+        requested_bytes: u64,
+        now_tick: u64,
+    ) -> Result<AdmissionPlan, MemoryError> {
+        let hard_limit = self.budgets.vram_hard_bytes;
+        let soft_limit = self.budgets.vram_soft_bytes;
+        let expert_limit = self.budgets.expert_cache_max_bytes;
+        if requested_bytes > hard_limit {
+            return Err(MemoryError::RequestTooLarge {
+                tier: MemoryTier::Vram,
+                requested: requested_bytes,
+                limit: hard_limit,
+            });
+        }
+        if requested_bytes > expert_limit {
+            return Err(MemoryError::RequestTooLarge {
+                tier: MemoryTier::Vram,
+                requested: requested_bytes,
+                limit: expert_limit,
+            });
+        }
+
+        let current = self.usage_bytes(MemoryTier::Vram);
+        let expert_current = self.expert_cache_usage_bytes();
+        let projected = current.saturating_add(requested_bytes);
+        let expert_projected = expert_current.saturating_add(requested_bytes);
+        let needed_soft = projected.saturating_sub(soft_limit);
+        let needed_hard = projected.saturating_sub(hard_limit);
+        let needed_expert = expert_projected.saturating_sub(expert_limit);
+
+        let mut candidates: Vec<&Allocation> = self
+            .allocations
+            .values()
+            .filter(|allocation| {
+                allocation.tier == MemoryTier::Vram && allocation.safe_after_tick <= now_tick
+            })
+            .collect();
+        candidates.sort_by(|a, b| {
+            self.eviction_key(a, now_tick)
+                .cmp(&self.eviction_key(b, now_tick))
+                .then_with(|| a.id.cmp(&b.id))
+        });
+
+        let mut selected = Vec::new();
+        let mut reclaimed = 0_u64;
+        let mut expert_reclaimed = 0_u64;
+        for candidate in candidates {
+            if reclaimed >= needed_soft && expert_reclaimed >= needed_expert {
+                break;
+            }
+            selected.push(candidate.id.clone());
+            reclaimed = reclaimed.saturating_add(candidate.bytes);
+            if candidate.expert {
+                expert_reclaimed = expert_reclaimed.saturating_add(candidate.bytes);
+            }
+        }
+
+        if reclaimed < needed_hard {
+            return Err(MemoryError::InsufficientReclaimable {
+                tier: MemoryTier::Vram,
+                needed: needed_hard,
+                reclaimable: reclaimed,
+            });
+        }
+        if expert_reclaimed < needed_expert {
+            return Err(MemoryError::InsufficientReclaimable {
+                tier: MemoryTier::Vram,
+                needed: needed_expert,
+                reclaimable: expert_reclaimed,
+            });
+        }
+
+        Ok(AdmissionPlan {
+            tier: MemoryTier::Vram,
+            requested_bytes,
+            evict_ids: selected,
+            projected_usage_bytes: current
+                .saturating_sub(reclaimed)
+                .saturating_add(requested_bytes),
+            limit_bytes: hard_limit,
+        })
+    }
+
     /// Plan expert-cache admission independently from the general VRAM budget.
     /// Only idle expert allocations are candidates; the plan never mutates state.
     pub fn plan_expert_admission(
@@ -524,6 +612,34 @@ mod tests {
             manager.plan_admission(MemoryTier::Vram, 15, 10),
             Err(MemoryError::InsufficientReclaimable { .. })
         ));
+    }
+
+    #[test]
+    fn joint_expert_admission_uses_one_minimal_vram_victim_set() {
+        let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
+        manager
+            .record_allocation(allocation("expert-old", 20, 1, 0))
+            .unwrap();
+        manager
+            .record_allocation(allocation("general-old", 20, 2, 0))
+            .unwrap();
+        manager
+            .record_allocation(allocation("expert-new", 20, 9, 0))
+            .unwrap();
+        manager
+            .record_allocation(Allocation {
+                expert: false,
+                ..allocation("general-new", 20, 10, 0)
+            })
+            .unwrap();
+
+        // 80 bytes are resident. A 20-byte expert admission needs 20 bytes
+        // reclaimed for the soft VRAM target and 10 for the expert ceiling.
+        // One shared plan must not union two independently selected plans.
+        let plan = manager.plan_expert_vram_admission(20, 10).unwrap();
+        assert_eq!(plan.evict_ids, vec!["expert-old"]);
+        assert_eq!(plan.projected_usage_bytes, 80);
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 80);
     }
 
     #[test]
