@@ -718,13 +718,8 @@ impl CudaMemoryManager {
     ) -> Result<(), CudaMemoryError> {
         // Reclaim transfers already completed by the device before planning
         // evictions. Polling errors abort admission before any victim is released.
-        let plan = plan_admission_after_poll(
-            &mut self.policy,
-            &mut self.pending,
-            tier,
-            bytes,
-            tick,
-        )?;
+        let plan =
+            plan_admission_after_poll(&mut self.policy, &mut self.pending, tier, bytes, tick)?;
         for id in plan.evict_ids {
             self.release(&id, tick)?;
         }
@@ -1011,14 +1006,9 @@ mod tests {
             completed,
         }];
 
-        let admission = plan_admission_after_poll(
-            &mut policy,
-            &mut pending,
-            MemoryTier::Vram,
-            8,
-            10,
-        )
-        .map(|plan| plan.evict_ids);
+        let admission =
+            plan_admission_after_poll(&mut policy, &mut pending, MemoryTier::Vram, 8, 10)
+                .map(|plan| plan.evict_ids);
         assert!(matches!(admission, Err(CudaMemoryError::Cuda(_))));
         assert_eq!(pending.len(), 1);
         assert!(policy.allocation("unrelated").is_some());
