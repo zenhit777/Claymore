@@ -6,6 +6,7 @@
 //! thread. A backend must return success only after the operation has reached
 //! the completion point required by its resource-lifetime contract (for CUDA,
 //! normally after observing the associated event).
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::time::Instant;
 
 use crate::{Scheduler, SchedulerError, TaskId, TaskKind, TaskSnapshot};
@@ -109,7 +110,18 @@ impl<E: TaskExecutor> QueueRunner<E> {
         self.metrics.started = self.metrics.started.saturating_add(1);
         let snapshot = scheduler.task(task_id)?;
         let started_at = Instant::now();
-        let result = self.executor.execute(&snapshot);
+        // A panic must not strand the scheduler task in Running forever. The
+        // executor is still invoked synchronously on its owner thread; unwind
+        // is converted into the same failed-task path as an ordinary error.
+        let result = catch_unwind(AssertUnwindSafe(|| self.executor.execute(&snapshot)))
+            .unwrap_or_else(|payload| {
+                let message = payload
+                    .downcast_ref::<&str>()
+                    .copied()
+                    .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                    .unwrap_or("executor panicked with a non-string payload");
+                Err(format!("executor panicked: {message}"))
+            });
         let elapsed_ns = started_at.elapsed().as_nanos().min(u64::MAX as u128) as u64;
         self.metrics.total_execution_ns =
             self.metrics.total_execution_ns.saturating_add(elapsed_ns);
