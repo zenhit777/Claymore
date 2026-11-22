@@ -585,6 +585,39 @@ mod tests {
     }
 
     #[test]
+    fn terminal_records_are_compacted_and_remain_inspectable_as_dependencies() {
+        let mut scheduler = scheduler();
+        let completed = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        scheduler.start_next(TaskKind::Transfer).unwrap();
+        scheduler.complete(completed).unwrap();
+
+        assert!(!scheduler.tasks.contains_key(&completed));
+        assert_eq!(
+            scheduler.task(completed).unwrap().state,
+            TaskState::Completed
+        );
+        let dependent = scheduler
+            .submit(TaskSpec::new(TaskKind::Compute).depends_on(completed))
+            .unwrap();
+        assert_eq!(scheduler.task(dependent).unwrap().state, TaskState::Ready);
+        assert_eq!(scheduler.ready_count(TaskKind::Compute), 1);
+    }
+
+    #[test]
+    fn cancellation_index_tracks_direct_and_transitive_cancellations() {
+        let mut scheduler = scheduler();
+        let root = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        let child = scheduler
+            .submit(TaskSpec::new(TaskKind::Compute).depends_on(root))
+            .unwrap();
+        scheduler.cancel(root).unwrap();
+
+        assert_eq!(scheduler.cancelled_task_ids(), vec![root, child]);
+        assert_eq!(scheduler.task(child).unwrap().state, TaskState::Cancelled);
+        assert!(!scheduler.tasks.contains_key(&child));
+    }
+
+    #[test]
     fn dispatches_by_priority_then_fifo_within_each_queue() {
         let mut scheduler = scheduler();
         let normal = scheduler.submit(TaskSpec::new(TaskKind::Compute)).unwrap();
