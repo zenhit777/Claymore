@@ -170,7 +170,15 @@ struct TaskRecord {
 /// transfer executor must remain on the thread that owns its CUDA context.
 pub struct Scheduler {
     config: SchedulerConfig,
+    /// Only non-terminal task records remain in the active graph.
     tasks: BTreeMap<TaskId, TaskRecord>,
+    /// Compact terminal snapshots preserve the public inspection contract.
+    terminal: BTreeMap<TaskId, TaskSnapshot>,
+    /// Reverse dependency edges make readiness/cancellation propagation local.
+    dependents: BTreeMap<TaskId, Vec<TaskId>>,
+    /// One priority/FIFO index per logical queue.
+    ready: [BTreeSet<(Reverse<TaskPriority>, u64, TaskId)>; 3],
+    /// Incremental index consumed by runtime/executor payload pruning.
     cancelled: BTreeSet<TaskId>,
     next_task_id: u64,
     next_sequence: u64,
@@ -186,6 +194,9 @@ impl Scheduler {
         Ok(Self {
             config,
             tasks: BTreeMap::new(),
+            terminal: BTreeMap::new(),
+            dependents: BTreeMap::new(),
+            ready: std::array::from_fn(|_| BTreeSet::new()),
             cancelled: BTreeSet::new(),
             next_task_id: 1,
             next_sequence: 0,
@@ -199,14 +210,14 @@ impl Scheduler {
     }
 
     /// Submit a task. Dependencies must refer to tasks already submitted.
-    /// Prefetch admission is bounded by max_prefetches + lookahead, including
-    /// blocked and ready prefetch tasks, so producers cannot grow it unbounded.
+    /// Terminal task records are compacted into snapshots; their state remains
+    /// available for dependency validation and public task inspection.
     pub fn submit(&mut self, spec: TaskSpec) -> Result<TaskId, SchedulerError> {
         for (index, dependency) in spec.dependencies.iter().enumerate() {
             if spec.dependencies[..index].contains(dependency) {
                 return Err(SchedulerError::DuplicateDependency(*dependency));
             }
-            if !self.tasks.contains_key(dependency) {
+            if self.task_state(*dependency).is_none() {
                 return Err(SchedulerError::UnknownDependency(*dependency));
             }
         }
@@ -215,7 +226,7 @@ impl Scheduler {
             let outstanding = self
                 .tasks
                 .values()
-                .filter(|task| task.kind == TaskKind::Prefetch && !task.state.is_terminal())
+                .filter(|task| task.kind == TaskKind::Prefetch)
                 .count();
             let limit = self.config.prefetch_window();
             if outstanding >= limit {
@@ -237,7 +248,7 @@ impl Scheduler {
         let dependency_states: Vec<_> = spec
             .dependencies
             .iter()
-            .filter_map(|dependency| self.tasks.get(dependency).map(|task| task.state))
+            .filter_map(|dependency| self.task_state(*dependency))
             .collect();
         let state = if dependency_states
             .iter()
@@ -264,11 +275,24 @@ impl Scheduler {
                 dependencies: spec.dependencies,
             },
         );
-        if state == TaskState::Cancelled {
-            self.cancelled.insert(id);
-        }
         self.next_task_id = next_task_id;
         self.next_sequence = next_sequence;
+
+        match state {
+            TaskState::Ready => self.insert_ready(id),
+            TaskState::Blocked => {
+                let dependencies = self.tasks[&id].dependencies.clone();
+                for dependency in dependencies {
+                    if self.tasks.contains_key(&dependency) {
+                        self.dependents.entry(dependency).or_default().push(id);
+                    }
+                }
+            }
+            TaskState::Cancelled => self.archive_terminal(id),
+            TaskState::Running | TaskState::Completed | TaskState::Failed => {
+                unreachable!("new tasks cannot start in this state")
+            }
+        }
         Ok(id)
     }
 
@@ -280,14 +304,9 @@ impl Scheduler {
             return None;
         }
 
-        let selected = self
-            .tasks
-            .values()
-            .filter(|task| task.kind == kind && task.state == TaskState::Ready)
-            .min_by_key(|task| (Reverse(task.priority), task.sequence))
-            .map(|task| task.id)?;
-
+        let (_, _, selected) = self.ready[queue_index(kind)].pop_first()?;
         let task = self.tasks.get_mut(&selected)?;
+        debug_assert_eq!(task.state, TaskState::Ready);
         task.state = TaskState::Running;
         if kind == TaskKind::Prefetch {
             self.running_prefetches += 1;
@@ -311,7 +330,8 @@ impl Scheduler {
         if was_prefetch {
             self.running_prefetches -= 1;
         }
-        self.refresh_blocked_tasks();
+        self.archive_terminal(id);
+        self.propagate_terminal(id);
         Ok(())
     }
 
@@ -331,7 +351,8 @@ impl Scheduler {
         if was_prefetch {
             self.running_prefetches -= 1;
         }
-        self.refresh_blocked_tasks();
+        self.archive_terminal(id);
+        self.propagate_terminal(id);
         Ok(())
     }
 
@@ -346,9 +367,12 @@ impl Scheduler {
                 operation: "cancel",
             });
         }
-        task.state = TaskState::Cancelled;
-        self.cancelled.insert(id);
-        self.refresh_blocked_tasks();
+        if task.state == TaskState::Ready {
+            self.remove_ready(id);
+        }
+        self.tasks.get_mut(&id).expect("active task exists").state = TaskState::Cancelled;
+        self.archive_terminal(id);
+        self.propagate_terminal(id);
         Ok(())
     }
 
@@ -365,38 +389,38 @@ impl Scheduler {
             });
         }
         let was_prefetch = task.kind == TaskKind::Prefetch;
-        task.state = TaskState::Cancelled;
+        self.tasks.get_mut(&id).expect("active task exists").state = TaskState::Cancelled;
         if was_prefetch {
             self.running_prefetches -= 1;
         }
-        self.cancelled.insert(id);
-        self.refresh_blocked_tasks();
+        self.archive_terminal(id);
+        self.propagate_terminal(id);
         Ok(())
     }
 
-    /// Return cancelled task IDs in deterministic submission order.
-    /// Return cancelled IDs from the incremental cancellation index rather
-    /// than rescanning every retained task record on each executor poll.
+    /// Return cancelled IDs from the incremental cancellation index.
     pub fn cancelled_task_ids(&self) -> Vec<TaskId> {
         self.cancelled.iter().copied().collect()
     }
 
     pub fn task(&self, id: TaskId) -> Result<TaskSnapshot, SchedulerError> {
-        let task = self.tasks.get(&id).ok_or(SchedulerError::UnknownTask(id))?;
-        Ok(TaskSnapshot {
-            id: task.id,
-            kind: task.kind,
-            priority: task.priority,
-            state: task.state,
-            dependencies: task.dependencies.clone(),
-        })
+        if let Some(task) = self.tasks.get(&id) {
+            return Ok(TaskSnapshot {
+                id: task.id,
+                kind: task.kind,
+                priority: task.priority,
+                state: task.state,
+                dependencies: task.dependencies.clone(),
+            });
+        }
+        self.terminal
+            .get(&id)
+            .cloned()
+            .ok_or(SchedulerError::UnknownTask(id))
     }
 
     pub fn ready_count(&self, kind: TaskKind) -> usize {
-        self.tasks
-            .values()
-            .filter(|task| task.kind == kind && task.state == TaskState::Ready)
-            .count()
+        self.ready[queue_index(kind)].len()
     }
 
     pub fn running_prefetches(&self) -> usize {
@@ -408,61 +432,116 @@ impl Scheduler {
         id: TaskId,
         operation: &'static str,
     ) -> Result<&mut TaskRecord, SchedulerError> {
-        self.tasks
-            .get_mut(&id)
-            .ok_or(SchedulerError::UnknownTask(id))
-            .and_then(|task| {
-                if task.state.is_terminal() {
-                    Err(SchedulerError::InvalidTransition {
-                        task_id: id,
-                        state: task.state,
-                        operation,
-                    })
-                } else {
-                    Ok(task)
-                }
-            })
+        if let Some(task) = self.tasks.get_mut(&id) {
+            return Ok(task);
+        }
+        if let Some(task) = self.terminal.get(&id) {
+            return Err(SchedulerError::InvalidTransition {
+                task_id: id,
+                state: task.state,
+                operation,
+            });
+        }
+        Err(SchedulerError::UnknownTask(id))
     }
 
-    fn refresh_blocked_tasks(&mut self) {
-        loop {
-            let states: BTreeMap<_, _> = self
-                .tasks
-                .iter()
-                .map(|(id, task)| (*id, task.state))
-                .collect();
-            let mut changed = false;
-            let mut newly_cancelled = Vec::new();
-            for task in self.tasks.values_mut() {
-                if task.state != TaskState::Blocked {
+    fn task_state(&self, id: TaskId) -> Option<TaskState> {
+        self.tasks
+            .get(&id)
+            .map(|task| task.state)
+            .or_else(|| self.terminal.get(&id).map(|task| task.state))
+    }
+
+    fn insert_ready(&mut self, id: TaskId) {
+        let task = self.tasks.get(&id).expect("ready task is active");
+        self.ready[queue_index(task.kind)].insert((Reverse(task.priority), task.sequence, id));
+    }
+
+    fn remove_ready(&mut self, id: TaskId) {
+        if let Some(task) = self.tasks.get(&id) {
+            self.ready[queue_index(task.kind)].remove(&(Reverse(task.priority), task.sequence, id));
+        }
+    }
+
+    fn archive_terminal(&mut self, id: TaskId) {
+        let snapshot = self.tasks.get(&id).and_then(|task| {
+            task.state.is_terminal().then(|| TaskSnapshot {
+                id: task.id,
+                kind: task.kind,
+                priority: task.priority,
+                state: task.state,
+                dependencies: task.dependencies.clone(),
+            })
+        });
+        if let Some(snapshot) = snapshot {
+            self.tasks.remove(&id);
+            if snapshot.state == TaskState::Cancelled {
+                self.cancelled.insert(id);
+            }
+            self.terminal.insert(id, snapshot);
+        }
+    }
+
+    /// Re-evaluate only direct dependents of newly terminal work. Each edge is
+    /// consumed once; descendants are visited only when their parent becomes
+    /// terminal, rather than rescanning the entire graph on every transition.
+    fn propagate_terminal(&mut self, source: TaskId) {
+        let mut frontier = vec![source];
+        while let Some(completed_id) = frontier.pop() {
+            let children = self.dependents.remove(&completed_id).unwrap_or_default();
+            for child_id in children {
+                let Some((state, dependencies)) = self
+                    .tasks
+                    .get(&child_id)
+                    .map(|task| (task.state, task.dependencies.clone()))
+                else {
+                    continue;
+                };
+                if state != TaskState::Blocked {
                     continue;
                 }
-                let dependency_states: Vec<_> = task
-                    .dependencies
-                    .iter()
-                    .filter_map(|id| states.get(id).copied())
-                    .collect();
-                if dependency_states
-                    .iter()
-                    .any(|state| matches!(state, TaskState::Failed | TaskState::Cancelled))
-                {
-                    task.state = TaskState::Cancelled;
-                    newly_cancelled.push(task.id);
-                    changed = true;
-                } else if dependency_states.len() == task.dependencies.len()
-                    && dependency_states
-                        .iter()
-                        .all(|state| *state == TaskState::Completed)
-                {
-                    task.state = TaskState::Ready;
-                    changed = true;
+
+                let mut failed_dependency = false;
+                let mut all_completed = true;
+                for dependency in dependencies {
+                    match self.task_state(dependency) {
+                        Some(TaskState::Failed | TaskState::Cancelled) => {
+                            failed_dependency = true;
+                            break;
+                        }
+                        Some(TaskState::Completed) => {}
+                        Some(_) => all_completed = false,
+                        None => {
+                            failed_dependency = true;
+                            break;
+                        }
+                    }
+                }
+
+                if failed_dependency {
+                    self.tasks
+                        .get_mut(&child_id)
+                        .expect("blocked child remains active")
+                        .state = TaskState::Cancelled;
+                    self.archive_terminal(child_id);
+                    frontier.push(child_id);
+                } else if all_completed {
+                    self.tasks
+                        .get_mut(&child_id)
+                        .expect("blocked child remains active")
+                        .state = TaskState::Ready;
+                    self.insert_ready(child_id);
                 }
             }
-            self.cancelled.extend(newly_cancelled);
-            if !changed {
-                break;
-            }
         }
+    }
+}
+
+fn queue_index(kind: TaskKind) -> usize {
+    match kind {
+        TaskKind::Compute => 0,
+        TaskKind::Transfer => 1,
+        TaskKind::Prefetch => 2,
     }
 }
 
