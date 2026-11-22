@@ -64,6 +64,7 @@ pub struct ScheduledRuntime<S> {
     scheduler: Scheduler,
     pending: BTreeMap<TaskId, (RequestInput, CancellationToken)>,
     metrics: ScheduledRuntimeMetrics,
+    last_cancelled_generation: u64,
 }
 
 impl<S: GenerationStrategy> ScheduledRuntime<S> {
@@ -77,6 +78,7 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
             scheduler: Scheduler::new(scheduler_config)?,
             pending: BTreeMap::new(),
             metrics: ScheduledRuntimeMetrics::default(),
+            last_cancelled_generation: 0,
         })
     }
 
@@ -211,7 +213,11 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
     }
 
     fn prune_cancelled_requests(&mut self) {
-        for task_id in self.scheduler.cancelled_task_ids() {
+        let (generation, task_ids) = self
+            .scheduler
+            .cancelled_task_ids_since(self.last_cancelled_generation);
+        self.last_cancelled_generation = generation;
+        for task_id in task_ids {
             self.pending.remove(&task_id);
         }
     }
