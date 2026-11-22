@@ -332,6 +332,10 @@ M5 est livré : stream de transfert `CU_STREAM_NON_BLOCKING`, `poll_completed_tr
 
 ### 7.1 Livré sur main
 
+#### M7.1 — Durcissement scheduler/runtime et préparation M8 (PR #22)
+
+**État : livré sur `main` par la PR #22.** Le périmètre logiciel M7.1 et la préparation architecturale M8 sont intégrés. La validation matérielle RTX 5090 a été réalisée sur le SHA de code `c16e9254994f24b6c7442c610332baf010352b1e` : 17/17 tests requis lors de chacune de deux campagnes, et 27/27 tests matériels workspace lors de chacune. Le rapport et les logs sont versionnés dans `docs/audits/m7.1-rtx5090-hardware-validation.md` et les fichiers associés. La CI complète a été validée sur le HEAD documentaire final de la PR. Les limites de couverture restantes sont suivies dans l'issue #23.
+
 #### v0.3 — Memory Orchestrator (politiques host-side)
 
 Le crate `claymore-memory` contient :
@@ -381,14 +385,42 @@ Le build par défaut reste indépendant du matériel. La feature CUDA requiert u
 
 Ce jalon livre des abstractions backend-neutres et leur validation CPU ; il ne livre aucun calcul tensoriel ni opérateur. Le backend CUDA existant n'implémente pas encore `Device` et son raccordement reste conditionné à un contrat de libération faillible et de protection des allocations en vol (voir §7.3 et l'audit M2).
 
-#### M7 — Scheduler et orchestration mémoire (PR #21)
+#### M7 — Scheduler et orchestration mémoire
 
-**État : M7 livré par la PR #21.** Le jalon relie les requêtes Compute, les tâches Transfer/Prefetch, les exécuteurs mémoire backend-neutres et l'exécuteur CUDA event-backed.
+**État : livré sur `main` par la PR #21.** Le jalon relie les requêtes Compute, les tâches Transfer/Prefetch, les exécuteurs mémoire backend-neutres et l'exécuteur CUDA event-backed.
 
 Le scheduler et les exécuteurs sont mono-propriétaires et synchrones. `CudaTransferExecutor` attend l'event CUDA après chaque copie H2D/D2H avant de retourner le succès à `QueueRunner`. Le périmètre ne fournit donc ni recouvrement transfert/calcul, ni préchargement concurrent, ni exécution asynchrone des requêtes Compute. La campagne RTX 5090 versionnée rapporte 34/34 exécutions de tests matériels réussies sur le SHA de code indiqué dans le rapport ; ses limites (transfert M7 de 1 MiB, cache expert à petite échelle, absence de kernels et d'injection de fautes) restent applicables.
 
 Le coût de rechargement est exposé par l'API mémoire, mais aucun chargeur de poids ou d'experts ne l'alimente encore automatiquement ; `CudaTransferExecutor` ne propose pas de tâche `RecordReloadCost`.
 
+
+### M7.1 — Durcissement scheduler/runtime et gestion mémoire (PR #22)
+
+**Statut : livré sur `main` par la PR #22.** Cette phase consolide les invariants de M7 avant l'ouverture de M8 ; elle ne livre pas le moteur tensoriel M8.
+
+Périmètre de livraison :
+- indexer les files Ready par priorité/FIFO, propager les transitions via les dépendances directes et compacter les tâches terminales tout en conservant leur snapshot public ;
+- rendre la purge des payloads annulés incrémentale ;
+- convertir les panics des exécuteurs et du chemin ScheduledRuntime en échecs de tâches, avec propagation aux dépendants ;
+- introduire une frontière privée injectable pour query/synchronization des events, synchronisation du stream et libération des buffers ; tester NOT_READY, complétion, erreurs query/sync/free, conservation des gardes et comportement fail-closed sans GPU ;
+- suivre Cargo.lock et exécuter les validations avec `--locked` ;
+- documenter `tick_us` comme cadence nominale de boucle d'orchestration, distincte des ticks logiques et des délais d'events ; conserver le contrat actuel d'un stream compute et d'un stream transfer réservés ;
+- calculer conjointement les contraintes d'admission VRAM et cache experts ;
+- afficher la version CLI depuis les métadonnées Cargo et rendre explicite la consommation/destruction des résultats ReadPinned.
+
+La préparation architecturale de M8 fait également partie de M7.1 : [docs/m8-architecture.md](m8-architecture.md) fixe les frontières Tensor / Device / Operations / Kernel dispatch / Runtime / Model adapters, les invariants d'ownership et les validations CPU/CI et RTX 5090. Ce document ne signifie pas que le code M8 est déjà implémenté.
+
+Les lots logiciels sont validés par la CI CPU, y compris les tests de fault injection avec la feature CUDA activée mais sans GPU. Le chemin de production `CudaMemoryManager` refactoré a également été revalidé sur la RTX 5090 au SHA de code `c16e9254994f24b6c7442c610332baf010352b1e` : les 17 tests matériels ciblés ont réussi lors de deux campagnes consécutives (34/34), et les 27 tests matériels découverts par la commande workspace ont également réussi lors de chacune des deux campagnes (54/54). Le vrai driver NVIDIA WSL2 a été utilisé, sans stub ; le rapport, les logs et leurs empreintes SHA-256 sont versionnés dans `docs/audits/m7.1-rtx5090-hardware-validation.md` et les fichiers associés. Cette validation ne couvre pas les kernels tensoriels ni les performances M8 ; ces gates restent distincts.
+
+#### Limites CUDA explicitement suivies après la revue M7.1
+
+La frontière injectable de M7.1 couvre le tracker de transferts partagé entre production et tests, le polling/retirement, l'attente d'allocation, la planification d'admission avant éviction, la libération/confirmation et la synchronisation de stream testée par doubles. Elle ne couvre pas encore de bout en bout les branches suivantes :
+
+- `copy_h2d` / `copy_d2h` : séquence d'échec d'enregistrement d'event puis d'échec de synchronisation, et état d'empoisonnement/fail-closed du manager ;
+- `make_room_for_expert` : polling, planification et exécution de l'admission expert sur le chemin complet ;
+- `Drop` de `CudaMemoryManager` avec un stream factice injecté.
+
+Ces limites sont suivies dans l'[issue #23](https://github.com/zenhit777/Claymore/issues/23). Elles ne sont pas présentées comme couvertes par les tests M7.1 actuels. Les tests matériels ciblés de la PR #22 vérifient le câblage réel du tracker refactoré ; ils ne remplacent pas les tests de fault injection des branches restantes.
 
 ### 7.2 Fonctionnalités et extensions non livrées de bout en bout
 
@@ -405,8 +437,7 @@ La limite `max_payload_bytes` porte explicitement sur les seuls octets du payloa
 La tranche M6 n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâches, ne charge pas de modèle et n'effectue aucun calcul tensoriel. Elle est validée par des tests CPU.
 
  - exécution concurrente/asynchrone des requêtes, stratégie de génération concrète et intégration de modèles dans le runtime (extensions futures de M6/M8+) ;
-- adaptateur CUDA spécifique injectable et tests du cycle de vie CUDA avec backend simulé (différés dans l'issue #19) ;
-- pool allocator VRAM, réutilisation de blocs et défragmentation ;
+- pool allocator VRAM, réutilisation de blocs et défragmentation (hors périmètre M7.1) ;
 - intégration des tâches Transfer/Prefetch au scheduler M7 : livrée dans la première tranche, avec exécution synchrone sur le thread propriétaire ;
 - prefetch prédictif intégré au cache d'experts ;
 - télémétrie consolidée CPU/RAM/VRAM/transferts ;
@@ -423,7 +454,7 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 #### Contrats et limites du runtime M6 (première tranche PR #20)
 
 - `RuntimeConfig::max_payload_bytes` borne uniquement `RequestInput::payload`, pas la taille cumulée des métadonnées ; ces dernières restent des données de contrôle non bornées par ce paramètre.
-- Une panique de `GenerationStrategy::execute` n'est pas interceptée : elle traverse `Runtime::execute`, consomme l'identifiant déjà alloué et ne produit aucun `ExecutionReport`. Le runtime concerné doit être abandonné, car l'état interne de la stratégie après unwinding n'est pas garanti.
+- Un appel direct à `Runtime::execute` ne transforme pas les panics de stratégie en `RuntimeError`. Dans le chemin `ScheduledRuntime` de M7.1, la panique est interceptée à la frontière d'exécution, convertie en échec de tâche et propagée aux dépendants ; l'état interne de la stratégie après unwinding n'est toutefois pas garanti.
 - L'annulation observée après le retour de la stratégie prévaut sur le résultat de celle-ci. Si la stratégie renvoie simultanément une erreur, le rapport contient `Cancelled` et l'erreur de stratégie n'est pas conservée.
 - L'exécution reste synchrone et mono-requête ; aucune interruption forcée d'un appel backend bloquant n'est garantie. Le jeton est coopératif.
 - Le contrat d'erreur de stratégie est encore une `String` ; son évolution vers un type structuré est une décision préalable à l'intégration des moteurs en M8/M9.
@@ -515,7 +546,8 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M4 | Contrat Device et sûreté mémoire (issues #11 et #12) | Livré par la PR #16 |
 | M5 | Robustesse et validation CUDA (issues #13, PR #17 et #18) | Livré ; chemin nominal validé sur RTX 5090 ; injection de fautes isolée dans l'issue #19 |
 | M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
-| M7 | Scheduler et orchestration mémoire | **Livré par la PR #21** |
+| M7 | Scheduler et orchestration mémoire | **Livré sur `main` par la PR #21** |
+| M7.1 | Durcissement scheduler/runtime et préparation M8 | **Livré sur `main` par la PR #22** ; CI verte ; revalidation RTX 5090 réussie au SHA de code `c16e925` (17/17 requis par campagne, deux campagnes ; 27/27 tests workspace par campagne) ; limites restantes suivies dans l'issue #23 |
 | M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
 | M9 | Stratégie autoregressive | Planifié |
 | M10 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
@@ -643,9 +675,31 @@ Critères de clôture M7 — tous validés :
 
 Les réserves de périmètre restent explicites : exécution synchrone mono-propriétaire, aucun overlap transfert/calcul, aucun prefetch concurrent, aucun kernel ni calcul tensoriel, tests experts à échelle réduite et absence d'injection de fautes (issue #19).
 
+### M7.1 — Durcissement scheduler/runtime et gestion mémoire
+
+**Objectif :** fermer les réserves de robustesse de M7 et figer les contrats d'architecture nécessaires avant M8.
+
+Travaux :
+- index de files Ready, adjacency de dépendances et compaction des états terminaux ;
+- pruning incrémental des tâches et payloads annulés ;
+- containment des panics aux frontières scheduler/runtime ;
+- frontière CUDA injectable et tests manager-level déterministes sans GPU ;
+- Cargo.lock suivi et CI reproductible avec `--locked` ;
+- clarification de la cadence `tick_us`, des bornes workers et des streams réservés ;
+- admission VRAM/cache experts conjointe ;
+- version CLI issue de Cargo et cycle de vie explicite des résultats de lecture ;
+- conception M8 Tensor / Device / Operations / Kernel dispatch / Runtime / Model adapters dans [docs/m8-architecture.md](m8-architecture.md).
+
+Critères d'acceptation :
+- CI workspace, feature CUDA sans matériel, Clippy et MSRV verts ;
+- revalidation des 17 tests matériels CUDA sur RTX 5090 au SHA final, avec rapport versionné dans `docs/audits/` ;
+- aucun contrat public modifié sans revue architecturale ;
+- tests démontrant la conservation des gardes et de la comptabilité en cas d'erreur backend ;
+- conception M8 relue, sans commencer l'implémentation du moteur tensoriel dans cette PR.
+
 ### M8 — Moteur tensoriel Claymore et premier chemin modèle
 
-**Objectif :** construire le premier chemin tensoriel natif de Claymore et obtenir un forward pass reproductible sur un modèle de référence.
+**Objectif :** construire le premier chemin tensoriel natif de Claymore et exécuter une étape représentative et reproductible d'un modèle de référence selon son véritable paradigme d'exécution. Le jalon ne présuppose pas un forward pass autoregressif ni une boucle unique commune aux modèles.
 
 Travaux :
 - définir et stabiliser les primitives de calcul tensoriel natives de Claymore ;
@@ -654,7 +708,7 @@ Travaux :
 - valider formes, précision, sorties et durée de vie des buffers.
 
 Critères d'acceptation :
-- forward pass reproductible sur CPU ou GPU selon le modèle ;
+- étape d'exécution représentative reproductible sur CPU ou GPU, avec les contrôles numériques propres au paradigme du modèle ;
 - test d'interopérabilité avec le contexte CUDA partagé ;
 - mesure du pic RAM/VRAM et libération propre des ressources.
 

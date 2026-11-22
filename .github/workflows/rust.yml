@@ -28,16 +28,30 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Run tests
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-targets --locked
+      - name: Build link-only CUDA Driver stub for CPU fault-injection tests
+        run: |
+          mkdir -p /tmp/claymore-cuda-stub
+          cc -shared -fPIC ci/cuda-driver-stub.c -o /tmp/claymore-cuda-stub/libcuda.so
+      - name: Test CUDA manager fault-injection boundary without a GPU
+        env:
+          RUSTFLAGS: -L native=/tmp/claymore-cuda-stub
+          LD_LIBRARY_PATH: /tmp/claymore-cuda-stub
+        run: cargo test -p claymore-memory --features cuda-driver --lib --locked
+      - name: Test CUDA crate unit tests without a GPU
+        env:
+          RUSTFLAGS: -L native=/tmp/claymore-cuda-stub
+          LD_LIBRARY_PATH: /tmp/claymore-cuda-stub
+        run: cargo test -p claymore-cuda --features cuda-driver --lib --locked
       - name: Check optional CUDA feature without linking or requiring a GPU
         run: |
-          cargo check -p claymore-cuda --features cuda-driver --all-targets
-          cargo check -p claymore-memory --features cuda-driver --all-targets
-          cargo check -p claymore-cli --features cuda-driver
+          cargo check -p claymore-cuda --features cuda-driver --all-targets --locked
+          cargo check -p claymore-memory --features cuda-driver --all-targets --locked
+          cargo check -p claymore-cli --features cuda-driver --locked
       - name: Run Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Run Clippy with optional CUDA feature
-        run: cargo clippy -p claymore-cuda -p claymore-memory -p claymore-cli --features cuda-driver --all-targets -- -D warnings
+        run: cargo clippy -p claymore-cuda -p claymore-memory -p claymore-cli --features cuda-driver --all-targets --locked -- -D warnings
 
   msrv:
     name: Minimum supported Rust 1.86
@@ -47,9 +61,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.86.0
       - uses: Swatinem/rust-cache@v2
       - name: Verify workspace on the declared MSRV
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-targets --locked
       - name: Check CUDA feature and hardware test targets on the declared MSRV
         run: |
-          cargo check -p claymore-cuda --features cuda-driver --all-targets
-          cargo check -p claymore-memory --features cuda-driver --all-targets
-          cargo check -p claymore-cli --features cuda-driver
+          cargo check -p claymore-cuda --features cuda-driver --all-targets --locked
+          cargo check -p claymore-memory --features cuda-driver --all-targets --locked
+          cargo check -p claymore-cli --features cuda-driver --locked

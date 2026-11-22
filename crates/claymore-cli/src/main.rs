@@ -81,7 +81,7 @@ fn show_profile() {
         }
     };
 
-    println!("Claymore v0.5.0");
+    println!("Claymore v{}", env!("CARGO_PKG_VERSION"));
     println!("profile={}", profile.profile);
     println!("gpu={}", profile.hardware.gpu);
     println!("vram_total_gib={}", profile.hardware.vram_gib);

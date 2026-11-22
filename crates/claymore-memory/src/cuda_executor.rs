@@ -120,8 +120,20 @@ impl CudaTransferExecutor {
         &self.manager
     }
 
+    /// Consume the output of a completed ReadPinned task. The result is
+    /// removed from executor-owned storage as part of the read.
     pub fn take_read_result(&mut self, task_id: TaskId) -> Option<Vec<u8>> {
-        self.read_results.remove(&task_id)
+        take_read_result(&mut self.read_results, task_id)
+    }
+
+    /// Explicitly discard a read output that the caller no longer needs.
+    pub fn discard_read_result(&mut self, task_id: TaskId) -> bool {
+        self.read_results.remove(&task_id).is_some()
+    }
+
+    /// Number of completed read outputs still owned by this executor.
+    pub fn pending_read_results(&self) -> usize {
+        self.read_results.len()
     }
 
     pub fn pending_operations(&self) -> usize {
@@ -225,6 +237,10 @@ impl CudaTransferExecutor {
     }
 }
 
+fn take_read_result(results: &mut BTreeMap<TaskId, Vec<u8>>, task_id: TaskId) -> Option<Vec<u8>> {
+    results.remove(&task_id)
+}
+
 impl TaskExecutor for CudaTransferExecutor {
     fn execute(&mut self, task: &TaskSnapshot) -> Result<(), String> {
         if !matches!(task.kind, TaskKind::Transfer | TaskKind::Prefetch) {
@@ -254,5 +270,25 @@ impl TaskExecutor for CudaTransferExecutor {
     fn discard(&mut self, task_id: TaskId) {
         self.operations.remove(&task_id);
         self.read_results.remove(&task_id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use claymore_scheduler::{Scheduler, SchedulerConfig, TaskKind, TaskSpec};
+
+    #[test]
+    fn taking_read_result_transfers_ownership_and_removes_retained_bytes() {
+        let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
+        let task_id = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        let mut results = BTreeMap::from([(task_id, vec![1, 2, 3, 4])]);
+
+        assert_eq!(
+            take_read_result(&mut results, task_id),
+            Some(vec![1, 2, 3, 4])
+        );
+        assert!(results.is_empty());
+        assert_eq!(take_read_result(&mut results, task_id), None);
     }
 }

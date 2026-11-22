@@ -1,0 +1,121 @@
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:20:1
+   |
+20 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+   Compiling claymore-scheduler v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-scheduler)
+   Compiling claymore-model-clover v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-clover)
+   Compiling claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+   Compiling claymore-memory v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-memory)
+   Compiling claymore-runtime v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-runtime)
+   Compiling claymore-cli v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cli)
+warning: unused dependency `thiserror`
+  --> crates/claymore-core/Cargo.toml:10:1
+   |
+10 | thiserror.workspace = true
+   | ^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `thiserror`
+warning: `claymore-core` (manifest) generated 1 warning
+warning: unused dependency `claymore-core`
+  --> crates/claymore-cuda/Cargo.toml:13:1
+   |
+13 | claymore-core = { path = "../claymore-core" }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-cuda` (manifest) generated 1 warning
+warning: unused dependency `claymore-core`
+ --> crates/claymore-model-clover/Cargo.toml:9:1
+  |
+9 | claymore-core = { path = "../claymore-core" }
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-model-clover` (manifest) generated 1 warning
+warning: unused dependency `claymore-core`
+ --> crates/claymore-model-gemma/Cargo.toml:9:1
+  |
+9 | claymore-core = { path = "../claymore-core" }
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-model-gemma` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.27s
+     Running unittests src/main.rs (target/debug/build/claymore-cli/f3420bb8fd2fc397/out/claymore_cli-f3420bb8fd2fc397)
+0 tests, 0 benchmarks
+     Running unittests src/lib.rs (target/debug/build/claymore-core/a6d5609b198f5a37/out/claymore_core-a6d5609b198f5a37)
+0 tests, 0 benchmarks
+     Running unittests src/lib.rs (target/debug/build/claymore-cuda/5749dd73d1eec802/out/claymore_cuda-5749dd73d1eec802)
+driver::tests::hardware_device_buffer_free_is_explicit_and_idempotent: test
+driver::tests::hardware_stream_synchronize_completes_async_copy: test
+driver::tests::hardware_streams_are_explicitly_non_blocking: test
+
+3 tests, 0 benchmarks
+     Running tests/hardware_cuda_driver.rs (target/debug/build/claymore-cuda/19119724ae60c554/out/hardware_cuda_driver-19119724ae60c554)
+hw_c1_01_driver_initializes_primary_context: test
+hw_c1_02_stream_and_event_lifecycle: test
+hw_c1_03_context_interop_and_async_round_trip: test
+hw_c2_01_allocation_sizes_and_explicit_free: test
+hw_c2_02_zero_size_and_bounds_are_rejected: test
+
+5 tests, 0 benchmarks
+     Running unittests src/lib.rs (target/debug/build/claymore-device/58186767f09bfe18/out/claymore_device-58186767f09bfe18)
+0 tests, 0 benchmarks
+     Running unittests src/lib.rs (target/debug/build/claymore-memory/3189c3de7a038823/out/claymore_memory-3189c3de7a038823)
+cuda::tests::cuda_manager_reports_device_memory: test
+cuda::tests::hardware_poll_retires_completed_transfer_before_admission_without_wait: test
+
+2 tests, 0 benchmarks
+     Running tests/hardware_cuda_memory.rs (target/debug/build/claymore-memory/8be5ff5e7392ea04/out/hardware_cuda_memory-8be5ff5e7392ea04)
+hw_c2_03_manager_release_semantics: test
+hw_c3_01_transfer_sizes_are_byte_exact: test
+hw_c3_02_multiple_allocations_and_successive_transfers: test
+hw_c4_01_nonblocking_polling_and_completion: test
+hw_c4_02_wait_for_allocation_is_scoped: test
+hw_c4_03_tokens_are_manager_scoped: test
+hw_c5_01_in_flight_allocation_cannot_be_evicted: test
+hw_c5_02_shared_allocation_stays_protected_by_remaining_transfer: test
+hw_c5_03_eviction_skips_protected_candidate: test
+hw_c6_01_polling_precedes_eviction_planning: test
+hw_c6_02_equal_priority_eviction_is_deterministic: test
+hw_c6_03_accounting_and_admission_errors: test
+hw_c7_01_repeated_allocate_transfer_free_cycles: test
+hw_c7_02_tight_polling_is_idempotent: test
+hw_c7_03_transfer_and_eviction_alternation: test
+hw_m7_cuda_transfer_executor_runs_scheduler_tasks_after_event_completion: test
+hw_m7_expert_cache_max_is_enforced_before_device_allocation: test
+
+17 tests, 0 benchmarks
+     Running unittests src/lib.rs (target/debug/build/claymore-model-clover/b2e3b272c8366baf/out/claymore_model_clover-b2e3b272c8366baf)
+0 tests, 0 benchmarks
+     Running unittests src/lib.rs (target/debug/build/claymore-model-gemma/b1f120cac4ea7449/out/claymore_model_gemma-b1f120cac4ea7449)
+0 tests, 0 benchmarks
+     Running unittests src/lib.rs (target/debug/build/claymore-runtime/77409cdf48e58ca6/out/claymore_runtime-77409cdf48e58ca6)
+0 tests, 0 benchmarks
+     Running unittests src/lib.rs (target/debug/build/claymore-scheduler/5cec7b21db6c15b8/out/claymore_scheduler-5cec7b21db6c15b8)
+0 tests, 0 benchmarks
+   Doc-tests claymore_core
+0 tests, 0 benchmarks
+   Doc-tests claymore_cuda
+0 tests, 0 benchmarks
+   Doc-tests claymore_device
+0 tests, 0 benchmarks
+   Doc-tests claymore_memory
+0 tests, 0 benchmarks
+   Doc-tests claymore_model_clover
+0 tests, 0 benchmarks
+   Doc-tests claymore_model_gemma
+0 tests, 0 benchmarks
+   Doc-tests claymore_runtime
+0 tests, 0 benchmarks
+   Doc-tests claymore_scheduler
+0 tests, 0 benchmarks
