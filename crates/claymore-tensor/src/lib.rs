@@ -301,6 +301,6 @@ mod tests {
     fn non_contiguous_layout_is_not_misreported_as_contiguous() {
         let layout = TensorLayout::strided(vec![2, 2], vec![3, 1], DType::F32).unwrap();
         assert!(!layout.is_contiguous());
-        assert_eq!(layout.span_bytes(), 24);
+        assert_eq!(layout.span_bytes(), 20);
     }
 }
