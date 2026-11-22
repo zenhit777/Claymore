@@ -1,0 +1,49 @@
+SHA=f0b034fde0fd8ee11f82e70bdded7d5d8d7171e4
+## feat/m8-tensor-foundation...origin/feat/m8-tensor-foundation [ahead 1]
+Sun Nov 22 19:21:03 CET 2026
+=== nvidia-smi ===
+Sun Nov 22 19:21:03 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+|  0%   44C    P8             46W /  575W |    1332MiB /  32607MiB |      8%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A          540639      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+
+=== nvidia-smi --query-gpu=name,memory.total,memory.free,compute_cap,driver_version --format=csv ===
+name, memory.total [MiB], memory.free [MiB], compute_cap, driver_version
+NVIDIA GeForce RTX 5090, 32607 MiB, 30856 MiB, 12.0, 616.64
+=== nvcc --version ===
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2025 NVIDIA Corporation
+Built on Wed_Jul_16_07:30:01_PM_PDT_2025
+Cuda compilation tools, release 13.0, V13.0.48
+Build cuda_13.0.r13.0/compiler.36260728_0
+=== rustc --version ===
+rustc 1.100.0 (0ef1bc386 2026-11-09)
+=== cargo --version ===
+cargo 1.100.0 (3acc79c0c 2026-11-05)
+=== rustc +1.86 --version ===
+rustc 1.86.0 (05f9846f8 2025-03-31)
+=== uname -a ===
+Linux Morpheus 6.18.58.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Tue Oct 27 00:24:11 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+=== free -h ===
+               total        used        free      shared  buff/cache   available
+Mem:           112Gi       4.0Gi       104Gi       5.5Mi       5.3Gi       109Gi
+Swap:           16Gi          0B        16Gi
+=== WSL driver library ===
+-r-xr-xr-x 4 root root 188024 Aug 25 01:01 /usr/lib/wsl/lib/libcuda.so
+-r-xr-xr-x 4 root root 188024 Aug 25 01:01 /usr/lib/wsl/lib/libcuda.so.1
