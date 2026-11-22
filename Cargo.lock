@@ -82,6 +82,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "claymore-tensor"
+version = "0.5.0"
+dependencies = [
+ "claymore-device",
+ "thiserror",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
