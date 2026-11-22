@@ -892,6 +892,37 @@ mod tests {
     }
 
     #[test]
+    fn injected_event_synchronization_failure_preserves_pending_event_and_guards() {
+        let mut policy = fake_policy();
+        guarded_allocation(&mut policy, "buffer");
+        let completed = Arc::new(AtomicBool::new(false));
+        let mut pending = vec![PendingTransfer {
+            id: 6,
+            allocation_ids: vec!["buffer".to_owned()],
+            event: FakeEvent {
+                complete: false,
+                query_error: None,
+                sync_error: Some(722),
+            },
+            completed: Arc::clone(&completed),
+        }];
+
+        assert!(matches!(
+            wait_for_pending_allocation(&mut policy, &mut pending, "buffer", 10),
+            Err(CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuEventSynchronize",
+                code: 722
+            }))
+        ));
+        assert_eq!(pending.len(), 1);
+        assert!(!completed.load(Ordering::Acquire));
+        assert_eq!(
+            policy.allocation("buffer").unwrap().safe_after_tick,
+            IN_FLIGHT
+        );
+    }
+
+    #[test]
     fn successful_event_retirement_lifts_guards_only_after_last_shared_event() {
         let mut policy = fake_policy();
         guarded_allocation(&mut policy, "buffer");
