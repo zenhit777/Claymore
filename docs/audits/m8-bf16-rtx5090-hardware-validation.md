@@ -9,6 +9,11 @@
 
 > Ce rapport est attaché au SHA `a092f306581fddcba2cda32272bd685a660fbcad`. Les rapports F32 antérieurs (`m8-rtx5090-hardware-validation.md`, SHA `f0b034fd`) et M4/M5/M7/M7.1 restent rattachés à leurs propres SHA.
 
+> **Validation finale de la PR #24 :** la section **§11** est rattachée au SHA
+> `8fc3ca882ede2538bdf4106ba6a4ef14c4fbba25`. Les sections 1 à 10 ci-dessous
+> sont historiques et restent rattachées au SHA `a092f30…`. Aucun résultat
+> matériel n'est réattribué d'un SHA à un autre.
+
 ---
 
 ## 1. Traçabilité et préparation
@@ -199,3 +204,164 @@ Artefacts de kernel :
 ## 10. Conclusion
 
 Au SHA `a092f306581fddcba2cda32272bd685a660fbcad`, le socle M8 fournit quatre opérations tensorielles en F32 et en BF16, avec représentation 16 bits exacte, conversion FP32 explicite RNE, accumulation FP32 et intégration complète au memory orchestrator et au scheduler. Les huit kernels CUDA (PTX `sm_120`) ont été réellement exécutés sur la RTX 5090 et comparés à la référence CPU lors de deux campagnes consécutives : 43/43 par campagne, 86/86 au total, écart BF16 nul sur toutes les shapes. Les contrôles logiciels, la feature CUDA sans GPU, Clippy et le MSRV 1.86 sont verts au SHA testé. La PR #24 reste ouverte et n'est pas fusionnée.
+
+---
+
+## 11. Validation finale de la PR #24 — SHA `8fc3ca882ede2538bdf4106ba6a4ef14c4fbba25`
+
+### 11.1 Code réellement exécuté et traçabilité
+
+| Élément | Valeur |
+|---|---|
+| SHA du code exécuté | `8fc3ca882ede2538bdf4106ba6a4ef14c4fbba25` |
+| Branche | `feat/m8-tensor-foundation` |
+| Arbre de travail | propre avant et après chaque campagne (`git status --short` vide dans les logs) |
+| Campagne 1 | 2026-11-22T21:05:16Z → 21:05:49Z, `SHA_BEFORE` = `SHA_AFTER` = `8fc3ca8…`, exit 0 |
+| Campagne 2 | 2026-11-22T21:05:49Z → 21:06:21Z, `SHA_BEFORE` = `SHA_AFTER` = `8fc3ca8…`, exit 0 |
+
+Aucune modification de code, de source CUDA, de PTX, de manifeste ou de tolérance n'a eu lieu entre les deux campagnes. Ce rapport, ses logs bruts et la mise à jour de la description de la PR ont été produits **après** les exécutions ; le SHA ci-dessus désigne le code exécuté, pas le commit documentaire final. Les résultats des sections 1 à 10 ne sont pas réattribués à ce SHA.
+
+### 11.2 Environnement observé
+
+| Élément | Valeur observée |
+|---|---|
+| GPU | NVIDIA GeForce RTX 5090, Blackwell, compute capability `12.0` |
+| VRAM | 32 607 MiB au total, 30 809 MiB libres au relevé |
+| NVIDIA-SMI / KMD / UMD | `615.65.07` / `616.64` / `13.4` |
+| CUDA toolkit | `nvcc` release 13.0, `V13.0.48`, build `cuda_13.0.r13.0/compiler.36260728_0` |
+| PTX intégrés | `.version 9.0`, `.target sm_120` (F32 et BF16) |
+| Rust stable | `rustc 1.100.0 (0ef1bc386 2026-11-09)`, `cargo 1.100.0 (3acc79c0c 2026-11-05)` |
+| MSRV | `rustc 1.86.0 (05f9846f8 2025-03-31)` |
+| Hôte | WSL2, noyau `6.18.58.1-microsoft-standard-WSL2`, 112 GiB RAM |
+| Bibliothèque driver | `/usr/lib/wsl/lib/libcuda.so` (vrai driver, pas le stub) |
+
+Log brut : `m8-final-00-environment.log.txt`. État après campagnes : `m8-final-04-post-campaign.log.txt`.
+
+### 11.3 Commandes intégrales exécutées
+
+Contrôles logiciels obligatoires (log `m8-final-01-software-checks.log.txt`) :
+
+```bash
+cargo fmt --all -- --check
+cargo test --workspace --all-targets --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo +1.86 test --workspace --all-targets --locked
+cargo +1.86 clippy --workspace --all-targets --locked -- -D warnings
+
+export RUSTFLAGS="-L native=/usr/lib/wsl/lib"
+export LD_LIBRARY_PATH="/usr/lib/wsl/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+cargo check -p claymore-cuda --features cuda-driver --all-targets --locked
+cargo check -p claymore-memory --features cuda-driver --all-targets --locked
+cargo check -p claymore-cli --features cuda-driver --locked
+cargo clippy -p claymore-cuda -p claymore-memory -p claymore-cli \
+  --features cuda-driver --all-targets --locked -- -D warnings
+cargo +1.86 check -p claymore-cuda --features cuda-driver --all-targets --locked
+
+cc -shared -fPIC ci/cuda-driver-stub.c -o /tmp/claymore-cuda-stub/libcuda.so
+RUSTFLAGS="-L native=/tmp/claymore-cuda-stub" \
+LD_LIBRARY_PATH=/tmp/claymore-cuda-stub \
+  cargo test -p claymore-memory --features cuda-driver --lib --locked
+RUSTFLAGS="-L native=/tmp/claymore-cuda-stub" \
+LD_LIBRARY_PATH=/tmp/claymore-cuda-stub \
+  cargo test -p claymore-cuda --features cuda-driver --lib --locked
+```
+
+Campagne matérielle, commande exacte exécutée deux fois de suite (logs `m8-final-02-*` et `m8-final-03-*`) :
+
+```bash
+export RUSTFLAGS="-L native=/usr/lib/wsl/lib"
+export LD_LIBRARY_PATH="/usr/lib/wsl/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+cargo test --workspace --features cuda-driver --locked -- \
+  --ignored --test-threads=1 --nocapture
+```
+
+### 11.4 Résultats des contrôles logiciels
+
+Les **14/14** commandes ci-dessus sont sorties en code 0. Workspace : **137 tests** réussis sous Rust stable et sous Rust 1.86 (dont 39 tests `claymore-tensor`, 4 nouveaux tests de propriété BF16 couvrant les 65 536 motifs). Stub sans GPU : 50 tests `claymore-memory` et 8 tests `claymore-cuda` réussis. `cargo fmt --check` et tous les Clippy `-D warnings` sont verts, y compris avec `cuda-driver`. Les avertissements Cargo `unused dependency` et `unused field repository` sont préexistants et ne sont pas des diagnostics `-D warnings`.
+
+Régression corrigée avant validation : les quatre commits de correction initiaux (`1996ec7`…`95460c9`) ne compilaient pas sous `cuda-driver` (`Vec<str>` inféré dans `launch_tensor_op`), échouaient à `cargo fmt --check` et faisaient échouer un test de capacité devenu obsolète après l'ajout du contrôle d'alignement. Ces trois défauts ont été corrigés dans le commit `8fc3ca8`, sans écraser les corrections existantes.
+
+### 11.5 Campagnes matérielles — 52 tests par campagne
+
+| Cible | Run 1 | Run 2 |
+|---|---:|---:|
+| `claymore-cuda` driver (3) | 3/3 | 3/3 |
+| Intégration driver CUDA (5) | 5/5 | 5/5 |
+| `claymore-memory` lib, dont **7 injections de fautes B2** (9) | 9/9 | 9/9 |
+| Matériel mémoire/transfert/éviction M4–M7.1 (17) | 17/17 | 17/17 |
+| Tenseurs matériels M8, dont **2 tests B1** (18) | 18/18 | 18/18 |
+| **Total** | **52/52** | **52/52** |
+
+**104/104 exécutions**, 0 échec, aucun test ignoré supplémentaire retiré, aucun filtre, aucune tolérance modifiée. Durées : 33 s (run 1) et 32 s (run 2), sans recours à un backend simulé : les deux modules PTX sont chargés et les kernels réellement lancés sur la RTX 5090.
+
+### 11.6 Écarts numériques réellement observés
+
+| Opération | Tolérance historique (inchangée) | Écart maximal run 1 = run 2 |
+|---|---|---|
+| add F32 | `1e-5 / 1e-6` | `0e0` (4 shapes) |
+| matmul F32 | `1e-3 / 2e-5` | `0e0` (3 shapes) |
+| softmax F32 | `1e-6 / 1e-5` | `2,98e-8` `[8,257]`, `4,44e-16` `[2,3,64]` |
+| rms_norm F32 | `1e-5 / 2e-5` | `3,58e-7` `[6,64]`, `4,77e-7` `[2,1,129]` |
+| add / matmul / softmax / rms_norm BF16 | 0 pas (add), 1 pas (autres) | **0 pas** sur toutes les shapes et valeurs spéciales |
+| event add F32/BF16, scheduler F32/BF16 | 0 / 0 pas | `0e0` / 0 pas |
+
+Les logits `±10 000` restent finis ; les sommes par ligne BF16 restent à `4e-3` près de 1. Aucune tolérance n'a été élargie. La différence résiduelle F32 provient de l'ordre des réductions ( CPU séquentiel vs arbre en mémoire partagée 256 threads) et de `rcp.rn.f32` contre division ; l'`exp` CUDA est `ex2.approx.ftz.f32` sans fast-math global, l'hôte utilise `libm`. Détail dans `m8-cpu-cuda-numerics.md`.
+
+### 11.7 B1 — offsets, alignement et capacité
+
+- `Tensor::with_layout` rejette tout offset non aligné sur la taille d'élément (`MisalignedOffset`) ; l'offset nul, l'offset F32 aligné de 8 octets et l'offset BF16 aligné de 2 octets sont acceptés, y compris dans les tests CPU.
+- `launch_tensor_op` applique `offset_bytes` au pointeur de chaque entrée après vérification `offset + span_bytes <= buffer.len()`. Test matériel `hw_m8_b1_input_offsets_are_honored_for_f32_and_bf16` : des sentinelles `0x5A`/`0xDD` précèdent les tenseurs dans l'allocation ; le noyau lit bien les valeurs décalées (`[11, 22, 33, 44]` en F32, `[1,5, 3,5, 5,5, 7,5]` en BF16) et les octets hors span restent intact. Sans prise en compte de l'offset, le noyau aurait lu les sentinelles.
+- `hw_m8_b1_byte_span_and_capacity_guards` vérifie le rejet `BufferTooSmall { requested: 16, capacity: 8 }` côté entrée **et** côté sortie, ainsi que le rejet d'un offset 3 pour un layout F32.
+- Les sorties sont écrites à la base de leur allocation : `TensorOp` ne porte pas de vue de sortie. Cette limite est explicite dans le contrat de `launch_tensor_op` et dans `docs/Claymore.md` §6.5.
+- Cohérence CPU/CUDA : la même validation `Tensor::with_layout` est utilisée par les deux chemins ; les huit opérations F32/BF16 ont été rejouées avec offset nul dans les 16 tests tenseurs matériels.
+
+### 11.8 B2 — injection de fautes dans `launch_tensor_op`
+
+Sept tests au niveau du **gestionnaire réel** (driver, streams, events, allocations réels), avec codes d'erreur injectés uniquement (`cfg(test)`, thread-local, remis à zéro après chaque test) :
+
+| Test | Faute injectée | Résultat observé |
+|---|---|---|
+| `injected_create_event_failure_leaves_every_allocation_releasable` | `cuEventCreate` échoue | aucune garde posée, aucune allocation bloquée, 3 libérations réussies, usage VRAM 0 |
+| `injected_launch_failure_with_successful_sync_releases_every_allocation` | `cuLaunchKernel` échoue, sync OK | horizons inchangés, 0 garde, 3 libérations réussies |
+| `injected_launch_failure_with_sync_error_poisons_and_pins_all_allocations` | `cuLaunchKernel` + `cuStreamSynchronize` échouent | `poisoned`, 3 allocations à `IN_FLIGHT`, toute libération refusée par `ManagerPoisoned` |
+| `injected_event_record_failure_with_successful_sync_lifts_every_guard` | `cuEventRecord` échoue, sync OK | gardes levées à `tick`, 0 event en attente, 3 libérations réussies |
+| `injected_event_record_failure_with_sync_error_preserves_gpu_guards` | `cuEventRecord` + sync échouent | `poisoned`, gardes conservées à `IN_FLIGHT`, comptabilité inchangée |
+| `injected_partial_guard_failure_with_successful_sync_lifts_only_installed_guards` | 2e garde échoue, sync OK | seule la 1re garde est levée, les 2 autres gardent leur horizon, 3 libérations réussies |
+| `injected_partial_guard_failure_with_sync_error_poisons_and_pins_all_allocations` | 3e garde + sync échouent | `poisoned`, 3 allocations à `IN_FLIGHT`, libérations refusées |
+
+La récupération est désormais centralisée dans `recover_launch_failure` : sync réussie → gardes levées ; sync non confirmée → empoisonnement et maintien de toutes les gardes. Les sept tests passent dans les deux campagnes. Aucune allocation potentiellement utilisée par le GPU n'est libérée dans les scénarios d'échec de synchronisation.
+
+### 11.9 Mémoire, events et scheduler
+
+- Driver : 34 162 016 256 octets VRAM au total, 32 429 309 952 libres pendant les tests.
+- Comptabilité F32 (`hw_m8_06`) : 0 avant, 49 152 octets au pic, 0 après libération ; BF16 (`hw_m8_bf16_06`) : 0 avant et 0 après. La libération backend est confirmée avant retrait comptable.
+- Échec de budget : 8 Kio refusant 200 000 octets demandés, sans allocation physique.
+- Events : les trois allocations d'une opération restent protégées jusqu'à `wait_for_transfer` ; aucun `cuCtxSynchronize` global. Scheduler : dépendances exécutées, tenseurs possédés par l'exécuteur, results disponibles seulement après l'event.
+- `nvidia-smi` après campagnes : 1 379 MiB utilisés, niveau comparable au relevé initial (1 379 MiB) ; aucune fuite VRAM observable. Log : `m8-final-04-post-campaign.log.txt`.
+
+### 11.10 Logs bruts versionnés et empreintes
+
+| Fichier | Contenu | SHA-256 |
+|---|---|---|
+| `docs/audits/m8-final-00-environment.log.txt` | environnement, SHA, versions | `aff1bebbb99b03f930b458f2cf437bd24ffb9c51c24ed8a2d1291ba5163db37e` |
+| `docs/audits/m8-final-01-software-checks.log.txt` | 14 contrôles logiciels, sorties intégrales | `8595b28eca5fe81e008bf9ccc179ed3f93a11e9e1cc10a877de8ebd2021b5cd5` |
+| `docs/audits/m8-final-02-hardware-run1.log.txt` | campagne 1 intégrale, SHA avant/après | `c2be591cd90f8259d80c53a6c535b9ed816ecd564f5d6cc4f43a8b48a2dc178f` |
+| `docs/audits/m8-final-03-hardware-run2.log.txt` | campagne 2 intégrale, SHA avant/après | `d6acc5fb7cb7baefab13292dcc65079a790f29fbfc9f6c7befd6efa1f4f64e37` |
+| `docs/audits/m8-final-04-post-campaign.log.txt` | état GPU après campagnes | `6327ebaebc59b948bc7f0c1521ff82afd707d4eddbd911d5623f9ee10ad96b47` |
+
+Artefacts de kernel (inchangés, voir `m8-ptx-provenance.md`) :
+
+| Fichier | SHA-256 |
+|---|---|
+| `crates/claymore-cuda/kernels/m8_f32.cu` | `5d20ae0ed15affb35ef1c63ef33fc391b094490d6e3d1d499f6891eabbfb33fc` |
+| `crates/claymore-cuda/kernels/m8_bf16.cu` | `a276fe54e34b54903591f18f2a777fdf7cae1f11bd64498b47df54a96273dc41` |
+| `crates/claymore-cuda/src/kernels/m8_f32.ptx` | `e2cf50f5edf18b0f5b64086a077c9aa53aa405b1adab28249e8b79f9594a6dde` |
+| `crates/claymore-cuda/src/kernels/m8_bf16.ptx` | `886ede72b76b6bdbd64e03588cdda3011f2e1e1a08534fd24ee52c576dfa4153` |
+
+### 11.11 Limites restantes après validation
+
+- Les injections de fautes simulent des codes d'erreur Driver API sur le gestionnaire réel ; elles ne simulent pas une panne matérielle ni une corruption GPU.
+- Aucun recouvrement transfert/calcul n'est revendiqué ; chaque opération attend son event (M12).
+- F32/BF16 uniquement, quatre primitives sur tenseurs contigus, sans broadcasting, vues stridées en entrée, Tensor Core ni benchmark (M12).
+- PTX `sm_120` uniquement (JIT PTX 9.0 / CUDA 13+).
+- Aucun checkpoint DiffusionGemma ou Clover n'est chargé ni exécuté : la compatibilité complète avec ces modèles n'est pas revendiquée ; les opérations propres aux modèles relèvent de M9/M10/M11.
