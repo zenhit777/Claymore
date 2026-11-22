@@ -365,3 +365,139 @@ Artefacts de kernel (inchangés, voir `m8-ptx-provenance.md`) :
 - F32/BF16 uniquement, quatre primitives sur tenseurs contigus, sans broadcasting, vues stridées en entrée, Tensor Core ni benchmark (M12).
 - PTX `sm_120` uniquement (JIT PTX 9.0 / CUDA 13+).
 - Aucun checkpoint DiffusionGemma ou Clover n'est chargé ni exécuté : la compatibilité complète avec ces modèles n'est pas revendiquée ; les opérations propres aux modèles relèvent de M9/M10/M11.
+
+---
+
+## 12. Campagne de suivi après les correctifs des limites de lancement CUDA — SHA `93522028066be1dda91940d648983e89008f5e7c`
+
+### 12.1 Statut et traçabilité
+
+Cette section constitue une **campagne de suivi distincte**, exécutée après les correctifs des limites de grille CUDA. Elle ne modifie pas et ne réattribue pas les résultats historiques des §1 à 11, qui restent rattachés à leurs propres SHA.
+
+| Élément | Valeur observée |
+|---|---|
+| Dépôt / PR | `zenhit777/Claymore`, [PR #24](https://github.com/zenhit777/Claymore/pull/24) |
+| Branche | `feat/m8-tensor-foundation` |
+| SHA de code impératif testé | `93522028066be1dda91940d648983e89008f5e7c` |
+| Commit de code | `style(cuda): format grid limit assertions` |
+| SHA local avant campagne 1 | `93522028066be1dda91940d648983e89008f5e7c` |
+| SHA local après campagne 1 | `93522028066be1dda91940d648983e89008f5e7c` |
+| SHA local avant campagne 2 | `93522028066be1dda91940d648983e89008f5e7c` |
+| SHA local après campagne 2 | `93522028066be1dda91940d648983e89008f5e7c` |
+| Statut | **PASS** — 52/52 tests matériels par campagne, 104/104 exécutions au total, 0 échec |
+
+Le clone local était initialement en retard de cinq commits sur la branche distante. Après `git fetch --prune origin feat/m8-tensor-foundation`, la branche distante a été vérifiée au SHA imposé et la branche locale a été avancée uniquement par fast-forward. L'arbre de travail était propre avant l'environnement et avant la campagne 1. Aucun fichier Rust, CUDA `.cu`, PTX, manifeste, lockfile, tolérance, test ou workflow CI n'a été modifié.
+
+### 12.2 Dates et environnement matériel réel
+
+| Élément | Valeur réellement observée |
+|---|---|
+| Fenêtre de campagne | 2026-11-22, 22:34:53–22:40:27 (Europe/Paris, UTC+01:00) |
+| Campagne 1 | 22:35:30–22:36:04 ; code retour `0` |
+| Campagne 2 | 22:36:37–22:37:10 ; code retour `0` |
+| Hôte | WSL2, Ubuntu 24.04.5 LTS, noyau `6.18.58.1-microsoft-standard-WSL2` |
+| GPU | NVIDIA GeForce RTX 5090, UUID `GPU-7556cae7-89a8-6267-b8b4-4e2edb9981d6` |
+| Architecture / Compute Capability | Blackwell / `12.0` (`sm_120`) |
+| VRAM totale | 32 607 MiB selon `nvidia-smi` ; 34 162 016 256 octets selon le driver pendant les tests |
+| NVIDIA-SMI / version driver / CUDA UMD | `615.65.07` / `616.64` / `13.4` |
+| CUDA toolkit | `nvcc` release 13.0, `V13.0.48`, build `cuda_13.0.r13.0/compiler.36260728_0` |
+| Bibliothèque driver réelle | `/usr/lib/wsl/lib/libcuda.so` (`libcuda.so.1`) ; aucun stub utilisé |
+| PTX intégré | `.version 9.0`, `.target sm_120` pour les modules F32 et BF16 |
+| Rust stable | `rustc 1.100.0 (0ef1bc386 2026-11-09)`, `cargo 1.100.0` |
+| Rust 1.86 / MSRV installé | `rustc 1.86.0 (05f9846f8 2025-03-31)`, `cargo 1.86.0` |
+
+Le pilote NVIDIA `616.64`, son CUDA UMD `13.4` et le toolkit CUDA `13.0.48` satisfont l'exigence CUDA 13 ou supérieur et la compatibilité PTX 9.0. Le vrai driver WSL2 a été utilisé : les tests ont imprimé le nom `NVIDIA GeForce RTX 5090`, la compute capability `12.0`, créé un contexte primaire, des streams, des events et des allocations, puis chargé et lancé les deux modules PTX.
+
+Log brut : `docs/audits/m8-followup-00-environment.log.txt`.
+
+### 12.3 Commande exécutée
+
+Les deux campagnes ont utilisé exactement la même commande, sans filtre, exclusion ou tolérance supplémentaire :
+
+```bash
+export RUSTFLAGS="-L native=/usr/lib/wsl/lib"
+export LD_LIBRARY_PATH="/usr/lib/wsl/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+cargo test --workspace --features cuda-driver --locked -- --ignored --test-threads=1 --nocapture
+```
+
+`CARGO_TERM_COLOR=never` a été exporté uniquement pour conserver une sortie texte non colorée dans les journaux. Aucun test n'a été supprimé ou désactivé ; `--ignored`, `--test-threads=1` et `--nocapture` sont restés inchangés. Les sorties intégrales, les horodatages, les SHA avant/après, les mesures VRAM et les codes retour figurent dans :
+
+- `docs/audits/m8-followup-01-hardware-run1.log.txt` ;
+- `docs/audits/m8-followup-02-hardware-run2.log.txt` ;
+- `docs/audits/m8-followup-03-post-campaign.log.txt`.
+
+### 12.4 Résultats matériels
+
+| Cible | Campagne 1 | Campagne 2 |
+|---|---:|---:|
+| Driver CUDA et contexte primaire | 3/3 | 3/3 |
+| Intégration driver CUDA : streams, events, buffers | 5/5 | 5/5 |
+| Gestionnaire mémoire CUDA et injections de fautes | 9/9 | 9/9 |
+| Transferts, évictions, scheduler et exécuteur CUDA | 17/17 | 17/17 |
+| Tenseurs matériels M8 F32/BF16, offsets et capacités | 18/18 | 18/18 |
+| **Total** | **52/52** | **52/52** |
+
+Les deux code retour Cargo sont `0`. Le total est **104 tests réussis, 0 échec, 0 test ignoré supplémentaire, 0 filtre modifié**. Les campagnes couivent le driver et le contexte primaire, les streams et events, le gestionnaire mémoire, les transferts et évictions, le scheduler et l'exécuteur CUDA, les opérations F32 et BF16, les offsets, l'alignement, les contrôles de capacité, les durées de vie et les protections d'allocation.
+
+### 12.5 Résultats numériques F32/BF16
+
+Les métriques numériques imprimées par les deux campagnes sont **strictement identiques** ; la comparaison automatisée du journal post-campagne retourne `NUMERIC_METRICS_IDENTICAL=True`.
+
+| Opération | Tolérance existante, inchangée | Écart maximal observé dans les deux campagnes |
+|---|---:|---|
+| add F32 | `1e-5 / 1e-6` | `0e0` sur 4 shapes |
+| matmul F32 | `1e-3 / 2e-5` | `0e0` sur 3 shapes |
+| softmax F32 | `1e-6 / 1e-5` | `2,9802322e-8` (`[8,257]`) ; `4,440892e-16` (`[2,3,64]`) |
+| rms_norm F32 | `1e-5 / 2e-5` | `3,5762787e-7` (`[6,64]`) ; `4,7683716e-7` (`[2,1,129]`) |
+| add BF16 | 0 pas | **0 pas** sur 5 shapes et valeurs spéciales |
+| matmul BF16 | 1 pas | **0 pas** sur 4 shapes |
+| softmax BF16 | 1 pas | **0 pas** sur 5 shapes |
+| rms_norm BF16 | 1 pas | **0 pas** sur 3 shapes |
+| event / scheduler F32 | 0 pas / `0e0` | `0e0` dans les deux campagnes |
+| event / scheduler BF16 | 0 pas | 0 pas dans les deux campagnes |
+
+Les offsets B1 restent exacts : F32 `offset=8` produit `[11, 22, 33, 44]` et BF16 `offset=2` produit `[1.5, 3.5, 5.5, 7.5]`. La comptabilité F32 est `before=0`, `peak=49152`, `after=0`; la comptabilité BF16 est `before=0`, `after=0`. Les valeurs `±10 000` de softmax restent finies. Aucune tolérance n'a été élargie ni réécrite.
+
+### 12.6 Comptabilité VRAM et état CUDA
+
+Les snapshots `nvidia-smi` sont les suivants :
+
+| Instant | Utilisé | Libre | Total |
+|---|---:|---:|---:|
+| Avant campagne 1 | 1 387 MiB | 30 801 MiB | 32 607 MiB |
+| Après campagne 1 / avant campagne 2 | 1 387 MiB | 30 801 MiB | 32 607 MiB |
+| Après campagne 2 | 1 387 MiB | 30 801 MiB | 32 607 MiB |
+| Snapshot post-campagne final | 1 374 MiB | 30 814 MiB | 32 607 MiB |
+
+La variation mesurée entre les deux campagnes est donc **0 MiB utilisé**. Le snapshot final est 13 MiB inférieur au niveau initial, ce qui correspond à la fluctuation du processus graphique Xwayland de WSL2 et non à une fuite CUDA ; le driver ne montre aucun processus de calcul résiduel dans `nvidia-smi`. Les tests d'éviction, de libération et de durée de vie confirment également le retour de la comptabilité interne à zéro.
+
+### 12.7 Contrôles de limites de lancement CUDA
+
+L'inspection du code au SHA testé confirme les points suivants :
+
+1. `crates/claymore-tensor/src/contracts.rs` définit `CUDA_GRID_X_MAX = 2_147_483_647` et `CUDA_GRID_Y_MAX = 65_535`.
+2. `cuda_grid_limit` calcule les blocs par axe selon le kernel : `ceil(numel/256)` pour elementwise, `ceil(n/16)` et `ceil(m/16)` pour matmul, `rows` pour softmax/RMSNorm.
+3. Le dispatcher refuse le backend CUDA avec le motif typé `UnsupportedReason::LaunchLimit { axis, blocks, maximum }`. Le refus est explicite dans `Display` et ne peut pas se déguiser en simple absence de capacité.
+4. `crates/claymore-cuda/src/compute.rs` refait le contrôle dans `grid_for(total, block, maximum)` et retourne `CudaError::InvalidLaunchConfiguration` avant chaque `cuLaunchKernel`. Aucun lancement hors limites n'est transmis au driver par les huit kernels F32/BF16.
+5. La configuration à la limite `grid.y = 65_535` est acceptée par le test logiciel `grid_rounding_and_axis_limits_are_explicit`; le dispatcher refuse `grid.y = 65_536` et `grid.x = 2_147_483_648` avec un motif typé. Les tests logiciels sont inclus dans `cargo test --workspace --all-targets --locked`, commande exécutée par la CI stable et MSRV. Ils n'ont pas été remplacés par une simulation matérielle.
+6. Les configurations ordinaires acceptables continuent de fonctionner : les 18 tests matériels tensoriels F32/BF16 passent dans chaque campagne.
+7. Les tests d'injection récupérable (`launch`, `event_record`, `partial_guard` avec synchronisation réussie) lèvent les gardes installées au tick courant ; aucune allocation ne reste `IN_FLIGHT` après une erreur récupérable. Les scénarios où la synchronisation échoue conservent au contraire les gardes et empoisonnent le gestionnaire, conformément au fail-closed.
+
+### 12.8 Empreintes des journaux
+
+| Fichier | SHA-256 |
+|---|---|
+| `docs/audits/m8-followup-00-environment.log.txt` | `01fadd844fb9e74a355b1eacc9b8a4fd1e185a068fb91a022a33dcd38f03746d` |
+| `docs/audits/m8-followup-01-hardware-run1.log.txt` | `ada5451d80c082c291e91411bbe89be4b667936a66185b96f2751b4887112200` |
+| `docs/audits/m8-followup-02-hardware-run2.log.txt` | `ec8def5b8f26805ad81d588bcf57b7ab9e20db3190026878f52bf07b3a1fc243` |
+| `docs/audits/m8-followup-03-post-campaign.log.txt` | `a034caa5d34c659cb0e732c39bf10d7310135c0479af809829b340b32973dd99` |
+
+Les empreintes des sources CUDA, des PTX et des deux Rust corrigés sont également consignées dans le journal post-campagne. Les quatre SHA-256 des fichiers `.cu` et `.ptx` sont identiques à ceux de la validation §11, confirmant qu'aucun kernel ni PTX n'a été régénéré ou remplacé.
+
+### 12.9 Problèmes rencontrés et conclusion
+
+- Le seul problème de préparation a été le clone local initialement en retard de cinq commits sur `origin/feat/m8-tensor-foundation`. La branche distante a été récupérée, vérifiée au SHA impératif, puis avancée par fast-forward depuis un arbre propre avant toute campagne. Aucun résultat n'a été attribué au SHA initial `d7d1523…`.
+- Cargo a affiché les avertissements préexistants `unused field repository` et `unused dependency` ; ils ne constituent ni une erreur de compilation ni un échec de test.
+- Aucun test exécuté n'a échoué. Aucun événement, allocation ou contexte CUDA n'a été laissé dans un état incohérent par les campagnes ou par les erreurs récupérables testées.
+
+Au SHA `93522028066be1dda91940d648983e89008f5e7c`, les deux campagnes matérielles consécutives ont exécuté **52/52 tests chacune, 104/104 au total**, sur une véritable NVIDIA RTX 5090 sous WSL2 avec le pilote NVIDIA et PTX 9.0, sans modification de code entre elles. **M8 est matériellement validé à ce SHA.** Cette campagne ne fusionne pas la PR #24 et ne revendique aucune extension au-delà du périmètre M8 décrit dans ce rapport.

@@ -1,0 +1,357 @@
+M8 FOLLOW-UP HARDWARE CAMPAIGN 2 / PR #24 / RTX 5090
+START_LOCAL=2026-11-22T22:36:37+01:00
+START_UTC=2026-11-22T21:36:37+00:00
+
+[PRE-CAMPAIGN STATE]
+COMMAND: git rev-parse HEAD
+93522028066be1dda91940d648983e89008f5e7c
+COMMAND: git status --short --branch
+## feat/m8-tensor-foundation...origin/feat/m8-tensor-foundation
+?? docs/audits/m8-followup-00-environment.log.txt
+?? docs/audits/m8-followup-01-hardware-run1.log.txt
+?? docs/audits/m8-followup-02-hardware-run2.log.txt
+COMMAND: git diff --name-only
+[]
+COMMAND: git diff --check
+DIFF_CHECK_EXIT_CODE=0
+SHA_BEFORE=93522028066be1dda91940d648983e89008f5e7c
+REQUIRED_SHA=93522028066be1dda91940d648983e89008f5e7c
+SHA_MATCH_BEFORE=yes
+
+[PRE-CAMPAIGN GPU MEMORY]
+COMMAND: nvidia-smi --query-gpu=timestamp,name,driver_version,memory.total,memory.used,memory.free,utilization.gpu --format=csv,noheader
+2026/11/22 22:36:38.049, NVIDIA GeForce RTX 5090, 616.64, 32607 MiB, 1387 MiB, 30801 MiB, 8 %
+
+[TEST COMMAND (verbatim; identical to campaign 1)]
+export RUSTFLAGS="-L native=/usr/lib/wsl/lib"
+export LD_LIBRARY_PATH="/usr/lib/wsl/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+cargo test --workspace --features cuda-driver --locked -- --ignored --test-threads=1 --nocapture
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+warning: unused dependency `thiserror`
+  --> crates/claymore-core/Cargo.toml:10:1
+   |
+10 | thiserror.workspace = true
+   | ^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `thiserror`
+warning: `claymore-core` (manifest) generated 1 warning
+warning: unused dependency `claymore-core`
+  --> crates/claymore-cuda/Cargo.toml:13:1
+   |
+13 | claymore-core = { path = "../claymore-core" }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-cuda` (manifest) generated 1 warning
+warning: unused dependency `claymore-core`
+ --> crates/claymore-model-clover/Cargo.toml:9:1
+  |
+9 | claymore-core = { path = "../claymore-core" }
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-model-clover` (manifest) generated 1 warning
+warning: unused dependency `claymore-core`
+ --> crates/claymore-model-gemma/Cargo.toml:9:1
+  |
+9 | claymore-core = { path = "../claymore-core" }
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-model-gemma` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/main.rs (target/debug/build/claymore-cli/342ec5ec106d38e3/out/claymore_cli-342ec5ec106d38e3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-core/a6d5609b198f5a37/out/claymore_core-a6d5609b198f5a37)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-cuda/5749dd73d1eec802/out/claymore_cuda-5749dd73d1eec802)
+
+running 3 tests
+test driver::tests::hardware_device_buffer_free_is_explicit_and_idempotent ... ok
+test driver::tests::hardware_stream_synchronize_completes_async_copy ... ok
+test driver::tests::hardware_streams_are_explicitly_non_blocking ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.59s
+
+     Running tests/hardware_cuda_driver.rs (target/debug/build/claymore-cuda/19119724ae60c554/out/hardware_cuda_driver-19119724ae60c554)
+
+running 5 tests
+test hw_c1_01_driver_initializes_primary_context ... HW-C1-01 device=NVIDIA GeForce RTX 5090 cc=12.0 total=34162016256 free=32429309952
+ok
+test hw_c1_02_stream_and_event_lifecycle ... HW-C1-02 created/destroyed 64 streams and 64 events
+ok
+test hw_c1_03_context_interop_and_async_round_trip ... HW-C1-03 verified 1048576 bytes across two driver handles
+ok
+test hw_c2_01_allocation_sizes_and_explicit_free ... HW-C2-01 freed 1 B .. 64 MiB device buffers and 4 KiB pinned
+ok
+test hw_c2_02_zero_size_and_bounds_are_rejected ... HW-C2-02 rejected zero, overflowing and out-of-bounds requests
+ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-device/58186767f09bfe18/out/claymore_device-58186767f09bfe18)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-memory/61a1b40b1dce1f17/out/claymore_memory-61a1b40b1dce1f17)
+
+running 9 tests
+test cuda::tests::cuda_manager_reports_device_memory ... ok
+test cuda::tests::hardware_poll_retires_completed_transfer_before_admission_without_wait ... M5-HW-POLL-01 retired=1; admission evicted completed victim without explicit wait
+ok
+test cuda::tests::injected_create_event_failure_leaves_every_allocation_releasable ... ok
+test cuda::tests::injected_event_record_failure_with_successful_sync_lifts_every_guard ... ok
+test cuda::tests::injected_event_record_failure_with_sync_error_preserves_gpu_guards ... ok
+test cuda::tests::injected_launch_failure_with_successful_sync_releases_every_allocation ... ok
+test cuda::tests::injected_launch_failure_with_sync_error_poisons_and_pins_all_allocations ... ok
+test cuda::tests::injected_partial_guard_failure_with_successful_sync_lifts_only_installed_guards ... ok
+test cuda::tests::injected_partial_guard_failure_with_sync_error_poisons_and_pins_all_allocations ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 50 filtered out; finished in 1.36s
+
+     Running tests/hardware_cuda_memory.rs (target/debug/build/claymore-memory/2f504eb1c7521cf4/out/hardware_cuda_memory-2f504eb1c7521cf4)
+
+running 17 tests
+test hw_c2_03_manager_release_semantics ... HW-C2-03 explicit release, accounting and post-release errors verified
+ok
+test hw_c3_01_transfer_sizes_are_byte_exact ... HW-C3-01 size=1 byte_exact=yes
+HW-C3-01 size=37 byte_exact=yes
+HW-C3-01 size=4096 byte_exact=yes
+HW-C3-01 size=1048576 byte_exact=yes
+HW-C3-01 size=67108864 byte_exact=yes
+ok
+test hw_c3_02_multiple_allocations_and_successive_transfers ... HW-C3-02 two allocation pairs transferred successively and verified
+ok
+test hw_c4_01_nonblocking_polling_and_completion ... HW-C4-01 retired=0/8 before wait; pending and complete states coherent
+ok
+test hw_c4_02_wait_for_allocation_is_scoped ... HW-C4-02 wait_for_allocation retired only transfers touching its target
+ok
+test hw_c4_03_tokens_are_manager_scoped ... HW-C4-03 foreign transfer token rejected by another manager
+ok
+test hw_c5_01_in_flight_allocation_cannot_be_evicted ... HW-C5-01 protected during 0/8 completed polls; evicted after confirmed completion
+ok
+test hw_c5_02_shared_allocation_stays_protected_by_remaining_transfer ... HW-C5-02 shared allocation stayed protected until its last event completed
+ok
+test hw_c5_03_eviction_skips_protected_candidate ... HW-C5-03 eviction skipped the protected allocation and freed the idle candidate
+ok
+test hw_c6_01_polling_precedes_eviction_planning ... HW-C6-01 completed event polled before eviction after 47 queries
+ok
+test hw_c6_02_equal_priority_eviction_is_deterministic ... HW-C6-02 equal-priority eviction selected alpha in 12/12 rounds
+ok
+test hw_c6_03_accounting_and_admission_errors ... HW-C6-03 accounting stayed consistent across release and admission errors
+ok
+test hw_c7_01_repeated_allocate_transfer_free_cycles ... HW-C7-01 128 H2D/D2H cycles verified in 102.07463ms
+ok
+test hw_c7_02_tight_polling_is_idempotent ... HW-C7-02 1000 polls, retired_total=8/8, state stayed coherent
+ok
+test hw_c7_03_transfer_and_eviction_alternation ... HW-C7-03 16 transfer/eviction alternations verified
+ok
+test hw_m7_cuda_transfer_executor_runs_scheduler_tasks_after_event_completion ... M7 CUDA executor: H2D=1048576 bytes in 479631 ns; D2H=1048576 bytes in 83121 ns; event_wait=467821 ns
+ok
+test hw_m7_expert_cache_max_is_enforced_before_device_allocation ... M7 expert cache maximum enforced with deterministic idle eviction
+ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 26.63s
+
+     Running tests/hardware_cuda_tensor.rs (target/debug/build/claymore-memory/888641f73a2b776e/out/hardware_cuda_tensor-888641f73a2b776e)
+
+running 18 tests
+test hw_m8_01_add_matches_cpu_for_multiple_shapes_and_signs ... HW-M8 add shape=[1]: n=1 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 add shape=[7]: n=7 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 add shape=[2, 3]: n=6 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 add shape=[64, 257]: n=16448 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+ok
+test hw_m8_02_matmul_matches_cpu_for_rank2_shapes ... HW-M8 matmul 2x3x2: n=4 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 matmul 16x64x32: n=512 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 matmul 129x17x65: n=8385 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+ok
+test hw_m8_03_softmax_is_stable_for_large_logits ... HW-M8 softmax shape=[1, 3]: n=3 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 softmax shape=[8, 257]: n=2056 max_abs_diff=2.9802322e-8 worst_index=689 worst_diff=2.9802322e-8
+HW-M8 softmax shape=[1, 1024]: n=1024 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 softmax shape=[2, 3, 64]: n=384 max_abs_diff=4.440892e-16 worst_index=161 worst_diff=4.440892e-16
+ok
+test hw_m8_04_rms_norm_matches_cpu_with_explicit_scale ... HW-M8 rms_norm shape=[4]: n=4 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 rms_norm shape=[6, 64]: n=384 max_abs_diff=3.5762787e-7 worst_index=196 worst_diff=3.5762787e-7
+HW-M8 rms_norm shape=[2, 1, 129]: n=258 max_abs_diff=4.7683716e-7 worst_index=97 worst_diff=4.7683716e-7
+ok
+test hw_m8_05_dispatch_refusals_and_typed_errors ... ok
+test hw_m8_06_allocation_accounting_lifetime_and_budget_guards ... HW-M8 accounting: before=0 peak=49152 after=0 vram_total=34162016256 vram_free=32429309952
+ok
+test hw_m8_07_kernel_event_guards_and_explicit_wait ... HW-M8 event-backed add: n=1024 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 event guard: token=69 allocations=["m8-vram-1", "m8-vram-3", "m8-vram-5"]
+ok
+test hw_m8_08_scheduler_driven_compute_keeps_tensors_out_of_scheduler ... HW-M8 scheduler-driven add: n=16384 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 scheduler: completed=TaskId(1) dependent=TaskId(2)
+ok
+test hw_m8_b1_byte_span_and_capacity_guards ... HW-M8-B1 span/capacity guards rejected short input and output allocations
+ok
+test hw_m8_b1_input_offsets_are_honored_for_f32_and_bf16 ... HW-M8-B1 F32 offset=8 actual=[11.0, 22.0, 33.0, 44.0]
+HW-M8-B1 BF16 offset=2 actual=[Bf16(0x3fc0, 1.5), Bf16(0x4060, 3.5), Bf16(0x40b0, 5.5), Bf16(0x40f0, 7.5)]
+ok
+test hw_m8_bf16_01_add_matches_cpu_for_multiple_shapes_and_special_values ... HW-M8-BF16 add shape=[1]: n=1 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add shape=[7]: n=7 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add shape=[2, 3]: n=6 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add shape=[64, 257]: n=16448 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add shape=[3, 5, 7]: n=105 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add special values: n=8 max_steps=0 worst_index=0 limit=0
+ok
+test hw_m8_bf16_02_matmul_matches_cpu_for_rank2_shapes ... HW-M8-BF16 matmul 2x3x2: n=4 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 matmul 16x64x32: n=512 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 matmul 129x17x65: n=8385 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 matmul 7x9x5: n=35 max_steps=0 worst_index=0 limit=1
+ok
+test hw_m8_bf16_03_softmax_is_stable_for_large_logits ... HW-M8-BF16 softmax shape=[1, 3]: n=3 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 softmax shape=[8, 257]: n=2056 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 softmax shape=[1, 1024]: n=1024 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 softmax shape=[2, 3, 64]: n=384 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 softmax shape=[5, 7, 3]: n=105 max_steps=0 worst_index=0 limit=1
+ok
+test hw_m8_bf16_04_rms_norm_matches_cpu_with_explicit_bf16_scale ... HW-M8-BF16 rms_norm shape=[4]: n=4 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 rms_norm shape=[6, 64]: n=384 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 rms_norm shape=[2, 1, 129]: n=258 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 rms_norm shape=[3, 5, 7]: n=105 max_steps=0 worst_index=0 limit=1
+ok
+test hw_m8_bf16_05_dispatch_refusals_and_typed_errors ... ok
+test hw_m8_bf16_06_allocation_transfer_lifetime_and_budget_guards ... HW-M8-BF16 accounting: before=0 after=0 vram_total=34162016256 vram_free=32429309952
+ok
+test hw_m8_bf16_07_kernel_event_guards_and_explicit_wait ... HW-M8-BF16 event-backed BF16 add: n=1024 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 event guard: token=178 allocations=["m8-vram-1", "m8-vram-3", "m8-vram-5"]
+ok
+test hw_m8_bf16_08_scheduler_driven_compute_keeps_tensors_out_of_scheduler ... HW-M8-BF16 scheduler-driven BF16 add: n=16384 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 scheduler: completed=TaskId(1) dependent=TaskId(2)
+ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.67s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-model-clover/b2e3b272c8366baf/out/claymore_model_clover-b2e3b272c8366baf)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-model-gemma/b1f120cac4ea7449/out/claymore_model_gemma-b1f120cac4ea7449)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-runtime/6537ea3e3edd7ed8/out/claymore_runtime-6537ea3e3edd7ed8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-scheduler/5cec7b21db6c15b8/out/claymore_scheduler-5cec7b21db6c15b8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-tensor/bd46fef250d97757/out/claymore_tensor-bd46fef250d97757)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s
+
+   Doc-tests claymore_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests claymore_cuda
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests claymore_device
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests claymore_memory
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests claymore_model_clover
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests claymore_model_gemma
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests claymore_runtime
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests claymore_scheduler
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests claymore_tensor
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+CARGO_TEST_EXIT_CODE=0
+
+[POST-CAMPAIGN STATE]
+COMMAND: git rev-parse HEAD
+93522028066be1dda91940d648983e89008f5e7c
+SHA_AFTER=93522028066be1dda91940d648983e89008f5e7c
+SHA_MATCH_AFTER=yes
+SHA_UNCHANGED=yes
+COMMAND: git status --short --branch
+## feat/m8-tensor-foundation...origin/feat/m8-tensor-foundation
+?? docs/audits/m8-followup-00-environment.log.txt
+?? docs/audits/m8-followup-01-hardware-run1.log.txt
+?? docs/audits/m8-followup-02-hardware-run2.log.txt
+COMMAND: git diff --name-only
+[]
+COMMAND: git diff --check
+DIFF_CHECK_EXIT_CODE=0
+
+[POST-CAMPAIGN GPU MEMORY]
+COMMAND: nvidia-smi --query-gpu=timestamp,name,driver_version,memory.total,memory.used,memory.free,utilization.gpu --format=csv,noheader
+2026/11/22 22:37:10.456, NVIDIA GeForce RTX 5090, 616.64, 32607 MiB, 1387 MiB, 30801 MiB, 1 %
+END_LOCAL=2026-11-22T22:37:10+01:00
+END_UTC=2026-11-22T21:37:10+00:00
+FINAL_CARGO_TEST_EXIT_CODE=0
+END_OF_CAMPAIGN_2_LOG
