@@ -390,9 +390,9 @@ Le scheduler et les exécuteurs sont mono-propriétaires et synchrones. `CudaTra
 Le coût de rechargement est exposé par l'API mémoire, mais aucun chargeur de poids ou d'experts ne l'alimente encore automatiquement ; `CudaTransferExecutor` ne propose pas de tâche `RecordReloadCost`.
 
 
-### M7.1 — Durcissement scheduler/runtime et gestion mémoire (en cours)
+### M7.1 — Durcissement scheduler/runtime et gestion mémoire (PR #22)
 
-**Statut : travaux en cours sur la branche `feat/m7.1-runtime-hardening`.** Cette phase consolide les invariants de M7 avant l'ouverture de M8 ; elle ne livre pas encore le moteur tensoriel M8.
+**Statut : implémentation présente dans la PR #22 ; fusion dans `main` en attente de la revue finale et de la validation matérielle ciblée.** Cette phase consolide les invariants de M7 avant l'ouverture de M8 ; elle ne livre pas encore le moteur tensoriel M8.
 
 Périmètre de livraison :
 - indexer les files Ready par priorité/FIFO, propager les transitions via les dépendances directes et compacter les tâches terminales tout en conservant leur snapshot public ;
@@ -406,7 +406,17 @@ Périmètre de livraison :
 
 La préparation architecturale de M8 fait également partie de M7.1 : [docs/m8-architecture.md](m8-architecture.md) fixe les frontières Tensor / Device / Operations / Kernel dispatch / Runtime / Model adapters, les invariants d'ownership et les validations CPU/CI et RTX 5090. Ce document ne signifie pas que le code M8 est déjà implémenté.
 
-Les lots logiciels doivent être validés par la CI CPU, y compris les tests de fault injection avec la feature CUDA activée mais sans driver matériel. La RTX 5090 reste nécessaire pour la validation réelle des transferts, events, kernels et performances de M8 ; elle n'est pas requise pour les tests déterministes de M7.1.
+Les lots logiciels sont validés par la CI CPU, y compris les tests de fault injection avec la feature CUDA activée mais sans GPU. En raison du refactor du chemin de production `CudaMemoryManager` dans cette PR, la revue finale exige également une revalidation sur la RTX 5090 au SHA final : les 17 tests matériels existants doivent être rejoués et le rapport versionné dans `docs/audits/`. Le rapport matériel M7 antérieur ne couvre pas ce refactor. Cette revalidation M7.1 ne prétend pas valider des kernels tensoriels ni des performances M8 ; ces gates restent distincts.
+
+#### Limites CUDA explicitement suivies après la revue M7.1
+
+La frontière injectable de M7.1 couvre le tracker de transferts partagé entre production et tests, le polling/retirement, l'attente d'allocation, la planification d'admission avant éviction, la libération/confirmation et la synchronisation de stream testée par doubles. Elle ne couvre pas encore de bout en bout les branches suivantes :
+
+- `copy_h2d` / `copy_d2h` : séquence d'échec d'enregistrement d'event puis d'échec de synchronisation, et état d'empoisonnement/fail-closed du manager ;
+- `make_room_for_expert` : polling, planification et exécution de l'admission expert sur le chemin complet ;
+- `Drop` de `CudaMemoryManager` avec un stream factice injecté.
+
+Ces limites sont suivies dans l'[issue #23](https://github.com/zenhit777/Claymore/issues/23). Elles ne sont pas présentées comme couvertes par les tests M7.1 actuels. Les tests matériels ciblés de la PR #22 vérifient le câblage réel du tracker refactoré ; ils ne remplacent pas les tests de fault injection des branches restantes.
 
 ### 7.2 Fonctionnalités et extensions non livrées de bout en bout
 
@@ -533,6 +543,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M5 | Robustesse et validation CUDA (issues #13, PR #17 et #18) | Livré ; chemin nominal validé sur RTX 5090 ; injection de fautes isolée dans l'issue #19 |
 | M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
 | M7 | Scheduler et orchestration mémoire | **Livré par la PR #21** |
+| M7.1 | Durcissement scheduler/runtime et préparation M8 | Implémenté dans la PR #22 ; CI logicielle verte sur le SHA précédent, revalidation RTX 5090 et revue finale en attente |
 | M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
 | M9 | Stratégie autoregressive | Planifié |
 | M10 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
