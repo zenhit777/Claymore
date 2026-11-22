@@ -723,7 +723,10 @@ impl CudaMemoryManager {
         let output_ptr = pointers[pointers.len() - 1];
         // Dispatch is exact on both dtype and shape signature. There is no
         // cross-dtype launch path: BF16 uses its own kernels, F32 keeps its own.
-        let launch = match (validated.dtype, shapes) {
+        // SAFETY: this manager owns every allocation ID above, validates
+        // tensor byte spans and offsets, and installs in-flight guards before
+        // returning; the stream event below is the completion boundary.
+        let launch = unsafe { match (validated.dtype, shapes) {
             (DType::F32, claymore_tensor::ShapeSignature::Elementwise { numel }) => {
                 engine.add(pointers[0], pointers[1], output_ptr, numel, stream)
             }
@@ -777,7 +780,7 @@ impl CudaMemoryManager {
             (_dtype, _) => {
                 return Err(CudaMemoryError::Tensor(OpError::UnsupportedDType));
             }
-        };
+        }};
         if let Err(error) = launch {
             // A driver error may be reported after work was partially submitted.
             // Prove stream quiescence before returning control to the caller.
