@@ -140,11 +140,11 @@ struct CudaTransferTracker<E> {
 
 impl<E: CudaEventOps> CudaTransferTracker<E> {
     fn poll(&mut self, tick: u64) -> Result<usize, CudaMemoryError> {
-        self.transfers.poll(tick)
+        poll_pending_transfers(&mut self.policy, &mut self.pending, tick)
     }
 
     fn wait_for_allocation(&mut self, id: &str, tick: u64) -> Result<(), CudaMemoryError> {
-        self.transfers.wait_for_allocation(id, tick)
+        wait_for_pending_allocation(&mut self.policy, &mut self.pending, id, tick)
     }
 
     fn plan_admission(
@@ -153,7 +153,13 @@ impl<E: CudaEventOps> CudaTransferTracker<E> {
         bytes: u64,
         tick: u64,
     ) -> Result<AdmissionPlan, CudaMemoryError> {
-        plan_admission_after_poll(&mut self.transfers.policy, &mut self.transfers.pending, tier, bytes, tick)
+        plan_admission_after_poll(
+            &mut self.policy,
+            &mut self.pending,
+            tier,
+            bytes,
+            tick,
+        )
     }
 }
 
@@ -525,14 +531,22 @@ impl CudaMemoryManager {
                 // prevent every subsequent operation and keep both allocations
                 // non-evictable until manager destruction can synchronize again.
                 self.poisoned = true;
-                self.transfers.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
-                self.transfers.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
+                self.transfers
+                    .policy
+                    .mark_in_flight_until(pinned_id, IN_FLIGHT)?;
+                self.transfers
+                    .policy
+                    .mark_in_flight_until(device_id, IN_FLIGHT)?;
                 return Err(sync_error.into());
             }
             return Err(error.into());
         }
-        self.transfers.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
-        self.transfers.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
+        self.transfers
+                    .policy
+                    .mark_in_flight_until(pinned_id, IN_FLIGHT)?;
+        self.transfers
+                    .policy
+                    .mark_in_flight_until(device_id, IN_FLIGHT)?;
         let allocation_ids = vec![pinned_id.to_owned(), device_id.to_owned()];
         let completed = Arc::new(AtomicBool::new(false));
         self.transfers.pending.push(PendingTransfer {
@@ -733,7 +747,10 @@ impl CudaMemoryManager {
         // Compute one victim set against both constraints. Independently
         // planning expert and general VRAM admission can over-evict when the
         // two plans choose different candidates.
-        let plan = self.transfers.policy.plan_expert_vram_admission(bytes, tick)?;
+        let plan = self
+            .transfers
+            .policy
+            .plan_expert_vram_admission(bytes, tick)?;
         for id in plan.evict_ids {
             self.release(&id, tick)?;
         }
@@ -1117,7 +1134,11 @@ mod tests {
         assert_eq!(tracker.pending.len(), 1);
         assert!(!completed.load(Ordering::Acquire));
         assert_eq!(
-            tracker.policy.allocation("guarded").unwrap().safe_after_tick,
+            tracker
+                .policy
+                .allocation("guarded")
+                .unwrap()
+                .safe_after_tick,
             IN_FLIGHT
         );
 
@@ -1177,7 +1198,11 @@ mod tests {
         assert!(!second.load(Ordering::Acquire));
         assert_eq!(tracker.pending.len(), 1);
         assert_eq!(
-            tracker.policy.allocation("shared").unwrap().safe_after_tick,
+            tracker
+                .policy
+                .allocation("shared")
+                .unwrap()
+                .safe_after_tick,
             IN_FLIGHT
         );
 
@@ -1220,7 +1245,11 @@ mod tests {
         assert_eq!(tracker.pending.len(), 1);
         assert!(!completed.load(Ordering::Acquire));
         assert_eq!(
-            tracker.policy.allocation("buffer").unwrap().safe_after_tick,
+            tracker
+                .policy
+                .allocation("buffer")
+                .unwrap()
+                .safe_after_tick,
             IN_FLIGHT
         );
     }
