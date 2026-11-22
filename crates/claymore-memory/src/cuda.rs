@@ -8,7 +8,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use crate::{
-    Allocation, EvictionPolicy, MemoryBudgets, MemoryError, MemoryOrchestrator, MemorySnapshot,
+    AdmissionPlan, Allocation, EvictionPolicy, MemoryBudgets, MemoryError, MemoryOrchestrator,
+    MemorySnapshot,
 };
 use claymore_core::MemoryTier;
 use claymore_cuda::{
@@ -159,6 +160,18 @@ fn poll_pending_transfers<E: CudaEventOps>(
         retired += 1;
     }
     Ok(retired)
+}
+
+fn plan_admission_after_poll<E: CudaEventOps>(
+    policy: &mut MemoryOrchestrator,
+    pending: &mut Vec<PendingTransfer<E>>,
+    tier: MemoryTier,
+    bytes: u64,
+    tick: u64,
+) -> Result<AdmissionPlan, CudaMemoryError> {
+    // This ordering is the fail-closed contract used by CudaMemoryManager::make_room.
+    poll_pending_transfers(policy, pending, tick)?;
+    Ok(policy.plan_admission(tier, bytes, tick)?)
 }
 
 fn wait_for_pending_allocation<E: CudaEventOps>(
@@ -704,9 +717,14 @@ impl CudaMemoryManager {
         tick: u64,
     ) -> Result<(), CudaMemoryError> {
         // Reclaim transfers already completed by the device before planning
-        // evictions. Polling is non-blocking; pending/error states stay guarded.
-        self.poll_completed_transfers(tick)?;
-        let plan = self.policy.plan_admission(tier, bytes, tick)?;
+        // evictions. Polling errors abort admission before any victim is released.
+        let plan = plan_admission_after_poll(
+            &mut self.policy,
+            &mut self.pending,
+            tier,
+            bytes,
+            tick,
+        )?;
         for id in plan.evict_ids {
             self.release(&id, tick)?;
         }
@@ -993,12 +1011,14 @@ mod tests {
             completed,
         }];
 
-        let admission = poll_pending_transfers(&mut policy, &mut pending, 10).and_then(|_| {
-            policy
-                .plan_admission(MemoryTier::Vram, 8, 10)
-                .map(|plan| plan.evict_ids)
-                .map_err(CudaMemoryError::from)
-        });
+        let admission = plan_admission_after_poll(
+            &mut policy,
+            &mut pending,
+            MemoryTier::Vram,
+            8,
+            10,
+        )
+        .map(|plan| plan.evict_ids);
         assert!(matches!(admission, Err(CudaMemoryError::Cuda(_))));
         assert_eq!(pending.len(), 1);
         assert!(policy.allocation("unrelated").is_some());
