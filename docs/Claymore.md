@@ -548,7 +548,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
 | M7 | Scheduler et orchestration mémoire | **Livré sur `main` par la PR #21** |
 | M7.1 | Durcissement scheduler/runtime et préparation M8 | **Livré sur `main` par la PR #22** ; CI verte ; revalidation RTX 5090 réussie au SHA de code `c16e925` (17/17 requis par campagne, deux campagnes ; 27/27 tests workspace par campagne) ; limites restantes suivies dans l'issue #23 |
-| M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
+| M8 | Moteur tensoriel Claymore et premier chemin modèle | **En cours — fondation Tensor CPU proposée dans la PR M8.1** |
 | M9 | Stratégie autoregressive | Planifié |
 | M10 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
 | M11 | Optimisation et validation de performance | Planifié |
@@ -701,10 +701,13 @@ Critères d'acceptation :
 
 **Objectif :** construire le premier chemin tensoriel natif de Claymore et exécuter une étape représentative et reproductible d'un modèle de référence selon son véritable paradigme d'exécution. Le jalon ne présuppose pas un forward pass autoregressif ni une boucle unique commune aux modèles.
 
+**État :** en cours. La première tranche M8.1 introduit `claymore-tensor` : layouts contigus/stridés validés, calculs de tailles vérifiés, ownership d'un buffer opaque et vues empruntées. Elle ne fournit encore aucune opération arithmétique ni aucun kernel.
+
 Travaux :
 - définir et stabiliser les primitives de calcul tensoriel natives de Claymore ;
 - définir le chargement et la représentation des poids ;
 - connecter les opérations tensorielles aux contrats Device / Tensor / Memory et au backend d'exécution Claymore ;
+- sélectionner les premières opérations après inspection du graphe et des exigences numériques du modèle retenu, sans imposer de boucle de génération commune ;
 - valider formes, précision, sorties et durée de vie des buffers.
 
 Critères d'acceptation :
