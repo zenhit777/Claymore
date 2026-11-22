@@ -18,13 +18,18 @@ pub struct TensorLayout {
 
 impl TensorLayout {
     /// Construct a contiguous layout with checked shape and byte arithmetic.
-    pub fn contiguous(shape: impl Into<Vec<usize>>, dtype: DType) -> Result<Self, TensorError> {
+    pub fn contiguous(
+        shape: impl Into<Vec<usize>>,
+        dtype: DType,
+    ) -> Result<Self, TensorError> {
         let shape = shape.into();
         let mut strides = vec![1; shape.len()];
         let mut stride = 1usize;
         for index in (0..shape.len()).rev() {
             strides[index] = stride;
-            stride = stride.checked_mul(shape[index]).ok_or(TensorError::SizeOverflow)?;
+            stride = stride
+                .checked_mul(shape[index])
+                .ok_or(TensorError::SizeOverflow)?;
         }
         Self::strided(shape, strides, dtype)
     }
@@ -51,21 +56,49 @@ impl TensorLayout {
             if dimension == 0 {
                 return Err(TensorError::EmptyDimension);
             }
-            numel = numel.checked_mul(dimension).ok_or(TensorError::SizeOverflow)?;
-            let axis = (dimension - 1).checked_mul(stride).ok_or(TensorError::SizeOverflow)?;
-            max_offset = max_offset.checked_add(axis).ok_or(TensorError::SizeOverflow)?;
+            numel = numel
+                .checked_mul(dimension)
+                .ok_or(TensorError::SizeOverflow)?;
+            let axis = (dimension - 1)
+                .checked_mul(stride)
+                .ok_or(TensorError::SizeOverflow)?;
+            max_offset = max_offset
+                .checked_add(axis)
+                .ok_or(TensorError::SizeOverflow)?;
         }
-        let span_bytes = max_offset.checked_add(1)
+        let span_bytes = max_offset
+            .checked_add(1)
             .and_then(|n| n.checked_mul(dtype.element_size_bytes()))
             .ok_or(TensorError::SizeOverflow)?;
-        Ok(Self { shape, strides, dtype, numel, span_bytes })
+        Ok(Self {
+            shape,
+            strides,
+            dtype,
+            numel,
+            span_bytes,
+        })
     }
 
-    pub fn shape(&self) -> &[usize] { &self.shape }
-    pub fn strides(&self) -> &[usize] { &self.strides }
-    pub fn dtype(&self) -> DType { self.dtype }
-    pub fn numel(&self) -> usize { self.numel }
-    pub fn span_bytes(&self) -> usize { self.span_bytes }
+    pub fn shape(&self) -> &[usize] {
+        &self.shape
+    }
+
+    pub fn strides(&self) -> &[usize] {
+        &self.strides
+    }
+
+    pub fn dtype(&self) -> DType {
+        self.dtype
+    }
+
+    pub fn numel(&self) -> usize {
+        self.numel
+    }
+
+    pub fn span_bytes(&self) -> usize {
+        self.span_bytes
+    }
+
     pub fn is_contiguous(&self) -> bool {
         Self::contiguous(self.shape.clone(), self.dtype)
             .is_ok_and(|layout| layout.strides == self.strides)
@@ -84,7 +117,8 @@ pub struct Tensor {
 
 impl std::fmt::Debug for Tensor {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.debug_struct("Tensor")
+        formatter
+            .debug_struct("Tensor")
             .field("layout", &self.layout)
             .field("offset_bytes", &self.offset_bytes)
             .field("storage_len", &self.storage.len())
@@ -107,18 +141,41 @@ impl Tensor {
         layout: TensorLayout,
         offset_bytes: usize,
     ) -> Result<Self, TensorError> {
-        let end = offset_bytes.checked_add(layout.span_bytes()).ok_or(TensorError::SizeOverflow)?;
+        let end = offset_bytes
+            .checked_add(layout.span_bytes())
+            .ok_or(TensorError::SizeOverflow)?;
         if end > storage.len() {
-            return Err(TensorError::StorageTooSmall { required: end, capacity: storage.len() });
+            return Err(TensorError::StorageTooSmall {
+                required: end,
+                capacity: storage.len(),
+            });
         }
-        Ok(Self { storage, layout, offset_bytes })
+        Ok(Self {
+            storage,
+            layout,
+            offset_bytes,
+        })
     }
 
-    pub fn layout(&self) -> &TensorLayout { &self.layout }
-    pub fn offset_bytes(&self) -> usize { self.offset_bytes }
-    pub fn storage(&self) -> &dyn DeviceBuffer { self.storage.as_ref() }
-    pub fn storage_mut(&mut self) -> &mut dyn DeviceBuffer { self.storage.as_mut() }
-    pub fn into_storage(self) -> Box<dyn DeviceBuffer> { self.storage }
+    pub fn layout(&self) -> &TensorLayout {
+        &self.layout
+    }
+
+    pub fn offset_bytes(&self) -> usize {
+        self.offset_bytes
+    }
+
+    pub fn storage(&self) -> &dyn DeviceBuffer {
+        self.storage.as_ref()
+    }
+
+    pub fn storage_mut(&mut self) -> &mut dyn DeviceBuffer {
+        self.storage.as_mut()
+    }
+
+    pub fn into_storage(self) -> Box<dyn DeviceBuffer> {
+        self.storage
+    }
 
     pub fn view(
         &self,
@@ -127,14 +184,25 @@ impl Tensor {
         relative_offset_bytes: usize,
     ) -> Result<TensorView<'_>, TensorError> {
         let layout = TensorLayout::strided(shape, strides, self.layout.dtype())?;
-        let offset_bytes = self.offset_bytes.checked_add(relative_offset_bytes)
+        let offset_bytes = self
+            .offset_bytes
+            .checked_add(relative_offset_bytes)
             .ok_or(TensorError::SizeOverflow)?;
-        let end = offset_bytes.checked_add(layout.span_bytes()).ok_or(TensorError::SizeOverflow)?;
+        let end = offset_bytes
+            .checked_add(layout.span_bytes())
+            .ok_or(TensorError::SizeOverflow)?;
         let storage_capacity = self.storage.len();
         if end > storage_capacity {
-            return Err(TensorError::StorageTooSmall { required: end, capacity: storage_capacity });
+            return Err(TensorError::StorageTooSmall {
+                required: end,
+                capacity: storage_capacity,
+            });
         }
-        Ok(TensorView { storage: self.storage.as_ref(), layout, offset_bytes })
+        Ok(TensorView {
+            storage: self.storage.as_ref(),
+            layout,
+            offset_bytes,
+        })
     }
 }
 
@@ -146,9 +214,17 @@ pub struct TensorView<'a> {
 }
 
 impl TensorView<'_> {
-    pub fn layout(&self) -> &TensorLayout { &self.layout }
-    pub fn offset_bytes(&self) -> usize { self.offset_bytes }
-    pub fn storage(&self) -> &dyn DeviceBuffer { self.storage }
+    pub fn layout(&self) -> &TensorLayout {
+        &self.layout
+    }
+
+    pub fn offset_bytes(&self) -> usize {
+        self.offset_bytes
+    }
+
+    pub fn storage(&self) -> &dyn DeviceBuffer {
+        self.storage
+    }
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -158,7 +234,10 @@ pub enum TensorError {
     #[error("tensor shape and byte span overflow usize")]
     SizeOverflow,
     #[error("shape rank {shape_rank} differs from stride rank {stride_rank}")]
-    RankMismatch { shape_rank: usize, stride_rank: usize },
+    RankMismatch {
+        shape_rank: usize,
+        stride_rank: usize,
+    },
     #[error("tensor requires {required} bytes but storage capacity is {capacity}")]
     StorageTooSmall { required: usize, capacity: usize },
     #[error(transparent)]
@@ -168,8 +247,8 @@ pub enum TensorError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claymore_device::{CpuDevice, Device};
     use claymore_core::MemoryTier;
+    use claymore_device::{CpuDevice, Device};
 
     #[test]
     fn contiguous_layout_uses_checked_element_strides() {
@@ -214,7 +293,10 @@ mod tests {
         let layout = TensorLayout::contiguous(vec![4], DType::F32).unwrap();
         assert_eq!(
             Tensor::with_layout(storage, layout, 17).unwrap_err(),
-            TensorError::StorageTooSmall { required: 33, capacity: 32 }
+            TensorError::StorageTooSmall {
+                required: 33,
+                capacity: 32
+            }
         );
     }
 
