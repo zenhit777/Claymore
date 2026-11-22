@@ -4,6 +4,9 @@
 //! handles and performs no arithmetic; device buffers remain opaque and are
 //! released only through the backend's explicit, fallible contract.
 use claymore_device::{DType, DeviceBuffer, DeviceError};
+
+pub mod ops;
+pub use ops::{add, matmul, rms_norm, softmax_last_dim, OpError};
 use thiserror::Error;
 
 /// A validated tensor layout. Strides are measured in elements, not bytes.
