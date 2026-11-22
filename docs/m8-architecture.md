@@ -31,7 +31,7 @@ Le crate claymore-tensor fournit un premier ensemble déterministe F32 :
 - softmax stable sur la dernière dimension ;
 - RMSNorm sur la dernière dimension avec vecteur de scale explicite.
 
-Ces opérations exigent des layouts contigus et un dtype F32. Elles ne convertissent pas silencieusement les types. Ce premier ensemble constitue un socle de référence, pas une affirmation qu'il couvre à lui seul les graphes complets de DiffusionGemma ou Clover. Les primitives BF16/FP16 et les opérations supplémentaires seront sélectionnées après inspection des graphes et exigences numériques.
+Ces opérations exigent des layouts contigus et un dtype F32. Elles ne convertissent pas silencieusement les types. Ce premier ensemble constitue un socle de référence, pas une affirmation qu'il couvre à lui seul les graphes complets de DiffusionGemma ou Clover. L'audit des checkpoints a confirmé que BF16 est requis pour les poids publiés ; le support BF16 explicite reste à livrer avant l'exécution de ces modèles.
 
 ## État d'implémentation
 
@@ -44,16 +44,14 @@ Ces opérations exigent des layouts contigus et un dtype F32. Elles ne convertis
 - [x] Allocation/sortie intégrée au memory orchestrator et au scheduler (`CudaTensorMemory`, `CudaMemoryManager::launch_tensor_op`, `CudaTensorComputeExecutor`) sans contourner budgets, gardes ni événements.
 - [x] Kernels CUDA F32 équivalents et tests différentiels CPU/CUDA (PTX `sm_120` intégré, 8 tests matériels).
 - [x] Validation RTX 5090 sur le SHA de code documenté dans `docs/audits/m8-rtx5090-hardware-validation.md`.
-- [ ] Inspection des graphes/checkpoints DiffusionGemma et Clover pour compléter le jeu d'opérations requis.
+- [x] Audit des configurations, index de poids et exigences des graphes DiffusionGemma/Clover (`docs/audits/m8-model-graph-requirements.md`).
+- [ ] Support BF16 explicite identifié comme prérequis partagé avant chargement/exécution des checkpoints ; non livré dans cette tranche F32.
 
-## Séquence restante de M8
+## État de clôture de M8
 
-1. Formaliser les contrats et erreurs des opérations, les règles d'aliasing et les tolérances numériques.
-2. Ajouter l'interface de capacités et un dispatch déterministe sans fallback implicite.
-3. Raccorder l'allocation des sorties et les durées de vie aux services mémoire/scheduler existants.
-4. Implémenter les kernels CUDA des opérations retenues, derrière la feature CUDA existante.
-5. Exécuter les tests différentiels, numériques, mémoire et de cycle de vie sur RTX 5090.
-6. Auditer les exigences réelles des graphes et checkpoints des deux modèles ; ajouter uniquement les primitives justifiées.
+Les contrats, le dispatch, l'intégration memory/scheduler, les quatre kernels F32 et la campagne RTX 5090 sont livrés et documentés. L'audit des modèles cibles est également réalisé ; ses conclusions et les besoins non couverts sont consignés dans `docs/audits/m8-model-graph-requirements.md`.
+
+Cet audit confirme que les deux checkpoints publiés sont BF16. Le chemin F32 livré ne permet donc pas de les charger directement. Le support BF16 explicite (ou une stratégie de conversion/quantification formellement décidée) reste un prérequis avant les tests d'exécution modèle et doit être planifié avant M10/M11. Cette limite ne doit pas être confondue avec la validation matérielle des kernels F32 de M8.
 
 ## Réalisation M8 (PR #24)
 
