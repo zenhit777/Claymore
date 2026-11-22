@@ -13,6 +13,7 @@ cuda-driver = ["dep:claymore-cuda", "claymore-cuda/cuda-driver"]
 claymore-cuda = { path = "../claymore-cuda", optional = true }
 claymore-core = { path = "../claymore-core" }
 claymore-device = { path = "../claymore-device" }
+claymore-scheduler = { path = "../claymore-scheduler" }
 thiserror.workspace = true
 
 [[test]]

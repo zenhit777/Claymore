@@ -32,6 +32,13 @@ pub enum DeviceMemoryError {
     ExpertMustUseVram,
     #[error("source and destination allocations must be distinct")]
     AliasedCopy,
+    #[error("completion horizon {safe_after_tick} precedes current tick {current_tick}")]
+    InvalidCompletionHorizon {
+        current_tick: u64,
+        safe_after_tick: u64,
+    },
+    #[error("completion horizon regressed from {previous} to {provided}")]
+    CompletionHorizonRegression { previous: u64, provided: u64 },
 }
 
 impl<D: Device> DeviceMemoryManager<D> {
@@ -58,6 +65,18 @@ impl<D: Device> DeviceMemoryManager<D> {
         self.policy.allocation(id)
     }
 
+    /// Store an observed/estimated reload cost for adaptive eviction.
+    pub fn record_reload_cost(
+        &mut self,
+        id: &str,
+        cost_ns: u64,
+        tick: u64,
+    ) -> Result<(), DeviceMemoryError> {
+        self.advance_tick(tick)?;
+        self.policy.record_reload_cost(id, cost_ns)?;
+        Ok(())
+    }
+
     pub fn allocate(
         &mut self,
         id: impl Into<String>,
@@ -75,8 +94,17 @@ impl<D: Device> DeviceMemoryManager<D> {
             return Err(DeviceMemoryError::ExpertMustUseVram);
         }
 
-        let plan = self.policy.plan_admission(tier, bytes, tick)?;
-        for evict_id in plan.evict_ids {
+        // Compute every applicable plan before releasing anything. This
+        // avoids evicting expert weights and then discovering that the general
+        // VRAM admission is impossible.
+        let mut evict_ids = Vec::new();
+        if expert {
+            evict_ids.extend(self.policy.plan_expert_admission(bytes, tick)?.evict_ids);
+        }
+        evict_ids.extend(self.policy.plan_admission(tier, bytes, tick)?.evict_ids);
+        evict_ids.sort();
+        evict_ids.dedup();
+        for evict_id in evict_ids {
             self.release_inner(&evict_id, tick)?;
         }
 
@@ -153,6 +181,37 @@ impl<D: Device> DeviceMemoryManager<D> {
             .copy(source.as_ref(), destination.as_mut(), bytes)?;
         self.policy.touch(source_id, tick)?;
         self.policy.touch(destination_id, tick)?;
+        Ok(())
+    }
+
+    /// Mark an allocation as protected until the backend-reported logical tick.
+    /// This is the CPU/backend-neutral guard used by schedulers and executors;
+    /// callers must not advance the horizon until their operation is complete.
+    pub fn mark_in_flight_until(
+        &mut self,
+        id: &str,
+        safe_after_tick: u64,
+        tick: u64,
+    ) -> Result<(), DeviceMemoryError> {
+        self.advance_tick(tick)?;
+        if safe_after_tick < tick {
+            return Err(DeviceMemoryError::InvalidCompletionHorizon {
+                current_tick: tick,
+                safe_after_tick,
+            });
+        }
+        let previous = self
+            .policy
+            .allocation(id)
+            .ok_or_else(|| DeviceMemoryError::UnknownAllocation(id.to_owned()))?
+            .safe_after_tick;
+        if safe_after_tick < previous {
+            return Err(DeviceMemoryError::CompletionHorizonRegression {
+                previous,
+                provided: safe_after_tick,
+            });
+        }
+        self.policy.mark_in_flight_until(id, safe_after_tick)?;
         Ok(())
     }
 
@@ -448,6 +507,71 @@ mod tests {
             Err(DeviceMemoryError::AliasedCopy)
         ));
         assert_eq!(manager.read("buffer", 0, 4, 4).unwrap(), [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn in_flight_guard_prevents_release_and_eviction_until_horizon() {
+        let mut manager =
+            DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
+        manager
+            .allocate("protected", MemoryTier::Vram, 80, 1, false)
+            .unwrap();
+        manager.mark_in_flight_until("protected", 10, 2).unwrap();
+
+        assert!(matches!(
+            manager.release("protected", 9),
+            Err(DeviceMemoryError::Policy(MemoryError::AllocationBusy(_)))
+        ));
+        assert!(matches!(
+            manager.allocate("replacement", MemoryTier::Vram, 80, 9, false),
+            Err(DeviceMemoryError::Policy(
+                MemoryError::InsufficientReclaimable { .. }
+            ))
+        ));
+
+        manager.release("protected", 10).unwrap();
+        manager
+            .allocate("replacement", MemoryTier::Vram, 80, 11, false)
+            .unwrap();
+    }
+
+    #[test]
+    fn expert_cache_max_is_enforced_by_cpu_device_manager() {
+        let mut manager =
+            DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
+        manager
+            .allocate("expert-a", MemoryTier::Vram, 60, 1, true)
+            .unwrap();
+        manager
+            .allocate("expert-b", MemoryTier::Vram, 40, 2, true)
+            .unwrap();
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 40);
+        assert!(manager.allocation("expert-a").is_none());
+        assert!(manager.allocation("expert-b").is_some());
+    }
+
+    #[test]
+    fn completion_horizon_cannot_be_moved_backwards() {
+        let mut manager =
+            DeviceMemoryManager::new(CpuDevice::new(), budgets(), EvictionPolicy::Lru).unwrap();
+        manager
+            .allocate("guarded", MemoryTier::Host, 8, 1, false)
+            .unwrap();
+        manager.mark_in_flight_until("guarded", 10, 2).unwrap();
+        assert!(matches!(
+            manager.mark_in_flight_until("guarded", 8, 3),
+            Err(DeviceMemoryError::CompletionHorizonRegression {
+                previous: 10,
+                provided: 8
+            })
+        ));
+        assert!(matches!(
+            manager.mark_in_flight_until("guarded", 2, 3),
+            Err(DeviceMemoryError::InvalidCompletionHorizon {
+                current_tick: 3,
+                safe_after_tick: 2
+            })
+        ));
     }
 
     #[test]

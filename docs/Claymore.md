@@ -270,7 +270,7 @@ L'architecture est organisée en couches avec des frontières explicites.
 | `claymore-core` | Types partagés, configuration et contrats transverses |
 | `claymore-device` | Contrats Device/Buffer/Tensor indépendants du backend et simulateur CPU |
 | `claymore-memory` | Budgets, comptabilité, admission et politiques d'éviction |
-| `claymore-scheduler` | Planification du travail et politique de préchargement |
+| `claymore-scheduler` | Graphe de tâches, files compute/transfer/prefetch, priorités et limites de préchargement |
 | `claymore-runtime` | Cycle de vie des requêtes, contexte d'exécution et orchestration synchrone indépendante des modèles |
 | `claymore-model-gemma` | Frontière d'intégration du modèle DiffusionGemma (`google/diffusiongemma-26B-A4B-it`) |
 | `claymore-model-clover` | Frontière d'intégration Clover |
@@ -279,7 +279,7 @@ L'architecture est organisée en couches avec des frontières explicites.
 
 Le workspace utilise Cargo, resolver 2, Rust edition 2021. La version de référence actuelle est 0.5.0.
 
-`claymore-scheduler` ne fournit actuellement qu'une structure `SchedulerConfig` (`cpu_workers`, `max_prefetches`, `lookahead`) et sa validation ; aucune boucle ni logique de planification n'est implémentée. La validation accepte de 1 à 12 workers. Les valeurs minimales de 6 workers, les nombres de streams et le tick de 500 µs figurant dans le profil JSON sont des paramètres documentaires, pas des contraintes appliquées par le code.
+`claymore-scheduler` fournit désormais un ordonnanceur déterministe de tâches avec dépendances, priorités, files logiques Compute/Transfer/Prefetch, fenêtre de préchargement bornée et transitions explicites. Il ne crée pas de workers, ne lance pas les opérations et ne crée aucun stream CUDA : l'exécuteur reste responsable du travail réel. Le scheduler est `!Send + !Sync` afin de préserver le confinement au thread propriétaire. La validation de `SchedulerConfig` accepte de 1 à 12 workers et au plus deux préchargements simultanés.
 
 ### 6.3 Principes de conception
 
@@ -343,15 +343,9 @@ Le crate `claymore-memory` contient :
 - politiques LRU, LFU et adaptive ;
 - protection logique des allocations avec `safe_after_tick` ;
 - confirmation explicite d'éviction avant mise à jour de la comptabilité ;
-- getters de configuration et compteur d'usage du cache d'experts ; la cible de 14 Gio et le maximum de 16 Gio ne sont pas appliqués à l'admission.
-
-Le budget souple VRAM de 26 Gio est actuellement validé par rapport au plafond dur, mais n'est pas appliqué comme limite d'admission : `limit_for(Vram)` renvoie le plafond dur de 28 Gio. Le champ working set de 18 Gio n'existe pas dans `MemoryBudgets` ; l'inclusion du cache d'experts dans ce working set reste donc un invariant documentaire non vérifié par le code.
-
-Cette version est une couche de politique host-side. Elle n'alloue pas elle-même la VRAM, ne réserve pas réellement de pages épinglées et ne réalise pas de transfert CUDA.
-
-#### Scheduler et profil CLI — état réel
-
-`claymore-scheduler` ne contient qu'une configuration et une méthode `validate()` ; il ne planifie pas de tâches et ne pilote aucun préchargement. Le fichier `config/rtx5090-7950x3d.json` est versionné mais n'est pas chargé par le runtime. La commande `claymore-cli profile` affiche les valeurs de `SchedulerConfig::default()` et ne reflète donc pas le profil matériel JSON.
+- Les enveloppes RAM sont disjointes : Host = weights pool + staging/state (80 Gio sur le profil de référence), PinnedHost = 8 Gio ; leur somme est validée contre le budget Claymore de 88 Gio.
+- Le budget souple VRAM de 26 Gio est une cible d'éviction proactive ; le plafond dur de 28 Gio reste la limite d'admission. Le plafond maximal du cache d'experts est appliqué à chaque admission.
+- Cette couche de politiques reste backend-neutre ; les allocations réelles, transferts et libérations sont exécutés par les adaptateurs correspondants.
 
 #### v0.4 — CUDA Driver Backend
 
@@ -387,28 +381,33 @@ Le build par défaut reste indépendant du matériel. La feature CUDA requiert u
 
 Ce jalon livre des abstractions backend-neutres et leur validation CPU ; il ne livre aucun calcul tensoriel ni opérateur. Le backend CUDA existant n'implémente pas encore `Device` et son raccordement reste conditionné à un contrat de libération faillible et de protection des allocations en vol (voir §7.3 et l'audit M2).
 
-### 7.2 Non livré sur main
+#### M7 — Scheduler et orchestration mémoire (PR #21)
+
+**État : M7 livré par la PR #21.** Le jalon relie les requêtes Compute, les tâches Transfer/Prefetch, les exécuteurs mémoire backend-neutres et l'exécuteur CUDA event-backed.
+
+Le scheduler et les exécuteurs sont mono-propriétaires et synchrones. `CudaTransferExecutor` attend l'event CUDA après chaque copie H2D/D2H avant de retourner le succès à `QueueRunner`. Le périmètre ne fournit donc ni recouvrement transfert/calcul, ni préchargement concurrent, ni exécution asynchrone des requêtes Compute. La campagne RTX 5090 versionnée rapporte 34/34 exécutions de tests matériels réussies sur le SHA de code indiqué dans le rapport ; ses limites (transfert M7 de 1 MiB, cache expert à petite échelle, absence de kernels et d'injection de fautes) restent applicables.
+
+Le coût de rechargement est exposé par l'API mémoire, mais aucun chargeur de poids ou d'experts ne l'alimente encore automatiquement ; `CudaTransferExecutor` ne propose pas de tâche `RecordReloadCost`.
+
+
+### 7.2 Fonctionnalités et extensions non livrées de bout en bout
 
 Les éléments suivants ne doivent pas être considérés comme fonctionnels de bout en bout :
 
-#### M6 — Runtime unifié (première tranche proposée par la PR #20, non encore sur main)
+#### M6 — Runtime unifié (première tranche livrée ; extensions restantes)
 
 Le crate `claymore-runtime` fournit un noyau synchrone, mono-exécution et indépendant des modèles : identifiants monotones, contexte isolé par requête, enveloppes opaques, états explicites, rapport d'exécution, stratégie `GenerationStrategy`, erreurs et annulation coopérative. Aucun trait `Send`/`Sync` n'est imposé à la stratégie.
 
 La limite `max_payload_bytes` porte explicitement sur les seuls octets du payload ; les métadonnées ne sont pas comptabilisées. Si une stratégie panique, la panique se propage, l'identifiant a déjà été consommé et aucun rapport n'est produit : l'instance du runtime doit être abandonnée. Si l'annulation est observée après le retour de la stratégie, elle prévaut sur son résultat ; une éventuelle erreur de stratégie simultanée est écartée du rapport.
 
-**Statut : partiel — première tranche livrée dans la PR #20, en attente de merge.** La portée historique initiale de M6 incluait aussi l'orchestration de haut niveau et des frontières explicites entre runtime, architecture de modèle, stratégie et mode d'exécution. Ces éléments ne sont pas implémentés dans cette tranche : l'orchestration, l'ownership des ressources et le scheduling sont reportés à M7 ; l'intégration des moteurs tensoriels et les modes d'exécution concrets sont reportés à M8 et aux phases modèles ultérieures. Cette répartition est un amendement explicite du périmètre, pas une déclaration d'achèvement de ces critères.
+**Statut : première tranche livrée sur `main` par la PR #20.** La portée historique initiale de M6 incluait aussi l'orchestration de haut niveau et des frontières explicites entre runtime, architecture de modèle, stratégie et mode d'exécution. Ces éléments ne sont pas implémentés dans cette tranche : l'orchestration, l'ownership des ressources et le scheduling sont reportés à M7 ; l'intégration des moteurs tensoriels et les modes d'exécution concrets sont reportés à M8 et aux phases modèles ultérieures. Cette répartition est un amendement explicite du périmètre, pas une déclaration d'achèvement de ces critères.
 
-La tranche actuelle n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâches, ne charge pas de modèle et n'effectue aucun calcul tensoriel. Elle est validée par des tests CPU.
+La tranche M6 n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâches, ne charge pas de modèle et n'effectue aucun calcul tensoriel. Elle est validée par des tests CPU.
 
-- chargement du profil matériel JSON par le runtime ou la CLI ;
-- application effective du budget souple VRAM de 26 Gio ;
-- enforcement de la cible/max du cache d'experts et de son inclusion dans un working set explicite ;
-- logique de scheduling, files de tâches et préchargement (M7) ;
-- exécution concurrente/asynchrone des requêtes, stratégie de génération concrète et intégration de modèles dans le runtime (extensions futures de M6/M8+) ;
+ - exécution concurrente/asynchrone des requêtes, stratégie de génération concrète et intégration de modèles dans le runtime (extensions futures de M6/M8+) ;
 - adaptateur CUDA spécifique injectable et tests du cycle de vie CUDA avec backend simulé (différés dans l'issue #19) ;
 - pool allocator VRAM, réutilisation de blocs et défragmentation ;
-- moteur de transfert piloté par le scheduler ;
+- intégration des tâches Transfer/Prefetch au scheduler M7 : livrée dans la première tranche, avec exécution synchrone sur le thread propriétaire ;
 - prefetch prédictif intégré au cache d'experts ;
 - télémétrie consolidée CPU/RAM/VRAM/transferts ;
 - moteur tensoriel natif et chemin d'inférence effectif ;
@@ -428,7 +427,7 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 - L'annulation observée après le retour de la stratégie prévaut sur le résultat de celle-ci. Si la stratégie renvoie simultanément une erreur, le rapport contient `Cancelled` et l'erreur de stratégie n'est pas conservée.
 - L'exécution reste synchrone et mono-requête ; aucune interruption forcée d'un appel backend bloquant n'est garantie. Le jeton est coopératif.
 - Le contrat d'erreur de stratégie est encore une `String` ; son évolution vers un type structuré est une décision préalable à l'intégration des moteurs en M8/M9.
-- L'ownership des ressources `Device` / `DeviceMemoryManager` n'est pas encore défini dans le contexte d'exécution : il sera décidé avec le propriétaire CUDA et le scheduler en M7/M8.
+- L'ownership des ressources CUDA est défini pour M7 : scheduler et exécuteurs restent mono-propriétaires (`!Send + !Sync`) ; `CudaTransferExecutor` détient son `CudaMemoryManager` et attend chaque event H2D/D2H. Le raccordement du backend CUDA au trait générique `Device` reste un chantier distinct.
 - `RequestOutput` représente une sortie complète ; une API de sortie incrémentale (blocs/tokens) reste à concevoir pour les stratégies qui en auront besoin.
 - L'épuisement des identifiants est détecté sans wraparound ; l'identifiant `u64::MAX` n'est pas émis car son incrément ne peut pas être représenté.
 
@@ -440,11 +439,11 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 - le stream de transfert utilise `CU_STREAM_NON_BLOCKING` et ne bénéficie donc pas des synchronisations implicites avec le legacy default stream ; tout futur consommateur compute (kernels, cuBLAS/cuBLASLt) devra exprimer les dépendances compute ↔ transfert explicitement, notamment avec `cuStreamWaitEvent` ;
 - `make_room` propage toute erreur de polling et refuse alors l'admission, même si l'événement en erreur ne référence pas la victime envisagée : ce comportement fail-closed est intentionnel ;
 - l'injection déterministe des erreurs event/stream/free et les tests manager-level avec backend simulé sont différés dans l'issue #19 ;
-- le backend CUDA et le `CudaMemoryManager` sont confinés au thread propriétaire (`Rc`, types non `Send`/`Sync`) ; le scheduler M4 devra déléguer les opérations CUDA à un thread propriétaire dédié ou faire évoluer explicitement ce modèle de concurrence ;
+- le backend CUDA et le `CudaMemoryManager` sont confinés au thread propriétaire (`Rc`, types non `Send`/`Sync`) ; le scheduler M7 et `CudaTransferExecutor` respectent cette affinité en exécutant les opérations sur le thread propriétaire, de manière synchrone ; toute évolution vers une exécution concurrente devra définir explicitement un modèle d'ownership compatible ;
 - le contrat `Device` M2 actuel libère ses buffers par destruction (`Drop`) et ne peut pas exprimer une libération backend faillible ni protéger une allocation en vol ; le backend CUDA ne doit pas implémenter ce trait avant qu'un contrat de libération faillible et de garde de complétion préserve les garanties fail-closed de M1 ;
 - la validation runtime sous WSL2 / RTX 5090 est attestée pour le SHA `a3ff0fd` par `docs/audits/m1-hardware-validation.md` ; elle couvre le contexte primaire, la compute capability, les allocations pinned/device, le roundtrip H2D/D2H et la libération, mais pas Compute Sanitizer, l'injection de faute fail-closed ni les performances.
 
-La CI standard valide le build par défaut sans exiger un GPU. Les tests matériels marqués `#[ignore]` ne sont pas exécutés par la CI. Le backend CUDA n'est pas encore relié au contrat `Device` de Claymore. `CudaDriver::new` retient le contexte primaire du device ; les opérations inter-ressources vérifient l'identité du contexte. Le raccordement futur devra préserver explicitement l'identité du contexte, l'ownership et la durée de vie des buffers. Le backend et le manager restent confinés au thread propriétaire (`Rc`) ; aucune implémentation `Send`/`Sync` unsafe n'est envisagée.
+La CI standard valide le build par défaut sans exiger un GPU. Les tests matériels marqués `#[ignore]` ne sont pas exécutés par la CI. Le backend CUDA n'est pas encore relié au contrat `Device` de Claymore. `CudaDriver::new` retient le contexte primaire du device ; les opérations inter-ressources vérifient l'identité du contexte. Le raccordement futur devra préserver explicitement l'identité du contexte, l'ownership et la durée de vie des buffers. Le backend et le manager restent confinés au thread propriétaire (`Rc`) ; M7 respecte cette contrainte avec un scheduler et des exécuteurs synchrones `!Send + !Sync`. Aucune implémentation `Send`/`Sync` unsafe n'est envisagée.
 
 ---
 
@@ -490,49 +489,16 @@ Chaque moteur de modèle doit pouvoir préparer, exécuter et libérer ses état
 
 ## 8 bis. Couverture actuelle des exigences
 
-| Exigence | Statut sur `main` | Justification |
+| Exigence | Statut | Justification |
 |---|---|---|
-| FR-01 — Configuration du runtime | **Non livré** | Le profil JSON existe, mais aucun chargeur ne l'applique ; la CLI utilise `SchedulerConfig::default()`. |
-| FR-02 — Gestion des budgets | **Partiel** | Comptabilité host-side et validation des budgets ; le budget souple VRAM n'est pas appliqué à l'admission. |
-| FR-03 — Admission et éviction | **Livré (host-side) ; exécution CUDA opt-in validée sur RTX 5090 pour le SHA `a3ff0fd`** | Adaptateur d'allocation/libération CUDA et confirmation après free livrés derrière `cuda-driver` ; validation matérielle disponible dans `docs/audits/m1-hardware-validation.md` ; tests avec backend simulé encore manquants. |
-| FR-04 — Sûreté asynchrone | **Partiel : chemin nominal M5 validé sur RTX 5090 ; injection de fautes différée (#19)** | Events réels reliés aux transferts ; allocations protégées jusqu'à complétion confirmée ; polling non bloquant et finalisation avant admission. Campagne nominale et scénario ciblé poll → éviction documentés dans `docs/audits/m5-hardware-validation.md`. Les tests d'injection de fautes et le backend simulable restent suivis dans l'issue #19. |
-| FR-05 — Gestion des experts | **Non livré** | Getters/compteur seulement ; cible et maximum non appliqués à l'admission. |
-| FR-06 — Scheduling et prefetch | **Non livré** | Configuration seulement ; aucune logique de scheduling/prefetch. |
-| FR-07 — Diagnostics | **Partiel** | CLI de base et diagnostic device optionnel ; le profil JSON n'est pas chargé. |
-| FR-08 — Exécution des modèles | **Non livré** | Pas de moteur tensoriel complet ni d'inférence réelle des deux modèles. |
-
-## 9. Exigences non fonctionnelles et invariants
-
-### NFR-01 — Sécurité mémoire
-
-Pas de use-after-free GPU, pas de libération anticipée d'un buffer en vol, pas de confirmation comptable d'une éviction non effectuée.
-
-### NFR-02 — Résilience
-
-L'indisponibilité du backend CUDA ne doit pas empêcher les tests des politiques host-side ni le build par défaut.
-
-### NFR-03 — Observabilité
-
-Les futures versions doivent exposer les allocations par tier, les budgets, les évictions, les transferts, les temps d'attente et les raisons d'échec d'admission.
-
-### NFR-04 — Reproductibilité
-
-Les tests de politiques doivent être déterministes. Les benchmarks doivent documenter modèle, paramètres, précision, warmup, nombre d'itérations, consommation mémoire et environnement.
-
-### NFR-05 — Qualité Rust
-
-Chaque changement doit passer le formatage, les tests et Clippy sur les configurations prises en charge. Les blocs `unsafe` doivent être minimisés, documentés et entourés de contrats vérifiables.
-
-### Invariants impératifs
-
-1. Un budget est une limite de planification, pas une mesure de mémoire libre.
-2. La VRAM ne doit jamais être planifiée à 100 %.
-3. Le swap n'est pas un tier de poids.
-4. Un candidat à l'éviction n'est pas une éviction confirmée.
-5. Une allocation en vol n'est pas libérable.
-6. Objectif d'architecture : le cache d'experts doit être inclus dans le working set ; cet invariant n'est pas encore représenté ni vérifié par `MemoryBudgets`.
-7. Une validation CI sans CUDA ne prouve pas le fonctionnement du backend CUDA.
-8. Une compilation réussie ne prouve pas la correction numérique ni la performance d'un modèle.
+| FR-01 — Configuration du runtime | **Livré** | `HardwareProfile` charge et valide le profil JSON ; la CLI utilise le profil embarqué ou `CLAYMORE_HARDWARE_PROFILE`. |
+| FR-02 — Gestion des budgets | **Livré pour les budgets déclarés** | Budgets VRAM souple/dur, Host et PinnedHost validés sans chevauchement ; le soft-budget est une cible d'éviction proactive et le hard-ceiling reste la limite d'admission. |
+| FR-03 — Admission et éviction | **Livré pour les chemins CPU et CUDA couverts** | Plans déterministes, confirmation après libération backend et exécution CUDA opt-in ; l'injection de fautes reste séparée dans l'issue #19. |
+| FR-04 — Sûreté asynchrone | **Chemin nominal livré et validé** | Les allocations en vol restent protégées jusqu'à la complétion de l'event ; les transferts CUDA M7 attendent l'event avant de libérer les dépendances. L'injection de fautes reste hors périmètre. |
+| FR-05 — Gestion des experts | **Plafond livré ; cible de working set** | Le maximum est imposé à l'admission et le coût de rechargement peut être enregistré. Aucun chargeur de poids/expert ne l'alimente automatiquement. |
+| FR-06 — Scheduling et prefetch | **Ordonnanceur et exécution des files livrés, synchrones** | Graphe commun Compute/Transfer/Prefetch, priorités, dépendances, propagation des échecs et limites de préchargement. Pas de recouvrement concurrent transfert/calcul. |
+| FR-07 — Diagnostics | **Livré pour profil et détection CUDA** | La CLI affiche le profil actif et la commande `device` interroge le backend CUDA lorsque la feature est activée. |
+| FR-08 — Exécution des modèles | **Non livré** | Les moteurs modèles et le calcul tensoriel natif restent des jalons ultérieurs. |
 
 ---
 
@@ -548,8 +514,8 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M3 | Durcissement des fondations Device (issues #7 à #10) | Livré par la PR #15 |
 | M4 | Contrat Device et sûreté mémoire (issues #11 et #12) | Livré par la PR #16 |
 | M5 | Robustesse et validation CUDA (issues #13, PR #17 et #18) | Livré ; chemin nominal validé sur RTX 5090 ; injection de fautes isolée dans l'issue #19 |
-| M6 | Runtime unifié | **Partiel : première tranche livrée dans la PR #20 (en attente de merge)** ; orchestration haut niveau et frontières mode d'exécution reportées à M7/M8 |
-| M7 | Scheduler et orchestration mémoire | Planifié |
+| M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
+| M7 | Scheduler et orchestration mémoire | **Livré par la PR #21** |
 | M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
 | M9 | Stratégie autoregressive | Planifié |
 | M10 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
@@ -627,7 +593,7 @@ Travaux : finalisation automatique des transferts terminés avant admission/évi
 
 **Objectif :** introduire le cycle de vie des requêtes, les contextes d'exécution, les états, les erreurs, les annulations et l'orchestration de haut niveau.
 
-**Première tranche livrée :** crate `claymore-runtime`, contrat `GenerationStrategy`, contexte par requête, identifiants monotones, machine d'états explicite, rapports d'exécution, erreurs, annulation coopérative et validation de taille/configuration. L'implémentation reste synchrone et ne suppose ni `Send` ni `Sync` pour les stratégies.
+**État :** première tranche livrée sur `main` par la PR #20 : crate `claymore-runtime`, contrat `GenerationStrategy`, contexte par requête, identifiants monotones, machine d'états explicite, rapports d'exécution, erreurs, annulation coopérative et validation de taille/configuration. L'implémentation reste synchrone et ne suppose ni `Send` ni `Sync` pour les stratégies.
 
 Critères de la tranche livrée :
 - exécution d'une requête simulée de bout en bout sur CPU ;
@@ -635,25 +601,47 @@ Critères de la tranche livrée :
 - aucune dépendance à un modèle particulier dans le cœur runtime ;
 - tests des chemins succès, échec, annulation avant/après démarrage et rejet d'entrée invalide.
 
-La concurrence, l'exécution asynchrone, les files compute/transfer et l'intégration du propriétaire des ressources CUDA relèvent de M7. Ils ne sont pas des critères implicites de la première tranche M6 et ne doivent pas être ajoutés sans contrat de thread-affinity et de cancellation adapté.
+La concurrence, l'exécution asynchrone et l'intégration du propriétaire des ressources CUDA relèvent de M7 et des tranches ultérieures. La PR #20 ne les implémente pas.
 
 ### M7 — Scheduler et orchestration mémoire
 
-**Objectif :** coordonner calcul, résidence mémoire, transferts et préchargements.
+**Objectif :** coordonner calcul, résidence mémoire, transferts et préchargements sans violer l'affinité du backend CUDA.
 
-Travaux :
-- formaliser tâches, états, dépendances et priorités ;
-- définir le propriétaire des opérations CUDA et leur file d'exécution ;
-- gérer les files compute et transfer, les limites de préchargement et le lookahead ;
-- intégrer les politiques LRU/LFU/adaptive aux coûts de chargement et aux métriques observées ;
-- protéger les ressources jusqu'à la fin de toutes les opérations dépendantes.
+**Première tranche implémentée dans la PR #21 :** graphe de tâches acyclique par construction (dépendances vers des tâches déjà soumises), files logiques Compute/Transfer/Prefetch, sélection priorité-descendante/FIFO, états explicites, propagation des échecs vers les descendants et limites séparées de concurrence et de lookahead pour les préchargements. Le scheduler est mono-propriétaire (`!Send + !Sync`) et ne lance pas lui-même les tâches.
 
-Critères d'acceptation :
-- tests déterministes avec backend simulé ;
-- aucun dépassement de budget ;
-- démonstration qu'une allocation en vol reste protégée jusqu'à la complétion de son event (critère de validation reporté de l'ancien M3) ;
-- aucun buffer évincé avant complétion de ses dépendances ;
-- mesures séparées du temps de transfert, d'attente et de calcul.
+**Complément d'exécution CPU et d'orchestration :** 
+- `claymore-scheduler` expose `QueueRunner` et `TaskExecutor`. Un runner exécute au plus une tâche de sa file sur le thread appelant, sans worker ni borne `Send`/`Sync`.
+- `claymore-runtime` expose `ScheduledRuntime`, qui soumet les requêtes comme tâches Compute, respecte priorité/dépendances, puis traduit les rapports Completed/Failed/Cancelled en transitions du scheduler. `submit_task` et `run_queue_one` permettent aux tâches Transfer/Prefetch de partager exactement le même graphe de dépendances ; une requête Compute peut donc attendre un transfert confirmé.
+- `claymore-memory` expose `MemoryTaskExecutor`, qui relie les tâches Transfer/Prefetch à l'adaptateur `DeviceMemoryManager<D>` backend-neutre. Les opérations CPU synchrones (allocation, écriture, copie, libération, synchronisation et enregistrement du coût de rechargement) sont exécutées par `QueueRunner` et couvertes par des tests avec `CpuDevice`.
+- `QueueRunnerMetrics` fournit les durées et compteurs par file ; `ScheduledRuntimeMetrics` mesure le calcul des requêtes ; `MemoryExecutionMetrics` fournit les compteurs d'opérations, volumes d'octets et durées du chemin mémoire ; `CudaTransferMetrics` isole les volumes H2D/D2H et le temps d'attente des events.
+- Le gestionnaire mémoire applique le budget VRAM souple comme cible d'éviction proactive et le plafond dur comme limite d'admission ; si la cible souple est inatteignable, il n'admet que si le plafond dur reste respecté.
+- Le plafond dur du cache d'experts est appliqué à chaque admission, avec éviction déterministe des experts inactifs ; la politique adaptive tient compte du coût de rechargement enregistré.
+- Les gardes de ressources exposées par `DeviceMemoryManager` refusent les horizons antérieurs au tick courant et toute régression de complétion.
+
+Ces interfaces restent mono-propriétaires et synchrones. Elles ne prétendent pas que le backend CUDA implémente `Device` : `CudaTransferExecutor` possède son `CudaMemoryManager` dédié et s'exécute sur le thread propriétaire. Les tâches H2D/D2H ne retournent le succès qu'après `wait_for_transfer` sur l'event réel ; les lectures pinned, allocations et libérations sont également exposées comme tâches. La campagne matérielle RTX 5090 est versionnée dans `docs/audits/m7-rtx5090-hardware-validation.md` : 17 tests matériels exécutés deux fois (34/34 PASS) sur le SHA de code documenté. Cette preuve couvre le périmètre testé, pas les kernels, l'inférence, les grosses charges soutenues du cache d'experts ni les scénarios d'injection de fautes.
+
+Limites et travaux ultérieurs :
+- les copies H2D/D2H sont synchronisées par attente d'event avant le retour de l'exécuteur ; aucun recouvrement transfert/calcul n'est livré ;
+- les queues Prefetch et Transfer sont ordonnancées, mais leurs exécuteurs restent synchrones et mono-propriétaires ; aucun préchargement concurrent n'est revendiqué ;
+- le coût de rechargement est exposé par l'API mémoire, mais aucun chargeur ne l'alimente automatiquement à ce stade ;
+- la campagne matérielle a été rejouée après les corrections B1/B3 : 34/34 exécutions réussies sur le SHA de code `13f06147deb3da5bb66132bc426ba7216e11eeeb`, identique au code du HEAD documentaire `7b1db2164af4de10d36fc4b010e7b8d6d2f746ca` ; voir le rapport versionné.
+
+Critères de la tranche CPU livrée :
+- tests déterministes couvrant priorité/FIFO, isolation des files, dépendances, échec en cascade, annulation et bornes de préchargement ;
+- cycle de requête ScheduledRuntime ↔ Scheduler vérifié sur CPU ;
+- tâches Transfer exécutables via QueueRunner et DeviceMemoryManager sur CpuDevice ;
+- admission expert bornée par le plafond dur et allocations protégées jusqu'à l'horizon déclaré ;
+- aucun lancement implicite ni appel CUDA depuis le scheduler.
+
+Critères de clôture M7 — tous validés :
+- [x] Budgets effectifs respectés : Host 80 Gio + PinnedHost 8 Gio = 88 Gio ; budget VRAM souple utilisé comme cible d'éviction proactive et plafond dur appliqué à l'admission ; plafond maximal du cache experts appliqué.
+- [x] Allocations en vol protégées jusqu'à la complétion de leur event CUDA ; les tests matériels H2D/D2H confirment l'attente d'event et l'absence d'opération résiduelle.
+- [x] Aucun buffer n'est évincé avant la complétion de ses dépendances ; les gardes d'horizon et les scénarios matériels de protection mémoire sont validés.
+- [x] Exécution des files sur leurs threads propriétaires, sans transfert de propriété ; métriques distinctes pour les files, le calcul, les opérations mémoire et les transferts/attentes CUDA.
+- [x] Validation logicielle complète : 96 tests workspace, formatage, Clippy, feature CUDA et MSRV Rust 1.86 validés en CI.
+- [x] Validation RTX 5090 : deux campagnes de 17 tests, soit 34/34 exécutions réussies sur le SHA de code `13f06147deb3da5bb66132bc426ba7216e11eeeb`.
+
+Les réserves de périmètre restent explicites : exécution synchrone mono-propriétaire, aucun overlap transfert/calcul, aucun prefetch concurrent, aucun kernel ni calcul tensoriel, tests experts à échelle réduite et absence d'injection de fautes (issue #19).
 
 ### M8 — Moteur tensoriel Claymore et premier chemin modèle
 
@@ -761,7 +749,7 @@ Historique de référence :
 - **v0.3** : memory orchestrator host-side ;
 - **v0.4** : backend CUDA Driver API optionnel.
 
-Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in). La PR #6 a livré M2 (`Device` / `Tensor` et simulateur CPU). Les PR #15 et #16 ont livré M3 et M4 ; la PR #17 livre M5, dont le chemin nominal a été validé sur RTX 5090. L'injection de fautes reste hors périmètre dans l'issue #19.
+Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in). La PR #6 a livré M2 (`Device` / `Tensor` et simulateur CPU). Les PR #15 et #16 ont livré M3 et M4 ; les PR #17 et #18 ont livré M5, dont le chemin nominal a été validé sur RTX 5090. La PR #20 a livré la première tranche M6. L'injection de fautes reste suivie séparément dans l'issue #19.
 
 Une PR ne doit pas être déclarée prête uniquement parce que le code existe : elle doit préciser si les tests couvrent le build par défaut, la feature CUDA, le matériel réel ou seulement un backend simulé.
 
@@ -784,7 +772,7 @@ Une PR ne doit pas être déclarée prête uniquement parce que le code existe :
 | Kernels spécialisés | Complexité sans gain démontré | Développer après profiling |
 | Performances | Paramètres scheduler non optimaux | Benchmarks et tuning sur cible |
 | Contrat d'erreur des stratégies | `String` ne conserve pas les causes ni les types d'erreur | Décider avant M8 si le trait expose un type d'erreur associé ou une chaîne de causes typée |
-| Ownership des ressources du runtime | Le contexte M6 n'expose pas encore Device / DeviceMemoryManager | Trancher en M7/M8 si les ressources sont détenues par la stratégie ou injectées dans le contexte, en respectant l'affinité du thread CUDA |
+| Ownership des ressources du runtime | Les ressources CUDA sont thread-affines | M7 conserve un scheduler et des exécuteurs `!Send + !Sync` sur leur thread propriétaire ; `CudaTransferExecutor` détient son `CudaMemoryManager`. Aucun recouvrement concurrent transfert/calcul n'est livré. |
 | Sorties de génération | Le rapport M6 contient une sortie complète unique | Concevoir une sortie incrémentale seulement avec les besoins concrets des stratégies M9/M10 |
 
 Les choix non tranchés doivent être consignés dans une PR ou une décision d'architecture avant d'être codés comme comportement permanent.
@@ -848,6 +836,10 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-20 | M4 introduit une libération de buffer explicite et faillible, des tokens de complétion H2D/D2H vérifiables par CUDA event et des vues tensor stridées ; aucun raccordement CUDA au trait Device n'est autorisé avant validation de ces contrats. |
 | 2026-11-21 | M6 (PR #20, tranche initiale) : runtime synchrone et mono-exécution, enveloppes opaques, stratégie sans contrainte `Send`/`Sync`, contexte par requête et annulation coopérative. Le périmètre initial est explicitement partiel : orchestration haut niveau et frontières de mode d'exécution reportées à M7/M8 ; panique de stratégie propagée (runtime à abandonner), annulation prioritaire sur le résultat simultané, limite `max_payload_bytes` appliquée au seul payload. Les choix de type d'erreur, ownership Device/Memory et sortie incrémentale restent ouverts avant M8/M9. |
 | 2026-11-21 | M5 utilise un stream de transfert `CU_STREAM_NON_BLOCKING` : les consommateurs compute futurs doivent exprimer explicitement leurs dépendances avec les transferts (par exemple `cuStreamWaitEvent`). Une erreur de polling dans `make_room` bloque l'admission en mode fail-closed. L'injection de fautes et le backend CUDA simulable sont suivis séparément dans l'issue #19. |
+| 2026-11-22 | RAM hôte M7 : les tiers sont disjoints ; Host = weights pool + staging/state (80 Gio), PinnedHost = 8 Gio, total = budget Claymore 88 Gio. Le profil rejette tout dépassement de cette somme. |
+| 2026-11-22 | VRAM M7 : le soft-budget de 26 Gio est une cible d'éviction proactive, le hard-ceiling de 28 Gio est la limite stricte d'admission ; le cache experts (cible 14 Gio, maximum 16 Gio) est inclus dans le working set VRAM. |
+| 2026-11-22 | M7 : scheduler, `QueueRunner` et exécuteur CUDA sont synchrones et mono-propriétaires ; H2D/D2H ne complètent une tâche qu'après attente de l'event. Aucun overlap transfert/calcul ou prefetch concurrent n'est revendiqué. |
+| 2026-11-22 | Éviction Adaptive : comparer d'abord la chaleur (hit count), puis la récence (tick), et utiliser le coût de rechargement en nanosecondes uniquement comme départage ; un coût inconnu vaut zéro pour ce seul départage. Aucun chargeur ne l'alimente automatiquement à ce stade. |
 
 ### Correspondance de la feuille de route historique
 

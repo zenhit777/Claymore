@@ -15,4 +15,5 @@ claymore-cuda = { path = "../claymore-cuda" }
 claymore-core = { path = "../claymore-core" }
 claymore-memory = { path = "../claymore-memory" }
 claymore-scheduler = { path = "../claymore-scheduler" }
+claymore-runtime = { path = "../claymore-runtime" }
 serde_json.workspace = true

@@ -30,7 +30,7 @@ The optimization roadmap includes a memory orchestrator, adaptive expert cache, 
 
 ## Important implementation status
 
-This repository is an early-stage runtime. The v0.3 memory crate contains deterministic budget validation, allocation accounting, admission planning, LRU/LFU/adaptive eviction policy hooks, and an event-horizon safety check. These are host-side policies only: they do not yet orchestrate real CUDA allocation, pinned memory, asynchronous transfers, native Claymore model execution, or specialized kernels.
+This repository is an early-stage runtime. The M7 CPU path now connects scheduled requests, queue runners, and backend-neutral memory operations. The memory layer enforces the soft VRAM target and hard ceiling, applies the expert-cache maximum, supports reload-cost-aware adaptive eviction, and exposes CPU-side execution telemetry. `CudaTransferExecutor` now maps scheduled H2D/D2H operations to the dedicated owner-thread `CudaMemoryManager` and waits for real CUDA events before releasing scheduler dependencies. Its real-device behavior and VRAM-pressure guarantees still require RTX 5090 validation. Native model execution and specialized kernels are not yet delivered.
 
 The CUDA backend is opt-in and links directly to the NVIDIA Driver API. The default workspace build remains hardware-independent. The M4/M5 CUDA path has been validated on the target RTX 5090 for the commits and scenarios documented in `docs/audits/m4-m5-rtx5090-hardware-validation.md`; this does not imply that every CUDA path or model execution path is hardware-validated. Validate locally with:
 
@@ -45,4 +45,4 @@ cargo run -p claymore-cli --features cuda-driver -- device
 
 The initial RTX 5090 profile uses a soft VRAM budget of 26 GiB and a hard ceiling of 28 GiB, leaving safety headroom. Expert-cache targets are 14 GiB with a 16 GiB maximum, included within the model working-set budget rather than added on top.
 
-See [`config/rtx5090-7950x3d.json`](config/rtx5090-7950x3d.json) and the [consolidated project reference](docs/Claymore.md). The JSON profile is currently documentation/configuration data and is not loaded by the runtime.
+See [`config/rtx5090-7950x3d.json`](config/rtx5090-7950x3d.json) and the [consolidated project reference](docs/Claymore.md). The profile is parsed and validated by `claymore-runtime`, converted into scheduler and memory budgets, and embedded as the CLI default. Override the CLI profile with `CLAYMORE_HARDWARE_PROFILE=/path/to/profile.json`.
