@@ -661,6 +661,27 @@ Critères de clôture M7 — tous validés :
 
 Les réserves de périmètre restent explicites : exécution synchrone mono-propriétaire, aucun overlap transfert/calcul, aucun prefetch concurrent, aucun kernel ni calcul tensoriel, tests experts à échelle réduite et absence d'injection de fautes (issue #19).
 
+### M7.1 — Durcissement scheduler/runtime et gestion mémoire
+
+**Objectif :** fermer les réserves de robustesse de M7 et figer les contrats d'architecture nécessaires avant M8.
+
+Travaux :
+- index de files Ready, adjacency de dépendances et compaction des états terminaux ;
+- pruning incrémental des tâches et payloads annulés ;
+- containment des panics aux frontières scheduler/runtime ;
+- frontière CUDA injectable et tests manager-level déterministes sans GPU ;
+- Cargo.lock suivi et CI reproductible avec `--locked` ;
+- clarification de la cadence `tick_us), des bornes workers et des streams réservés ;
+- admission VRAM/cache experts conjointe ;
+- version CLI issue de Cargo et cycle de vie explicite des résultats de lecture ;
+- conception M8 Tensor / Device / Operations / Kernel dispatch / Runtime / Model adapters dans [docs/m8-architecture.md](m8-architecture.md).
+
+Critères d'acceptation :
+- CI workspace, feature CUDA sans matériel, Clippy et MSRV verts ;
+- aucun contrat public modifié sans revue architecturale ;
+- tests démontrant la conservation des gardes et de la comptabilité en cas d'erreur backend ;
+- conception M8 relue, sans commencer l'implémentation du moteur tensoriel dans cette PR.
+
 ### M8 — Moteur tensoriel Claymore et premier chemin modèle
 
 **Objectif :** construire le premier chemin tensoriel natif de Claymore et obtenir un forward pass reproductible sur un modèle de référence.
