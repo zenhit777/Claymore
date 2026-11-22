@@ -681,13 +681,14 @@ Travaux :
 - containment des panics aux frontières scheduler/runtime ;
 - frontière CUDA injectable et tests manager-level déterministes sans GPU ;
 - Cargo.lock suivi et CI reproductible avec `--locked` ;
-- clarification de la cadence `tick_us), des bornes workers et des streams réservés ;
+- clarification de la cadence `tick_us`, des bornes workers et des streams réservés ;
 - admission VRAM/cache experts conjointe ;
 - version CLI issue de Cargo et cycle de vie explicite des résultats de lecture ;
 - conception M8 Tensor / Device / Operations / Kernel dispatch / Runtime / Model adapters dans [docs/m8-architecture.md](m8-architecture.md).
 
 Critères d'acceptation :
 - CI workspace, feature CUDA sans matériel, Clippy et MSRV verts ;
+- revalidation des 17 tests matériels CUDA sur RTX 5090 au SHA final, avec rapport versionné dans `docs/audits/` ;
 - aucun contrat public modifié sans revue architecturale ;
 - tests démontrant la conservation des gardes et de la comptabilité en cas d'erreur backend ;
 - conception M8 relue, sans commencer l'implémentation du moteur tensoriel dans cette PR.
