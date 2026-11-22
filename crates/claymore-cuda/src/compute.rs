@@ -34,6 +34,8 @@ const RMS_NORM_KERNEL_BF16: &[u8] = b"claymore_rms_norm_bf16\0";
 
 const ELEMENTWISE_BLOCK: u32 = 256;
 const MATMUL_TILE: u32 = 16;
+const CUDA_GRID_X_MAX: u64 = 2_147_483_647;
+const CUDA_GRID_Y_MAX: u64 = 65_535;
 
 struct ModuleInner {
     raw: CuModuleRaw,
@@ -128,7 +130,7 @@ impl CudaComputeEngine {
     ) -> Result<(), CudaError> {
         self.prepare(stream)?;
         let count = checked_count(numel, "add requires at least one element")?;
-        let grid = grid_for(count, ELEMENTWISE_BLOCK)?;
+        let grid = grid_for(count, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX)?;
         let params = [p(&lhs), p(&rhs), p(&output), p(&count)];
         // SAFETY: the module and stream belong to the current context; the
         // caller guarantees that every device pointer stays live until the
@@ -172,8 +174,8 @@ impl CudaComputeEngine {
     ) -> Result<(), CudaError> {
         self.prepare(stream)?;
         let (rows64, inner64, cols64) = checked_matmul(rows, inner, cols)?;
-        let grid_x = grid_for(cols64, MATMUL_TILE)?;
-        let grid_y = grid_for(rows64, MATMUL_TILE)?;
+        let grid_x = grid_for(cols64, MATMUL_TILE, CUDA_GRID_X_MAX)?;
+        let grid_y = grid_for(rows64, MATMUL_TILE, CUDA_GRID_Y_MAX)?;
         let params = [
             p(&lhs),
             p(&rhs),
@@ -219,7 +221,7 @@ impl CudaComputeEngine {
     ) -> Result<(), CudaError> {
         self.prepare(stream)?;
         let (rows64, width64) = checked_last_dim(rows, width)?;
-        let grid = grid_for(rows64, 1)?;
+        let grid = grid_for(rows64, 1, CUDA_GRID_X_MAX)?;
         let params = [p(&input), p(&output), p(&rows64), p(&width64)];
         // SAFETY: see `add`; dynamic shared memory holds one float per thread.
         unsafe {
@@ -261,7 +263,7 @@ impl CudaComputeEngine {
     ) -> Result<(), CudaError> {
         self.prepare(stream)?;
         let (rows64, width64) = checked_last_dim(rows, width)?;
-        let grid = grid_for(rows64, 1)?;
+        let grid = grid_for(rows64, 1, CUDA_GRID_X_MAX)?;
         let params = [
             p(&input),
             p(&scale),
@@ -308,7 +310,7 @@ impl CudaComputeEngine {
     ) -> Result<(), CudaError> {
         self.prepare(stream)?;
         let count = checked_count(numel, "add_bf16 requires at least one element")?;
-        let grid = grid_for(count, ELEMENTWISE_BLOCK)?;
+        let grid = grid_for(count, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX)?;
         let params = [p(&lhs), p(&rhs), p(&output), p(&count)];
         // SAFETY: identical lifetime contract to `add`.
         unsafe {
@@ -350,8 +352,8 @@ impl CudaComputeEngine {
     ) -> Result<(), CudaError> {
         self.prepare(stream)?;
         let (rows64, inner64, cols64) = checked_matmul(rows, inner, cols)?;
-        let grid_x = grid_for(cols64, MATMUL_TILE)?;
-        let grid_y = grid_for(rows64, MATMUL_TILE)?;
+        let grid_x = grid_for(cols64, MATMUL_TILE, CUDA_GRID_X_MAX)?;
+        let grid_y = grid_for(rows64, MATMUL_TILE, CUDA_GRID_Y_MAX)?;
         let params = [
             p(&lhs),
             p(&rhs),
@@ -397,7 +399,7 @@ impl CudaComputeEngine {
     ) -> Result<(), CudaError> {
         self.prepare(stream)?;
         let (rows64, width64) = checked_last_dim(rows, width)?;
-        let grid = grid_for(rows64, 1)?;
+        let grid = grid_for(rows64, 1, CUDA_GRID_X_MAX)?;
         let params = [p(&input), p(&output), p(&rows64), p(&width64)];
         // SAFETY: identical lifetime contract to `softmax_last_dim`.
         unsafe {
@@ -439,7 +441,7 @@ impl CudaComputeEngine {
     ) -> Result<(), CudaError> {
         self.prepare(stream)?;
         let (rows64, width64) = checked_last_dim(rows, width)?;
-        let grid = grid_for(rows64, 1)?;
+        let grid = grid_for(rows64, 1, CUDA_GRID_X_MAX)?;
         let params = [
             p(&input),
             p(&scale),
@@ -518,8 +520,13 @@ fn p(value: &u64) -> *const c_void {
     value as *const u64 as *const c_void
 }
 
-fn grid_for(total: u64, block: u32) -> Result<c_uint, CudaError> {
+fn grid_for(total: u64, block: u32, maximum: u64) -> Result<c_uint, CudaError> {
     let blocks = total.div_ceil(u64::from(block));
+    if blocks > maximum {
+        return Err(CudaError::InvalidLaunchConfiguration(format!(
+            "grid dimension requires {blocks} blocks; CUDA axis maximum is {maximum}"
+        )));
+    }
     c_uint::try_from(blocks).map_err(|_| invalid("grid dimension exceeds CUDA limit"))
 }
 
@@ -578,12 +585,24 @@ mod tests {
     }
 
     #[test]
-    fn grid_rounding_and_limits_are_explicit() {
-        assert_eq!(grid_for(1, ELEMENTWISE_BLOCK).unwrap(), 1);
-        assert_eq!(grid_for(257, ELEMENTWISE_BLOCK).unwrap(), 2);
-        assert_eq!(grid_for(4096, ELEMENTWISE_BLOCK).unwrap(), 16);
+    fn grid_rounding_and_axis_limits_are_explicit() {
+        assert_eq!(grid_for(1, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX).unwrap(), 1);
+        assert_eq!(grid_for(257, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX).unwrap(), 2);
+        assert_eq!(grid_for(4096, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX).unwrap(), 16);
+        assert_eq!(
+            grid_for(65_535 * 16, MATMUL_TILE, CUDA_GRID_Y_MAX).unwrap(),
+            65_535
+        );
         assert!(matches!(
-            grid_for(u64::MAX, 1),
+            grid_for(65_536 * 16, MATMUL_TILE, CUDA_GRID_Y_MAX),
+            Err(CudaError::InvalidLaunchConfiguration(_))
+        ));
+        assert!(matches!(
+            grid_for(CUDA_GRID_X_MAX + 1, 1, CUDA_GRID_X_MAX),
+            Err(CudaError::InvalidLaunchConfiguration(_))
+        ));
+        assert!(matches!(
+            grid_for(u64::MAX, 1, CUDA_GRID_X_MAX),
             Err(CudaError::InvalidLaunchConfiguration(_))
         ));
     }
