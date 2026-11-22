@@ -616,7 +616,10 @@ mod tests {
 
     #[test]
     fn joint_expert_admission_uses_one_minimal_vram_victim_set() {
-        let mut manager = MemoryOrchestrator::new(budgets(), EvictionPolicy::Lru).unwrap();
+        let mut constrained = budgets();
+        constrained.expert_cache_target_bytes = 40;
+        constrained.expert_cache_max_bytes = 50;
+        let mut manager = MemoryOrchestrator::new(constrained, EvictionPolicy::Lru).unwrap();
         manager
             .record_allocation(allocation("expert-old", 20, 1, 0))
             .unwrap();
