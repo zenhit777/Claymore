@@ -390,6 +390,24 @@ Le scheduler et les exécuteurs sont mono-propriétaires et synchrones. `CudaTra
 Le coût de rechargement est exposé par l'API mémoire, mais aucun chargeur de poids ou d'experts ne l'alimente encore automatiquement ; `CudaTransferExecutor` ne propose pas de tâche `RecordReloadCost`.
 
 
+### M7.1 — Durcissement scheduler/runtime et gestion mémoire (en cours)
+
+**Statut : travaux en cours sur la branche `feat/m7.1-runtime-hardening`.** Cette phase consolide les invariants de M7 avant l'ouverture de M8 ; elle ne livre pas encore le moteur tensoriel M8.
+
+Périmètre de livraison :
+- indexer les files Ready par priorité/FIFO, propager les transitions via les dépendances directes et compacter les tâches terminales tout en conservant leur snapshot public ;
+- rendre la purge des payloads annulés incrémentale ;
+- convertir les panics des exécuteurs et du chemin ScheduledRuntime en échecs de tâches, avec propagation aux dépendants ;
+- introduire une frontière privée injectable pour query/synchronization des events, synchronisation du stream et libération des buffers ; tester NOT_READY, complétion, erreurs query/sync/free, conservation des gardes et comportement fail-closed sans GPU ;
+- suivre Cargo.lock et exécuter les validations avec `--locked` ;
+- documenter `tick_us` comme cadence nominale de boucle d'orchestration, distincte des ticks logiques et des délais d'events ; conserver le contrat actuel d'un stream compute et d'un stream transfer réservés ;
+- calculer conjointement les contraintes d'admission VRAM et cache experts ;
+- afficher la version CLI depuis les métadonnées Cargo et rendre explicite la consommation/destruction des résultats ReadPinned.
+
+La préparation architecturale de M8 fait également partie de M7.1 : [docs/m8-architecture.md](m8-architecture.md) fixe les frontières Tensor / Device / Operations / Kernel dispatch / Runtime / Model adapters, les invariants d'ownership et les validations CPU/CI et RTX 5090. Ce document ne signifie pas que le code M8 est déjà implémenté.
+
+Les lots logiciels doivent être validés par la CI CPU, y compris les tests de fault injection avec la feature CUDA activée mais sans driver matériel. La RTX 5090 reste nécessaire pour la validation réelle des transferts, events, kernels et performances de M8 ; elle n'est pas requise pour les tests déterministes de M7.1.
+
 ### 7.2 Fonctionnalités et extensions non livrées de bout en bout
 
 Les éléments suivants ne doivent pas être considérés comme fonctionnels de bout en bout :
@@ -423,7 +441,7 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 #### Contrats et limites du runtime M6 (première tranche PR #20)
 
 - `RuntimeConfig::max_payload_bytes` borne uniquement `RequestInput::payload`, pas la taille cumulée des métadonnées ; ces dernières restent des données de contrôle non bornées par ce paramètre.
-- Une panique de `GenerationStrategy::execute` n'est pas interceptée : elle traverse `Runtime::execute`, consomme l'identifiant déjà alloué et ne produit aucun `ExecutionReport`. Le runtime concerné doit être abandonné, car l'état interne de la stratégie après unwinding n'est pas garanti.
+- Un appel direct à `Runtime::execute` ne transforme pas les panics de stratégie en `RuntimeError`. Dans le chemin `ScheduledRuntime` de M7.1, la panique est interceptée à la frontière d'exécution, convertie en échec de tâche et propagée aux dépendants ; l'état interne de la stratégie après unwinding n'est toutefois pas garanti.
 - L'annulation observée après le retour de la stratégie prévaut sur le résultat de celle-ci. Si la stratégie renvoie simultanément une erreur, le rapport contient `Cancelled` et l'erreur de stratégie n'est pas conservée.
 - L'exécution reste synchrone et mono-requête ; aucune interruption forcée d'un appel backend bloquant n'est garantie. Le jeton est coopératif.
 - Le contrat d'erreur de stratégie est encore une `String` ; son évolution vers un type structuré est une décision préalable à l'intégration des moteurs en M8/M9.
