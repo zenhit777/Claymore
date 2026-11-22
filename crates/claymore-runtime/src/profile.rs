@@ -72,13 +72,20 @@ pub struct HostMemoryProfile {
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct SchedulerProfile {
+    /// Configured worker capacity. M7's scheduler remains synchronous and
+    /// does not spawn these workers.
     pub cpu_workers: usize,
     pub cpu_workers_min: usize,
     pub cpu_workers_max: usize,
+    /// M7 reserves one compute stream; parallel compute streams are not yet
+    /// part of the runtime contract.
     pub cuda_compute_streams: usize,
+    /// M7 reserves one owner-thread transfer stream.
     pub transfer_streams: usize,
     pub max_prefetches: usize,
     pub lookahead: usize,
+    /// Nominal orchestration-loop cadence in microseconds. This is profile
+    /// metadata, not a CUDA timeout, event-poll interval, or scheduler task ID.
     pub tick_us: u64,
 }
 
