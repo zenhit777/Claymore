@@ -243,10 +243,10 @@ L'architecture est organisée en couches avec des frontières explicites.
    - diagnostics et CLI ;
    - orchestration de haut niveau.
 
-2. **Moteurs de modèles**
-   - adaptateur DiffusionGemma ;
-   - adaptateur Clover ;
-   - préparation des tenseurs, exécution et états propres à chaque modèle.
+2. **Orchestration de diffusion et adaptateurs**
+   - orchestration commune, modulaire et extensible ;
+   - adaptateur DiffusionGemma et stratégie de denoising propres au modèle ;
+   - adaptateur Clover et stratégie block-diffusion/GDN/MoE propres au modèle.
 
 3. **Cœur d'optimisation**
    - memory orchestrator ;
@@ -587,7 +587,7 @@ Critères d'acceptation :
 
 **Objectif :** définir des interfaces communes et explicites pour les devices, buffers, transferts et tenseurs, sans exposer les détails CUDA aux couches supérieures.
 
-**État :** livré pour le contrat backend-neutre et le backend CPU. `claymore-device` expose `Device`, `DeviceBuffer`, `DeviceCapabilities`, `Tensor` et `CpuDevice`. `claymore-memory` fournit `DeviceMemoryManager<D>` qui applique les politiques d'admission et d'éviction sur ces contrats.
+**État :** livré pour le contrat backend-neutre et le backend CPU. `claymore-device` expose `Device`, `DeviceBuffer`, `DeviceCapabilities` et `CpuDevice` ; `claymore-tensor` porte les types `Tensor`, `TensorLayout` et `TensorView`. `claymore-memory` fournit `DeviceMemoryManager<D>` qui applique les politiques d'admission et d'éviction sur ces contrats.
 
 Critères d'acceptation :
 - backend simulé CPU pour les contrats Device/Tensor et l'adaptateur mémoire : livré et testé sans GPU ;
