@@ -188,11 +188,14 @@ impl Tensor {
         let end = offset_bytes
             .checked_add(layout.span_bytes())
             .ok_or(TensorError::SizeOverflow)?;
-        let storage_capacity = self.storage.len();
-        if end > storage_capacity {
+        let tensor_end = self
+            .offset_bytes
+            .checked_add(self.layout.span_bytes())
+            .ok_or(TensorError::SizeOverflow)?;
+        if end > tensor_end {
             return Err(TensorError::StorageTooSmall {
                 required: end,
-                capacity: storage_capacity,
+                capacity: tensor_end,
             });
         }
         Ok(TensorView {
@@ -265,6 +268,20 @@ mod tests {
         assert_eq!(view.layout().strides(), &[4, 1]);
         assert_eq!(view.layout().span_bytes(), 24);
         assert_eq!(view.offset_bytes(), 0);
+    }
+
+    #[test]
+    fn view_cannot_escape_parent_tensor_span() {
+        let device = CpuDevice::new();
+        let storage = device.allocate(MemoryTier::Host, 64).unwrap();
+        let tensor = Tensor::new(storage, vec![2, 2], DType::F32).unwrap();
+        assert_eq!(
+            tensor.view(vec![2, 2], vec![4, 1], 0).unwrap_err(),
+            TensorError::StorageTooSmall {
+                required: 24,
+                capacity: 16
+            }
+        );
     }
 
     #[test]
