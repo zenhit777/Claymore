@@ -268,7 +268,7 @@ L'architecture est organisée en couches avec des frontières explicites.
 | Crate | Responsabilité |
 |---|---|
 | `claymore-core` | Types partagés, configuration et contrats transverses |
-| `claymore-device` | Contrats Device/Buffer/Tensor indépendants du backend et simulateur CPU |
+| `claymore-device` | Contrats Device/Buffer indépendants du backend et simulateur CPU |\n| `claymore-tensor` | Modèle Tensor canonique, layouts, vues et opérations natives |
 | `claymore-memory` | Budgets, comptabilité, admission et politiques d'éviction |
 | `claymore-scheduler` | Graphe de tâches, files compute/transfer/prefetch, priorités et limites de préchargement |
 | `claymore-runtime` | Cycle de vie des requêtes, contexte d'exécution et orchestration synchrone indépendante des modèles |
