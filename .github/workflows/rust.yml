@@ -29,7 +29,14 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Run tests
         run: cargo test --workspace --all-targets --locked
+      - name: Build link-only CUDA Driver stub for CPU fault-injection tests
+        run: |
+          mkdir -p /tmp/claymore-cuda-stub
+          cc -shared -fPIC ci/cuda-driver-stub.c -o /tmp/claymore-cuda-stub/libcuda.so
       - name: Test CUDA manager fault-injection boundary without a GPU
+        env:
+          RUSTFLAGS: -L native=/tmp/claymore-cuda-stub
+          LD_LIBRARY_PATH: /tmp/claymore-cuda-stub
         run: cargo test -p claymore-memory --features cuda-driver --lib --locked
       - name: Check optional CUDA feature without linking or requiring a GPU
         run: |
