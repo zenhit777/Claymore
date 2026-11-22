@@ -354,7 +354,9 @@ mod tests {
             )
             .unwrap();
 
-        let error = runtime.run_one().expect_err("panic must become a runtime error");
+        let error = runtime
+            .run_one()
+            .expect_err("panic must become a runtime error");
         assert!(matches!(
             error,
             ScheduledRuntimeError::Runtime(RuntimeError::StrategyFailed(message))
