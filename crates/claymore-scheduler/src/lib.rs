@@ -178,8 +178,11 @@ pub struct Scheduler {
     dependents: BTreeMap<TaskId, Vec<TaskId>>,
     /// One priority/FIFO index per logical queue.
     ready: [BTreeSet<(Reverse<TaskPriority>, u64, TaskId)>; 3],
-    /// Incremental index consumed by runtime/executor payload pruning.
+    /// Index and append-only generation log consumed independently by each
+    /// executor/runtime payload owner.
     cancelled: BTreeSet<TaskId>,
+    cancelled_events: Vec<(u64, TaskId)>,
+    cancelled_generation: u64,
     next_task_id: u64,
     next_sequence: u64,
     running_prefetches: usize,
@@ -198,6 +201,8 @@ impl Scheduler {
             dependents: BTreeMap::new(),
             ready: std::array::from_fn(|_| BTreeSet::new()),
             cancelled: BTreeSet::new(),
+            cancelled_events: Vec::new(),
+            cancelled_generation: 0,
             next_task_id: 1,
             next_sequence: 0,
             running_prefetches: 0,
@@ -398,9 +403,23 @@ impl Scheduler {
         Ok(())
     }
 
-    /// Return cancelled IDs from the incremental cancellation index.
+    /// Return every cancelled task ID in deterministic submission order.
     pub fn cancelled_task_ids(&self) -> Vec<TaskId> {
         self.cancelled.iter().copied().collect()
+    }
+
+    /// Return only cancellation events newer than the caller's cursor.
+    /// Each QueueRunner/ScheduledRuntime keeps its own cursor, so pruning work
+    /// is proportional to newly cancelled tasks rather than total history.
+    pub fn cancelled_task_ids_since(&self, generation: u64) -> (u64, Vec<TaskId>) {
+        let start = self
+            .cancelled_events
+            .partition_point(|(event_generation, _)| *event_generation <= generation);
+        let ids = self.cancelled_events[start..]
+            .iter()
+            .map(|(_, id)| *id)
+            .collect();
+        (self.cancelled_generation, ids)
     }
 
     pub fn task(&self, id: TaskId) -> Result<TaskSnapshot, SchedulerError> {
@@ -477,6 +496,8 @@ impl Scheduler {
             self.tasks.remove(&id);
             if snapshot.state == TaskState::Cancelled {
                 self.cancelled.insert(id);
+                self.cancelled_generation += 1;
+                self.cancelled_events.push((self.cancelled_generation, id));
             }
             self.terminal.insert(id, snapshot);
         }
@@ -582,6 +603,21 @@ mod tests {
             scheduler.task(descendant).unwrap().state,
             TaskState::Cancelled
         );
+    }
+
+    #[test]
+    fn cancellation_cursor_returns_only_new_events() {
+        let mut scheduler = scheduler();
+        let first = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        scheduler.cancel(first).unwrap();
+        let (cursor, ids) = scheduler.cancelled_task_ids_since(0);
+        assert_eq!(ids, vec![first]);
+
+        let second = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
+        scheduler.cancel(second).unwrap();
+        let (next_cursor, ids) = scheduler.cancelled_task_ids_since(cursor);
+        assert_eq!(ids, vec![second]);
+        assert!(next_cursor > cursor);
     }
 
     #[test]
