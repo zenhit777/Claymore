@@ -6,5 +6,6 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+claymore-core = { path = "../claymore-core" }
 claymore-device = { path = "../claymore-device" }
 thiserror.workspace = true
