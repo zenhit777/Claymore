@@ -94,16 +94,16 @@ impl<D: Device> DeviceMemoryManager<D> {
             return Err(DeviceMemoryError::ExpertMustUseVram);
         }
 
-        // Compute every applicable plan before releasing anything. This
-        // avoids evicting expert weights and then discovering that the general
-        // VRAM admission is impossible.
-        let mut evict_ids = Vec::new();
-        if expert {
-            evict_ids.extend(self.policy.plan_expert_admission(bytes, tick)?.evict_ids);
-        }
-        evict_ids.extend(self.policy.plan_admission(tier, bytes, tick)?.evict_ids);
-        evict_ids.sort();
-        evict_ids.dedup();
+        // Expert and general VRAM limits share one candidate set. Plan the
+        // combined admission once so CPU and CUDA managers use identical
+        // eviction semantics and do not independently over-plan victims.
+        let evict_ids = if expert {
+            self.policy
+                .plan_expert_vram_admission(bytes, tick)?
+                .evict_ids
+        } else {
+            self.policy.plan_admission(tier, bytes, tick)?.evict_ids
+        };
         for evict_id in evict_ids {
             self.release_inner(&evict_id, tick)?;
         }
