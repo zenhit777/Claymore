@@ -150,6 +150,13 @@ impl Tensor {
         layout: TensorLayout,
         offset_bytes: usize,
     ) -> Result<Self, TensorError> {
+        let element_size = layout.dtype().element_size_bytes();
+        if offset_bytes % element_size != 0 {
+            return Err(TensorError::MisalignedOffset {
+                offset: offset_bytes,
+                alignment: element_size,
+            });
+        }
         let end = offset_bytes
             .checked_add(layout.span_bytes())
             .ok_or(TensorError::SizeOverflow)?;
@@ -252,6 +259,8 @@ pub enum TensorError {
     },
     #[error("tensor requires {required} bytes but storage capacity is {capacity}")]
     StorageTooSmall { required: usize, capacity: usize },
+    #[error("tensor byte offset {offset} is not aligned to {alignment} bytes")]
+    MisalignedOffset { offset: usize, alignment: usize },
     #[error(transparent)]
     Device(#[from] DeviceError),
 }
@@ -324,6 +333,26 @@ mod tests {
                 capacity: 32
             }
         );
+    }
+
+    #[test]
+    fn tensor_rejects_misaligned_byte_offsets() {
+        let device = CpuDevice::new();
+        let storage = device.allocate(MemoryTier::Host, 32).unwrap();
+        let layout = TensorLayout::contiguous(vec![2], DType::F32).unwrap();
+        assert_eq!(
+            Tensor::with_layout(storage, layout, 1).unwrap_err(),
+            TensorError::MisalignedOffset { offset: 1, alignment: 4 }
+        );
+    }
+
+    #[test]
+    fn tensor_accepts_aligned_nonzero_byte_offsets() {
+        let device = CpuDevice::new();
+        let storage = device.allocate(MemoryTier::Host, 32).unwrap();
+        let layout = TensorLayout::contiguous(vec![2], DType::F32).unwrap();
+        let tensor = Tensor::with_layout(storage, layout, 8).unwrap();
+        assert_eq!(tensor.offset_bytes(), 8);
     }
 
     #[test]
