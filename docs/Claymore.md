@@ -330,11 +330,11 @@ Le contrat `CompletionToken` et la méthode `Device::copy_async` sont définis, 
 
 M5 est livré : stream de transfert `CU_STREAM_NON_BLOCKING`, `poll_completed_transfers`, finalisation des événements terminés avant admission/éviction, départage déterministe des évictions et validation matérielle RTX 5090. La revalidation B1 a exécuté 25 tests matériels trois fois (75/75 PASS) sur le SHA de code `385db116f4c2cce6138ee530f7bec7771f355d95`; le rapport complet et ses limites sont versionnés dans `docs/audits/m4-m5-rtx5090-hardware-validation.md`. L'injection déterministe des erreurs event/stream/free reste un chantier séparé dans l'issue #19 et ne constitue pas une validation matérielle réussie.
 
-### 7.1 Livré sur main et implémentations en attente de fusion
+### 7.1 Livré sur main
 
-#### M7.1 — implémenté dans la PR #22 (fusion en attente)
+#### M7.1 — Durcissement scheduler/runtime et préparation M8 (PR #22)
 
-Le périmètre logiciel M7.1 et sa préparation architecturale M8 sont implémentés dans la PR #22. La revalidation matérielle RTX 5090 est réussie au SHA de code `c16e9254994f24b6c7442c610332baf010352b1e` : 17/17 tests requis lors de deux campagnes, et 27/27 tests matériels workspace lors de chacune. Le commit documentaire `df749b9b8237855d859c2b4be87a88b4abf4ffa1` versionne le rapport et les logs ; sa CI complète est verte. La revue finale reste à confirmer et M7.1 n'est pas encore présent sur `main` tant que la PR n'est pas fusionnée.
+**État : livré sur `main` par la PR #22.** Le périmètre logiciel M7.1 et la préparation architecturale M8 sont intégrés. La validation matérielle RTX 5090 a été réalisée sur le SHA de code `c16e9254994f24b6c7442c610332baf010352b1e` : 17/17 tests requis lors de chacune de deux campagnes, et 27/27 tests matériels workspace lors de chacune. Le rapport et les logs sont versionnés dans `docs/audits/m7.1-rtx5090-hardware-validation.md` et les fichiers associés. La CI complète a été validée sur le HEAD documentaire final de la PR. Les limites de couverture restantes sont suivies dans l'issue #23.
 
 #### v0.3 — Memory Orchestrator (politiques host-side)
 
@@ -396,7 +396,7 @@ Le coût de rechargement est exposé par l'API mémoire, mais aucun chargeur de 
 
 ### M7.1 — Durcissement scheduler/runtime et gestion mémoire (PR #22)
 
-**Statut : implémentation présente dans la PR #22 ; fusion dans `main` en attente de la revue finale et de la validation matérielle ciblée.** Cette phase consolide les invariants de M7 avant l'ouverture de M8 ; elle ne livre pas encore le moteur tensoriel M8.
+**Statut : livré sur `main` par la PR #22.** Cette phase consolide les invariants de M7 avant l'ouverture de M8 ; elle ne livre pas le moteur tensoriel M8.
 
 Périmètre de livraison :
 - indexer les files Ready par priorité/FIFO, propager les transitions via les dépendances directes et compacter les tâches terminales tout en conservant leur snapshot public ;
@@ -410,7 +410,7 @@ Périmètre de livraison :
 
 La préparation architecturale de M8 fait également partie de M7.1 : [docs/m8-architecture.md](m8-architecture.md) fixe les frontières Tensor / Device / Operations / Kernel dispatch / Runtime / Model adapters, les invariants d'ownership et les validations CPU/CI et RTX 5090. Ce document ne signifie pas que le code M8 est déjà implémenté.
 
-Les lots logiciels sont validés par la CI CPU, y compris les tests de fault injection avec la feature CUDA activée mais sans GPU. En raison du refactor du chemin de production `CudaMemoryManager` dans cette PR, la revue finale exige également une revalidation sur la RTX 5090 au SHA final : les 17 tests matériels existants doivent être rejoués et le rapport versionné dans `docs/audits/`. Le rapport matériel M7 antérieur ne couvre pas ce refactor. Cette revalidation M7.1 ne prétend pas valider des kernels tensoriels ni des performances M8 ; ces gates restent distincts.
+Les lots logiciels sont validés par la CI CPU, y compris les tests de fault injection avec la feature CUDA activée mais sans GPU. Le chemin de production `CudaMemoryManager` refactoré a également été revalidé sur la RTX 5090 au SHA de code `c16e9254994f24b6c7442c610332baf010352b1e` : les 17 tests matériels ciblés ont réussi lors de deux campagnes consécutives (34/34), et les 27 tests matériels découverts par la commande workspace ont également réussi lors de chacune des deux campagnes (54/54). Le vrai driver NVIDIA WSL2 a été utilisé, sans stub ; le rapport, les logs et leurs empreintes SHA-256 sont versionnés dans `docs/audits/m7.1-rtx5090-hardware-validation.md` et les fichiers associés. Cette validation ne couvre pas les kernels tensoriels ni les performances M8 ; ces gates restent distincts.
 
 #### Limites CUDA explicitement suivies après la revue M7.1
 
@@ -546,8 +546,8 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M4 | Contrat Device et sûreté mémoire (issues #11 et #12) | Livré par la PR #16 |
 | M5 | Robustesse et validation CUDA (issues #13, PR #17 et #18) | Livré ; chemin nominal validé sur RTX 5090 ; injection de fautes isolée dans l'issue #19 |
 | M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
-| M7 | Scheduler et orchestration mémoire | **Livré par la PR #21** |
-| M7.1 | Durcissement scheduler/runtime et préparation M8 | Implémenté dans la PR #22 ; CI verte sur `df749b9`, revalidation RTX 5090 réussie (17/17 requis, deux campagnes) ; fusion/revue finale en attente |
+| M7 | Scheduler et orchestration mémoire | **Livré sur `main` par la PR #21** |
+| M7.1 | Durcissement scheduler/runtime et préparation M8 | **Livré sur `main` par la PR #22** ; CI verte ; revalidation RTX 5090 réussie au SHA de code `c16e925` (17/17 requis par campagne, deux campagnes ; 27/27 tests workspace par campagne) ; limites restantes suivies dans l'issue #23 |
 | M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
 | M9 | Stratégie autoregressive | Planifié |
 | M10 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
