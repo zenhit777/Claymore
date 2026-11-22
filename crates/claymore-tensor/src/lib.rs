@@ -275,13 +275,13 @@ mod tests {
         let device = CpuDevice::new();
         let storage = device.allocate(MemoryTier::Host, 64).unwrap();
         let tensor = Tensor::new(storage, vec![2, 2], DType::F32).unwrap();
-        assert_eq!(
-            tensor.view(vec![2, 2], vec![4, 1], 0).unwrap_err(),
-            TensorError::StorageTooSmall {
+        assert!(matches!(
+            tensor.view(vec![2, 2], vec![4, 1], 0),
+            Err(TensorError::StorageTooSmall {
                 required: 24,
                 capacity: 16
-            }
-        );
+            })
+        ));
     }
 
     #[test]
