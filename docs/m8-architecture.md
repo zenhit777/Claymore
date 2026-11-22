@@ -1,101 +1,81 @@
-# M8 — Claymore tensor engine architecture
+# M8 — Moteur tensoriel natif Claymore
 
-## Status and scope
+## Décision d'architecture
 
-This document began as the architectural preparation deliverable produced during M7.1. M7.1 is now merged. M8 implementation is in progress; the first proposed increment introduces `claymore-tensor` metadata and storage ownership on the CPU reference path. This remains a partial foundation, not a complete tensor engine.
+Claymore cible initialement deux modèles de diffusion : DiffusionGemma et Clover. Aucune stratégie autoregressive générique n'est dans le périmètre sans décision produit ultérieure.
 
-M8 establishes Claymore's native tensor execution foundation. Claymore owns the tensor model, storage and lifetime rules, operation contracts, dispatch policy, and integration with its scheduler and memory manager. CUDA provides device execution primitives; it must not become the owner of Claymore tensor semantics or orchestration.
+M8 construit le socle tensoriel natif commun, en dessous des sémantiques des modèles. Il ne construit ni moteur autoregressif, ni moteur de génération diffusion, ni adaptateur modèle. Les jalons suivants sont M9 (orchestration de diffusion modulaire), M10 (adaptateur DiffusionGemma), M11 (adaptateur Clover), puis M12 (optimisation et validation de performance).
 
-The architecture must not assume that a tensor framework's abstractions, execution model, or model-specific runtime are interchangeable with Claymore's. Model families with materially different execution paradigms must retain separate model adapters and execution strategies over shared low-level tensor/device contracts.
+Le principe cible est **un seul runtime Claymore, un seul socle tensoriel et une orchestration de diffusion modulaire commune**, avec des points d'extension explicites. Les adaptateurs spécialisés conservent les graphes, états, règles numériques et comportements propres à chaque modèle ; ils ne deviennent pas des runtimes tensoriels concurrents.
 
-## Layer boundaries
+## Responsabilités des couches
 
-1. **Tensor core ('claymore-tensor', planned):** tensor metadata, shape/stride validation, layouts, element types, views, storage handles, and ownership/lifetime contracts. No CUDA FFI in this layer.
-2. **Device abstraction ('claymore-device', evolve existing crate):** device identity, capabilities, allocation handles, host/device copies, synchronization primitives, and backend error mapping. CPU is the deterministic reference backend.
-3. **Operation layer ('claymore-ops', planned):** validated operation descriptors and semantic contracts. Operations must define supported dtypes/layouts, shape constraints, aliasing rules, and numerical behavior.
-4. **Kernel dispatch ('claymore-kernels', planned):** capability- and dtype-aware selection of CPU or CUDA kernels. Dispatch must be deterministic and explain unsupported combinations; it must not silently change precision.
-5. **Runtime integration:** scheduler dependencies, transfer events, memory admission, cancellation, and resource retirement. Tensor operations may be submitted as work, but the scheduler does not own tensor storage.
-6. **Model adapters:** model-specific graph/state, attention, routing, denoising/autoregressive control flow, and checkpoint interpretation. Model-specific behavior must not leak into the generic tensor core.
+1. **claymore-core** : types transverses et configuration.
+2. **claymore-device** : identité/capacités des devices, buffers opaques, allocations, copies, synchronisation et erreurs backend. Il ne définit pas une seconde représentation de Tensor.
+3. **claymore-tensor** : propriétaire canonique des layouts, shape/strides, Tensor, TensorView, vérifications de bornes et contrats d'ownership. Les buffers restent opaques et sont fournis par claymore-device ; DType est partagé avec le backend.
+4. **Opérations et kernels** : contrats explicites par opération (shapes, dtype, layouts, aliasing, précision et comportement numérique), implémentations CPU de référence puis kernels CUDA. Aucun cast, broadcasting, fallback CPU ou aller-retour host implicite.
+5. **Runtime / mémoire / scheduler** : claymore-runtime, claymore-memory et claymore-scheduler conservent le cycle de vie des requêtes, l'admission mémoire, les dépendances et la protection des ressources en vol. Le scheduler ne possède pas les tenseurs.
+6. **Orchestration de diffusion et adaptateurs** : hors M8. L'orchestration commune appartient à M9 ; les différences irréductibles sont portées par les adaptateurs M10/M11.
 
-## Model execution paradigms
+## Contrat Tensor
 
-The shared tensor/device layer is deliberately below model execution semantics. It must not impose a conventional autoregressive, next-token decoding loop on every model.
+Un Tensor expose un TensorLayout validé : shape, strides mesurés en éléments, dtype, nombre d'éléments et byte-span calculés avec vérification d'overflow. Une vue emprunte le Tensor propriétaire, conserve l'offset en octets et ne peut dépasser le byte-span du parent. Les strides négatifs et dimensions nulles sont exclus du contrat initial. Toute extension doit définir explicitement les règles d'ownership, d'aliasing et d'opérations.
 
-- **DiffusionGemma adapter:** owns the diffusion-oriented generation loop, canvas/state representation, denoising progression, and the model's attention/state semantics.
-- **Clover adapter:** owns its block-diffusion/GDN execution path, MoE routing, expert residency, and the scheduling of expert transfers.
-- **Shared services:** tensor storage, validated primitive operations, backend capability discovery, memory admission, event-backed transfers, and task dependencies.
+Le type Tensor canonique vit dans claymore-tensor. Les anciens types Tensor/TensorView de claymore-device ont été retirés pendant M8 afin d'éviter deux modèles de tenseurs concurrents. DType reste un contrat de représentation scalaire partagé avec le backend device.
 
-These adapters may share tensor primitives and memory services without sharing a single model graph, generation loop, state machine, or scheduler policy. M8 must first inspect the actual model graph and checkpoint contracts before selecting its initial operation set. The generic tensor engine must not encode assumptions borrowed from unrelated runtimes or frameworks.
+## Opérations CPU de référence livrées dans cette tranche
 
-## Tensor contract
+Le crate claymore-tensor fournit un premier ensemble déterministe F32 :
+- addition élément par élément, sans broadcasting ;
+- multiplication matricielle row-major rank-2 ;
+- softmax stable sur la dernière dimension ;
+- RMSNorm sur la dernière dimension avec vecteur de scale explicite.
 
-A tensor descriptor must make the following explicit:
+Ces opérations exigent des layouts contigus et un dtype F32. Elles ne convertissent pas silencieusement les types. Ce premier ensemble constitue un socle de référence, pas une affirmation qu'il couvre à lui seul les graphes complets de DiffusionGemma ou Clover. Les primitives BF16/FP16 et les opérations supplémentaires seront sélectionnées après inspection des graphes et exigences numériques.
 
-- **Shape:** rank and dimensions, with checked element-count multiplication and explicit handling of zero-sized dimensions.
-- **Strides:** element or byte unit must be unambiguous; address-span calculations must be checked for overflow.
-- **Element type:** an explicit closed enum for supported scalar representations. Storage byte width is derived from the type, never supplied independently.
-- **Layout:** contiguous and strided layouts are distinct. Any specialized layout must be named and validated rather than inferred from shape alone.
-- **Storage:** a tensor owns or shares a storage handle with an explicit device and byte capacity. A view references storage and carries an offset/shape/stride descriptor; it does not pretend to own an independent allocation.
-- **Lifetime:** storage remains alive until all scheduled operations that reference it have completed. An in-flight tensor/storage cannot be released or evicted.
-- **Mutability and aliasing:** read/write access and overlap rules are explicit per operation. Safe Rust APIs must not expose mutable aliases to overlapping storage.
-- **Transfer:** host/device copies are explicit operations with completion tokens or scheduler dependencies. A successful enqueue is not equivalent to completed transfer.
+## État d'implémentation
 
-The first implementation should prefer a small, auditable set of layouts and dtypes over broad but weakly specified support.
+- [x] Crate claymore-tensor intégré au workspace.
+- [x] Layouts contigus/stridés, arithmétique de tailles vérifiée, Tensor propriétaire et TensorView empruntée.
+- [x] Retrait des définitions Tensor concurrentes de claymore-device.
+- [x] Opérations CPU F32 de référence : add, matmul, softmax, RMSNorm.
+- [ ] Contrats d'opérations formalisés (descripteurs, contraintes dtype/layout, aliasing et tolérances).
+- [ ] Dispatch explicite par capacités backend.
+- [ ] Allocation/sortie intégrée au memory orchestrator et au scheduler sans contourner leurs gardes.
+- [ ] Kernels CUDA équivalents et tests différentiels CPU/CUDA.
+- [ ] Validation RTX 5090 sur le SHA final.
+- [ ] Inspection des graphes/checkpoints DiffusionGemma et Clover pour compléter le jeu d'opérations requis.
 
-## Device and backend contract
+## Séquence restante de M8
 
-A device reports stable identity and capabilities (supported dtypes, layouts, operation families, memory tiers, alignment constraints, and relevant limits). Capability discovery is separate from kernel selection.
+1. Formaliser les contrats et erreurs des opérations, les règles d'aliasing et les tolérances numériques.
+2. Ajouter l'interface de capacités et un dispatch déterministe sans fallback implicite.
+3. Raccorder l'allocation des sorties et les durées de vie aux services mémoire/scheduler existants.
+4. Implémenter les kernels CUDA des opérations retenues, derrière la feature CUDA existante.
+5. Exécuter les tests différentiels, numériques, mémoire et de cycle de vie sur RTX 5090.
+6. Auditer les exigences réelles des graphes et checkpoints des deux modèles ; ajouter uniquement les primitives justifiées.
 
-The CPU backend is the semantic reference and must support deterministic tests without a GPU. The CUDA backend is optional and feature-gated. CUDA context/thread affinity, stream ownership, event completion, and driver errors remain encapsulated in the backend. A backend may expose opaque allocation and event handles, but callers must not manufacture raw CUDA handles.
+## Validation requise
 
-Device memory allocation and release are coordinated with the memory manager. A backend release failure retains ownership and accounting; the system must never report a buffer freed before the backend confirms release.
+**CPU / CI**
+- tests de shape, strides, overflow, offsets, vues et bornes ;
+- tests de chaque opération, erreurs de dtype/layout/shape et stabilité numérique ;
+- format, tests workspace, Clippy, MSRV Rust 1.86 et compilation de la feature CUDA sans GPU.
 
-## Operation and kernel contract
+**RTX 5090**
+- cycle de vie du contexte et des streams ;
+- allocations, copies et synchronisation par events ;
+- exactitude des kernels CUDA comparée à la référence CPU avec tolérances par opération ;
+- précision F32/BF16/FP16 uniquement lorsque chaque chemin est explicitement implémenté ;
+- pression mémoire, gardes en vol, libération et intégration scheduler/memory ;
+- rapport versionné avec SHA exact, versions driver/runtime, device, commandes, résultats et écarts numériques.
 
-Each operation descriptor defines:
+La CI sans GPU ne constitue jamais une validation matérielle. Aucun résultat RTX 5090 n'est revendiqué pour les opérations CUDA tant que la campagne n'a pas été exécutée sur la machine cible.
 
-- input/output tensor requirements and shape inference;
-- dtype and layout support, including explicit promotion/cast rules;
-- output allocation requirements and permitted input/output aliasing;
-- synchronous completion or asynchronous completion-token semantics;
-- numerical tolerance and deterministic-mode behavior;
-- backend capability requirements and fallback policy.
+## Non-objectifs
 
-Kernel dispatch follows a strict order: validate semantic requirements, query backend capabilities, select a compatible kernel, reserve required memory, schedule dependencies/transfers, then execute. An unsupported operation returns a typed error. No implicit CPU fallback, precision downgrade, or hidden host round-trip is permitted unless explicitly requested by the caller or model strategy.
-
-## Runtime and memory integration
-
-- The scheduler owns dependency and task state, not tensor data.
-- Transfer completion is established by the backend event, never by enqueue success or elapsed time.
-- Memory admission considers the complete allocation set and all applicable budgets before evicting.
-- Every allocation referenced by an in-flight operation remains guarded.
-- Cancellation of queued work discards its payload; cancellation of running work requires backend-confirmed quiescence before resources can be released.
-- Execution failures and panics transition tasks to terminal failure and propagate cancellation to dependents.
-- Metrics distinguish queue delay, host execution, kernel execution, transfer enqueue, transfer completion, and allocation/eviction costs.
-
-## M8 delivery sequence
-
-1. **In progress (PR M8.1):** establish tensor metadata and storage ownership types; checked shape/stride arithmetic and CPU tests are proposed in `claymore-tensor`. The existing `claymore-device::Tensor` remains for compatibility during this increment; migration/removal requires a separate reviewed change.
-
-2. Implement CPU storage and a minimal reference operation set with exhaustive unit tests.
-3. Add operation descriptors, shape inference, typed validation errors, and explicit casting.
-4. Add the backend capability interface and adapt the existing CPU device.
-5. Add kernel dispatch with deterministic selection and unsupported-operation behavior.
-6. Integrate transfer dependencies and memory lifetime guards.
-7. Add the CUDA backend implementation behind the existing optional feature, with CPU-only CI coverage and separate RTX 5090 validation.
-8. Add model-adapter integration only after generic tensor and operation contracts are stable.
-
-The exact initial operation set is to be selected from the first M8 model execution path after reviewing its actual graph and numerical requirements; it must not be guessed from a generic framework checklist.
-
-## Required validation gates
-
-**CPU/CI:** tensor metadata and overflow tests; storage/view aliasing tests; operation shape/dtype/layout validation; deterministic CPU kernels; scheduler cancellation/failure tests; memory-accounting and release-failure tests; rustfmt, workspace tests, Clippy, MSRV, and CUDA-feature compilation without a physical GPU.
-
-**RTX 5090:** CUDA context and stream lifecycle; allocations and transfers; event completion; kernel correctness against CPU reference within operation-specific tolerances; numerical stability at supported precisions; memory-pressure and eviction behavior; representative end-to-end workload and performance measurements. Hardware results must record the exact commit SHA, driver/runtime versions, device identity, and test commands.
-
-## Explicit non-goals for M8 foundation
-
-- Do not make a third-party tensor framework the owner of Claymore's tensor contracts.
-- Do not merge distinct model paradigms into one generic model execution loop.
-- Do not implement model-specific attention, routing, denoising, or autoregressive control flow inside the tensor core.
-- Do not claim performance or hardware readiness from CPU simulation or feature compilation alone.
+- stratégie autoregressive générique ;
+- boucle de génération commune imposée aux modèles ;
+- implémentation de l'attention, du denoising, du GDN ou du routage MoE dans le cœur Tensor ;
+- adoption d'un framework tiers comme propriétaire des tenseurs ou de l'orchestration ;
+- affirmation de compatibilité complète des modèles sur la seule base des primitives CPU génériques.
