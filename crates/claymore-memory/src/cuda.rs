@@ -993,13 +993,12 @@ mod tests {
             completed,
         }];
 
-        let admission = poll_pending_transfers(&mut policy, &mut pending, 10)
-            .and_then(|_| {
-                policy
-                    .plan_admission(MemoryTier::Vram, 8, 10)
-                    .map(|plan| plan.evict_ids)
-                    .map_err(CudaMemoryError::from)
-            });
+        let admission = poll_pending_transfers(&mut policy, &mut pending, 10).and_then(|_| {
+            policy
+                .plan_admission(MemoryTier::Vram, 8, 10)
+                .map(|plan| plan.evict_ids)
+                .map_err(CudaMemoryError::from)
+        });
         assert!(matches!(admission, Err(CudaMemoryError::Cuda(_))));
         assert_eq!(pending.len(), 1);
         assert!(policy.allocation("unrelated").is_some());
