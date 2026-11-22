@@ -1,4 +1,4 @@
-//! Backend-neutral device, buffer, transfer, and tensor contracts.
+//! Backend-neutral device, buffer, and transfer contracts.
 //!
 //! No Send/Sync bounds are imposed: a concrete backend may be thread-affine
 //! (as the current CUDA primary-context owner is). Callers must respect the
