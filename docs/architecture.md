@@ -1,31 +1,48 @@
-# Architecture
+# Architecture Claymore
 
-## Runtime layers
+## Périmètre produit
 
-1. Runtime/API: configuration, lifecycle, diagnostics, and CLI.
-2. Model engines: separate DiffusionGemma and Clover adapters.
-3. Optimization core: memory orchestrator, expert cache, scheduler, transfer engine, kernel dispatcher, and quantization policy.
-4. Backend: Claymore-owned tensor execution contracts, with CPU and optional CUDA device backends.
+Claymore cible initialement deux modèles de diffusion : DiffusionGemma et Clover. Il ne développe pas de stratégie autoregressive générique sans décision produit ultérieure.
 
-## Model-specific work
+## Architecture d'exécution
 
-### DiffusionGemma
-- Diffusion canvas/state management and denoising loop.
-- Bidirectional attention and state/cache lifetime policy.
-- Mixed-precision validation for each kernel path.
+1. **Runtime commun** : cycle de vie des requêtes, configuration, diagnostics et coordination des services.
+2. **Socle tensoriel natif unique** : types Tensor/Layout, opérations, kernels et dispatch backend appartenant à Claymore.
+3. **Services transverses** : memory orchestrator, budgets, expert cache, scheduler, transfer engine, télémétrie et profiling.
+4. **Orchestration de diffusion modulaire commune** : cycle de génération et interfaces d'extension partagées lorsque les invariants sont communs. Les stratégies sont composables et ne forcent pas un graphe, un état ou une boucle identique à tous les modèles.
+5. **Adaptateurs spécialisés** :
+   - DiffusionGemma : canvas/état, progression de denoising, attention bidirectionnelle et règles numériques propres au modèle.
+   - Clover : block diffusion/GDN, routage MoE, résidence/préchargement des experts et coordination spécifique.
 
-### Clover-35B-A3B-preview
-- GDN and block-diffusion execution paths.
-- MoE routing and expert residency.
-- Expert cache, attention, and prefetch integration.
+Les adaptateurs ne constituent pas des moteurs tensoriels ou runtimes autonomes : ils s'appuient sur le socle et les services communs. Ils préservent les différences irréductibles de graphe, de cycle de vie et de calcul.
 
-## Safety invariants
-- Treat configured memory budgets as admission limits, not guaranteed free memory.
-- Keep a safety reserve; never plan to consume all reported VRAM.
-- Evict only after outstanding device work using an allocation has completed.
-- Swap is not a model-weight tier.
+## Frontières de crates
 
+- claymore-core : types et configuration transverses.
+- claymore-device : devices, capacités, buffers opaques et opérations de transfert.
+- claymore-tensor : modèle Tensor canonique, layouts et vues.
+- claymore-memory : admission, budgets, résidence et éviction.
+- claymore-scheduler : dépendances et ordonnancement des tâches.
+- claymore-runtime : cycle de vie et orchestration des requêtes.
+- claymore-model-gemma / claymore-model-clover : adaptateurs spécialisés.
+- claymore-cuda : backend CUDA optionnel, sans propriété des sémantiques Tensor.
 
-## M8 tensor-engine design
+## Invariants de sûreté
 
-The M8 design contract and implementation gates are specified in [m8-architecture.md](m8-architecture.md). M8 is a Claymore-owned tensor execution layer; CUDA is a device backend, not the owner of tensor semantics, storage policy, graph scheduling, or model orchestration.
+- Les budgets mémoire configurés sont des limites d'admission, pas une garantie de mémoire libre.
+- Conserver une réserve de sécurité ; ne jamais planifier la consommation de toute la VRAM.
+- Ne libérer/évincer un buffer qu'après complétion confirmée de tout travail device qui le référence.
+- Les transferts asynchrones sont prouvés terminés par leurs events/tokens, jamais par le seul retour d'enqueue.
+- Le swap n'est pas un tier de poids de modèle.
+- Aucun cast, fallback CPU ou aller-retour host implicite dans le dispatch.
+- Une stratégie de modèle ne contourne pas les contrats communs de mémoire, scheduler et durée de vie.
+
+## Jalons
+
+- M8 : socle tensoriel natif, opérations de référence, dispatch et backends.
+- M9 : orchestration de diffusion modulaire commune.
+- M10 : intégration DiffusionGemma.
+- M11 : intégration Clover.
+- M12 : optimisation et validation de performance.
+
+Le détail des contrats et gates de M8 est dans [m8-architecture.md](m8-architecture.md).
