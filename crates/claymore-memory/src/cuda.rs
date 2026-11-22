@@ -643,7 +643,8 @@ impl CudaMemoryManager {
             .allocation(id)
             .ok_or_else(|| CudaMemoryError::UnknownAllocation(id.to_owned()))?;
         ensure_release_safe(id, allocation.safe_after_tick, tick)?;
-        match allocation.tier {
+        let tier = allocation.tier;
+        match tier {
             MemoryTier::Vram => {
                 let buffer = self.device.get_mut(id)
                     .ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?;
@@ -941,7 +942,12 @@ mod tests {
         }];
 
         let admission = poll_pending_transfers(&mut policy, &mut pending, 10)
-            .and_then(|_| policy.plan_admission(MemoryTier::Vram, 8, 10).map(|plan| plan.evict_ids));
+            .and_then(|_| {
+                policy
+                    .plan_admission(MemoryTier::Vram, 8, 10)
+                    .map(|plan| plan.evict_ids)
+                    .map_err(CudaMemoryError::from)
+            });
         assert!(matches!(admission, Err(CudaMemoryError::Cuda(_))));
         assert_eq!(pending.len(), 1);
         assert!(policy.allocation("unrelated").is_some());
