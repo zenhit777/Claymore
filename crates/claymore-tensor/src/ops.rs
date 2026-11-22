@@ -37,14 +37,24 @@ fn read_f32(device: &dyn Device, tensor: &Tensor) -> Result<Vec<f32>, OpError> {
     if !tensor.layout().is_contiguous() {
         return Err(OpError::NonContiguous);
     }
-    let bytes = device.read(tensor.storage(), tensor.offset_bytes(), tensor.layout().span_bytes())?;
-    Ok(bytes.chunks_exact(4).map(|chunk| f32::from_ne_bytes(chunk.try_into().expect("four-byte chunk"))).collect())
+    let bytes = device.read(
+        tensor.storage(),
+        tensor.offset_bytes(),
+        tensor.layout().span_bytes(),
+    )?;
+    Ok(bytes
+        .chunks_exact(4)
+        .map(|chunk| f32::from_ne_bytes(chunk.try_into().expect("four-byte chunk")))
+        .collect())
 }
 
 fn write_f32(device: &dyn Device, values: &[f32], shape: Vec<usize>) -> Result<Tensor, OpError> {
     let layout = TensorLayout::contiguous(shape, DType::F32)?;
     let byte_len = layout.span_bytes();
-    let mut storage = device.allocate(MemoryTier::Host, u64::try_from(byte_len).map_err(|_| DeviceError::SizeOverflow)?)?;
+    let mut storage = device.allocate(
+        MemoryTier::Host,
+        u64::try_from(byte_len).map_err(|_| DeviceError::SizeOverflow)?,
+    )?;
     let mut bytes = Vec::with_capacity(byte_len);
     for value in values {
         bytes.extend_from_slice(&value.to_ne_bytes());
@@ -93,7 +103,10 @@ pub fn softmax_last_dim(device: &dyn Device, input: &Tensor) -> Result<Tensor, O
     let width = *shape.last().ok_or(OpError::InvalidRank)?;
     let values = read_f32(device, input)?;
     let mut output = vec![0.0f32; values.len()];
-    for (src, dst) in values.chunks_exact(width).zip(output.chunks_exact_mut(width)) {
+    for (src, dst) in values
+        .chunks_exact(width)
+        .zip(output.chunks_exact_mut(width))
+    {
         let max = src.iter().copied().fold(f32::NEG_INFINITY, f32::max);
         let sum: f32 = src.iter().map(|value| (*value - max).exp()).sum();
         for (out, value) in dst.iter_mut().zip(src) {
@@ -104,7 +117,12 @@ pub fn softmax_last_dim(device: &dyn Device, input: &Tensor) -> Result<Tensor, O
 }
 
 /// RMS normalization on the final dimension with an explicit F32 scale vector.
-pub fn rms_norm(device: &dyn Device, input: &Tensor, scale: &Tensor, epsilon: f32) -> Result<Tensor, OpError> {
+pub fn rms_norm(
+    device: &dyn Device,
+    input: &Tensor,
+    scale: &Tensor,
+    epsilon: f32,
+) -> Result<Tensor, OpError> {
     if !epsilon.is_finite() || epsilon < 0.0 {
         return Err(OpError::InvalidEpsilon);
     }
@@ -133,15 +151,24 @@ mod tests {
 
     fn tensor(device: &CpuDevice, shape: Vec<usize>, values: &[f32]) -> Tensor {
         let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_ne_bytes()).collect();
-        let mut buffer = device.allocate(MemoryTier::Host, bytes.len() as u64).unwrap();
+        let mut buffer = device
+            .allocate(MemoryTier::Host, bytes.len() as u64)
+            .unwrap();
         device.write(buffer.as_mut(), 0, &bytes).unwrap();
         Tensor::new(buffer, shape, DType::F32).unwrap()
     }
 
     fn values(device: &CpuDevice, tensor: &Tensor) -> Vec<f32> {
-        device.read(tensor.storage(), tensor.offset_bytes(), tensor.layout().span_bytes())
-            .unwrap().chunks_exact(4)
-            .map(|b| f32::from_ne_bytes(b.try_into().unwrap())).collect()
+        device
+            .read(
+                tensor.storage(),
+                tensor.offset_bytes(),
+                tensor.layout().span_bytes(),
+            )
+            .unwrap()
+            .chunks_exact(4)
+            .map(|b| f32::from_ne_bytes(b.try_into().unwrap()))
+            .collect()
     }
 
     #[test]
@@ -159,7 +186,10 @@ mod tests {
         let device = CpuDevice::new();
         let a = tensor(&device, vec![2, 3], &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         let b = tensor(&device, vec![3, 2], &[7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
-        assert_eq!(values(&device, &matmul(&device, &a, &b).unwrap()), [58.0, 64.0, 139.0, 154.0]);
+        assert_eq!(
+            values(&device, &matmul(&device, &a, &b).unwrap()),
+            [58.0, 64.0, 139.0, 154.0]
+        );
     }
 
     #[test]
