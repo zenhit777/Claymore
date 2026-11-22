@@ -22,6 +22,52 @@ use claymore_tensor::{OpError, TensorOp};
 const IN_FLIGHT: u64 = crate::lifecycle::IN_FLIGHT_TICK;
 static NEXT_TRANSFER_ID: AtomicU64 = AtomicU64::new(1);
 
+/// Deterministic, test-only fault injection for `launch_tensor_op`. It is
+/// compiled out of every non-test build; production behavior is unchanged.
+/// Thread-local state keeps parallel unit tests independent.
+#[cfg(test)]
+mod launch_faults {
+    use std::cell::RefCell;
+
+    #[derive(Debug, Default, Clone, Copy)]
+    pub struct Faults {
+        pub create_event_code: Option<i32>,
+        pub launch_code: Option<i32>,
+        pub record_code: Option<i32>,
+        pub stream_sync_code: Option<i32>,
+        pub fail_guard_at: Option<usize>,
+    }
+
+    thread_local! {
+        static FAULTS: RefCell<Faults> = const {
+            RefCell::new(Faults {
+                create_event_code: None,
+                launch_code: None,
+                record_code: None,
+                stream_sync_code: None,
+                fail_guard_at: None,
+            })
+        };
+    }
+
+    pub fn current() -> Faults {
+        FAULTS.with(|faults| *faults.borrow())
+    }
+
+    pub fn set(faults: Faults) {
+        FAULTS.with(|cell| *cell.borrow_mut() = faults);
+    }
+
+    pub fn reset() {
+        set(Faults::default());
+    }
+}
+
+#[cfg(test)]
+fn injected_driver_error(operation: &'static str, code: i32) -> CudaError {
+    CudaError::Driver { operation, code }
+}
+
 fn allocate_transfer_id() -> Result<u64, CudaMemoryError> {
     let mut current = NEXT_TRANSFER_ID.load(Ordering::Relaxed);
     loop {
@@ -246,6 +292,72 @@ fn wait_for_pending_allocation<E: CudaEventOps>(
 
 fn synchronize_stream<S: CudaStreamOps>(stream: &S) -> Result<(), CudaError> {
     stream.synchronize()
+}
+
+/// The compute-stream synchronization used by tensor-launch recovery. The
+/// injected failure simulates a driver that cannot confirm stream quiescence.
+fn synchronize_compute_stream<S: CudaStreamOps>(stream: &S) -> Result<(), CudaError> {
+    #[cfg(test)]
+    if let Some(code) = launch_faults::current().stream_sync_code {
+        return Err(injected_driver_error("cuStreamSynchronize", code));
+    }
+    synchronize_stream(stream)
+}
+
+/// Install one in-flight guard. `index` allows fault injection to fail partway
+/// through a multi-allocation launch.
+fn mark_launch_guard(
+    policy: &mut MemoryOrchestrator,
+    id: &str,
+    safe_after_tick: u64,
+    _index: usize,
+) -> Result<(), MemoryError> {
+    #[cfg(test)]
+    if launch_faults::current().fail_guard_at == Some(_index) {
+        return Err(MemoryError::AllocationNotFound(id.to_owned()));
+    }
+    policy.mark_in_flight_until(id, safe_after_tick)
+}
+
+/// Single recovery boundary for every post-submission tensor-launch failure.
+///
+/// On a recoverable failure the compute stream is synchronized, the guards
+/// installed so far are lifted to `tick`, and the original error is returned:
+/// no allocation stays in flight. If synchronization cannot be confirmed, the
+/// manager is poisoned and every allocation touched by the launch is pinned at
+/// `IN_FLIGHT`, so nothing that the GPU may still be using can be released.
+fn recover_launch_failure<S: CudaStreamOps>(
+    original: CudaMemoryError,
+    allocation_ids: &[String],
+    guarded: &[String],
+    stream: &S,
+    policy: &mut MemoryOrchestrator,
+    tick: u64,
+    poisoned: &mut bool,
+) -> CudaMemoryError {
+    match synchronize_compute_stream(stream) {
+        Ok(()) => {
+            for id in guarded {
+                if let Err(error) = policy.mark_in_flight_until(id, tick) {
+                    // Lifting a guard failed; fail closed instead of allowing
+                    // an uncertain allocation to become evictable.
+                    *poisoned = true;
+                    for id in allocation_ids {
+                        let _ = policy.mark_in_flight_until(id, IN_FLIGHT);
+                    }
+                    return error.into();
+                }
+            }
+            original
+        }
+        Err(sync_error) => {
+            *poisoned = true;
+            for id in allocation_ids {
+                let _ = policy.mark_in_flight_until(id, IN_FLIGHT);
+            }
+            sync_error.into()
+        }
+    }
 }
 
 fn release_and_confirm<B: CudaBufferRelease>(
@@ -647,11 +759,17 @@ impl CudaMemoryManager {
     /// Enqueue one native CUDA kernel for a validated M8 tensor operation.
     ///
     /// Output allocation has already gone through `allocate_device` (and thus
-    /// through the memory policy). Every touched allocation is marked in flight
-    /// before the launch and is protected by a real CUDA event recorded on the
+    /// through the memory policy). Input tensor `offset_bytes` values are
+    /// applied to their device pointers; the output is always written at the
+    /// base of its allocation because `TensorOp` carries no output view. Every
+    /// touched allocation is marked in flight immediately after enqueue, while
+    /// this exclusive `&mut self` borrow rules out any concurrent manager
+    /// operation, and is protected by a real CUDA event recorded on the
     /// dedicated compute stream. The returned token must be waited on with
     /// `wait_for_transfer` before the caller may read, release or evict any of
-    /// those allocations. A launch/event failure leaves the guards in place.
+    /// those allocations. On a recoverable launch/event failure, stream
+    /// quiescence is confirmed before guards are lifted; if quiescence cannot
+    /// be confirmed the guards are retained and the manager is poisoned.
     pub fn launch_tensor_op(
         &mut self,
         op: &TensorOp<'_>,
@@ -678,11 +796,12 @@ impl CudaMemoryManager {
                 .ok_or_else(|| CudaMemoryError::UnknownAllocation((*id).to_owned()))?;
             let tensor = inputs[index];
             let offset = tensor.offset_bytes();
-            let end = offset
-                .checked_add(tensor.layout().span_bytes())
-                .ok_or(CudaMemoryError::Tensor(OpError::Tensor(
-                    claymore_tensor::TensorError::SizeOverflow,
-                )))?;
+            let end =
+                offset
+                    .checked_add(tensor.layout().span_bytes())
+                    .ok_or(CudaMemoryError::Tensor(OpError::Tensor(
+                        claymore_tensor::TensorError::SizeOverflow,
+                    )))?;
             if end > buffer.len() {
                 return Err(CudaMemoryError::Cuda(CudaError::BufferTooSmall {
                     requested: end,
@@ -716,6 +835,10 @@ impl CudaMemoryManager {
         let shapes = op.shape_signature();
         // Allocate fallible bookkeeping resources before submitting device work.
         let transfer_id = allocate_transfer_id()?;
+        #[cfg(test)]
+        if let Some(code) = launch_faults::current().create_event_code {
+            return Err(injected_driver_error("cuEventCreate", code).into());
+        }
         let event = self.driver.create_event()?;
 
         let engine = &self.compute_engine;
@@ -726,114 +849,119 @@ impl CudaMemoryManager {
         // SAFETY: this manager owns every allocation ID above, validates
         // tensor byte spans and offsets, and installs in-flight guards before
         // returning; the stream event below is the completion boundary.
-        let launch = unsafe { match (validated.dtype, shapes) {
-            (DType::F32, claymore_tensor::ShapeSignature::Elementwise { numel }) => {
-                engine.add(pointers[0], pointers[1], output_ptr, numel, stream)
-            }
-            (DType::BF16, claymore_tensor::ShapeSignature::Elementwise { numel }) => {
-                engine.add_bf16(pointers[0], pointers[1], output_ptr, numel, stream)
-            }
-            (DType::F32, claymore_tensor::ShapeSignature::MatMul { m, k, n }) => {
-                engine.matmul(pointers[0], pointers[1], output_ptr, m, k, n, stream)
-            }
-            (DType::BF16, claymore_tensor::ShapeSignature::MatMul { m, k, n }) => {
-                engine.matmul_bf16(pointers[0], pointers[1], output_ptr, m, k, n, stream)
-            }
-            (
-                DType::F32,
-                claymore_tensor::ShapeSignature::LastDim {
-                    rows,
-                    width,
-                    epsilon,
+        let launch = unsafe {
+            match (validated.dtype, shapes) {
+                (DType::F32, claymore_tensor::ShapeSignature::Elementwise { numel }) => {
+                    engine.add(pointers[0], pointers[1], output_ptr, numel, stream)
+                }
+                (DType::BF16, claymore_tensor::ShapeSignature::Elementwise { numel }) => {
+                    engine.add_bf16(pointers[0], pointers[1], output_ptr, numel, stream)
+                }
+                (DType::F32, claymore_tensor::ShapeSignature::MatMul { m, k, n }) => {
+                    engine.matmul(pointers[0], pointers[1], output_ptr, m, k, n, stream)
+                }
+                (DType::BF16, claymore_tensor::ShapeSignature::MatMul { m, k, n }) => {
+                    engine.matmul_bf16(pointers[0], pointers[1], output_ptr, m, k, n, stream)
+                }
+                (
+                    DType::F32,
+                    claymore_tensor::ShapeSignature::LastDim {
+                        rows,
+                        width,
+                        epsilon,
+                    },
+                ) => match epsilon {
+                    Some(value) => engine.rms_norm(
+                        pointers[0],
+                        pointers[1],
+                        output_ptr,
+                        rows,
+                        width,
+                        value,
+                        stream,
+                    ),
+                    None => engine.softmax_last_dim(pointers[0], output_ptr, rows, width, stream),
                 },
-            ) => match epsilon {
-                Some(value) => engine.rms_norm(
-                    pointers[0],
-                    pointers[1],
-                    output_ptr,
-                    rows,
-                    width,
-                    value,
-                    stream,
-                ),
-                None => engine.softmax_last_dim(pointers[0], output_ptr, rows, width, stream),
-            },
-            (
-                DType::BF16,
-                claymore_tensor::ShapeSignature::LastDim {
-                    rows,
-                    width,
-                    epsilon,
+                (
+                    DType::BF16,
+                    claymore_tensor::ShapeSignature::LastDim {
+                        rows,
+                        width,
+                        epsilon,
+                    },
+                ) => match epsilon {
+                    Some(value) => engine.rms_norm_bf16(
+                        pointers[0],
+                        pointers[1],
+                        output_ptr,
+                        rows,
+                        width,
+                        value,
+                        stream,
+                    ),
+                    None => {
+                        engine.softmax_last_dim_bf16(pointers[0], output_ptr, rows, width, stream)
+                    }
                 },
-            ) => match epsilon {
-                Some(value) => engine.rms_norm_bf16(
-                    pointers[0],
-                    pointers[1],
-                    output_ptr,
-                    rows,
-                    width,
-                    value,
-                    stream,
-                ),
-                None => engine.softmax_last_dim_bf16(pointers[0], output_ptr, rows, width, stream),
-            },
-            (_dtype, _) => {
-                return Err(CudaMemoryError::Tensor(OpError::UnsupportedDType));
+                (_dtype, _) => {
+                    return Err(CudaMemoryError::Tensor(OpError::UnsupportedDType));
+                }
             }
-        }};
+        };
+        #[cfg(test)]
+        let launch = match launch_faults::current().launch_code {
+            Some(code) => Err(injected_driver_error("cuLaunchKernel", code)),
+            None => launch,
+        };
         if let Err(error) = launch {
             // A driver error may be reported after work was partially submitted.
             // Prove stream quiescence before returning control to the caller.
-            if let Err(sync_error) = synchronize_stream(&self.compute_stream) {
-                self.poisoned = true;
-                for id in &allocation_ids {
-                    let _ = self.transfers.policy.mark_in_flight_until(id, IN_FLIGHT);
-                }
-                return Err(sync_error.into());
-            }
-            return Err(error.into());
+            return Err(recover_launch_failure(
+                error.into(),
+                &allocation_ids,
+                &[],
+                stream,
+                &mut self.transfers.policy,
+                tick,
+                &mut self.poisoned,
+            ));
         }
 
         // The manager is exclusively borrowed for this whole method, so no
         // release/eviction can race between enqueue and installing these guards.
-        let mut guarded = Vec::with_capacity(allocation_ids.len());
-        for id in &allocation_ids {
-            if let Err(error) = self.transfers.policy.mark_in_flight_until(id, IN_FLIGHT) {
-                match synchronize_stream(&self.compute_stream) {
-                    Ok(()) => {
-                        for guarded_id in &guarded {
-                            self.transfers.policy.mark_in_flight_until(guarded_id, tick)?;
-                        }
-                        return Err(error.into());
-                    }
-                    Err(sync_error) => {
-                        self.poisoned = true;
-                        for guarded_id in &allocation_ids {
-                            let _ = self.transfers.policy.mark_in_flight_until(guarded_id, IN_FLIGHT);
-                        }
-                        return Err(sync_error.into());
-                    }
-                }
+        let mut guarded: Vec<String> = Vec::with_capacity(allocation_ids.len());
+        for (index, id) in allocation_ids.iter().enumerate() {
+            if let Err(error) = mark_launch_guard(&mut self.transfers.policy, id, IN_FLIGHT, index)
+            {
+                return Err(recover_launch_failure(
+                    error.into(),
+                    &allocation_ids,
+                    &guarded,
+                    stream,
+                    &mut self.transfers.policy,
+                    tick,
+                    &mut self.poisoned,
+                ));
             }
             guarded.push(id.clone());
         }
 
-        if let Err(error) = event.record(&self.compute_stream) {
-            match synchronize_stream(&self.compute_stream) {
-                Ok(()) => {
-                    for id in &allocation_ids {
-                        self.transfers.policy.mark_in_flight_until(id, tick)?;
-                    }
-                    return Err(error.into());
-                }
-                Err(sync_error) => {
-                    self.poisoned = true;
-                    for id in &allocation_ids {
-                        let _ = self.transfers.policy.mark_in_flight_until(id, IN_FLIGHT);
-                    }
-                    return Err(sync_error.into());
-                }
-            }
+        let record = event.record(&self.compute_stream);
+        #[cfg(test)]
+        let record = match launch_faults::current().record_code {
+            Some(code) => Err(injected_driver_error("cuEventRecord", code)),
+            None => record,
+        };
+        if let Err(error) = record {
+            return Err(recover_launch_failure(
+                error.into(),
+                &allocation_ids,
+                &allocation_ids,
+                stream,
+                &mut self.transfers.policy,
+                tick,
+                &mut self.poisoned,
+            ));
         }
         self.transfers.pending.push(PendingTransfer {
             id: transfer_id,
@@ -1040,6 +1168,75 @@ impl Drop for CudaMemoryManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CudaTensorMemory;
+    use claymore_tensor::Tensor;
+
+    /// Resets injected faults even when a test panics, so worker-thread state
+    /// cannot leak into another test.
+    struct FaultGuard;
+    impl FaultGuard {
+        fn set(faults: launch_faults::Faults) -> Self {
+            launch_faults::set(faults);
+            Self
+        }
+    }
+    impl Drop for FaultGuard {
+        fn drop(&mut self) {
+            launch_faults::reset();
+        }
+    }
+
+    fn tensor_memory() -> CudaTensorMemory {
+        CudaTensorMemory::new(
+            0,
+            MemoryBudgets {
+                vram_soft_bytes: 64 << 20,
+                vram_hard_bytes: 128 << 20,
+                host_bytes: 64 << 20,
+                pinned_host_bytes: 16 << 20,
+                expert_cache_target_bytes: 0,
+                expert_cache_max_bytes: 0,
+            },
+            EvictionPolicy::Lru,
+        )
+        .expect("CUDA tensor memory")
+    }
+
+    /// Builds the three managed allocations every launch-fault test needs.
+    /// Returns the managed owner, its tensors and their allocation ids.
+    fn launch_inputs() -> (CudaTensorMemory, Tensor, Tensor, Tensor, Vec<String>) {
+        let memory = tensor_memory();
+        let lhs = memory
+            .upload_f32(vec![4], &[1.0, 2.0, 3.0, 4.0])
+            .expect("lhs upload");
+        let rhs = memory
+            .upload_f32(vec![4], &[5.0, 6.0, 7.0, 8.0])
+            .expect("rhs upload");
+        let output = memory
+            .allocate_tensor(vec![4], DType::F32)
+            .expect("output allocation");
+        let ids = vec![
+            memory.buffer_id(&lhs).unwrap(),
+            memory.buffer_id(&rhs).unwrap(),
+            memory.buffer_id(&output).unwrap(),
+        ];
+        (memory, lhs, rhs, output, ids)
+    }
+
+    fn launch_add(
+        manager: &mut CudaMemoryManager,
+        lhs: &Tensor,
+        rhs: &Tensor,
+        ids: &[String],
+        tick: u64,
+    ) -> Result<TransferToken, CudaMemoryError> {
+        manager.launch_tensor_op(
+            &TensorOp::Add { lhs, rhs },
+            &[ids[0].as_str(), ids[1].as_str()],
+            &ids[2],
+            tick,
+        )
+    }
 
     fn fake_policy() -> MemoryOrchestrator {
         MemoryOrchestrator::new(
@@ -1521,6 +1718,290 @@ mod tests {
             Err(CudaMemoryError::Policy(MemoryError::AllocationBusy(id))) if id == "buffer"
         ));
         assert!(ensure_release_safe("buffer", 10, 10).is_ok());
+    }
+
+    // ---- B2: manager-level fault injection for launch_tensor_op -------------
+    // Each test drives the real manager (real driver, streams, events and
+    // allocations) and injects only the failing API outcome. No compilation
+    // check is treated as proof of recovery.
+
+    #[test]
+    #[ignore = "requires a CUDA driver; fault injection targets the real manager"]
+    fn injected_create_event_failure_leaves_every_allocation_releasable() {
+        let (memory, lhs, rhs, _output, ids) = launch_inputs();
+        let tick = memory.tick();
+        let error = {
+            let _faults = FaultGuard::set(launch_faults::Faults {
+                create_event_code: Some(719),
+                ..Default::default()
+            });
+            let mut manager = memory.manager_mut();
+            launch_add(&mut manager, &lhs, &rhs, &ids, tick).err()
+        };
+        assert!(matches!(
+            error,
+            Some(CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuEventCreate",
+                code: 719
+            }))
+        ));
+        {
+            let manager = memory.manager();
+            assert!(!manager.poisoned);
+            assert!(manager.transfers.pending.is_empty());
+            for id in &ids {
+                assert!(manager.allocation(id).is_some());
+            }
+        }
+        let release_tick = memory.tick();
+        let mut manager = memory.manager_mut();
+        for id in &ids {
+            manager.release(id, release_tick).unwrap();
+        }
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 0);
+    }
+
+    #[test]
+    #[ignore = "requires a CUDA driver; fault injection targets the real manager"]
+    fn injected_launch_failure_with_successful_sync_releases_every_allocation() {
+        let (memory, lhs, rhs, _output, ids) = launch_inputs();
+        let before: Vec<u64> = {
+            let manager = memory.manager();
+            ids.iter()
+                .map(|id| manager.allocation(id).unwrap().safe_after_tick)
+                .collect()
+        };
+        let tick = memory.tick();
+        let error = {
+            let _faults = FaultGuard::set(launch_faults::Faults {
+                launch_code: Some(700),
+                ..Default::default()
+            });
+            let mut manager = memory.manager_mut();
+            launch_add(&mut manager, &lhs, &rhs, &ids, tick).err()
+        };
+        assert!(matches!(
+            error,
+            Some(CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuLaunchKernel",
+                code: 700
+            }))
+        ));
+        {
+            let manager = memory.manager();
+            assert!(!manager.poisoned);
+            assert!(manager.transfers.pending.is_empty());
+            for (id, previous) in ids.iter().zip(before) {
+                assert_eq!(manager.allocation(id).unwrap().safe_after_tick, previous);
+            }
+        }
+        let release_tick = memory.tick();
+        let mut manager = memory.manager_mut();
+        for id in &ids {
+            manager.release(id, release_tick).unwrap();
+        }
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 0);
+    }
+
+    #[test]
+    #[ignore = "requires a CUDA driver; fault injection targets the real manager"]
+    fn injected_launch_failure_with_sync_error_poisons_and_pins_all_allocations() {
+        let (memory, lhs, rhs, _output, ids) = launch_inputs();
+        let used_before = memory.usage_bytes(MemoryTier::Vram);
+        let tick = memory.tick();
+        let error = {
+            let _faults = FaultGuard::set(launch_faults::Faults {
+                launch_code: Some(700),
+                stream_sync_code: Some(901),
+                ..Default::default()
+            });
+            let mut manager = memory.manager_mut();
+            launch_add(&mut manager, &lhs, &rhs, &ids, tick).err()
+        };
+        assert!(matches!(
+            error,
+            Some(CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuStreamSynchronize",
+                code: 901
+            }))
+        ));
+        {
+            let manager = memory.manager();
+            assert!(manager.poisoned);
+            for id in &ids {
+                assert_eq!(manager.allocation(id).unwrap().safe_after_tick, IN_FLIGHT);
+            }
+            assert_eq!(manager.usage_bytes(MemoryTier::Vram), used_before);
+        }
+        let release_tick = memory.tick();
+        let mut manager = memory.manager_mut();
+        for id in &ids {
+            assert!(matches!(
+                manager.release(id, release_tick),
+                Err(CudaMemoryError::ManagerPoisoned)
+            ));
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a CUDA driver; fault injection targets the real manager"]
+    fn injected_event_record_failure_with_successful_sync_lifts_every_guard() {
+        let (memory, lhs, rhs, _output, ids) = launch_inputs();
+        let tick = memory.tick();
+        let error = {
+            let _faults = FaultGuard::set(launch_faults::Faults {
+                record_code: Some(702),
+                ..Default::default()
+            });
+            let mut manager = memory.manager_mut();
+            launch_add(&mut manager, &lhs, &rhs, &ids, tick).err()
+        };
+        assert!(matches!(
+            error,
+            Some(CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuEventRecord",
+                code: 702
+            }))
+        ));
+        {
+            let manager = memory.manager();
+            assert!(!manager.poisoned);
+            assert!(manager.transfers.pending.is_empty());
+            for id in &ids {
+                assert_eq!(manager.allocation(id).unwrap().safe_after_tick, tick);
+            }
+        }
+        let release_tick = memory.tick();
+        let mut manager = memory.manager_mut();
+        for id in &ids {
+            manager.release(id, release_tick).unwrap();
+        }
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 0);
+    }
+
+    #[test]
+    #[ignore = "requires a CUDA driver; fault injection targets the real manager"]
+    fn injected_event_record_failure_with_sync_error_preserves_gpu_guards() {
+        let (memory, lhs, rhs, _output, ids) = launch_inputs();
+        let used_before = memory.usage_bytes(MemoryTier::Vram);
+        let tick = memory.tick();
+        let error = {
+            let _faults = FaultGuard::set(launch_faults::Faults {
+                record_code: Some(702),
+                stream_sync_code: Some(901),
+                ..Default::default()
+            });
+            let mut manager = memory.manager_mut();
+            launch_add(&mut manager, &lhs, &rhs, &ids, tick).err()
+        };
+        assert!(matches!(
+            error,
+            Some(CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuStreamSynchronize",
+                code: 901
+            }))
+        ));
+        {
+            let manager = memory.manager();
+            assert!(manager.poisoned);
+            for id in &ids {
+                assert_eq!(manager.allocation(id).unwrap().safe_after_tick, IN_FLIGHT);
+            }
+            assert_eq!(manager.usage_bytes(MemoryTier::Vram), used_before);
+        }
+        let release_tick = memory.tick();
+        let mut manager = memory.manager_mut();
+        for id in &ids {
+            assert!(matches!(
+                manager.release(id, release_tick),
+                Err(CudaMemoryError::ManagerPoisoned)
+            ));
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a CUDA driver; fault injection targets the real manager"]
+    fn injected_partial_guard_failure_with_successful_sync_lifts_only_installed_guards() {
+        let (memory, lhs, rhs, _output, ids) = launch_inputs();
+        let before: Vec<u64> = {
+            let manager = memory.manager();
+            ids.iter()
+                .map(|id| manager.allocation(id).unwrap().safe_after_tick)
+                .collect()
+        };
+        let tick = memory.tick();
+        let error = {
+            let _faults = FaultGuard::set(launch_faults::Faults {
+                fail_guard_at: Some(1),
+                ..Default::default()
+            });
+            let mut manager = memory.manager_mut();
+            launch_add(&mut manager, &lhs, &rhs, &ids, tick).err()
+        };
+        assert!(matches!(
+            error,
+            Some(CudaMemoryError::Policy(MemoryError::AllocationNotFound(_)))
+        ));
+        {
+            let manager = memory.manager();
+            assert!(!manager.poisoned);
+            assert!(manager.transfers.pending.is_empty());
+            // The first guard was installed, then lifted on recovery.
+            assert_eq!(manager.allocation(&ids[0]).unwrap().safe_after_tick, tick);
+            // The failing and not-yet-installed guards keep their prior horizon.
+            assert_eq!(
+                manager.allocation(&ids[1]).unwrap().safe_after_tick,
+                before[1]
+            );
+            assert_eq!(
+                manager.allocation(&ids[2]).unwrap().safe_after_tick,
+                before[2]
+            );
+        }
+        let release_tick = memory.tick();
+        let mut manager = memory.manager_mut();
+        for id in &ids {
+            manager.release(id, release_tick).unwrap();
+        }
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 0);
+    }
+
+    #[test]
+    #[ignore = "requires a CUDA driver; fault injection targets the real manager"]
+    fn injected_partial_guard_failure_with_sync_error_poisons_and_pins_all_allocations() {
+        let (memory, lhs, rhs, _output, ids) = launch_inputs();
+        let tick = memory.tick();
+        let error = {
+            let _faults = FaultGuard::set(launch_faults::Faults {
+                fail_guard_at: Some(2),
+                stream_sync_code: Some(901),
+                ..Default::default()
+            });
+            let mut manager = memory.manager_mut();
+            launch_add(&mut manager, &lhs, &rhs, &ids, tick).err()
+        };
+        assert!(matches!(
+            error,
+            Some(CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuStreamSynchronize",
+                code: 901
+            }))
+        ));
+        {
+            let manager = memory.manager();
+            assert!(manager.poisoned);
+            for id in &ids {
+                assert_eq!(manager.allocation(id).unwrap().safe_after_tick, IN_FLIGHT);
+            }
+        }
+        let release_tick = memory.tick();
+        let mut manager = memory.manager_mut();
+        for id in &ids {
+            assert!(matches!(
+                manager.release(id, release_tick),
+                Err(CudaMemoryError::ManagerPoisoned)
+            ));
+        }
     }
 
     #[test]

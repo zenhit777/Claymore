@@ -326,10 +326,12 @@ mod tests {
         let device = CpuDevice::new();
         let storage = device.allocate(MemoryTier::Host, 32).unwrap();
         let layout = TensorLayout::contiguous(vec![4], DType::F32).unwrap();
+        // 20 is element-aligned, so the capacity check is reached (an
+        // unaligned offset is rejected earlier by MisalignedOffset).
         assert_eq!(
-            Tensor::with_layout(storage, layout, 17).unwrap_err(),
+            Tensor::with_layout(storage, layout, 20).unwrap_err(),
             TensorError::StorageTooSmall {
-                required: 33,
+                required: 36,
                 capacity: 32
             }
         );
@@ -342,7 +344,10 @@ mod tests {
         let layout = TensorLayout::contiguous(vec![2], DType::F32).unwrap();
         assert_eq!(
             Tensor::with_layout(storage, layout, 1).unwrap_err(),
-            TensorError::MisalignedOffset { offset: 1, alignment: 4 }
+            TensorError::MisalignedOffset {
+                offset: 1,
+                alignment: 4
+            }
         );
     }
 

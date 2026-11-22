@@ -1,12 +1,28 @@
 //! Explicit IEEE-754 bfloat16 (BF16) scalar representation.
 //!
+//! # Storage format
+//!
 //! BF16 is a *binary16 storage / binary32 exponent* format: 1 sign bit,
 //! 8 exponent bits and 7 explicit significand bits (8 bits of precision with
-//! the implicit leading one). It is not the same format as FP16 (IEEE-754
-//! binary16, 5 exponent bits), and this crate never treats the two as
-//! interchangeable.
+//! the implicit leading one). It is stored as the exact 16-bit pattern in a
+//! `u16`. It is not the same format as FP16 (IEEE-754 binary16, 5 exponent
+//! bits), and this crate never treats the two as interchangeable.
 //!
-//! Conversion rules (documented and tested):
+//! # Equality, ordering and hashing
+//!
+//! `Bf16` implements `PartialEq`/`Eq` by comparing the **raw 16-bit pattern**,
+//! *not* the numeric value. As a consequence `+0` (`0x0000`) and `-0` (`0x8000`)
+//! are **not** equal, and two distinct NaN payloads are **not** equal even
+//! though both widen to a NaN. This is deliberate: a `Bf16` is a bit container
+//! whose representation must survive CPU/CUDA byte transfers unchanged, and
+//! bitwise equality is the only notion consistent with that contract. There
+//! is intentionally **no** `PartialOrd`, `Ord` or `Hash` implementation:
+//! bitwise ordering would place every negative pattern above every positive
+//! one, which would be misleading. Code that needs numeric ordering must map
+//! the sign-magnitude pattern to a monotonic integer key (flip the sign bit,
+//! or complement the negative half) or widen to FP32.
+//!
+//! # Conversion rules (documented and tested)
 //!
 //! * `from_bits` / `to_bits` are exact bitwise views. Because BF16 uses the
 //!   same exponent width as FP32, shifting the 16-bit pattern into the high
@@ -30,7 +46,10 @@
 use claymore_device::DType;
 
 /// A single BF16 value stored as its exact 16-bit pattern.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+///
+/// Equality (`PartialEq`/`Eq`) compares that raw pattern bitwise, not the
+/// numeric value; see the module documentation for the full contract.
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Bf16(u16);
 
 impl Bf16 {
@@ -291,5 +310,93 @@ mod tests {
             );
             previous = bits;
         }
+    }
+
+    #[test]
+    fn widening_is_exactly_sign_symmetric_for_every_pattern() {
+        // Widening is a pure bit operation (shift + quiet OR). The quiet bit
+        // does not overlap the sign bit, so flipping the BF16 sign bit flips
+        // exactly the FP32 sign bit for *all* 65,536 patterns, including NaNs
+        // (their payloads are preserved by the shift).
+        for bits in 0..=u16::MAX {
+            let positive = Bf16::from_bits(bits).to_f32().to_bits();
+            let negative = Bf16::from_bits(bits ^ 0x8000).to_f32().to_bits();
+            assert_eq!(negative, positive ^ 0x8000_0000, "bits {bits:#06x}");
+        }
+    }
+
+    #[test]
+    fn nan_widening_quiets_and_from_f32_canonicalizes_for_every_pattern() {
+        for bits in 0..=u16::MAX {
+            let value = Bf16::from_bits(bits);
+            if value.is_nan() {
+                // The quiet bit is set; sign and NaN payload are otherwise
+                // preserved verbatim by the widening shift.
+                assert_eq!(
+                    value.to_f32().to_bits(),
+                    ((bits as u32) << 16) | 0x0040_0000,
+                    "bits {bits:#06x}"
+                );
+                // Every NaN pattern (any sign/payload) collapses to +qNaN.
+                assert_eq!(
+                    Bf16::from_f32(value.to_f32()).to_bits(),
+                    Bf16::QUIET_NAN_BITS,
+                    "bits {bits:#06x}"
+                );
+            } else {
+                assert!(!value.to_f32().is_nan(), "bits {bits:#06x}");
+            }
+        }
+    }
+
+    #[test]
+    fn widening_is_monotonic_in_magnitude_for_all_non_nan_patterns() {
+        // Widening of a positive pattern is exactly (bits << 16), which is
+        // monotonic in the FP32 bit pattern. The negative half mirrors it.
+        // NaNs are excluded because their payloads are not ordered.
+        let mut previous = 0u32;
+        for magnitude in 0..=0x7F7Fu16 {
+            let widened = Bf16::from_bits(magnitude).to_f32().to_bits();
+            assert!(widened >= previous, "non-monotonic at {magnitude:#06x}");
+            previous = widened;
+
+            let negative = Bf16::from_bits(magnitude | 0x8000).to_f32().to_bits();
+            assert_eq!(
+                negative & 0x7FFF_FFFF,
+                widened,
+                "magnitude mismatch at {magnitude:#06x}"
+            );
+        }
+        // Infinities bound the finite range from both sides.
+        assert_eq!(
+            Bf16::from_bits(Bf16::INFINITY_BITS).to_f32().to_bits(),
+            f32::INFINITY.to_bits()
+        );
+        assert_eq!(
+            Bf16::from_bits(Bf16::NEG_INFINITY_BITS).to_f32().to_bits(),
+            f32::NEG_INFINITY.to_bits()
+        );
+    }
+
+    #[test]
+    fn equality_compares_raw_bits_not_numeric_value() {
+        let pos_zero = Bf16::from_bits(Bf16::ZERO_BITS);
+        let neg_zero = Bf16::from_bits(Bf16::NEG_ZERO_BITS);
+        assert_eq!(pos_zero, Bf16::from_bits(0x0000));
+        assert_ne!(pos_zero, neg_zero, "+0 and -0 have different patterns");
+        // ...yet both widen to FP32 zero (sign masked out here).
+        assert_eq!(
+            pos_zero.to_f32().to_bits() & 0x7FFF_FFFF,
+            neg_zero.to_f32().to_bits() & 0x7FFF_FFFF
+        );
+
+        let nan_a = Bf16::from_bits(0x7FC0);
+        let nan_b = Bf16::from_bits(0x7FC1);
+        assert!(nan_a.is_nan() && nan_b.is_nan());
+        assert_ne!(nan_a, nan_b, "distinct NaN payloads are distinct values");
+        assert_eq!(nan_a, nan_a, "bitwise equality is still reflexive");
+        // from_f32 canonicalizes every NaN to the single +qNaN pattern.
+        assert_eq!(Bf16::from_f32(f32::NAN), Bf16::from_f32(-f32::NAN));
+        assert_eq!(Bf16::from_f32(f32::NAN), nan_a);
     }
 }

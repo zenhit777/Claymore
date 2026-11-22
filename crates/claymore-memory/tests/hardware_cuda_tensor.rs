@@ -13,17 +13,17 @@
 use std::sync::{Mutex, MutexGuard};
 
 use claymore_core::MemoryTier;
-use claymore_device::{DType, Device};
+use claymore_device::{CpuDevice, DType, Device};
 use claymore_memory::{
-    CudaTensorBackend, CudaTensorComputeExecutor, CudaTensorError, CudaTensorMemory,
-    CudaTensorTask, EvictionPolicy, MemoryBudgets,
+    CudaMemoryManager, CudaTensorBackend, CudaTensorComputeExecutor, CudaTensorError,
+    CudaTensorMemory, CudaTensorTask, EvictionPolicy, MemoryBudgets,
 };
 use claymore_scheduler::{
     ExecutionOutcome, QueueRunner, Scheduler, SchedulerConfig, TaskKind, TaskSpec,
 };
 use claymore_tensor::{
     Bf16, CpuReferenceBackend, DispatchError, ExecutionRequest, OpError, Tensor, TensorDispatcher,
-    TensorLayout, TensorOp,
+    TensorError, TensorLayout, TensorOp,
 };
 
 static GPU_LOCK: Mutex<()> = Mutex::new(());
@@ -1108,4 +1108,302 @@ fn hw_m8_bf16_08_scheduler_driven_compute_keeps_tensors_out_of_scheduler() {
     assert_eq!(runner.executor().pending_results(), 1);
     assert_eq!(runner.executor().pending_operations(), 0);
     println!("HW-M8-BF16 scheduler: completed={compute_id:?} dependent={dependent_id:?}");
+}
+
+/// B1: a non-zero, element-aligned `Tensor::offset_bytes` must be applied to
+/// every pointer handed to the CUDA kernels, for both dtypes. Sentinels before
+/// the tensor span detect a kernel that ignored the offset and wrote/read the
+/// beginning of the allocation.
+#[test]
+#[ignore = "requires a CUDA driver, an RTX 5090 and real GPU kernels"]
+fn hw_m8_b1_input_offsets_are_honored_for_f32_and_bf16() {
+    let _serial = serial();
+    let mut manager = CudaMemoryManager::new(0, budgets(1 << 30), EvictionPolicy::Lru).unwrap();
+    let cpu = CpuDevice::new();
+    let mut tick = 1u64;
+
+    // ---- F32: 8-byte offset in a 24-byte allocation (two leading floats) ----
+    let offset = 8usize;
+    let total = 24usize;
+    let a = [1.0f32, 2.0, 3.0, 4.0];
+    let b = [10.0f32, 20.0, 30.0, 40.0];
+    let a_bytes: Vec<u8> = a.iter().flat_map(|v| v.to_ne_bytes()).collect();
+    let b_bytes: Vec<u8> = b.iter().flat_map(|v| v.to_ne_bytes()).collect();
+    let sentinel = [0x5Au8; 24];
+
+    manager.allocate_pinned("h_in", total as u64, tick).unwrap();
+    tick += 1;
+    manager
+        .write_pinned("h_in", offset, &a_bytes, tick)
+        .unwrap();
+    tick += 1;
+    manager
+        .allocate_device("a", total as u64, tick, false)
+        .unwrap();
+    tick += 1;
+    let token = manager.copy_h2d("h_in", "a", total, tick).unwrap();
+    tick += 1;
+    manager.wait_for_transfer(&token, tick).unwrap();
+    tick += 1;
+
+    manager
+        .write_pinned("h_in", offset, &b_bytes, tick)
+        .unwrap();
+    tick += 1;
+    manager
+        .allocate_device("b", total as u64, tick, false)
+        .unwrap();
+    tick += 1;
+    let token = manager.copy_h2d("h_in", "b", total, tick).unwrap();
+    tick += 1;
+    manager.wait_for_transfer(&token, tick).unwrap();
+    tick += 1;
+
+    manager.write_pinned("h_in", 0, &sentinel, tick).unwrap();
+    tick += 1;
+    manager
+        .allocate_device("out_f32", total as u64, tick, false)
+        .unwrap();
+    tick += 1;
+    let token = manager.copy_h2d("h_in", "out_f32", total, tick).unwrap();
+    tick += 1;
+    manager.wait_for_transfer(&token, tick).unwrap();
+    tick += 1;
+
+    let layout = TensorLayout::contiguous(vec![4], DType::F32).unwrap();
+    let ta = Tensor::with_layout(
+        cpu.allocate(MemoryTier::Host, total as u64).unwrap(),
+        layout.clone(),
+        offset,
+    )
+    .unwrap();
+    let tb = Tensor::with_layout(
+        cpu.allocate(MemoryTier::Host, total as u64).unwrap(),
+        layout,
+        offset,
+    )
+    .unwrap();
+    let op = TensorOp::Add { lhs: &ta, rhs: &tb };
+    let launch_tick = tick;
+    tick += 1;
+    let token = manager
+        .launch_tensor_op(&op, &["a", "b"], "out_f32", launch_tick)
+        .expect("offset F32 launch");
+    manager.wait_for_transfer(&token, tick).unwrap();
+    tick += 1;
+
+    manager
+        .allocate_pinned("h_res", total as u64, tick)
+        .unwrap();
+    tick += 1;
+    let token = manager.copy_d2h("out_f32", "h_res", total, tick).unwrap();
+    tick += 1;
+    manager.wait_for_transfer(&token, tick).unwrap();
+    tick += 1;
+    let bytes = manager.read_pinned("h_res", 0, total, tick).unwrap();
+    tick += 1;
+    // `launch_tensor_op` has no output-offset argument: outputs are written at
+    // the base of their allocation. The inputs must be read from their tensor
+    // offsets; ignoring them would read the 0x5A sentinel bytes instead.
+    let actual: Vec<f32> = bytes[..16]
+        .chunks_exact(4)
+        .map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))
+        .collect();
+    assert_eq!(&bytes[16..], &sentinel[16..], "F32 trailing sentinel");
+    let expected: Vec<f32> = a.iter().zip(b).map(|(left, right)| left + right).collect();
+    assert_eq!(actual, expected, "F32 add at offset {offset}");
+    println!("HW-M8-B1 F32 offset={offset} actual={actual:?}");
+
+    // ---- BF16: 2-byte offset (one element) in a 10-byte allocation --------
+    let bf_offset = 2usize;
+    let bf_total = 10usize;
+    let bf_a: Vec<Bf16> = [1.0f32, 2.0, 3.0, 4.0]
+        .iter()
+        .copied()
+        .map(Bf16::from_f32)
+        .collect();
+    let bf_b: Vec<Bf16> = [0.5f32, 1.5, 2.5, 3.5]
+        .iter()
+        .copied()
+        .map(Bf16::from_f32)
+        .collect();
+    let bf_a_bytes: Vec<u8> = bf_a.iter().flat_map(|v| v.to_ne_bytes()).collect();
+    let bf_b_bytes: Vec<u8> = bf_b.iter().flat_map(|v| v.to_ne_bytes()).collect();
+    let bf_sentinel = [0xDDu8; 10];
+    manager
+        .allocate_pinned("h_bf", bf_total as u64, tick)
+        .unwrap();
+    tick += 1;
+    manager
+        .write_pinned("h_bf", bf_offset, &bf_a_bytes, tick)
+        .unwrap();
+    tick += 1;
+    manager
+        .allocate_device("bf_a", bf_total as u64, tick, false)
+        .unwrap();
+    tick += 1;
+    let token = manager.copy_h2d("h_bf", "bf_a", bf_total, tick).unwrap();
+    tick += 1;
+    manager.wait_for_transfer(&token, tick).unwrap();
+    tick += 1;
+
+    manager
+        .write_pinned("h_bf", bf_offset, &bf_b_bytes, tick)
+        .unwrap();
+    tick += 1;
+    manager
+        .allocate_device("bf_b", bf_total as u64, tick, false)
+        .unwrap();
+    tick += 1;
+    let token = manager.copy_h2d("h_bf", "bf_b", bf_total, tick).unwrap();
+    tick += 1;
+    manager.wait_for_transfer(&token, tick).unwrap();
+    tick += 1;
+
+    manager.write_pinned("h_bf", 0, &bf_sentinel, tick).unwrap();
+    tick += 1;
+    manager
+        .allocate_device("out_bf16", bf_total as u64, tick, false)
+        .unwrap();
+    tick += 1;
+    let token = manager
+        .copy_h2d("h_bf", "out_bf16", bf_total, tick)
+        .unwrap();
+    tick += 1;
+    manager.wait_for_transfer(&token, tick).unwrap();
+    tick += 1;
+
+    let bf_layout = TensorLayout::contiguous(vec![4], DType::BF16).unwrap();
+    let bfa = Tensor::with_layout(
+        cpu.allocate(MemoryTier::Host, bf_total as u64).unwrap(),
+        bf_layout.clone(),
+        bf_offset,
+    )
+    .unwrap();
+    let bfb = Tensor::with_layout(
+        cpu.allocate(MemoryTier::Host, bf_total as u64).unwrap(),
+        bf_layout,
+        bf_offset,
+    )
+    .unwrap();
+    let bf_op = TensorOp::Add {
+        lhs: &bfa,
+        rhs: &bfb,
+    };
+    let launch_tick = tick;
+    tick += 1;
+    let token = manager
+        .launch_tensor_op(&bf_op, &["bf_a", "bf_b"], "out_bf16", launch_tick)
+        .expect("offset BF16 launch");
+    manager.wait_for_transfer(&token, tick).unwrap();
+    tick += 1;
+
+    manager
+        .allocate_pinned("h_bf_res", bf_total as u64, tick)
+        .unwrap();
+    tick += 1;
+    let token = manager
+        .copy_d2h("out_bf16", "h_bf_res", bf_total, tick)
+        .unwrap();
+    tick += 1;
+    manager.wait_for_transfer(&token, tick).unwrap();
+    tick += 1;
+    let bytes = manager.read_pinned("h_bf_res", 0, bf_total, tick).unwrap();
+    tick += 1;
+    let actual: Vec<Bf16> = bytes[..8]
+        .chunks_exact(2)
+        .map(|chunk| Bf16::from_ne_bytes(chunk.try_into().unwrap()))
+        .collect();
+    assert_eq!(&bytes[8..], &bf_sentinel[8..], "BF16 trailing sentinel");
+    let expected: Vec<Bf16> = bf_a
+        .iter()
+        .zip(&bf_b)
+        .map(|(left, right)| Bf16::from_f32(left.to_f32() + right.to_f32()))
+        .collect();
+    assert_eq!(actual, expected, "BF16 add at offset {bf_offset}");
+    println!("HW-M8-B1 BF16 offset={bf_offset} actual={actual:?}");
+
+    for id in [
+        "a", "b", "out_f32", "bf_a", "bf_b", "out_bf16", "h_in", "h_out", "h_res", "h_bf",
+        "h_bf_res",
+    ] {
+        let _ = manager.release(id, tick);
+    }
+}
+
+/// B1: byte spans and capacities are checked before any launch, on both the
+/// input and output side; misaligned offsets are rejected at tensor level.
+#[test]
+#[ignore = "requires a CUDA driver, an RTX 5090 and real GPU kernels"]
+fn hw_m8_b1_byte_span_and_capacity_guards() {
+    let _serial = serial();
+    let mut manager = CudaMemoryManager::new(0, budgets(1 << 30), EvictionPolicy::Lru).unwrap();
+    let cpu = CpuDevice::new();
+    let mut tick = 1u64;
+
+    manager
+        .allocate_device("short_input", 8, tick, false)
+        .unwrap();
+    tick += 1;
+    manager.allocate_device("out", 16, tick, false).unwrap();
+    tick += 1;
+    manager
+        .allocate_device("short_output", 8, tick, false)
+        .unwrap();
+    tick += 1;
+
+    let f32_layout = TensorLayout::contiguous(vec![4], DType::F32).unwrap();
+    let input = Tensor::with_layout(
+        cpu.allocate(MemoryTier::Host, 16).unwrap(),
+        f32_layout.clone(),
+        0,
+    )
+    .unwrap();
+    let other = Tensor::with_layout(
+        cpu.allocate(MemoryTier::Host, 16).unwrap(),
+        f32_layout.clone(),
+        0,
+    )
+    .unwrap();
+
+    let input_span = TensorOp::SoftmaxLastDim { input: &input };
+    assert!(matches!(
+        manager.launch_tensor_op(&input_span, &["short_input"], "out", tick),
+        Err(claymore_memory::CudaMemoryError::Cuda(
+            claymore_cuda::CudaError::BufferTooSmall {
+                requested: 16,
+                capacity: 8
+            }
+        ))
+    ));
+    tick += 1;
+
+    let add = TensorOp::Add {
+        lhs: &input,
+        rhs: &other,
+    };
+    assert!(matches!(
+        manager.launch_tensor_op(&add, &["out", "out"], "short_output", tick),
+        Err(claymore_memory::CudaMemoryError::Cuda(
+            claymore_cuda::CudaError::BufferTooSmall {
+                requested: 16,
+                capacity: 8
+            }
+        ))
+    ));
+    tick += 1;
+
+    let storage = cpu.allocate(MemoryTier::Host, 24).unwrap();
+    assert_eq!(
+        Tensor::with_layout(storage, f32_layout, 3).unwrap_err(),
+        TensorError::MisalignedOffset {
+            offset: 3,
+            alignment: 4
+        }
+    );
+
+    for id in ["short_input", "out", "short_output"] {
+        manager.release(id, tick).unwrap();
+    }
+    println!("HW-M8-B1 span/capacity guards rejected short input and output allocations");
 }
