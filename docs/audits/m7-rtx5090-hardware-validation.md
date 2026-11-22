@@ -6,7 +6,7 @@
 - **Branche :** `feat/m7-deterministic-scheduler`
 - **SHA de code testé :** `13f06147deb3da5bb66132bc426ba7216e11eeeb`
 - **Commit de code :** `style(scheduler): match rustfmt output`
-- **Commit documentaire :** commit distinct et postérieur, contenant uniquement le présent rapport. Son SHA est communiqué dans le compte rendu de livraison et reste visible via `git log -1 -- docs/audits/m7-rtx5090-hardware-validation.md`.
+- **Commit documentaire initial :** `b160df7372558365914c05cea6c41a821111cef7` (rapport seul, ensuite complété par une correction de traçabilité documentaire).
 - **Périmètre :** validation matérielle du scheduler déterministe M7, du `CudaTransferExecutor`, du cache d'experts et des contrats mémoire CUDA associés, après intégration des corrections bloquantes B1, B2, B3 et B4. Aucun kernel CUDA, aucun calcul tensoriel et aucune génération de modèle ne sont validés par cette campagne.
 
 > Cette campagne remplace intégralement la campagne précédente. Les résultats associés à l'ancien SHA `2a2e14fe96baa5ec3962212571cbea28d24d6726` ne sont pas réutilisés et ne doivent pas être attribués au SHA `13f06147deb3da5bb66132bc426ba7216e11eeeb`.

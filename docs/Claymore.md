@@ -406,7 +406,7 @@ La tranche M6 n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâch
  - exécution concurrente/asynchrone des requêtes, stratégie de génération concrète et intégration de modèles dans le runtime (extensions futures de M6/M8+) ;
 - adaptateur CUDA spécifique injectable et tests du cycle de vie CUDA avec backend simulé (différés dans l'issue #19) ;
 - pool allocator VRAM, réutilisation de blocs et défragmentation ;
-- moteur de transfert piloté par le scheduler ;
+- intégration des tâches Transfer/Prefetch au scheduler M7 : livrée dans la première tranche, avec exécution synchrone sur le thread propriétaire ;
 - prefetch prédictif intégré au cache d'experts ;
 - télémétrie consolidée CPU/RAM/VRAM/transferts ;
 - moteur tensoriel natif et chemin d'inférence effectif ;
@@ -438,11 +438,11 @@ Les crates modèles constituent à ce stade des frontières de workspace, pas la
 - le stream de transfert utilise `CU_STREAM_NON_BLOCKING` et ne bénéficie donc pas des synchronisations implicites avec le legacy default stream ; tout futur consommateur compute (kernels, cuBLAS/cuBLASLt) devra exprimer les dépendances compute ↔ transfert explicitement, notamment avec `cuStreamWaitEvent` ;
 - `make_room` propage toute erreur de polling et refuse alors l'admission, même si l'événement en erreur ne référence pas la victime envisagée : ce comportement fail-closed est intentionnel ;
 - l'injection déterministe des erreurs event/stream/free et les tests manager-level avec backend simulé sont différés dans l'issue #19 ;
-- le backend CUDA et le `CudaMemoryManager` sont confinés au thread propriétaire (`Rc`, types non `Send`/`Sync`) ; le scheduler M4 devra déléguer les opérations CUDA à un thread propriétaire dédié ou faire évoluer explicitement ce modèle de concurrence ;
+- le backend CUDA et le `CudaMemoryManager` sont confinés au thread propriétaire (`Rc`, types non `Send`/`Sync`) ; le scheduler M7 et `CudaTransferExecutor` respectent cette affinité en exécutant les opérations sur le thread propriétaire, de manière synchrone ; toute évolution vers une exécution concurrente devra définir explicitement un modèle d'ownership compatible ;
 - le contrat `Device` M2 actuel libère ses buffers par destruction (`Drop`) et ne peut pas exprimer une libération backend faillible ni protéger une allocation en vol ; le backend CUDA ne doit pas implémenter ce trait avant qu'un contrat de libération faillible et de garde de complétion préserve les garanties fail-closed de M1 ;
 - la validation runtime sous WSL2 / RTX 5090 est attestée pour le SHA `a3ff0fd` par `docs/audits/m1-hardware-validation.md` ; elle couvre le contexte primaire, la compute capability, les allocations pinned/device, le roundtrip H2D/D2H et la libération, mais pas Compute Sanitizer, l'injection de faute fail-closed ni les performances.
 
-La CI standard valide le build par défaut sans exiger un GPU. Les tests matériels marqués `#[ignore]` ne sont pas exécutés par la CI. Le backend CUDA n'est pas encore relié au contrat `Device` de Claymore. `CudaDriver::new` retient le contexte primaire du device ; les opérations inter-ressources vérifient l'identité du contexte. Le raccordement futur devra préserver explicitement l'identité du contexte, l'ownership et la durée de vie des buffers. Le backend et le manager restent confinés au thread propriétaire (`Rc`) ; aucune implémentation `Send`/`Sync` unsafe n'est envisagée.
+La CI standard valide le build par défaut sans exiger un GPU. Les tests matériels marqués `#[ignore]` ne sont pas exécutés par la CI. Le backend CUDA n'est pas encore relié au contrat `Device` de Claymore. `CudaDriver::new` retient le contexte primaire du device ; les opérations inter-ressources vérifient l'identité du contexte. Le raccordement futur devra préserver explicitement l'identité du contexte, l'ownership et la durée de vie des buffers. Le backend et le manager restent confinés au thread propriétaire (`Rc`) ; M7 respecte cette contrainte avec un scheduler et des exécuteurs synchrones `!Send + !Sync`. Aucune implémentation `Send`/`Sync` unsafe n'est envisagée.
 
 ---
 
