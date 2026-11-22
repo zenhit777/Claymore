@@ -89,7 +89,7 @@ Ces éléments constituent une base utile et validée matériellement, mais ne c
 | Capacité | M8 actuel | Besoin modèle |
 |---|---|---|
 | F32 add / matmul / softmax / RMSNorm | Implémenté CPU + CUDA | Réutilisable |
-| BF16 stockage et calcul | Non supporté par les opérations | Requis par les deux checkpoints |
+| BF16 stockage et calcul | **Livré** : 16 bits exacts, RNE, accumulation FP32, CPU + CUDA `sm_120` | Requis par les deux checkpoints |
 | SiLU | Non livré | Requis par Clover |
 | RoPE / QK norm / attention complète | Non livré | Requis par les deux, avec variantes |
 | Cross-attention et KV cache | Non livré | Requis par DiffusionGemma |
@@ -100,7 +100,7 @@ Ces éléments constituent une base utile et validée matériellement, mais ne c
 ## 4. Décisions de frontière et séquencement
 
 1. **M8 reste un socle tensoriel natif, pas un moteur de modèle.** Les quatre kernels F32 validés restent une première tranche de référence ; les résultats RTX 5090 ne doivent pas être présentés comme validation de DiffusionGemma ou Clover.
-2. **BF16 est un prérequis partagé identifié.** Il doit être traité comme une capacité explicite du système tensoriel (dtype, transferts, opérations, accumulation et tolérances), et non comme une conversion silencieuse. Sa livraison doit être planifiée avant les premiers tests d'exécution des checkpoints.
+2. **BF16 est un prérequis partagé, désormais livré.** Il a été traité comme une capacité explicite du système tensoriel (représentation 16 bits, transferts, opérations, accumulation FP32, arrondi RNE et tolérances), et non comme une conversion silencieuse. Les quatre primitives BF16 ont été validées sur RTX 5090 dans `docs/audits/m8-bf16-rtx5090-hardware-validation.md` ; FP16 reste non supporté.
 3. **M9 porte l'orchestration diffusion commune** : état des requêtes/blocs, dépendances, progression de débruitage et points d'extension ; il ne fusionne pas les graphes des deux modèles.
 4. **M10 porte l'adaptateur DiffusionGemma** : encoder, cache KV, décodeur bidirectionnel/cross-attention et raffinement du canvas.
 5. **M11 porte l'adaptateur Clover** : GDN bidirectionnel, full attention, MoE, coreset d'experts et résidence/transferts.
@@ -113,6 +113,6 @@ Ces éléments constituent une base utile et validée matériellement, mais ne c
 - [x] Les paradigmes de génération et les différences irréductibles sont consignés.
 - [x] Les familles de primitives requises et les capacités manquantes sont identifiées.
 - [x] Les frontières M8/M9/M10/M11/M12 sont explicitées.
-- [ ] Le support BF16 n'est pas livré dans cette PR et reste un prérequis technique à planifier avant l'exécution des checkpoints.
+- [x] Le support BF16 explicite est livré dans cette PR : types, conversions, contrats, référence CPU, kernels CUDA, accumulation FP32 et tolérances, avec validation matérielle RTX 5090.
 
-**Conclusion :** l'audit architectural demandé par M8 est réalisé. La PR valide un socle F32 natif et son chemin CUDA sur RTX 5090 ; elle ne valide pas l'exécution de modèles. La prise en charge BF16 et les primitives spécifiques listées ci-dessus doivent être livrées dans les phases désignées avant toute revendication de compatibilité DiffusionGemma ou Clover.
+**Conclusion :** l'audit architectural demandé par M8 est réalisé. La PR valide un socle tensoriel natif F32 **et BF16** et ses chemins CUDA sur RTX 5090 ; elle ne valide pas l'exécution de modèles. Les primitives spécifiques listées ci-dessus (SiLU, RoPE, attention, KV cache, GDN, MoE, canvas/denoising) restent à livrer dans M9/M10/M11 avant toute revendication de compatibilité DiffusionGemma ou Clover.
