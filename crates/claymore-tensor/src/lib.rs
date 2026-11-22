@@ -18,10 +18,7 @@ pub struct TensorLayout {
 
 impl TensorLayout {
     /// Construct a contiguous layout with checked shape and byte arithmetic.
-    pub fn contiguous(
-        shape: impl Into<Vec<usize>>,
-        dtype: DType,
-    ) -> Result<Self, TensorError> {
+    pub fn contiguous(shape: impl Into<Vec<usize>>, dtype: DType) -> Result<Self, TensorError> {
         let shape = shape.into();
         let mut strides = vec![1; shape.len()];
         let mut stride = 1usize;
