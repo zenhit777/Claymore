@@ -337,11 +337,21 @@ pub enum UnsupportedReason {
         blocks: usize,
         maximum: usize,
     },
-    DType { dtype: DType },
-    Layout { layout: LayoutRequirement },
-    Tier { tier: MemoryTier },
-    Aliasing { rule: AliasRule },
-    DeviceKind { kind: DeviceKind },
+    DType {
+        dtype: DType,
+    },
+    Layout {
+        layout: LayoutRequirement,
+    },
+    Tier {
+        tier: MemoryTier,
+    },
+    Aliasing {
+        rule: AliasRule,
+    },
+    DeviceKind {
+        kind: DeviceKind,
+    },
     LowerPriority,
 }
 
@@ -351,8 +361,15 @@ impl fmt::Display for UnsupportedReason {
             UnsupportedReason::OperationNotImplemented => {
                 formatter.write_str("operation is not implemented by this backend")
             }
-            UnsupportedReason::LaunchLimit { axis, blocks, maximum } => {
-                write!(formatter, "CUDA grid axis {axis} requires {blocks} blocks; maximum is {maximum}")
+            UnsupportedReason::LaunchLimit {
+                axis,
+                blocks,
+                maximum,
+            } => {
+                write!(
+                    formatter,
+                    "CUDA grid axis {axis} requires {blocks} blocks; maximum is {maximum}"
+                )
             }
             UnsupportedReason::DType { dtype } => {
                 write!(formatter, "dtype {dtype:?} is not implemented")
@@ -934,11 +951,14 @@ mod tests {
 
     #[test]
     fn cuda_launch_grid_limits_are_axis_specific_and_typed() {
-        assert_eq!(cuda_grid_limit(ShapeSignature::MatMul {
-            m: 65_535 * 16,
-            k: 1,
-            n: 16,
-        }), None);
+        assert_eq!(
+            cuda_grid_limit(ShapeSignature::MatMul {
+                m: 65_535 * 16,
+                k: 1,
+                n: 16,
+            }),
+            None
+        );
         assert_eq!(
             cuda_grid_limit(ShapeSignature::MatMul {
                 m: 65_536 * 16,
