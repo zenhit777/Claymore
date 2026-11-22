@@ -389,6 +389,7 @@ Le scheduler et les exécuteurs sont mono-propriétaires et synchrones. `CudaTra
 
 Le coût de rechargement est exposé par l'API mémoire, mais aucun chargeur de poids ou d'experts ne l'alimente encore automatiquement ; `CudaTransferExecutor` ne propose pas de tâche `RecordReloadCost`.
 
+
 ### 7.2 Fonctionnalités et extensions non livrées de bout en bout
 
 Les éléments suivants ne doivent pas être considérés comme fonctionnels de bout en bout :
@@ -488,7 +489,7 @@ Chaque moteur de modèle doit pouvoir préparer, exécuter et libérer ses état
 
 ## 8 bis. Couverture actuelle des exigences
 
-| Exigence | Statut sur la branche M7 (future référence après merge de la PR #21) | Justification |
+| Exigence | Statut | Justification |
 |---|---|---|
 | FR-01 — Configuration du runtime | **Livré** | `HardwareProfile` charge et valide le profil JSON ; la CLI utilise le profil embarqué ou `CLAYMORE_HARDWARE_PROFILE`. |
 | FR-02 — Gestion des budgets | **Livré pour les budgets déclarés** | Budgets VRAM souple/dur, Host et PinnedHost validés sans chevauchement ; le soft-budget est une cible d'éviction proactive et le hard-ceiling reste la limite d'admission. |
@@ -514,7 +515,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M4 | Contrat Device et sûreté mémoire (issues #11 et #12) | Livré par la PR #16 |
 | M5 | Robustesse et validation CUDA (issues #13, PR #17 et #18) | Livré ; chemin nominal validé sur RTX 5090 ; injection de fautes isolée dans l'issue #19 |
 | M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
-| M7 | Scheduler et orchestration mémoire | **En cours : noyau déterministe de tâches et files livré dans la PR #21 ; raccordement mémoire/exécution restant** |
+| M7 | Scheduler et orchestration mémoire | **Livré par la PR #21** |
 | M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
 | M9 | Stratégie autoregressive | Planifié |
 | M10 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
@@ -623,7 +624,7 @@ Limites et travaux ultérieurs :
 - les copies H2D/D2H sont synchronisées par attente d'event avant le retour de l'exécuteur ; aucun recouvrement transfert/calcul n'est livré ;
 - les queues Prefetch et Transfer sont ordonnancées, mais leurs exécuteurs restent synchrones et mono-propriétaires ; aucun préchargement concurrent n'est revendiqué ;
 - le coût de rechargement est exposé par l'API mémoire, mais aucun chargeur ne l'alimente automatiquement à ce stade ;
-- la campagne matérielle doit être relancée après les corrections B1/B3, car elles changent la conversion du profil mémoire et l'ordre d'éviction ; les nouvelles mesures devront être consignées sur le SHA final.
+- la campagne matérielle a été rejouée après les corrections B1/B3 : 34/34 exécutions réussies sur le SHA de code `13f06147deb3da5bb66132bc426ba7216e11eeeb`, identique au code du HEAD documentaire `7b1db2164af4de10d36fc4b010e7b8d6d2f746ca` ; voir le rapport versionné.
 
 Critères de la tranche CPU livrée :
 - tests déterministes couvrant priorité/FIFO, isolation des files, dépendances, échec en cascade, annulation et bornes de préchargement ;
@@ -632,11 +633,15 @@ Critères de la tranche CPU livrée :
 - admission expert bornée par le plafond dur et allocations protégées jusqu'à l'horizon déclaré ;
 - aucun lancement implicite ni appel CUDA depuis le scheduler.
 
-Critères de clôture M7 complète :
-- aucun dépassement des budgets effectifs, dont le working set expert ;
-- une allocation en vol reste protégée jusqu'à la complétion de son event ;
-- aucun buffer évincé avant complétion de toutes ses dépendances ;
-- exécution des files sur leurs propriétaires respectifs et métriques séparées transfert/attente/calcul.
+Critères de clôture M7 — tous validés :
+- [x] Budgets effectifs respectés : Host 80 Gio + PinnedHost 8 Gio = 88 Gio ; budget VRAM souple utilisé comme cible d'éviction proactive et plafond dur appliqué à l'admission ; plafond maximal du cache experts appliqué.
+- [x] Allocations en vol protégées jusqu'à la complétion de leur event CUDA ; les tests matériels H2D/D2H confirment l'attente d'event et l'absence d'opération résiduelle.
+- [x] Aucun buffer n'est évincé avant la complétion de ses dépendances ; les gardes d'horizon et les scénarios matériels de protection mémoire sont validés.
+- [x] Exécution des files sur leurs threads propriétaires, sans transfert de propriété ; métriques distinctes pour les files, le calcul, les opérations mémoire et les transferts/attentes CUDA.
+- [x] Validation logicielle complète : 96 tests workspace, formatage, Clippy, feature CUDA et MSRV Rust 1.86 validés en CI.
+- [x] Validation RTX 5090 : deux campagnes de 17 tests, soit 34/34 exécutions réussies sur le SHA de code `13f06147deb3da5bb66132bc426ba7216e11eeeb`.
+
+Les réserves de périmètre restent explicites : exécution synchrone mono-propriétaire, aucun overlap transfert/calcul, aucun prefetch concurrent, aucun kernel ni calcul tensoriel, tests experts à échelle réduite et absence d'injection de fautes (issue #19).
 
 ### M8 — Moteur tensoriel Claymore et premier chemin modèle
 
