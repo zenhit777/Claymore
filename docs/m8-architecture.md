@@ -17,6 +17,16 @@ The architecture must not assume that a tensor framework's abstractions, executi
 5. **Runtime integration:** scheduler dependencies, transfer events, memory admission, cancellation, and resource retirement. Tensor operations may be submitted as work, but the scheduler does not own tensor storage.
 6. **Model adapters:** model-specific graph/state, attention, routing, denoising/autoregressive control flow, and checkpoint interpretation. Model-specific behavior must not leak into the generic tensor core.
 
+## Model execution paradigms
+
+The shared tensor/device layer is deliberately below model execution semantics. It must not impose a conventional autoregressive, next-token decoding loop on every model.
+
+- **DiffusionGemma adapter:** owns the diffusion-oriented generation loop, canvas/state representation, denoising progression, and the model's attention/state semantics.
+- **Clover adapter:** owns its block-diffusion/GDN execution path, MoE routing, expert residency, and the scheduling of expert transfers.
+- **Shared services:** tensor storage, validated primitive operations, backend capability discovery, memory admission, event-backed transfers, and task dependencies.
+
+These adapters may share tensor primitives and memory services without sharing a single model graph, generation loop, state machine, or scheduler policy. M8 must first inspect the actual model graph and checkpoint contracts before selecting its initial operation set. The generic tensor engine must not encode assumptions borrowed from unrelated runtimes or frameworks.
+
 ## Tensor contract
 
 A tensor descriptor must make the following explicit:
