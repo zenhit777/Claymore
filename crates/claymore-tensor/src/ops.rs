@@ -134,7 +134,10 @@ pub fn rms_norm(
     let values = read_f32(device, input)?;
     let weights = read_f32(device, scale)?;
     let mut output = vec![0.0f32; values.len()];
-    for (src, dst) in values.chunks_exact(width).zip(output.chunks_exact_mut(width)) {
+    for (src, dst) in values
+        .chunks_exact(width)
+        .zip(output.chunks_exact_mut(width))
+    {
         let mean_square = src.iter().map(|x| x * x).sum::<f32>() / width as f32;
         let inv_rms = (mean_square + epsilon).sqrt().recip();
         for index in 0..width {
