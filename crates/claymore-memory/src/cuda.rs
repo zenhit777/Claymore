@@ -187,6 +187,10 @@ fn wait_for_pending_allocation<E: CudaEventOps>(
     Ok(())
 }
 
+fn synchronize_stream<S: CudaStreamOps>(stream: &S) -> Result<(), CudaError> {
+    stream.synchronize()
+}
+
 fn release_and_confirm<B: CudaBufferRelease>(
     buffer: &mut B,
     policy: &mut MemoryOrchestrator,
@@ -704,7 +708,7 @@ impl Drop for CudaMemoryManager {
         // every operation enqueued on it has completed. Older events in
         // `pending` cannot prove completion of a later copy whose event record
         // failed, so never use them as a fallback.
-        let safe_to_drop = self.transfer_stream.synchronize().is_ok();
+        let safe_to_drop = synchronize_stream(&self.transfer_stream).is_ok();
         if safe_to_drop {
             for transfer in self.pending.drain(..) {
                 transfer.completed.store(true, Ordering::Release);
@@ -729,6 +733,267 @@ impl Drop for CudaMemoryManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn fake_policy() -> MemoryOrchestrator {
+        MemoryOrchestrator::new(
+            MemoryBudgets {
+                vram_soft_bytes: 8,
+                vram_hard_bytes: 16,
+                host_bytes: 32,
+                pinned_host_bytes: 8,
+                expert_cache_target_bytes: 0,
+                expert_cache_max_bytes: 0,
+            },
+            EvictionPolicy::Lru,
+        )
+        .unwrap()
+    }
+
+    fn guarded_allocation(policy: &mut MemoryOrchestrator, id: &str) {
+        policy
+            .record_allocation(Allocation {
+                id: id.to_owned(),
+                tier: MemoryTier::Vram,
+                bytes: 4,
+                last_used_tick: 0,
+                hit_count: 0,
+                safe_after_tick: IN_FLIGHT,
+                expert: false,
+            })
+            .unwrap();
+    }
+
+    struct FakeEvent {
+        complete: bool,
+        query_error: Option<i32>,
+        sync_error: Option<i32>,
+    }
+
+    impl CudaEventOps for FakeEvent {
+        fn is_complete(&self) -> Result<bool, CudaError> {
+            if let Some(code) = self.query_error {
+                Err(CudaError::Driver {
+                    operation: "cuEventQuery",
+                    code,
+                })
+            } else {
+                Ok(self.complete)
+            }
+        }
+
+        fn synchronize(&self) -> Result<(), CudaError> {
+            if let Some(code) = self.sync_error {
+                Err(CudaError::Driver {
+                    operation: "cuEventSynchronize",
+                    code,
+                })
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    struct FakeStream(Option<i32>);
+    impl CudaStreamOps for FakeStream {
+        fn synchronize(&self) -> Result<(), CudaError> {
+            match self.0 {
+                Some(code) => Err(CudaError::Driver {
+                    operation: "cuStreamSynchronize",
+                    code,
+                }),
+                None => Ok(()),
+            }
+        }
+    }
+
+    struct FakeBufferRelease(Option<i32>);
+    impl CudaBufferRelease for FakeBufferRelease {
+        fn release(&mut self) -> Result<(), CudaError> {
+            match self.0 {
+                Some(code) => Err(CudaError::Driver {
+                    operation: "cuMemFree",
+                    code,
+                }),
+                None => Ok(()),
+            }
+        }
+    }
+
+    #[test]
+    fn injected_not_ready_event_keeps_event_and_allocation_guard() {
+        let mut policy = fake_policy();
+        guarded_allocation(&mut policy, "buffer");
+        let completed = Arc::new(AtomicBool::new(false));
+        let mut pending = vec![PendingTransfer {
+            id: 1,
+            allocation_ids: vec!["buffer".to_owned()],
+            event: FakeEvent {
+                complete: false,
+                query_error: None,
+                sync_error: None,
+            },
+            completed: Arc::clone(&completed),
+        }];
+
+        assert_eq!(poll_pending_transfers(&mut policy, &mut pending, 10).unwrap(), 0);
+        assert_eq!(pending.len(), 1);
+        assert!(!completed.load(Ordering::Acquire));
+        assert_eq!(
+            policy.allocation("buffer").unwrap().safe_after_tick,
+            IN_FLIGHT
+        );
+    }
+
+    #[test]
+    fn injected_query_failure_preserves_pending_event_and_every_guard() {
+        let mut policy = fake_policy();
+        guarded_allocation(&mut policy, "buffer");
+        let completed = Arc::new(AtomicBool::new(false));
+        let mut pending = vec![PendingTransfer {
+            id: 2,
+            allocation_ids: vec!["buffer".to_owned()],
+            event: FakeEvent {
+                complete: false,
+                query_error: Some(719),
+                sync_error: None,
+            },
+            completed: Arc::clone(&completed),
+        }];
+
+        assert!(matches!(
+            poll_pending_transfers(&mut policy, &mut pending, 10),
+            Err(CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuEventQuery",
+                code: 719
+            }))
+        ));
+        assert_eq!(pending.len(), 1);
+        assert!(!completed.load(Ordering::Acquire));
+        assert_eq!(
+            policy.allocation("buffer").unwrap().safe_after_tick,
+            IN_FLIGHT
+        );
+    }
+
+    #[test]
+    fn successful_event_retirement_lifts_guards_only_after_last_shared_event() {
+        let mut policy = fake_policy();
+        guarded_allocation(&mut policy, "buffer");
+        let first = Arc::new(AtomicBool::new(false));
+        let second = Arc::new(AtomicBool::new(false));
+        let mut pending = vec![
+            PendingTransfer {
+                id: 3,
+                allocation_ids: vec!["buffer".to_owned()],
+                event: FakeEvent {
+                    complete: true,
+                    query_error: None,
+                    sync_error: None,
+                },
+                completed: Arc::clone(&first),
+            },
+            PendingTransfer {
+                id: 4,
+                allocation_ids: vec!["buffer".to_owned()],
+                event: FakeEvent {
+                    complete: false,
+                    query_error: None,
+                    sync_error: None,
+                },
+                completed: Arc::clone(&second),
+            },
+        ];
+
+        assert_eq!(poll_pending_transfers(&mut policy, &mut pending, 10).unwrap(), 1);
+        assert!(first.load(Ordering::Acquire));
+        assert!(!second.load(Ordering::Acquire));
+        assert_eq!(pending.len(), 1);
+        assert_eq!(
+            policy.allocation("buffer").unwrap().safe_after_tick,
+            IN_FLIGHT
+        );
+
+        pending[0].event = FakeEvent {
+            complete: true,
+            query_error: None,
+            sync_error: None,
+        };
+        assert_eq!(poll_pending_transfers(&mut policy, &mut pending, 11).unwrap(), 1);
+        assert!(second.load(Ordering::Acquire));
+        assert!(pending.is_empty());
+        assert_eq!(policy.allocation("buffer").unwrap().safe_after_tick, 11);
+    }
+
+    #[test]
+    fn unrelated_event_query_error_fails_closed_before_admission_planning() {
+        let mut policy = fake_policy();
+        guarded_allocation(&mut policy, "unrelated");
+        let completed = Arc::new(AtomicBool::new(false));
+        let mut pending = vec![PendingTransfer {
+            id: 5,
+            allocation_ids: vec!["unrelated".to_owned()],
+            event: FakeEvent {
+                complete: false,
+                query_error: Some(999),
+                sync_error: None,
+            },
+            completed,
+        }];
+
+        let admission = poll_pending_transfers(&mut policy, &mut pending, 10)
+            .and_then(|_| policy.plan_admission(MemoryTier::Vram, 8, 10).map(|plan| plan.evict_ids));
+        assert!(matches!(admission, Err(CudaMemoryError::Cuda(_))));
+        assert_eq!(pending.len(), 1);
+        assert!(policy.allocation("unrelated").is_some());
+        assert_eq!(
+            policy.allocation("unrelated").unwrap().safe_after_tick,
+            IN_FLIGHT
+        );
+    }
+
+    #[test]
+    fn failed_backend_release_retains_policy_ownership_until_retry_succeeds() {
+        let mut policy = fake_policy();
+        policy
+            .record_allocation(Allocation {
+                id: "buffer".to_owned(),
+                tier: MemoryTier::Vram,
+                bytes: 4,
+                last_used_tick: 0,
+                hit_count: 0,
+                safe_after_tick: 0,
+                expert: false,
+            })
+            .unwrap();
+        let mut backend = FakeBufferRelease(Some(700));
+
+        assert!(matches!(
+            release_and_confirm(&mut backend, &mut policy, "buffer", 1),
+            Err(CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuMemFree",
+                code: 700
+            }))
+        ));
+        assert!(policy.allocation("buffer").is_some());
+        assert_eq!(policy.usage_bytes(MemoryTier::Vram), 4);
+
+        backend.0 = None;
+        release_and_confirm(&mut backend, &mut policy, "buffer", 1).unwrap();
+        assert!(policy.allocation("buffer").is_none());
+        assert_eq!(policy.usage_bytes(MemoryTier::Vram), 0);
+    }
+
+    #[test]
+    fn injected_stream_synchronization_error_is_not_treated_as_success() {
+        assert!(matches!(
+            synchronize_stream(&FakeStream(Some(901))),
+            Err(CudaError::Driver {
+                operation: "cuStreamSynchronize",
+                code: 901
+            })
+        ));
+        assert!(synchronize_stream(&FakeStream(None)).is_ok());
+    }
 
     #[test]
     fn transfer_token_clones_share_completion_state() {
