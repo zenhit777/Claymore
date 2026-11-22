@@ -587,8 +587,14 @@ mod tests {
     #[test]
     fn grid_rounding_and_axis_limits_are_explicit() {
         assert_eq!(grid_for(1, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX).unwrap(), 1);
-        assert_eq!(grid_for(257, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX).unwrap(), 2);
-        assert_eq!(grid_for(4096, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX).unwrap(), 16);
+        assert_eq!(
+            grid_for(257, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX).unwrap(),
+            2
+        );
+        assert_eq!(
+            grid_for(4096, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX).unwrap(),
+            16
+        );
         assert_eq!(
             grid_for(65_535 * 16, MATMUL_TILE, CUDA_GRID_Y_MAX).unwrap(),
             65_535
