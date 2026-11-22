@@ -130,6 +130,33 @@ struct PendingTransfer<E> {
     completed: Arc<AtomicBool>,
 }
 
+/// State shared by the production CUDA manager and deterministic manager-level
+/// tests. Keeping policy and pending events together prevents tests from
+/// validating helper functions while bypassing the manager's transfer state.
+struct CudaTransferTracker<E> {
+    policy: MemoryOrchestrator,
+    pending: Vec<PendingTransfer<E>>,
+}
+
+impl<E: CudaEventOps> CudaTransferTracker<E> {
+    fn poll(&mut self, tick: u64) -> Result<usize, CudaMemoryError> {
+        self.transfers.poll(tick)
+    }
+
+    fn wait_for_allocation(&mut self, id: &str, tick: u64) -> Result<(), CudaMemoryError> {
+        self.transfers.wait_for_allocation(id, tick)
+    }
+
+    fn plan_admission(
+        &mut self,
+        tier: MemoryTier,
+        bytes: u64,
+        tick: u64,
+    ) -> Result<AdmissionPlan, CudaMemoryError> {
+        plan_admission_after_poll(&mut self.transfers.policy, &mut self.transfers.pending, tier, bytes, tick)
+    }
+}
+
 fn poll_pending_transfers<E: CudaEventOps>(
     policy: &mut MemoryOrchestrator,
     pending: &mut Vec<PendingTransfer<E>>,
@@ -243,10 +270,9 @@ pub struct CudaMemoryManager {
     manager_id: u64,
     driver: CudaDriver,
     transfer_stream: CudaStream,
-    policy: MemoryOrchestrator,
+    transfers: CudaTransferTracker<CudaEvent>,
     device: HashMap<String, CudaDeviceBuffer>,
     pinned: HashMap<String, PinnedHostBuffer>,
-    pending: Vec<PendingTransfer<CudaEvent>>,
     last_tick: Option<u64>,
     poisoned: bool,
 }
@@ -265,10 +291,12 @@ impl CudaMemoryManager {
             manager_id,
             driver,
             transfer_stream,
-            policy,
+            transfers: CudaTransferTracker {
+                policy,
+                pending: Vec::new(),
+            },
             device: HashMap::new(),
             pinned: HashMap::new(),
-            pending: Vec::new(),
             last_tick: None,
             poisoned: false,
         })
@@ -305,7 +333,7 @@ impl CudaMemoryManager {
     }
 
     pub fn usage_bytes(&self, tier: MemoryTier) -> u64 {
-        self.policy.usage_bytes(tier)
+        self.transfers.policy.usage_bytes(tier)
     }
 
     /// Store an observed/estimated reload cost for adaptive eviction.
@@ -316,7 +344,7 @@ impl CudaMemoryManager {
         tick: u64,
     ) -> Result<(), CudaMemoryError> {
         self.advance_tick(tick)?;
-        self.policy.record_reload_cost(id, cost_ns)?;
+        self.transfers.policy.record_reload_cost(id, cost_ns)?;
         Ok(())
     }
 
@@ -355,7 +383,7 @@ impl CudaMemoryManager {
             safe_after_tick: tick,
             expert,
         };
-        if let Err(error) = self.policy.record_allocation(allocation) {
+        if let Err(error) = self.transfers.policy.record_allocation(allocation) {
             drop(buffer);
             return Err(error.into());
         }
@@ -386,7 +414,7 @@ impl CudaMemoryManager {
             safe_after_tick: tick,
             expert: false,
         };
-        if let Err(error) = self.policy.record_allocation(allocation) {
+        if let Err(error) = self.transfers.policy.record_allocation(allocation) {
             drop(buffer);
             return Err(error.into());
         }
@@ -497,24 +525,24 @@ impl CudaMemoryManager {
                 // prevent every subsequent operation and keep both allocations
                 // non-evictable until manager destruction can synchronize again.
                 self.poisoned = true;
-                self.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
-                self.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
+                self.transfers.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
+                self.transfers.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
                 return Err(sync_error.into());
             }
             return Err(error.into());
         }
-        self.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
-        self.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
+        self.transfers.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
+        self.transfers.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
         let allocation_ids = vec![pinned_id.to_owned(), device_id.to_owned()];
         let completed = Arc::new(AtomicBool::new(false));
-        self.pending.push(PendingTransfer {
+        self.transfers.pending.push(PendingTransfer {
             id: transfer_id,
             allocation_ids: allocation_ids.clone(),
             event,
             completed: Arc::clone(&completed),
         });
-        self.policy.touch(pinned_id, tick)?;
-        self.policy.touch(device_id, tick)?;
+        self.transfers.policy.touch(pinned_id, tick)?;
+        self.transfers.policy.touch(device_id, tick)?;
         Ok(TransferToken {
             manager_id: self.manager_id,
             id: transfer_id,
@@ -551,24 +579,24 @@ impl CudaMemoryManager {
                 // prevent every subsequent operation and keep both allocations
                 // non-evictable until manager destruction can synchronize again.
                 self.poisoned = true;
-                self.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
-                self.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
+                self.transfers.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
+                self.transfers.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
                 return Err(sync_error.into());
             }
             return Err(error.into());
         }
-        self.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
-        self.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
+        self.transfers.policy.mark_in_flight_until(device_id, IN_FLIGHT)?;
+        self.transfers.policy.mark_in_flight_until(pinned_id, IN_FLIGHT)?;
         let allocation_ids = vec![device_id.to_owned(), pinned_id.to_owned()];
         let completed = Arc::new(AtomicBool::new(false));
-        self.pending.push(PendingTransfer {
+        self.transfers.pending.push(PendingTransfer {
             id: transfer_id,
             allocation_ids: allocation_ids.clone(),
             event,
             completed: Arc::clone(&completed),
         });
-        self.policy.touch(device_id, tick)?;
-        self.policy.touch(pinned_id, tick)?;
+        self.transfers.policy.touch(device_id, tick)?;
+        self.transfers.policy.touch(pinned_id, tick)?;
         Ok(TransferToken {
             manager_id: self.manager_id,
             id: transfer_id,
@@ -588,7 +616,7 @@ impl CudaMemoryManager {
     /// treated as success.
     pub fn poll_completed_transfers(&mut self, tick: u64) -> Result<usize, CudaMemoryError> {
         self.advance_tick(tick)?;
-        poll_pending_transfers(&mut self.policy, &mut self.pending, tick)
+        poll_pending_transfers(&mut self.transfers.policy, &mut self.transfers.pending, tick)
     }
 
     /// Query the associated CUDA event without blocking. A token is complete
@@ -602,7 +630,7 @@ impl CudaMemoryManager {
         if token.completed.load(Ordering::Acquire) {
             return Ok(true);
         }
-        if let Some(transfer) = self.pending.iter().find(|transfer| {
+        if let Some(transfer) = self.transfers.pending.iter().find(|transfer| {
             transfer.id == token.id
                 && transfer.allocation_ids == token.allocation_ids
                 && Arc::ptr_eq(&transfer.completed, &token.completed)
@@ -653,7 +681,7 @@ impl CudaMemoryManager {
 
     pub fn wait_for_allocation(&mut self, id: &str, tick: u64) -> Result<(), CudaMemoryError> {
         self.advance_tick(tick)?;
-        wait_for_pending_allocation(&mut self.policy, &mut self.pending, id, tick)
+        wait_for_pending_allocation(&mut self.transfers.policy, &mut self.transfers.pending, id, tick)
     }
 
     pub fn release(&mut self, id: &str, tick: u64) -> Result<Allocation, CudaMemoryError> {
@@ -671,7 +699,7 @@ impl CudaMemoryManager {
                     .device
                     .get_mut(id)
                     .ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?;
-                let released = release_and_confirm(buffer, &mut self.policy, id, tick)?;
+                let released = release_and_confirm(buffer, &mut self.transfers.policy, id, tick)?;
                 self.device.remove(id);
                 Ok(released)
             }
@@ -680,7 +708,7 @@ impl CudaMemoryManager {
                     .pinned
                     .get_mut(id)
                     .ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?;
-                let released = release_and_confirm(buffer, &mut self.policy, id, tick)?;
+                let released = release_and_confirm(buffer, &mut self.transfers.policy, id, tick)?;
                 self.pinned.remove(id);
                 Ok(released)
             }
@@ -689,7 +717,7 @@ impl CudaMemoryManager {
     }
 
     fn ensure_new_id(&self, id: &str) -> Result<(), CudaMemoryError> {
-        if self.policy.allocation(id).is_some()
+        if self.transfers.policy.allocation(id).is_some()
             || self.device.contains_key(id)
             || self.pinned.contains_key(id)
         {
@@ -703,7 +731,7 @@ impl CudaMemoryManager {
         // Compute one victim set against both constraints. Independently
         // planning expert and general VRAM admission can over-evict when the
         // two plans choose different candidates.
-        let plan = self.policy.plan_expert_vram_admission(bytes, tick)?;
+        let plan = self.transfers.policy.plan_expert_vram_admission(bytes, tick)?;
         for id in plan.evict_ids {
             self.release(&id, tick)?;
         }
@@ -718,8 +746,7 @@ impl CudaMemoryManager {
     ) -> Result<(), CudaMemoryError> {
         // Reclaim transfers already completed by the device before planning
         // evictions. Polling errors abort admission before any victim is released.
-        let plan =
-            plan_admission_after_poll(&mut self.policy, &mut self.pending, tier, bytes, tick)?;
+        let plan = self.transfers.plan_admission(tier, bytes, tick)?;
         for id in plan.evict_ids {
             self.release(&id, tick)?;
         }
@@ -736,7 +763,7 @@ impl Drop for CudaMemoryManager {
         // failed, so never use them as a fallback.
         let safe_to_drop = synchronize_stream(&self.transfer_stream).is_ok();
         if safe_to_drop {
-            for transfer in self.pending.drain(..) {
+            for transfer in self.transfers.pending.drain(..) {
                 transfer.completed.store(true, Ordering::Release);
                 drop(transfer.event);
             }
@@ -749,7 +776,7 @@ impl Drop for CudaMemoryManager {
             for (_, buffer) in self.pinned.drain() {
                 std::mem::forget(buffer);
             }
-            for transfer in self.pending.drain(..) {
+            for transfer in self.transfers.pending.drain(..) {
                 std::mem::forget(transfer.event);
             }
         }
