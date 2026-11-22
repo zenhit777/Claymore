@@ -14,9 +14,15 @@ claymore-cuda = { path = "../claymore-cuda", optional = true }
 claymore-core = { path = "../claymore-core" }
 claymore-device = { path = "../claymore-device" }
 claymore-scheduler = { path = "../claymore-scheduler" }
+claymore-tensor = { path = "../claymore-tensor" }
 thiserror.workspace = true
 
 [[test]]
 name = "hardware_cuda_memory"
 path = "tests/hardware_cuda_memory.rs"
+required-features = ["cuda-driver"]
+
+[[test]]
+name = "hardware_cuda_tensor"
+path = "tests/hardware_cuda_tensor.rs"
 required-features = ["cuda-driver"]

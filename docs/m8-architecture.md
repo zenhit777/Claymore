@@ -39,11 +39,11 @@ Ces opérations exigent des layouts contigus et un dtype F32. Elles ne convertis
 - [x] Layouts contigus/stridés, arithmétique de tailles vérifiée, Tensor propriétaire et TensorView empruntée.
 - [x] Retrait des définitions Tensor concurrentes de claymore-device.
 - [x] Opérations CPU F32 de référence : add, matmul, softmax, RMSNorm.
-- [ ] Contrats d'opérations formalisés (descripteurs, contraintes dtype/layout, aliasing et tolérances).
-- [ ] Dispatch explicite par capacités backend.
-- [ ] Allocation/sortie intégrée au memory orchestrator et au scheduler sans contourner leurs gardes.
-- [ ] Kernels CUDA équivalents et tests différentiels CPU/CUDA.
-- [ ] Validation RTX 5090 sur le SHA final.
+- [x] Contrats d'opérations formalisés (`contracts.rs` : descripteurs, contraintes dtype/layout/shape, aliasing en lecture seule + sortie fraîche, erreurs typées).
+- [x] Dispatch explicite par capacités backend (`TensorDispatcher` : sélection déterministe, explication de chaque refus, aucun fallback ni cast implicite).
+- [x] Allocation/sortie intégrée au memory orchestrator et au scheduler (`CudaTensorMemory`, `CudaMemoryManager::launch_tensor_op`, `CudaTensorComputeExecutor`) sans contourner budgets, gardes ni événements.
+- [x] Kernels CUDA F32 équivalents et tests différentiels CPU/CUDA (PTX `sm_120` intégré, 8 tests matériels).
+- [x] Validation RTX 5090 sur le SHA de code documenté dans `docs/audits/m8-rtx5090-hardware-validation.md`.
 - [ ] Inspection des graphes/checkpoints DiffusionGemma et Clover pour compléter le jeu d'opérations requis.
 
 ## Séquence restante de M8
@@ -54,6 +54,45 @@ Ces opérations exigent des layouts contigus et un dtype F32. Elles ne convertis
 4. Implémenter les kernels CUDA des opérations retenues, derrière la feature CUDA existante.
 5. Exécuter les tests différentiels, numériques, mémoire et de cycle de vie sur RTX 5090.
 6. Auditer les exigences réelles des graphes et checkpoints des deux modèles ; ajouter uniquement les primitives justifiées.
+
+## Réalisation M8 (PR #24)
+
+### Contrats et dispatch
+
+`claymore-tensor/src/contracts.rs` définit `TensorOp`, `OpKind`, `ShapeSignature`, `ValidatedOp`, `BackendCapabilities`, `OpSupport` et les erreurs typées `DispatchError` / `UnsupportedReason`. `TensorDispatcher::explain` évalue tous les backends enregistrés dans l'ordre d'inscription : le premier backend possédant une correspondance **exacte** de dtype, tier, layout, opération et règle d'aliasing est sélectionné ; chaque autre backend reçoit une décision `SELECT` ou `REFUSE` explicitée. `BackendPreference::Explicit` exige le backend nommé et échoue sans fallback si ses capacités ne correspondent pas.
+
+Les quatre opérations exigent F32, des layouts contigus, un seul device instance, une sortie fraîchement allouée et des entrées en lecture seule. Aucun casting, broadcasting, matérialisation de vue stridée, transfert Host implicite ou fallback CPU silencieux n'est autorisé. BF16 et FP16 ne sont **pas** déclarés supportés : les types existent dans `DType`, mais aucun chemin de calcul ni référence CPU n'est implémenté pour eux.
+
+### Backend CUDA et intégration mémoire
+
+`claymore-cuda` fournit `CudaComputeEngine` : chargement du module PTX via `cuModuleLoadData`, résolution des quatre symboles via `cuModuleGetFunction`, lancement via `cuLaunchKernel` sur un stream explicite du contexte primaire. Chaque lancement vérifie l'appartenance au même contexte (buffers, stream, module, events) et convertit les erreurs de compilation/chargement/lancement en `CudaError` typées. Il n'existe pas de deuxième type `Tensor` et aucune bibliothèque tensorielle tierce.
+
+`claymore-memory` possède le seul chemin d'allocation VRAM tensorielle : `CudaTensorMemory` passe exclusivement par `CudaMemoryManager::allocate_device`, donc par `MemoryOrchestrator` (budget souple 26 Gio, plafond dur 28 Gio, éviction, gardes en vol) et par la vérification de mémoire libre du driver. `launch_tensor_op` marque toutes les allocations touchées `IN_FLIGHT` avant le lancement, exécute le kernel sur l'unique stream de calcul, enregistre un CUDA event réel et publie un `TransferToken` repris par le tracker existant. `wait_for_transfer` synchronise cet event et ne lève les gardes qu'après confirmation ; un échec de lancement ou d'enregistrement laisse les gardes en place. `ManagedCudaBuffer::release` demande une libération backend réussie avant de retirer la comptabilité.
+
+`CudaTensorComputeExecutor` implémente `TaskExecutor` pour la file `Compute` : les tenseurs sont possédés par l'exécuteur, pas par le scheduler, qui ne manipule que des `TaskId`. La completion est signalée au `QueueRunner` uniquement après l'attente de l'event CUDA.
+
+### Stratégie PTX et compatibilité Blackwell
+
+Le code source des kernels est versionné dans `crates/claymore-cuda/kernels/m8_f32.cu` ; le PTX généré est versionné dans `crates/claymore-cuda/src/kernels/m8_f32.ptx` et inclus par `include_str!`. Le build par défaut et la CI ne nécessitent ni `nvcc` ni GPU. Régénération :
+
+```bash
+nvcc -arch=compute_120 -code=compute_120 -O3 -ptx \
+  -o crates/claymore-cuda/src/kernels/m8_f32.ptx \
+  crates/claymore-cuda/kernels/m8_f32.cu
+```
+
+La cible `sm_120` correspond à la compute capability 12.0 de la RTX 5090 (Blackwell). Le pilote doit prendre en charge le PTX 9.0 / CUDA 13+ (vérifié avec le driver 616.64 et CUDA UMD 13.4). Le JIT du driver compile le PTX à l'ouverture du module ; une incompatibilité est signalée par `CudaError::KernelModuleLoad`. Aucune architecture plus ancienne n'est revendiquée.
+
+### Tolérances numériques documentées
+
+| Opération | Tolérance CPU/CUDA | Justification |
+|---|---|---|
+| add | `atol = 1e-5`, `rtol = 1e-6` | même opération IEEE-754 F32 ; différence observée nulle |
+| matmul | `atol = 1e-3`, `rtol = 2e-5` | accumulation FMA sur `K` termes ; ordre des sommes identique, multiplication par des amplitudes jusqu'à `~1e3` |
+| softmax | `atol = 1e-6`, `rtol = 1e-5` | sorties dans `[0,1]` ; stabilité par soustraction du maximum et réduction en arbre |
+| rms_norm | `atol = 1e-5`, `rtol = 2e-5` | réduction en arbre de `sum(x²)` puis `sqrt`/division, contre réduction séquentielle CPU |
+
+Ces tolérances sont vérifiées par opération dans la campagne matérielle ; les écarts réellement observés sont consignés dans le rapport.
 
 ## Validation requise
 

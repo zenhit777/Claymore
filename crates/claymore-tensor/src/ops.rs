@@ -5,10 +5,14 @@ use thiserror::Error;
 
 use crate::{Tensor, TensorError, TensorLayout};
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum OpError {
     #[error("operation currently supports F32 tensors only")]
     UnsupportedDType,
+    #[error("operation inputs must use a single dtype")]
+    MixedDType,
+    #[error("operation inputs must belong to the same device instance")]
+    MixedDevices,
     #[error("operation requires contiguous tensor layouts")]
     NonContiguous,
     #[error("tensor shapes are incompatible for this operation")]
@@ -21,6 +25,11 @@ pub enum OpError {
     CpuReferenceRequiresHostBuffers,
     #[error("epsilon must be finite and non-negative")]
     InvalidEpsilon,
+    #[error("backend {backend} refused execution: {reason}")]
+    Backend {
+        backend: &'static str,
+        reason: String,
+    },
     #[error(transparent)]
     Tensor(#[from] TensorError),
     #[error(transparent)]

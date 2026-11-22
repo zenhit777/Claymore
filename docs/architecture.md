@@ -25,7 +25,8 @@ Les adaptateurs ne constituent pas des moteurs tensoriels ou runtimes autonomes 
 - claymore-scheduler : dépendances et ordonnancement des tâches.
 - claymore-runtime : cycle de vie et orchestration des requêtes.
 - claymore-model-gemma / claymore-model-clover : adaptateurs spécialisés.
-- claymore-cuda : backend CUDA optionnel, sans propriété des sémantiques Tensor.
+- claymore-cuda : backend CUDA optionnel, sans propriété des sémantiques Tensor ; il charge et lance les kernels F32 M8 via la Driver API dans le contexte primaire.
+- Le dispatch tensoriel est déterministe et backend-neutre : chaque refus est typé et expliqué ; aucun fallback CPU, cast ou transfert Host implicite n'est autorisé. Les sorties CUDA passent par le memory orchestrator et des events réels, le scheduler ne possédant que des identifiants de tâches.
 
 ## Invariants de sûreté
 

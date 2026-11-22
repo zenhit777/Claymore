@@ -46,6 +46,7 @@ dependencies = [
  "claymore-cuda",
  "claymore-device",
  "claymore-scheduler",
+ "claymore-tensor",
  "thiserror",
 ]
 

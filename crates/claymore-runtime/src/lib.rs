@@ -144,7 +144,7 @@ pub struct ExecutionContext<'a> {
     cancellation: CancellationToken,
 }
 
-impl<'a> ExecutionContext<'a> {
+impl ExecutionContext<'_> {
     pub const fn request_id(&self) -> RequestId {
         self.request_id
     }

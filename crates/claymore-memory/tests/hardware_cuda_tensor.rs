@@ -1,0 +1,540 @@
+//! Real RTX 5090 differential validation of the M8 CUDA tensor backend.
+//!
+//! These tests are ignored by default. They require the NVIDIA driver exposed
+//! in WSL2 and are never substituted by a CPU simulation. Run them with:
+//!
+//! ```text
+//! RUSTFLAGS="-L native=/usr/lib/wsl/lib" \
+//! LD_LIBRARY_PATH=/usr/lib/wsl/lib \
+//! cargo test -p claymore-memory --features cuda-driver \
+//!   --test hardware_cuda_tensor -- --ignored --test-threads=1 --nocapture
+//! ```
+
+use std::sync::{Mutex, MutexGuard};
+
+use claymore_core::MemoryTier;
+use claymore_device::{DType, Device};
+use claymore_memory::{
+    CudaTensorBackend, CudaTensorComputeExecutor, CudaTensorError, CudaTensorMemory,
+    CudaTensorTask, EvictionPolicy, MemoryBudgets,
+};
+use claymore_scheduler::{
+    ExecutionOutcome, QueueRunner, Scheduler, SchedulerConfig, TaskKind, TaskSpec,
+};
+use claymore_tensor::{
+    CpuReferenceBackend, DispatchError, ExecutionRequest, OpError, Tensor, TensorDispatcher,
+    TensorLayout, TensorOp,
+};
+
+static GPU_LOCK: Mutex<()> = Mutex::new(());
+
+fn serial() -> MutexGuard<'static, ()> {
+    GPU_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn budgets(vram_bytes: u64) -> MemoryBudgets {
+    MemoryBudgets {
+        vram_soft_bytes: (vram_bytes * 9) / 10,
+        vram_hard_bytes: vram_bytes,
+        host_bytes: 8 << 30,
+        pinned_host_bytes: 1 << 30,
+        expert_cache_target_bytes: (vram_bytes / 2).min(14 << 30),
+        expert_cache_max_bytes: (vram_bytes / 2 + 1).min(16 << 30),
+    }
+}
+
+fn memory() -> CudaTensorMemory {
+    CudaTensorMemory::new(0, budgets(24 << 30), EvictionPolicy::Lru).expect("CUDA memory owner")
+}
+
+fn values(seed: u32, len: usize, scale: f32) -> Vec<f32> {
+    let mut state = seed | 1;
+    (0..len)
+        .map(|index| {
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let magnitude = ((state >> 16) & 0x7ff) as f32 / 2048.0;
+            let sign = if (state >> 8) & 1 == 0 { 1.0 } else { -1.0 };
+            // A few large amplitudes are mixed in to exercise F32 range.
+            let boost = if index % 97 == 0 { 8.0 } else { 1.0 };
+            sign * magnitude * scale * boost
+        })
+        .collect()
+}
+
+fn cpu_values(backend: &CpuReferenceBackend, tensor: &Tensor) -> Vec<f32> {
+    backend
+        .device()
+        .read(
+            tensor.storage(),
+            tensor.offset_bytes(),
+            tensor.layout().span_bytes(),
+        )
+        .unwrap()
+        .chunks_exact(4)
+        .map(|chunk| f32::from_ne_bytes(chunk.try_into().unwrap()))
+        .collect()
+}
+
+fn assert_close(label: &str, expected: &[f32], actual: &[f32], atol: f32, rtol: f32) {
+    assert_eq!(expected.len(), actual.len(), "{label}: element count");
+    let mut max_abs = 0.0f32;
+    let mut worst = 0.0f32;
+    let mut worst_index = 0usize;
+    for (index, (want, got)) in expected.iter().zip(actual).enumerate() {
+        let difference = (want - got).abs();
+        let tolerance = atol + rtol * want.abs();
+        if difference > worst {
+            worst = difference;
+            worst_index = index;
+        }
+        max_abs = max_abs.max(difference);
+        assert!(
+            got.is_finite(),
+            "{label}: non-finite output at {index}: {got}"
+        );
+        assert!(
+            difference <= tolerance,
+            "{label}: index {index} expected {want}, got {got}, |diff|={difference}, tol={tolerance}"
+        );
+    }
+    println!(
+        "HW-M8 {label}: n={} max_abs_diff={max_abs:e} worst_index={worst_index} worst_diff={worst:e}",
+        expected.len()
+    );
+}
+
+#[test]
+#[ignore = "requires a CUDA driver, an RTX 5090 and real GPU kernels"]
+fn hw_m8_01_add_matches_cpu_for_multiple_shapes_and_signs() {
+    let _serial = serial();
+    let memory = memory();
+    let cpu = CpuReferenceBackend::new();
+    let dispatcher = TensorDispatcher::new(vec![
+        Box::new(CudaTensorBackend::new(&memory)),
+        Box::new(CpuReferenceBackend::with_device(cpu.device().clone())),
+    ]);
+
+    for (seed, shape, scale) in [
+        (1u32, vec![1usize], 1.0f32),
+        (2, vec![7], 1000.0),
+        (3, vec![2, 3], 0.01),
+        (4, vec![64, 257], 25.0),
+    ] {
+        let len = shape.iter().product();
+        let a = values(seed, len, scale);
+        let b = values(seed + 100, len, scale);
+        let cpu_a = cpu.tensor(shape.clone(), &a).unwrap();
+        let cpu_b = cpu.tensor(shape.clone(), &b).unwrap();
+        let gpu_a = memory.upload_f32(shape.clone(), &a).unwrap();
+        let gpu_b = memory.upload_f32(shape, &b).unwrap();
+        let expected = cpu_values(
+            &cpu,
+            &dispatcher
+                .execute(
+                    &ExecutionRequest::new(TensorOp::Add {
+                        lhs: &cpu_a,
+                        rhs: &cpu_b,
+                    })
+                    .on("cpu-reference-f32"),
+                )
+                .unwrap(),
+        );
+        let output = dispatcher
+            .execute(&ExecutionRequest::new(TensorOp::Add {
+                lhs: &gpu_a,
+                rhs: &gpu_b,
+            }))
+            .unwrap();
+        let actual = memory.download_f32(&output).unwrap();
+        assert_close(
+            &format!("add shape={:?}", output.layout().shape()),
+            &expected,
+            &actual,
+            1e-5,
+            1e-6,
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires a CUDA driver, an RTX 5090 and real GPU kernels"]
+fn hw_m8_02_matmul_matches_cpu_for_rank2_shapes() {
+    let _serial = serial();
+    let memory = memory();
+    let cpu = CpuReferenceBackend::new();
+    let dispatcher = TensorDispatcher::new(vec![
+        Box::new(CudaTensorBackend::new(&memory)),
+        Box::new(CpuReferenceBackend::with_device(cpu.device().clone())),
+    ]);
+
+    for (seed, m, k, n) in [
+        (11usize, 2usize, 3usize, 2usize),
+        (12, 16, 64, 32),
+        (13, 129, 17, 65),
+    ] {
+        let a = values(seed as u32, m * k, 3.0);
+        let b = values(seed as u32 + 200, k * n, 3.0);
+        let cpu_a = cpu.tensor(vec![m, k], &a).unwrap();
+        let cpu_b = cpu.tensor(vec![k, n], &b).unwrap();
+        let gpu_a = memory.upload_f32(vec![m, k], &a).unwrap();
+        let gpu_b = memory.upload_f32(vec![k, n], &b).unwrap();
+        let expected = cpu_values(
+            &cpu,
+            &dispatcher
+                .execute(
+                    &ExecutionRequest::new(TensorOp::MatMul {
+                        lhs: &cpu_a,
+                        rhs: &cpu_b,
+                    })
+                    .on("cpu-reference-f32"),
+                )
+                .unwrap(),
+        );
+        let output = dispatcher
+            .execute(&ExecutionRequest::new(TensorOp::MatMul {
+                lhs: &gpu_a,
+                rhs: &gpu_b,
+            }))
+            .unwrap();
+        let actual = memory.download_f32(&output).unwrap();
+        assert_eq!(output.layout().shape(), &[m, n]);
+        assert_close(
+            &format!("matmul {m}x{k}x{n}"),
+            &expected,
+            &actual,
+            1e-3,
+            2e-5,
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires a CUDA driver, an RTX 5090 and real GPU kernels"]
+fn hw_m8_03_softmax_is_stable_for_large_logits() {
+    let _serial = serial();
+    let memory = memory();
+    let cpu = CpuReferenceBackend::new();
+    let dispatcher = TensorDispatcher::new(vec![
+        Box::new(CudaTensorBackend::new(&memory)),
+        Box::new(CpuReferenceBackend::with_device(cpu.device().clone())),
+    ]);
+
+    for (seed, shape, scale) in [
+        (21u32, vec![1usize, 3usize], 1.0f32),
+        (22, vec![8, 257], 100.0),
+        (23, vec![1, 1024], 1000.0),
+        (24, vec![2, 3, 64], 500.0),
+    ] {
+        let len = shape.iter().product();
+        let mut logits = values(seed, len, scale);
+        logits[0] = 10_000.0;
+        logits[len - 1] = -10_000.0;
+        let cpu_input = cpu.tensor(shape.clone(), &logits).unwrap();
+        let gpu_input = memory.upload_f32(shape.clone(), &logits).unwrap();
+        let expected = cpu_values(
+            &cpu,
+            &dispatcher
+                .execute(
+                    &ExecutionRequest::new(TensorOp::SoftmaxLastDim { input: &cpu_input })
+                        .on("cpu-reference-f32"),
+                )
+                .unwrap(),
+        );
+        let output = dispatcher
+            .execute(&ExecutionRequest::new(TensorOp::SoftmaxLastDim {
+                input: &gpu_input,
+            }))
+            .unwrap();
+        let actual = memory.download_f32(&output).unwrap();
+        assert_close(
+            &format!("softmax shape={shape:?}"),
+            &expected,
+            &actual,
+            1e-6,
+            1e-5,
+        );
+        let width = *shape.last().unwrap();
+        for row in actual.chunks(width) {
+            let sum: f32 = row.iter().sum();
+            assert!((sum - 1.0).abs() < 1e-4, "softmax row sum {sum}");
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires a CUDA driver, an RTX 5090 and real GPU kernels"]
+fn hw_m8_04_rms_norm_matches_cpu_with_explicit_scale() {
+    let _serial = serial();
+    let memory = memory();
+    let cpu = CpuReferenceBackend::new();
+    let dispatcher = TensorDispatcher::new(vec![
+        Box::new(CudaTensorBackend::new(&memory)),
+        Box::new(CpuReferenceBackend::with_device(cpu.device().clone())),
+    ]);
+
+    for (seed, shape, epsilon, scale) in [
+        (31u32, vec![4usize], 0.0f32, 1.5f32),
+        (32, vec![6, 64], 1e-5, 0.25),
+        (33, vec![2, 1, 129], 1e-3, 2.0),
+    ] {
+        let len: usize = shape.iter().product();
+        let width = *shape.last().unwrap();
+        let input = values(seed, len, scale);
+        let weights: Vec<f32> = (0..width)
+            .map(|index| 0.25 + (index % 7) as f32 * 0.125)
+            .collect();
+        let cpu_input = cpu.tensor(shape.clone(), &input).unwrap();
+        let cpu_scale = cpu.tensor(vec![width], &weights).unwrap();
+        let gpu_input = memory.upload_f32(shape.clone(), &input).unwrap();
+        let gpu_scale = memory.upload_f32(vec![width], &weights).unwrap();
+        let expected = cpu_values(
+            &cpu,
+            &dispatcher
+                .execute(
+                    &ExecutionRequest::new(TensorOp::RmsNorm {
+                        input: &cpu_input,
+                        scale: &cpu_scale,
+                        epsilon,
+                    })
+                    .on("cpu-reference-f32"),
+                )
+                .unwrap(),
+        );
+        let output = dispatcher
+            .execute(&ExecutionRequest::new(TensorOp::RmsNorm {
+                input: &gpu_input,
+                scale: &gpu_scale,
+                epsilon,
+            }))
+            .unwrap();
+        let actual = memory.download_f32(&output).unwrap();
+        assert_close(
+            &format!("rms_norm shape={shape:?}"),
+            &expected,
+            &actual,
+            1e-5,
+            2e-5,
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires a CUDA driver, an RTX 5090 and real GPU kernels"]
+fn hw_m8_05_dispatch_refusals_and_typed_errors() {
+    let _serial = serial();
+    let memory = memory();
+    let cpu = CpuReferenceBackend::new();
+    let dispatcher = TensorDispatcher::new(vec![
+        Box::new(CudaTensorBackend::new(&memory)),
+        Box::new(CpuReferenceBackend::with_device(cpu.device().clone())),
+    ]);
+    let gpu_a = memory.upload_f32(vec![4], &[1.0, 2.0, 3.0, 4.0]).unwrap();
+    let gpu_b = memory.upload_f32(vec![4], &[4.0, 3.0, 2.0, 1.0]).unwrap();
+
+    let cpu_forced = ExecutionRequest::new(TensorOp::Add {
+        lhs: &gpu_a,
+        rhs: &gpu_b,
+    })
+    .on("cpu-reference-f32");
+    assert!(matches!(
+        dispatcher.plan(&cpu_forced),
+        Err(DispatchError::NoCapableBackend { .. })
+    ));
+
+    let report = dispatcher
+        .explain(&ExecutionRequest::new(TensorOp::Add {
+            lhs: &gpu_a,
+            rhs: &gpu_b,
+        }))
+        .unwrap();
+    let text = report.to_string();
+    assert!(text.contains("SELECT cuda-native-f32"), "{text}");
+    assert!(text.contains("REFUSE cpu-reference-f32"), "{text}");
+
+    let bf16 = memory.allocate_tensor(vec![4], DType::BF16);
+    assert!(matches!(bf16, Err(CudaTensorError::UnsupportedDType)));
+
+    let host = cpu.tensor(vec![4], &[1.0, 2.0, 3.0, 4.0]).unwrap();
+    let short = cpu.tensor(vec![2], &[1.0, 2.0]).unwrap();
+    let mismatch = ExecutionRequest::new(TensorOp::Add {
+        lhs: &host,
+        rhs: &short,
+    });
+    assert!(matches!(
+        dispatcher.plan(&mismatch),
+        Err(DispatchError::Contract(OpError::ShapeMismatch))
+    ));
+
+    let storage = cpu.device().allocate(MemoryTier::Host, 40).unwrap();
+    let strided = Tensor::with_layout(
+        storage,
+        TensorLayout::strided(vec![2, 2], vec![3, 1], DType::F32).unwrap(),
+        0,
+    )
+    .unwrap();
+    let non_contiguous = ExecutionRequest::new(TensorOp::SoftmaxLastDim { input: &strided });
+    assert!(matches!(
+        dispatcher.plan(&non_contiguous),
+        Err(DispatchError::Contract(OpError::NonContiguous))
+    ));
+}
+
+#[test]
+#[ignore = "requires a CUDA driver, an RTX 5090 and real GPU kernels"]
+fn hw_m8_06_allocation_accounting_lifetime_and_budget_guards() {
+    let _serial = serial();
+    let memory = memory();
+    let before = memory.usage_bytes(MemoryTier::Vram);
+    let a = memory
+        .upload_f32(vec![4096], &values(41, 4096, 1.0))
+        .unwrap();
+    let b = memory
+        .upload_f32(vec![4096], &values(42, 4096, 1.0))
+        .unwrap();
+    let after_inputs = memory.usage_bytes(MemoryTier::Vram);
+    assert_eq!(after_inputs - before, 2 * 4096 * 4);
+
+    let dispatcher = TensorDispatcher::new(vec![Box::new(CudaTensorBackend::new(&memory))]);
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::Add { lhs: &a, rhs: &b }))
+        .unwrap();
+    assert_eq!(memory.usage_bytes(MemoryTier::Vram) - before, 3 * 4096 * 4);
+    let actual = memory.download_f32(&output).unwrap();
+    assert_eq!(actual.len(), 4096);
+
+    drop(output);
+    assert_eq!(memory.usage_bytes(MemoryTier::Vram) - before, 2 * 4096 * 4);
+    drop(a);
+    drop(b);
+    assert_eq!(memory.usage_bytes(MemoryTier::Vram), before);
+
+    let snapshot = memory.snapshot(8 << 30, 4 << 30).unwrap();
+    assert!(snapshot.vram_total_bytes >= snapshot.vram_free_bytes);
+    println!(
+        "HW-M8 accounting: before={before} peak={} after={} vram_total={} vram_free={}",
+        after_inputs + 4096 * 4,
+        memory.usage_bytes(MemoryTier::Vram),
+        snapshot.vram_total_bytes,
+        snapshot.vram_free_bytes
+    );
+
+    let tight = CudaTensorMemory::new(0, budgets(8 << 10), EvictionPolicy::Lru).unwrap();
+    assert!(matches!(
+        tight.allocate_tensor(vec![100_000], DType::F32),
+        Err(CudaTensorError::Memory(_))
+    ));
+}
+
+#[test]
+#[ignore = "requires a CUDA driver, an RTX 5090 and real GPU kernels"]
+fn hw_m8_07_kernel_event_guards_and_explicit_wait() {
+    let _serial = serial();
+    let memory = memory();
+    let a = memory
+        .upload_f32(vec![32, 32], &values(51, 1024, 2.0))
+        .unwrap();
+    let b = memory
+        .upload_f32(vec![32, 32], &values(52, 1024, 2.0))
+        .unwrap();
+    let output = memory.allocate_tensor(vec![32, 32], DType::F32).unwrap();
+    let a_id = memory.buffer_id(&a).unwrap();
+    let b_id = memory.buffer_id(&b).unwrap();
+    let out_id = memory.buffer_id(&output).unwrap();
+
+    let inputs = [a_id.as_str(), b_id.as_str()];
+    let launch_tick = memory.tick();
+    let token = {
+        let mut manager = memory.manager_mut();
+        let op = TensorOp::Add { lhs: &a, rhs: &b };
+        manager
+            .launch_tensor_op(&op, &inputs, &out_id, launch_tick)
+            .expect("kernel launch")
+    };
+    {
+        let manager = memory.manager();
+        assert!(manager.allocation(&out_id).is_some());
+        let _ = manager.is_transfer_complete(&token).expect("event query");
+    }
+    let wait_tick = memory.tick();
+    {
+        let mut manager = memory.manager_mut();
+        manager
+            .wait_for_transfer(&token, wait_tick)
+            .expect("explicit event wait");
+    }
+    let actual = memory.download_f32(&output).unwrap();
+    let expected: Vec<f32> = values(51, 1024, 2.0)
+        .iter()
+        .zip(values(52, 1024, 2.0).iter())
+        .map(|(left, right)| left + right)
+        .collect();
+    assert_close("event-backed add", &expected, &actual, 1e-5, 1e-6);
+    println!(
+        "HW-M8 event guard: token={} allocations={:?}",
+        token.id(),
+        token.allocation_ids()
+    );
+}
+
+#[test]
+#[ignore = "requires a CUDA driver, an RTX 5090 and real GPU kernels"]
+fn hw_m8_08_scheduler_driven_compute_keeps_tensors_out_of_scheduler() {
+    let _serial = serial();
+    let memory = memory();
+    let a = memory
+        .upload_f32(vec![128, 128], &values(61, 16_384, 1.5))
+        .unwrap();
+    let b = memory
+        .upload_f32(vec![128, 128], &values(62, 16_384, 1.5))
+        .unwrap();
+
+    let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
+    let compute_id = scheduler.submit(TaskSpec::new(TaskKind::Compute)).unwrap();
+    let dependent_id = scheduler
+        .submit(TaskSpec::new(TaskKind::Compute).depends_on(compute_id))
+        .unwrap();
+    let mut runner = QueueRunner::new(TaskKind::Compute, CudaTensorComputeExecutor::new(&memory));
+    runner
+        .executor_mut()
+        .register(compute_id, CudaTensorTask::Add { lhs: a, rhs: b })
+        .unwrap();
+    runner
+        .executor_mut()
+        .register(
+            dependent_id,
+            CudaTensorTask::SoftmaxLastDim {
+                input: memory.upload_f32(vec![4], &[0.0, 1.0, 2.0, 3.0]).unwrap(),
+            },
+        )
+        .unwrap();
+
+    assert_eq!(
+        runner.run_one(&mut scheduler).unwrap(),
+        ExecutionOutcome::Completed(compute_id)
+    );
+    assert_eq!(
+        scheduler.task(dependent_id).unwrap().state,
+        claymore_scheduler::TaskState::Ready
+    );
+    assert_eq!(
+        runner.run_one(&mut scheduler).unwrap(),
+        ExecutionOutcome::Completed(dependent_id)
+    );
+
+    let output = runner
+        .executor_mut()
+        .take_result(compute_id)
+        .expect("scheduler executor returns the completed tensor");
+    let actual = memory.download_f32(&output).unwrap();
+    let expected: Vec<f32> = values(61, 16_384, 1.5)
+        .iter()
+        .zip(values(62, 16_384, 1.5).iter())
+        .map(|(left, right)| left + right)
+        .collect();
+    assert_close("scheduler-driven add", &expected, &actual, 1e-5, 1e-6);
+    assert_eq!(runner.executor().pending_results(), 1);
+    assert_eq!(runner.executor().pending_operations(), 0);
+    println!("HW-M8 scheduler: completed={compute_id:?} dependent={dependent_id:?}");
+}

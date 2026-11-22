@@ -13,8 +13,10 @@ use crate::{
 };
 use claymore_core::MemoryTier;
 use claymore_cuda::{
-    CudaDeviceBuffer, CudaDriver, CudaError, CudaEvent, CudaStream, PinnedHostBuffer,
+    CudaComputeEngine, CudaDeviceBuffer, CudaDriver, CudaError, CudaEvent, CudaStream,
+    PinnedHostBuffer,
 };
+use claymore_tensor::TensorOp;
 
 const IN_FLIGHT: u64 = crate::lifecycle::IN_FLIGHT_TICK;
 static NEXT_TRANSFER_ID: AtomicU64 = AtomicU64::new(1);
@@ -79,6 +81,12 @@ pub enum CudaMemoryError {
     TransferIdExhausted,
     #[error("CUDA transfer token {0} is not owned by this manager")]
     UnknownTransferToken(u64),
+    #[error(transparent)]
+    Tensor(#[from] claymore_tensor::OpError),
+    #[error("tensor launch inputs do not match the operation descriptor")]
+    TensorInputMismatch,
+    #[error("compute output allocation is missing from the VRAM map")]
+    ComputeOutputMissing,
 }
 
 /// Private operation boundary for event lifecycle. Production delegates to
@@ -270,6 +278,11 @@ pub struct CudaMemoryManager {
     manager_id: u64,
     driver: CudaDriver,
     transfer_stream: CudaStream,
+    /// The single compute stream reserved by the hardware profile. It is kept
+    /// separate from the DMA stream so kernel work never uses the legacy
+    /// default stream and never implicitly synchronizes with transfers.
+    compute_stream: CudaStream,
+    compute_engine: CudaComputeEngine,
     transfers: CudaTransferTracker<CudaEvent>,
     device: HashMap<String, CudaDeviceBuffer>,
     pinned: HashMap<String, PinnedHostBuffer>,
@@ -286,11 +299,15 @@ impl CudaMemoryManager {
         let manager_id = allocate_transfer_id()?;
         let driver = CudaDriver::new(ordinal)?;
         let transfer_stream = driver.create_stream()?;
+        let compute_stream = driver.create_stream()?;
+        let compute_engine = driver.create_compute_engine()?;
         let policy = MemoryOrchestrator::new(budgets, eviction)?;
         Ok(Self {
             manager_id,
             driver,
             transfer_stream,
+            compute_stream,
+            compute_engine,
             transfers: CudaTransferTracker {
                 policy,
                 pending: Vec::new(),
@@ -334,6 +351,11 @@ impl CudaMemoryManager {
 
     pub fn usage_bytes(&self, tier: MemoryTier) -> u64 {
         self.transfers.policy.usage_bytes(tier)
+    }
+
+    /// Policy accounting entry for one managed allocation, if it is live.
+    pub fn allocation(&self, id: &str) -> Option<&Allocation> {
+        self.transfers.policy.allocation(id)
     }
 
     /// Store an observed/estimated reload cost for adaptive eviction.
@@ -621,6 +643,116 @@ impl CudaMemoryManager {
         })
     }
 
+    /// Enqueue one native CUDA kernel for a validated M8 tensor operation.
+    ///
+    /// Output allocation has already gone through `allocate_device` (and thus
+    /// through the memory policy). Every touched allocation is marked in flight
+    /// before the launch and is protected by a real CUDA event recorded on the
+    /// dedicated compute stream. The returned token must be waited on with
+    /// `wait_for_transfer` before the caller may read, release or evict any of
+    /// those allocations. A launch/event failure leaves the guards in place.
+    pub fn launch_tensor_op(
+        &mut self,
+        op: &TensorOp<'_>,
+        input_ids: &[&str],
+        output_id: &str,
+        tick: u64,
+    ) -> Result<TransferToken, CudaMemoryError> {
+        self.advance_tick(tick)?;
+        op.validate()?;
+        let inputs = op.inputs();
+        if input_ids.len() != inputs.len() {
+            return Err(CudaMemoryError::TensorInputMismatch);
+        }
+        if !self.device.contains_key(output_id) {
+            return Err(CudaMemoryError::ComputeOutputMissing);
+        }
+        let mut allocation_ids: Vec<String> = input_ids.iter().map(|id| (*id).to_owned()).collect();
+        allocation_ids.push(output_id.to_owned());
+        let mut pointers = Vec::with_capacity(allocation_ids.len());
+        for id in &allocation_ids {
+            let buffer = self
+                .device
+                .get(id)
+                .ok_or_else(|| CudaMemoryError::UnknownAllocation(id.clone()))?;
+            pointers.push(buffer.device_ptr());
+        }
+
+        let shapes = op.shape_signature();
+        for id in &allocation_ids {
+            self.transfers.policy.mark_in_flight_until(id, IN_FLIGHT)?;
+        }
+
+        let engine = &self.compute_engine;
+        let stream = &self.compute_stream;
+        let output_ptr = pointers[pointers.len() - 1];
+        let launch = match shapes {
+            claymore_tensor::ShapeSignature::Elementwise { numel } => {
+                engine.add(pointers[0], pointers[1], output_ptr, numel, stream)
+            }
+            claymore_tensor::ShapeSignature::MatMul { m, k, n } => {
+                engine.matmul(pointers[0], pointers[1], output_ptr, m, k, n, stream)
+            }
+            claymore_tensor::ShapeSignature::LastDim {
+                rows,
+                width,
+                epsilon,
+            } => match epsilon {
+                Some(value) => engine.rms_norm(
+                    pointers[0],
+                    pointers[1],
+                    output_ptr,
+                    rows,
+                    width,
+                    value,
+                    stream,
+                ),
+                None => engine.softmax_last_dim(pointers[0], output_ptr, rows, width, stream),
+            },
+        };
+        if let Err(error) = launch {
+            // Guards remain IN_FLIGHT: a failed launch may still have enqueued
+            // work, so no allocation may be released or evicted.
+            return Err(error.into());
+        }
+
+        let transfer_id = allocate_transfer_id()?;
+        let event = self.driver.create_event()?;
+        if let Err(error) = event.record(&self.compute_stream) {
+            match synchronize_stream(&self.compute_stream) {
+                Ok(()) => {
+                    for id in &allocation_ids {
+                        self.transfers.policy.mark_in_flight_until(id, tick)?;
+                    }
+                    return Err(error.into());
+                }
+                Err(sync_error) => {
+                    self.poisoned = true;
+                    for id in &allocation_ids {
+                        self.transfers.policy.mark_in_flight_until(id, IN_FLIGHT)?;
+                    }
+                    return Err(sync_error.into());
+                }
+            }
+        }
+        self.transfers.pending.push(PendingTransfer {
+            id: transfer_id,
+            allocation_ids: allocation_ids.clone(),
+            event,
+            completed: Arc::new(AtomicBool::new(false)),
+        });
+        let completed = Arc::clone(&self.transfers.pending.last().unwrap().completed);
+        for id in &allocation_ids {
+            self.transfers.policy.touch(id, tick)?;
+        }
+        Ok(TransferToken {
+            manager_id: self.manager_id,
+            id: transfer_id,
+            allocation_ids,
+            completed,
+        })
+    }
+
     /// Poll every pending transfer without blocking and retire only events
     /// that CUDA positively reports as complete.
     ///
@@ -782,7 +914,8 @@ impl Drop for CudaMemoryManager {
         // every operation enqueued on it has completed. Older events in
         // `pending` cannot prove completion of a later copy whose event record
         // failed, so never use them as a fallback.
-        let safe_to_drop = synchronize_stream(&self.transfer_stream).is_ok();
+        let safe_to_drop = synchronize_stream(&self.transfer_stream).is_ok()
+            && synchronize_stream(&self.compute_stream).is_ok();
         if safe_to_drop {
             for transfer in self.transfers.pending.drain(..) {
                 transfer.completed.store(true, Ordering::Release);

@@ -5,7 +5,14 @@
 //! released only through the backend's explicit, fallible contract.
 use claymore_device::{DType, DeviceBuffer, DeviceError};
 
+pub mod contracts;
 pub mod ops;
+pub use contracts::{
+    AliasRule, BackendCapabilities, BackendDecision, BackendPreference, CpuReferenceBackend,
+    DispatchError, DispatchPlan, DispatchReport, ExecutionError, ExecutionRequest,
+    LayoutRequirement, OpKind, OpSupport, ShapeSignature, TensorComputeBackend, TensorDispatcher,
+    TensorOp, UnsupportedReason, ValidatedOp,
+};
 pub use ops::{add, matmul, rms_norm, softmax_last_dim, OpError};
 use thiserror::Error;
 

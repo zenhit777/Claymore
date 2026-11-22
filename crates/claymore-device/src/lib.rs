@@ -21,6 +21,13 @@ static NEXT_DEVICE_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 pub struct DeviceInstanceId(u64);
 
 impl DeviceInstanceId {
+    /// Allocate a fresh process-local identity. Used by backend adapters that
+    /// own resources outside a `Device` implementation but still need to
+    /// attest buffer/device ownership through the shared contract.
+    pub fn new() -> Self {
+        Self::next()
+    }
+
     fn next() -> Self {
         let mut current = NEXT_DEVICE_INSTANCE_ID.load(Ordering::Relaxed);
         loop {
@@ -37,6 +44,12 @@ impl DeviceInstanceId {
                 Err(observed) => current = observed,
             }
         }
+    }
+}
+
+impl Default for DeviceInstanceId {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

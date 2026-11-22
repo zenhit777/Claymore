@@ -549,7 +549,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
 | M7 | Scheduler et orchestration mémoire | **Livré sur `main` par la PR #21** |
 | M7.1 | Durcissement scheduler/runtime et préparation M8 | **Livré sur `main` par la PR #22** ; CI verte ; revalidation RTX 5090 réussie au SHA de code `c16e925` (17/17 requis par campagne, deux campagnes ; 27/27 tests workspace par campagne) ; limites restantes suivies dans l'issue #23 |
-| M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **En cours — consolidation Tensor et premières opérations CPU dans la PR #24** |
+| M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **Livré dans la PR #24** — Tensor canonique, contrats, dispatch, kernels CUDA F32, intégration mémoire/scheduler ; preuve matérielle RTX 5090 versionnée |
 | M9 | Orchestration de diffusion modulaire commune | Planifié |
 | M10 | Adaptateur et intégration DiffusionGemma | Planifié |
 | M11 | Adaptateur et intégration Clover | Planifié |
@@ -703,7 +703,7 @@ Critères d'acceptation :
 
 **Objectif :** livrer un seul modèle Tensor natif, les opérations de référence, le dispatch explicite et les backends CPU/CUDA qui serviront à l'orchestration de diffusion et aux deux adaptateurs. M8 ne développe aucune stratégie autoregressive ni boucle de génération de modèle.
 
-**État :** en cours dans la PR #24. Le crate claymore-tensor porte désormais les layouts validés, le Tensor propriétaire, les vues empruntées et les opérations CPU F32 de référence (add, matmul, softmax, RMSNorm). Les définitions Tensor concurrentes ont été retirées de claymore-device. Les contrats d'opérations complets, le dispatch, l'intégration mémoire/scheduler, les kernels CUDA et la validation RTX 5090 restent à livrer.
+**État :** livré dans la PR #24 sous réserve de la validation matérielle documentée séparément. Le crate claymore-tensor porte le Tensor canonique, les layouts validés, les vues empruntées, les opérations CPU F32 de référence (add, matmul, softmax, RMSNorm), les contrats typés (`contracts.rs`) et le dispatch déterministe avec explication de chaque refus. Les définitions Tensor concurrentes ont été retirées de claymore-device. Les quatre kernels CUDA F32 sont intégrés via une feature optionnelle, avec PTX `sm_120` versionné, chargement par la Driver API, event de complétion réel et intégration aux budgets/gardes de claymore-memory et aux files du scheduler. Le détail figure dans [m8-architecture.md](m8-architecture.md) et dans le [rapport de validation RTX 5090](audits/m8-rtx5090-hardware-validation.md). BF16/FP16 ne sont pas supportés dans M8 (aucun chemin de calcul validé). L'inspection des graphes DiffusionGemma/Clover pour sélectionner des primitives supplémentaires reste hors de cette tranche.
 
 Travaux :
 - finaliser les contrats Tensor, layouts, vues, aliasing et durée de vie ;
