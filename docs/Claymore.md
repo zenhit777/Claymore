@@ -423,8 +423,7 @@ La limite `max_payload_bytes` porte explicitement sur les seuls octets du payloa
 La tranche M6 n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâches, ne charge pas de modèle et n'effectue aucun calcul tensoriel. Elle est validée par des tests CPU.
 
  - exécution concurrente/asynchrone des requêtes, stratégie de génération concrète et intégration de modèles dans le runtime (extensions futures de M6/M8+) ;
-- adaptateur CUDA spécifique injectable et tests du cycle de vie CUDA avec backend simulé (différés dans l'issue #19) ;
-- pool allocator VRAM, réutilisation de blocs et défragmentation ;
+- pool allocator VRAM, réutilisation de blocs et défragmentation (hors périmètre M7.1) ;
 - intégration des tâches Transfer/Prefetch au scheduler M7 : livrée dans la première tranche, avec exécution synchrone sur le thread propriétaire ;
 - prefetch prédictif intégré au cache d'experts ;
 - télémétrie consolidée CPU/RAM/VRAM/transferts ;
