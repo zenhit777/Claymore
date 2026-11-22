@@ -560,7 +560,8 @@ pub use cuda::{CudaMemoryError, CudaMemoryManager, TransferToken};
 mod cuda_tensor;
 #[cfg(feature = "cuda-driver")]
 pub use cuda_tensor::{
-    CudaTensorBackend, CudaTensorComputeExecutor, CudaTensorError, CudaTensorMemory, CudaTensorTask,
+    CudaTensorBackend, CudaTensorComputeExecutor, CudaTensorError, CudaTensorMemory,
+    CudaTensorTask, CUDA_BACKEND_NAME,
 };
 
 #[cfg(test)]

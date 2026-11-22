@@ -16,7 +16,8 @@ use claymore_cuda::{
     CudaComputeEngine, CudaDeviceBuffer, CudaDriver, CudaError, CudaEvent, CudaStream,
     PinnedHostBuffer,
 };
-use claymore_tensor::TensorOp;
+use claymore_device::DType;
+use claymore_tensor::{OpError, TensorOp};
 
 const IN_FLIGHT: u64 = crate::lifecycle::IN_FLIGHT_TICK;
 static NEXT_TRANSFER_ID: AtomicU64 = AtomicU64::new(1);
@@ -659,7 +660,7 @@ impl CudaMemoryManager {
         tick: u64,
     ) -> Result<TransferToken, CudaMemoryError> {
         self.advance_tick(tick)?;
-        op.validate()?;
+        let validated = op.validate()?;
         let inputs = op.inputs();
         if input_ids.len() != inputs.len() {
             return Err(CudaMemoryError::TensorInputMismatch);
@@ -686,18 +687,29 @@ impl CudaMemoryManager {
         let engine = &self.compute_engine;
         let stream = &self.compute_stream;
         let output_ptr = pointers[pointers.len() - 1];
-        let launch = match shapes {
-            claymore_tensor::ShapeSignature::Elementwise { numel } => {
+        // Dispatch is exact on both dtype and shape signature. There is no
+        // cross-dtype launch path: BF16 uses its own kernels, F32 keeps its own.
+        let launch = match (validated.dtype, shapes) {
+            (DType::F32, claymore_tensor::ShapeSignature::Elementwise { numel }) => {
                 engine.add(pointers[0], pointers[1], output_ptr, numel, stream)
             }
-            claymore_tensor::ShapeSignature::MatMul { m, k, n } => {
+            (DType::BF16, claymore_tensor::ShapeSignature::Elementwise { numel }) => {
+                engine.add_bf16(pointers[0], pointers[1], output_ptr, numel, stream)
+            }
+            (DType::F32, claymore_tensor::ShapeSignature::MatMul { m, k, n }) => {
                 engine.matmul(pointers[0], pointers[1], output_ptr, m, k, n, stream)
             }
-            claymore_tensor::ShapeSignature::LastDim {
-                rows,
-                width,
-                epsilon,
-            } => match epsilon {
+            (DType::BF16, claymore_tensor::ShapeSignature::MatMul { m, k, n }) => {
+                engine.matmul_bf16(pointers[0], pointers[1], output_ptr, m, k, n, stream)
+            }
+            (
+                DType::F32,
+                claymore_tensor::ShapeSignature::LastDim {
+                    rows,
+                    width,
+                    epsilon,
+                },
+            ) => match epsilon {
                 Some(value) => engine.rms_norm(
                     pointers[0],
                     pointers[1],
@@ -709,6 +721,28 @@ impl CudaMemoryManager {
                 ),
                 None => engine.softmax_last_dim(pointers[0], output_ptr, rows, width, stream),
             },
+            (
+                DType::BF16,
+                claymore_tensor::ShapeSignature::LastDim {
+                    rows,
+                    width,
+                    epsilon,
+                },
+            ) => match epsilon {
+                Some(value) => engine.rms_norm_bf16(
+                    pointers[0],
+                    pointers[1],
+                    output_ptr,
+                    rows,
+                    width,
+                    value,
+                    stream,
+                ),
+                None => engine.softmax_last_dim_bf16(pointers[0], output_ptr, rows, width, stream),
+            },
+            (_dtype, _) => {
+                return Err(CudaMemoryError::Tensor(OpError::UnsupportedDType));
+            }
         };
         if let Err(error) = launch {
             // Guards remain IN_FLIGHT: a failed launch may still have enqueued

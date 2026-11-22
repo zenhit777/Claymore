@@ -5,8 +5,10 @@
 //! released only through the backend's explicit, fallible contract.
 use claymore_device::{DType, DeviceBuffer, DeviceError};
 
+pub mod bf16;
 pub mod contracts;
 pub mod ops;
+pub use bf16::Bf16;
 pub use contracts::{
     AliasRule, BackendCapabilities, BackendDecision, BackendPreference, CpuReferenceBackend,
     DispatchError, DispatchPlan, DispatchReport, ExecutionError, ExecutionRequest,
@@ -329,5 +331,27 @@ mod tests {
         let layout = TensorLayout::strided(vec![2, 2], vec![3, 1], DType::F32).unwrap();
         assert!(!layout.is_contiguous());
         assert_eq!(layout.span_bytes(), 20);
+    }
+
+    #[test]
+    fn bf16_storage_uses_two_bytes_per_element_and_releases_explicitly() {
+        let device = CpuDevice::new();
+        let mut storage = device.allocate(MemoryTier::Host, 16).unwrap();
+        let patterns = [0x3F80u16, 0xBF80, 0x0001, 0x8000];
+        let bytes: Vec<u8> = patterns
+            .iter()
+            .flat_map(|bits| bits.to_ne_bytes())
+            .collect();
+        device.write(storage.as_mut(), 0, &bytes).unwrap();
+        let tensor = Tensor::new(storage, vec![2, 2], DType::BF16).unwrap();
+        assert_eq!(DType::BF16.element_size_bytes(), 2);
+        assert_eq!(tensor.layout().numel(), 4);
+        assert_eq!(tensor.layout().span_bytes(), 8);
+        assert_eq!(device.read(tensor.storage(), 0, 8).unwrap(), bytes);
+
+        let mut owned = tensor.into_storage();
+        owned.release().unwrap();
+        assert_eq!(owned.len(), 0);
+        assert_eq!(owned.release(), Err(DeviceError::BufferReleased));
     }
 }

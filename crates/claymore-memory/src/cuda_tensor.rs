@@ -18,12 +18,15 @@ use claymore_cuda::CudaDeviceInfo;
 use claymore_device::{DType, DeviceBuffer, DeviceError, DeviceInstanceId};
 use claymore_scheduler::{TaskExecutor, TaskId, TaskKind, TaskSnapshot};
 use claymore_tensor::{
-    AliasRule, BackendCapabilities, LayoutRequirement, OpError, OpKind, OpSupport, Tensor,
+    AliasRule, BackendCapabilities, Bf16, LayoutRequirement, OpError, OpKind, OpSupport, Tensor,
     TensorComputeBackend, TensorLayout, TensorOp,
 };
 use thiserror::Error;
 
 use crate::{CudaMemoryError, CudaMemoryManager, EvictionPolicy, MemoryBudgets, MemorySnapshot};
+
+/// Dtype-neutral backend identifier used in dispatch plans and error messages.
+pub const CUDA_BACKEND_NAME: &str = "cuda-native";
 
 #[derive(Debug, Error)]
 pub enum CudaTensorError {
@@ -33,7 +36,9 @@ pub enum CudaTensorError {
     Tensor(#[from] claymore_tensor::TensorError),
     #[error(transparent)]
     Op(#[from] OpError),
-    #[error("only F32 tensors are implemented on the CUDA backend")]
+    #[error(
+        "only F32 and BF16 tensors are implemented on the CUDA backend (FP16 is not supported)"
+    )]
     UnsupportedDType,
     #[error("tensor storage is not a CUDA-managed buffer")]
     ForeignBuffer,
@@ -143,12 +148,14 @@ impl CudaTensorMemory {
     }
 
     /// Allocate a fresh VRAM-backed tensor through the memory policy.
+    /// F32 (4 bytes/element) and BF16 (2 bytes/element) are supported;
+    /// FP16 and metadata-only dtypes are explicitly refused.
     pub fn allocate_tensor(
         &self,
         shape: Vec<usize>,
         dtype: DType,
     ) -> Result<Tensor, CudaTensorError> {
-        if dtype != DType::F32 {
+        if !matches!(dtype, DType::F32 | DType::BF16) {
             return Err(CudaTensorError::UnsupportedDType);
         }
         let layout = TensorLayout::contiguous(shape, dtype)?;
@@ -179,44 +186,85 @@ impl CudaTensorMemory {
             .iter()
             .flat_map(|value| value.to_ne_bytes())
             .collect();
-        let host_id = self.inner.id("h2d");
-        let byte_len =
-            u64::try_from(bytes.len()).map_err(|_| CudaMemoryError::ZeroSizedAllocation)?;
-        {
-            let mut manager = self.inner.manager.borrow_mut();
-            manager.allocate_pinned(host_id.clone(), byte_len, self.inner.tick())?;
-            manager.write_pinned(&host_id, 0, &bytes, self.inner.tick())?;
-            let device_id = managed(&tensor)?.id.clone();
-            let token = manager.copy_h2d(&host_id, &device_id, bytes.len(), self.inner.tick())?;
-            manager.wait_for_transfer(&token, self.inner.tick())?;
-            manager.release(&host_id, self.inner.tick())?;
-        }
+        self.upload_bytes(&tensor, &bytes)?;
         Ok(tensor)
     }
 
     /// Read tensor values back through pinned staging. The D2H event is waited
     /// on before the bytes are returned.
     pub fn download_f32(&self, tensor: &Tensor) -> Result<Vec<f32>, CudaTensorError> {
-        let buffer = managed(tensor)?;
-        let byte_len = tensor.layout().span_bytes();
-        let host_id = self.inner.id("d2h");
-        let bytes = {
-            let mut manager = self.inner.manager.borrow_mut();
-            manager.allocate_pinned(
-                host_id.clone(),
-                u64::try_from(byte_len).map_err(|_| CudaMemoryError::ZeroSizedAllocation)?,
-                self.inner.tick(),
-            )?;
-            let token = manager.copy_d2h(&buffer.id, &host_id, byte_len, self.inner.tick())?;
-            manager.wait_for_transfer(&token, self.inner.tick())?;
-            let bytes = manager.read_pinned(&host_id, 0, byte_len, self.inner.tick())?;
-            manager.release(&host_id, self.inner.tick())?;
-            bytes
-        };
+        if tensor.layout().dtype() != DType::F32 {
+            return Err(CudaTensorError::UnsupportedDType);
+        }
+        let bytes = self.download_bytes(tensor)?;
         Ok(bytes
             .chunks_exact(4)
             .map(|chunk| f32::from_ne_bytes(chunk.try_into().expect("four-byte f32 chunk")))
             .collect())
+    }
+
+    /// Upload explicit BF16 values through pinned staging and a real H2D event.
+    /// The 16-bit patterns are written verbatim: no FP32 conversion occurs on
+    /// the host side of the transfer.
+    pub fn upload_bf16(
+        &self,
+        shape: Vec<usize>,
+        values: &[Bf16],
+    ) -> Result<Tensor, CudaTensorError> {
+        let tensor = self.allocate_tensor(shape, DType::BF16)?;
+        if values.len() != tensor.layout().numel() {
+            return Err(CudaTensorError::ValueCountMismatch);
+        }
+        let bytes: Vec<u8> = values
+            .iter()
+            .flat_map(|value| value.to_ne_bytes())
+            .collect();
+        self.upload_bytes(&tensor, &bytes)?;
+        Ok(tensor)
+    }
+
+    /// Read BF16 patterns back through pinned staging. The D2H event is waited
+    /// on before the bytes are returned and reinterpreted as 16-bit values.
+    pub fn download_bf16(&self, tensor: &Tensor) -> Result<Vec<Bf16>, CudaTensorError> {
+        if tensor.layout().dtype() != DType::BF16 {
+            return Err(CudaTensorError::UnsupportedDType);
+        }
+        let bytes = self.download_bytes(tensor)?;
+        Ok(bytes
+            .chunks_exact(2)
+            .map(|chunk| Bf16::from_ne_bytes(chunk.try_into().expect("two-byte bf16 chunk")))
+            .collect())
+    }
+
+    fn upload_bytes(&self, tensor: &Tensor, bytes: &[u8]) -> Result<(), CudaTensorError> {
+        let host_id = self.inner.id("h2d");
+        let byte_len =
+            u64::try_from(bytes.len()).map_err(|_| CudaMemoryError::ZeroSizedAllocation)?;
+        let mut manager = self.inner.manager.borrow_mut();
+        manager.allocate_pinned(host_id.clone(), byte_len, self.inner.tick())?;
+        manager.write_pinned(&host_id, 0, bytes, self.inner.tick())?;
+        let device_id = managed(tensor)?.id.clone();
+        let token = manager.copy_h2d(&host_id, &device_id, bytes.len(), self.inner.tick())?;
+        manager.wait_for_transfer(&token, self.inner.tick())?;
+        manager.release(&host_id, self.inner.tick())?;
+        Ok(())
+    }
+
+    fn download_bytes(&self, tensor: &Tensor) -> Result<Vec<u8>, CudaTensorError> {
+        let buffer = managed(tensor)?;
+        let byte_len = tensor.layout().span_bytes();
+        let host_id = self.inner.id("d2h");
+        let mut manager = self.inner.manager.borrow_mut();
+        manager.allocate_pinned(
+            host_id.clone(),
+            u64::try_from(byte_len).map_err(|_| CudaMemoryError::ZeroSizedAllocation)?,
+            self.inner.tick(),
+        )?;
+        let token = manager.copy_d2h(&buffer.id, &host_id, byte_len, self.inner.tick())?;
+        manager.wait_for_transfer(&token, self.inner.tick())?;
+        let bytes = manager.read_pinned(&host_id, 0, byte_len, self.inner.tick())?;
+        manager.release(&host_id, self.inner.tick())?;
+        Ok(bytes)
     }
 }
 
@@ -289,7 +337,7 @@ fn managed(tensor: &Tensor) -> Result<&ManagedCudaBuffer, CudaTensorError> {
         .ok_or(CudaTensorError::ForeignBuffer)
 }
 
-const CUDA_F32_OPS: [OpSupport; 4] = [
+const CUDA_OPS: [OpSupport; 8] = [
     OpSupport {
         kind: OpKind::Add,
         dtype: DType::F32,
@@ -322,6 +370,38 @@ const CUDA_F32_OPS: [OpSupport; 4] = [
         layout: LayoutRequirement::Contiguous,
         alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
     },
+    OpSupport {
+        kind: OpKind::Add,
+        dtype: DType::BF16,
+        input_tier: MemoryTier::Vram,
+        output_tier: MemoryTier::Vram,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::MatMul,
+        dtype: DType::BF16,
+        input_tier: MemoryTier::Vram,
+        output_tier: MemoryTier::Vram,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::SoftmaxLastDim,
+        dtype: DType::BF16,
+        input_tier: MemoryTier::Vram,
+        output_tier: MemoryTier::Vram,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::RmsNorm,
+        dtype: DType::BF16,
+        input_tier: MemoryTier::Vram,
+        output_tier: MemoryTier::Vram,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
 ];
 
 /// Native CUDA backend for the M8 operation set. It never reads host bytes
@@ -343,16 +423,16 @@ impl CudaTensorBackend {
 impl TensorComputeBackend for CudaTensorBackend {
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
-            name: "cuda-native-f32",
+            name: CUDA_BACKEND_NAME,
             device_kind: claymore_device::DeviceKind::Cuda,
-            supported_ops: &CUDA_F32_OPS,
+            supported_ops: &CUDA_OPS,
         }
     }
 
     fn execute(&self, op: &TensorOp<'_>) -> Result<Tensor, OpError> {
         let validated = op.validate()?;
         let backend_error = |error: CudaTensorError| OpError::Backend {
-            backend: "cuda-native-f32",
+            backend: CUDA_BACKEND_NAME,
             reason: error.to_string(),
         };
         let mut input_ids = Vec::with_capacity(op.inputs().len());
@@ -365,7 +445,7 @@ impl TensorComputeBackend for CudaTensorBackend {
         }
         let output = self
             .memory
-            .allocate_tensor(validated.shape, DType::F32)
+            .allocate_tensor(validated.shape, validated.dtype)
             .map_err(backend_error)?;
         let output_id = managed(&output).map_err(backend_error)?.id.clone();
         let input_refs: Vec<&str> = input_ids.iter().map(String::as_str).collect();
@@ -500,24 +580,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cuda_capabilities_declare_only_implemented_f32_vram_ops() {
-        assert_eq!(CUDA_F32_OPS.len(), 4);
-        for support in CUDA_F32_OPS {
-            assert_eq!(support.dtype, DType::F32);
+    fn cuda_capabilities_declare_only_implemented_f32_and_bf16_vram_ops() {
+        assert_eq!(CUDA_OPS.len(), 8);
+        for support in CUDA_OPS {
+            assert!(matches!(support.dtype, DType::F32 | DType::BF16));
             assert_eq!(support.input_tier, MemoryTier::Vram);
             assert_eq!(support.output_tier, MemoryTier::Vram);
             assert_eq!(support.layout, LayoutRequirement::Contiguous);
             assert_eq!(support.alias_rule, AliasRule::ReadOnlyInputsFreshOutput);
         }
-        let kinds: Vec<OpKind> = CUDA_F32_OPS.iter().map(|support| support.kind).collect();
-        assert_eq!(
-            kinds,
-            vec![
-                OpKind::Add,
-                OpKind::MatMul,
-                OpKind::SoftmaxLastDim,
-                OpKind::RmsNorm
-            ]
-        );
+        for dtype in [DType::F32, DType::BF16] {
+            let kinds: Vec<OpKind> = CUDA_OPS
+                .iter()
+                .filter(|support| support.dtype == dtype)
+                .map(|support| support.kind)
+                .collect();
+            assert_eq!(
+                kinds,
+                vec![
+                    OpKind::Add,
+                    OpKind::MatMul,
+                    OpKind::SoftmaxLastDim,
+                    OpKind::RmsNorm
+                ]
+            );
+        }
+        assert!(!CUDA_OPS.iter().any(|support| support.dtype == DType::F16));
+    }
+
+    #[test]
+    fn cuda_backend_uses_the_dtype_neutral_name() {
+        assert_eq!(CUDA_BACKEND_NAME, "cuda-native");
+        assert!(!CUDA_BACKEND_NAME.contains("f32"));
     }
 }

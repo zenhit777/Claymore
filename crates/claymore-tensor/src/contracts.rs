@@ -12,7 +12,7 @@ use claymore_core::MemoryTier;
 use claymore_device::{CpuDevice, DType, Device, DeviceKind};
 
 use crate::ops::{self, OpError};
-use crate::Tensor;
+use crate::{Bf16, Tensor};
 
 /// The complete set of tensor operations covered by the M8 contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -173,7 +173,9 @@ impl<'a> TensorOp<'a> {
         let inputs = self.inputs();
         let first = inputs.first().ok_or(OpError::InvalidRank)?;
         let dtype = first.layout().dtype();
-        if dtype != DType::F32 {
+        // FP16 (and every other metadata-only dtype) is explicitly refused:
+        // no CPU reference, kernel or conversion path exists for it.
+        if !matches!(dtype, DType::F32 | DType::BF16) {
             return Err(OpError::UnsupportedDType);
         }
         for input in &inputs {
@@ -733,9 +735,28 @@ impl CpuReferenceBackend {
         self.device.write(storage.as_mut(), 0, &bytes)?;
         Ok(Tensor::with_layout(storage, layout, 0)?)
     }
+
+    /// Allocate a contiguous BF16 Host tensor with exact 16-bit storage.
+    pub fn tensor_bf16(&self, shape: Vec<usize>, values: &[Bf16]) -> Result<Tensor, OpError> {
+        let layout = crate::TensorLayout::contiguous(shape, DType::BF16)?;
+        if values.len() != layout.numel() {
+            return Err(OpError::ShapeMismatch);
+        }
+        let mut storage = self.device.allocate(
+            MemoryTier::Host,
+            u64::try_from(layout.span_bytes())
+                .map_err(|_| OpError::Device(claymore_device::DeviceError::SizeOverflow))?,
+        )?;
+        let bytes: Vec<u8> = values
+            .iter()
+            .flat_map(|value| value.to_ne_bytes())
+            .collect();
+        self.device.write(storage.as_mut(), 0, &bytes)?;
+        Ok(Tensor::with_layout(storage, layout, 0)?)
+    }
 }
 
-const CPU_F32_OPS: [OpSupport; 4] = [
+const CPU_OPS: [OpSupport; 8] = [
     OpSupport {
         kind: OpKind::Add,
         dtype: DType::F32,
@@ -768,14 +789,46 @@ const CPU_F32_OPS: [OpSupport; 4] = [
         layout: LayoutRequirement::Contiguous,
         alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
     },
+    OpSupport {
+        kind: OpKind::Add,
+        dtype: DType::BF16,
+        input_tier: MemoryTier::Host,
+        output_tier: MemoryTier::Host,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::MatMul,
+        dtype: DType::BF16,
+        input_tier: MemoryTier::Host,
+        output_tier: MemoryTier::Host,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::SoftmaxLastDim,
+        dtype: DType::BF16,
+        input_tier: MemoryTier::Host,
+        output_tier: MemoryTier::Host,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::RmsNorm,
+        dtype: DType::BF16,
+        input_tier: MemoryTier::Host,
+        output_tier: MemoryTier::Host,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
 ];
 
 impl TensorComputeBackend for CpuReferenceBackend {
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
-            name: "cpu-reference-f32",
+            name: "cpu-reference",
             device_kind: DeviceKind::Cpu,
-            supported_ops: &CPU_F32_OPS,
+            supported_ops: &CPU_OPS,
         }
     }
 
@@ -839,12 +892,9 @@ mod tests {
         });
         let report = dispatcher.explain(&request).unwrap();
         let text = report.to_string();
-        assert!(text.contains("SELECT cpu-reference-f32"), "{text}");
+        assert!(text.contains("SELECT cpu-reference"), "{text}");
         assert!(text.contains("exact capability match"), "{text}");
-        assert_eq!(
-            dispatcher.plan(&request).unwrap().backend,
-            "cpu-reference-f32"
-        );
+        assert_eq!(dispatcher.plan(&request).unwrap().backend, "cpu-reference");
     }
 
     #[test]
@@ -940,16 +990,78 @@ mod tests {
     }
 
     #[test]
-    fn bf16_is_not_claimed_as_supported() {
+    fn fp16_is_not_claimed_as_supported() {
         let device = CpuDevice::new();
         let mut storage = device.allocate(MemoryTier::Host, 4).unwrap();
         device.write(storage.as_mut(), 0, &[0; 4]).unwrap();
-        let tensor = Tensor::new(storage, vec![2], DType::BF16).unwrap();
+        let tensor = Tensor::new(storage, vec![2], DType::F16).unwrap();
         let request = ExecutionRequest::new(TensorOp::SoftmaxLastDim { input: &tensor });
         assert_eq!(
             dispatcher().0.plan(&request).unwrap_err(),
             DispatchError::Contract(OpError::UnsupportedDType)
         );
+        for support in CPU_OPS {
+            assert_ne!(support.dtype, DType::F16);
+        }
+    }
+
+    #[test]
+    fn bf16_is_dispatched_and_executed_by_the_cpu_reference() {
+        let backend = CpuReferenceBackend::new();
+        let device = backend.device().clone();
+        let dispatcher = TensorDispatcher::new(vec![Box::new(backend)]);
+        let mut lhs_storage = device.allocate(MemoryTier::Host, 4).unwrap();
+        device.write(lhs_storage.as_mut(), 0, &[0; 4]).unwrap();
+        let lhs = Tensor::new(lhs_storage, vec![2], DType::BF16).unwrap();
+        let rhs = host_tensor(&device, vec![2], &[1.0, 2.0]);
+        let mixed = ExecutionRequest::new(TensorOp::Add {
+            lhs: &lhs,
+            rhs: &rhs,
+        });
+        assert_eq!(
+            dispatcher.plan(&mixed).unwrap_err(),
+            DispatchError::Contract(OpError::MixedDType)
+        );
+
+        let rhs_bf16 = {
+            let mut storage = device.allocate(MemoryTier::Host, 4).unwrap();
+            device.write(storage.as_mut(), 0, &[0; 4]).unwrap();
+            Tensor::new(storage, vec![2], DType::BF16).unwrap()
+        };
+        let request = ExecutionRequest::new(TensorOp::Add {
+            lhs: &lhs,
+            rhs: &rhs_bf16,
+        });
+        let plan = dispatcher.plan(&request).unwrap();
+        assert_eq!(plan.backend, "cpu-reference");
+        assert!(plan.reason.contains("BF16"), "{}", plan.reason);
+        let output = dispatcher.execute(&request).unwrap();
+        assert_eq!(output.layout().dtype(), DType::BF16);
+        assert_eq!(output.layout().numel(), 2);
+        assert_eq!(output.layout().span_bytes(), 4);
+    }
+
+    #[test]
+    fn cpu_capabilities_cover_both_dtypes_for_all_four_operations() {
+        let capabilities = CpuReferenceBackend::new().capabilities();
+        assert_eq!(capabilities.supported_ops.len(), 8);
+        for dtype in [DType::F32, DType::BF16] {
+            for kind in OpKind::ALL {
+                assert!(
+                    capabilities
+                        .support_for(
+                            kind,
+                            dtype,
+                            MemoryTier::Host,
+                            MemoryTier::Host,
+                            LayoutRequirement::Contiguous,
+                            AliasRule::ReadOnlyInputsFreshOutput,
+                        )
+                        .is_some(),
+                    "missing support for {kind} / {dtype:?}"
+                );
+            }
+        }
     }
 
     #[test]

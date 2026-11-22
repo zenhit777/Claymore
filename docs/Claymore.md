@@ -144,8 +144,8 @@ La première cible de développement et de validation est la machine suivante :
 | RAM système | 128 Gio |
 | Environnement | WSL2 sous Windows |
 | Langage | Rust, édition 2021 |
-| Backend de tenseurs visé | Moteur tensoriel natif Claymore (à construire) |
-| Politique numérique | précision mixte, BF16 privilégié lorsque supporté |
+| Backend de tenseurs visé | Moteur tensoriel natif Claymore (socle livré en M8, extensions M9-M12) |
+| Politique numérique | précision mixte, BF16 et FP32 supportés dans les primitives M8 ; FP16 non implémenté |
 
 Cette configuration est le profil de référence, pas une limite architecturale du projet. Les paramètres matériels doivent rester configurables.
 
@@ -155,7 +155,7 @@ Décision initiale :
 
 - **BF16** comme précision préférée lorsque le matériel, le modèle et les kernels la supportent correctement ;
 - **FP32** pour les accumulations ou opérations sensibles qui le nécessitent ;
-- **FP16** comme solution de repli lorsque BF16 n'est pas disponible ou approprié ;
+- **FP16** comme solution de repli *envisagée* lorsque BF16 n'est pas disponible ou approprié : le type existe dans `DType`, mais aucun chemin FP16 n'est implémenté ni validé ; aucun repli implicite n'est autorisé ;
 - **INT8 / INT4** comme axes ultérieurs d'optimisation, après mesures de qualité et de performance.
 
 Aucune quantification ne doit être activée par défaut sans validation de la qualité de génération, de la stabilité numérique et du gain réel.
@@ -549,7 +549,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
 | M7 | Scheduler et orchestration mémoire | **Livré sur `main` par la PR #21** |
 | M7.1 | Durcissement scheduler/runtime et préparation M8 | **Livré sur `main` par la PR #22** ; CI verte ; revalidation RTX 5090 réussie au SHA de code `c16e925` (17/17 requis par campagne, deux campagnes ; 27/27 tests workspace par campagne) ; limites restantes suivies dans l'issue #23 |
-| M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **Livré dans la PR #24** — Tensor canonique, contrats, dispatch, kernels CUDA F32, intégration mémoire/scheduler ; preuve matérielle RTX 5090 versionnée |
+| M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **Livré dans la PR #24, finalisation BF16 incluse** — Tensor canonique, contrats, dispatch, kernels CUDA F32 et BF16, intégration mémoire/scheduler ; preuves matérielles RTX 5090 versionnées |
 | M9 | Orchestration de diffusion modulaire commune | Planifié |
 | M10 | Adaptateur et intégration DiffusionGemma | Planifié |
 | M11 | Adaptateur et intégration Clover | Planifié |
@@ -703,15 +703,15 @@ Critères d'acceptation :
 
 **Objectif :** livrer un seul modèle Tensor natif, les opérations de référence, le dispatch explicite et les backends CPU/CUDA qui serviront à l'orchestration de diffusion et aux deux adaptateurs. M8 ne développe aucune stratégie autoregressive ni boucle de génération de modèle.
 
-**État :** livré dans la PR #24 sous réserve de la validation matérielle documentée séparément. Le crate claymore-tensor porte le Tensor canonique, les layouts validés, les vues empruntées, les opérations CPU F32 de référence (add, matmul, softmax, RMSNorm), les contrats typés (`contracts.rs`) et le dispatch déterministe avec explication de chaque refus. Les définitions Tensor concurrentes ont été retirées de claymore-device. Les quatre kernels CUDA F32 sont intégrés via une feature optionnelle, avec PTX `sm_120` versionné, chargement par la Driver API, event de complétion réel et intégration aux budgets/gardes de claymore-memory et aux files du scheduler. Le détail figure dans [m8-architecture.md](m8-architecture.md) et dans le [rapport de validation RTX 5090](audits/m8-rtx5090-hardware-validation.md). BF16/FP16 ne sont pas supportés dans M8 (aucun chemin de calcul validé). L'inspection des graphes DiffusionGemma/Clover pour sélectionner des primitives supplémentaires reste hors de cette tranche.
+**État :** livré dans la PR #24, y compris la finalisation BF16 et la validation matérielle documentée séparément. Le crate claymore-tensor porte le Tensor canonique, les layouts validés, les vues empruntées, les opérations CPU F32 **et BF16** de référence (add, matmul, softmax, RMSNorm), les contrats typés (`contracts.rs`) et le dispatch déterministe avec explication de chaque refus. Les définitions Tensor concurrentes ont été retirées de claymore-device. Les huit kernels CUDA (quatre F32, quatre BF16) sont intégrés via une feature optionnelle, avec deux PTX `sm_120` versionnés, chargement par la Driver API, event de complétion réel et intégration aux budgets/gardes de claymore-memory et aux files du scheduler. BF16 utilise une représentation 16 bits exacte, une conversion FP32 explicite avec arrondi round-to-nearest-even et une accumulation FP32 pour matmul et réductions. FP16 reste non supporté. Le détail figure dans [m8-architecture.md](m8-architecture.md), dans le [rapport F32](audits/m8-rtx5090-hardware-validation.md), dans le [rapport BF16](audits/m8-bf16-rtx5090-hardware-validation.md) et dans l'[audit des exigences de graphe](audits/m8-model-graph-requirements.md). Les opérations spécifiques aux modèles relèvent des adaptateurs M10/M11.
 
 Travaux :
 - finaliser les contrats Tensor, layouts, vues, aliasing et durée de vie ;
 - formaliser les opérations, contraintes de shape/dtype/layout, erreurs et tolérances numériques ;
-- fournir les kernels CPU de référence et un dispatch explicite par capacités ;
+- fournir les kernels CPU de référence F32 et BF16 et un dispatch explicite par capacités ;
 - raccorder les allocations et opérations aux services memory/scheduler, sans contourner les gardes ;
-- implémenter les kernels CUDA derrière la feature optionnelle ;
-- sélectionner les opérations additionnelles après inspection des graphes et checkpoints DiffusionGemma et Clover.
+- implémenter les kernels CUDA F32 et BF16 derrière la feature optionnelle ;
+- traiter le prérequis BF16 identifié pour les checkpoints DiffusionGemma et Clover ; la sélection des primitives supplémentaires appartient aux phases M9/M10/M11.
 
 Critères d'acceptation :
 - un seul type Tensor canonique dans claymore-tensor ;
@@ -719,7 +719,7 @@ Critères d'acceptation :
 - dispatch déterministe et erreurs explicites pour les combinaisons non supportées ;
 - intégration des durées de vie et de l'admission mémoire avec les contrats M7/M7.1 ;
 - CI workspace, Clippy, format, MSRV et compilation CUDA sans GPU ;
-- tests différentiels et validation matérielle RTX 5090 documentés au SHA final.
+- tests différentiels RTX 5090 F32 et BF16 documentés au SHA de code réellement exécuté, en deux campagnes consécutives.
 
 ### M9 — Orchestration de diffusion modulaire commune
 
@@ -889,6 +889,10 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 - `docs/audits/m2-device-tensor-design.md` — contrats Device/Tensor et validation CPU.
 - `docs/audits/m3-device-foundations.md` — audit et durcissement des fondations Device.
 - `docs/audits/m4-device-lifecycle-contracts.md` — audit des contrats de libération, complétion asynchrone et vues tensor.
+- `docs/m8-architecture.md` — socle tensoriel natif, politique numérique F32/BF16 et tolérances.
+- `docs/audits/m8-model-graph-requirements.md` — exigences de graphe et frontières M8/M9/M10/M11.
+- `docs/audits/m8-rtx5090-hardware-validation.md` — campagne matérielle F32.
+- `docs/audits/m8-bf16-rtx5090-hardware-validation.md` — campagne matérielle BF16.
 - `config/rtx5090-7950x3d.json` — profil machine versionné.
 
 ---
@@ -920,6 +924,8 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-22 | VRAM M7 : le soft-budget de 26 Gio est une cible d'éviction proactive, le hard-ceiling de 28 Gio est la limite stricte d'admission ; le cache experts (cible 14 Gio, maximum 16 Gio) est inclus dans le working set VRAM. |
 | 2026-11-22 | M7 : scheduler, `QueueRunner` et exécuteur CUDA sont synchrones et mono-propriétaires ; H2D/D2H ne complètent une tâche qu'après attente de l'event. Aucun overlap transfert/calcul ou prefetch concurrent n'est revendiqué. |
 | 2026-11-22 | Éviction Adaptive : comparer d'abord la chaleur (hit count), puis la récence (tick), et utiliser le coût de rechargement en nanosecondes uniquement comme départage ; un coût inconnu vaut zéro pour ce seul départage. Aucun chargeur ne l'alimente automatiquement à ce stade. |
+| 2026-11-22 | Finalisation M8 : BF16 est implémenté en 16 bits exacts avec conversion FP32 explicite et arrondi round-to-nearest-even. Matmul et réductions accumulent en FP32 ; la sortie BF16 est arrondie une seule fois. FP16 reste non supporté et aucun cast/fallback implicite n'est autorisé. |
+| 2026-11-22 | Les deux modules PTX (`m8_f32.ptx` et `m8_bf16.ptx`) ciblent `sm_120` ; les kernels BF16 utilisent `cvt.rn.bf16.f32` et `fma.rn.f32`. La tolérance matérielle BF16 est exprimée en pas représentables (0 pour add, 1 pour matmul/softmax/RMSNorm), fixée avant la campagne. |
 
 ### Correspondance de la feuille de route historique
 
