@@ -143,12 +143,13 @@ fn poll_pending_transfers<E: CudaEventOps>(
         }
         let ids = pending[index].allocation_ids.clone();
         for completed_id in &ids {
-            let still_in_flight = pending.iter().enumerate().any(
-                |(pending_index, transfer)| {
-                    pending_index != index
-                        && transfer.allocation_ids.iter().any(|pending_id| pending_id == completed_id)
-                },
-            );
+            let still_in_flight = pending.iter().enumerate().any(|(pending_index, transfer)| {
+                pending_index != index
+                    && transfer
+                        .allocation_ids
+                        .iter()
+                        .any(|pending_id| pending_id == completed_id)
+            });
             if !still_in_flight {
                 policy.mark_in_flight_until(completed_id, tick)?;
             }
@@ -168,13 +169,20 @@ fn wait_for_pending_allocation<E: CudaEventOps>(
 ) -> Result<(), CudaMemoryError> {
     let mut index = 0;
     while index < pending.len() {
-        if pending[index].allocation_ids.iter().any(|candidate| candidate == id) {
+        if pending[index]
+            .allocation_ids
+            .iter()
+            .any(|candidate| candidate == id)
+        {
             pending[index].event.synchronize()?;
             let transfer = pending.remove(index);
             transfer.completed.store(true, Ordering::Release);
             for completed_id in transfer.allocation_ids {
                 let still_in_flight = pending.iter().any(|other| {
-                    other.allocation_ids.iter().any(|pending_id| pending_id == &completed_id)
+                    other
+                        .allocation_ids
+                        .iter()
+                        .any(|pending_id| pending_id == &completed_id)
                 });
                 if !still_in_flight {
                     policy.mark_in_flight_until(&completed_id, tick)?;
@@ -646,14 +654,18 @@ impl CudaMemoryManager {
         let tier = allocation.tier;
         match tier {
             MemoryTier::Vram => {
-                let buffer = self.device.get_mut(id)
+                let buffer = self
+                    .device
+                    .get_mut(id)
                     .ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?;
                 let released = release_and_confirm(buffer, &mut self.policy, id, tick)?;
                 self.device.remove(id);
                 Ok(released)
             }
             MemoryTier::PinnedHost => {
-                let buffer = self.pinned.get_mut(id)
+                let buffer = self
+                    .pinned
+                    .get_mut(id)
                     .ok_or_else(|| CudaMemoryError::WrongTier(id.to_owned()))?;
                 let released = release_and_confirm(buffer, &mut self.policy, id, tick)?;
                 self.pinned.remove(id);
@@ -836,7 +848,10 @@ mod tests {
             completed: Arc::clone(&completed),
         }];
 
-        assert_eq!(poll_pending_transfers(&mut policy, &mut pending, 10).unwrap(), 0);
+        assert_eq!(
+            poll_pending_transfers(&mut policy, &mut pending, 10).unwrap(),
+            0
+        );
         assert_eq!(pending.len(), 1);
         assert!(!completed.load(Ordering::Acquire));
         assert_eq!(
@@ -905,7 +920,10 @@ mod tests {
             },
         ];
 
-        assert_eq!(poll_pending_transfers(&mut policy, &mut pending, 10).unwrap(), 1);
+        assert_eq!(
+            poll_pending_transfers(&mut policy, &mut pending, 10).unwrap(),
+            1
+        );
         assert!(first.load(Ordering::Acquire));
         assert!(!second.load(Ordering::Acquire));
         assert_eq!(pending.len(), 1);
@@ -919,7 +937,10 @@ mod tests {
             query_error: None,
             sync_error: None,
         };
-        assert_eq!(poll_pending_transfers(&mut policy, &mut pending, 11).unwrap(), 1);
+        assert_eq!(
+            poll_pending_transfers(&mut policy, &mut pending, 11).unwrap(),
+            1
+        );
         assert!(second.load(Ordering::Acquire));
         assert!(pending.is_empty());
         assert_eq!(policy.allocation("buffer").unwrap().safe_after_tick, 11);
