@@ -5,6 +5,7 @@
 //! ordering. It executes only Compute tasks; transfer and prefetch queues are
 //! driven by their own owner-thread QueueRunner instances.
 use std::collections::BTreeMap;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::time::Instant;
 
 use claymore_scheduler::{
@@ -146,7 +147,20 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
         };
         self.metrics.requests_started = self.metrics.requests_started.saturating_add(1);
         let started_at = Instant::now();
-        let report = match self.runtime.execute(input, cancellation) {
+        let execution = catch_unwind(AssertUnwindSafe(|| {
+            self.runtime.execute(input, cancellation)
+        }))
+        .unwrap_or_else(|payload| {
+            let message = payload
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("generation strategy panicked with a non-string payload");
+            Err(RuntimeError::StrategyFailed(format!(
+                "generation strategy panicked: {message}"
+            )))
+        });
+        let report = match execution {
             Ok(report) => report,
             Err(error) => {
                 self.record_execution_time(started_at);
@@ -307,6 +321,49 @@ mod tests {
         fn execute(&mut self, _task: &TaskSnapshot) -> Result<(), String> {
             Ok(())
         }
+    }
+
+    struct Panics;
+    impl GenerationStrategy for Panics {
+        fn execute(
+            &mut self,
+            _context: &mut ExecutionContext<'_>,
+            _input: &RequestInput,
+        ) -> Result<RequestOutput, String> {
+            panic!("injected strategy panic");
+        }
+    }
+
+    #[test]
+    fn strategy_panic_fails_request_and_cancels_dependent_work() {
+        let mut runtime = runtime(Panics);
+        let first = runtime
+            .submit_request(
+                RequestInput::new([1]),
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                [],
+            )
+            .unwrap();
+        let dependent = runtime
+            .submit_request(
+                RequestInput::new([2]),
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                [first],
+            )
+            .unwrap();
+
+        let error = runtime.run_one().expect_err("panic must become a runtime error");
+        assert!(matches!(
+            error,
+            ScheduledRuntimeError::Runtime(RuntimeError::StrategyFailed(message))
+                if message.contains("generation strategy panicked: injected strategy panic")
+        ));
+        assert_eq!(runtime.task(first).unwrap().state, TaskState::Failed);
+        assert_eq!(runtime.task(dependent).unwrap().state, TaskState::Cancelled);
+        assert_eq!(runtime.pending_request_count(), 0);
+        assert_eq!(runtime.metrics().requests_failed, 1);
     }
 
     #[test]
