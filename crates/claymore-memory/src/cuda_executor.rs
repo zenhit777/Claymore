@@ -237,10 +237,7 @@ impl CudaTransferExecutor {
     }
 }
 
-fn take_read_result(
-    results: &mut BTreeMap<TaskId, Vec<u8>>,
-    task_id: TaskId,
-) -> Option<Vec<u8>> {
+fn take_read_result(results: &mut BTreeMap<TaskId, Vec<u8>>, task_id: TaskId) -> Option<Vec<u8>> {
     results.remove(&task_id)
 }
 
@@ -279,13 +276,18 @@ impl TaskExecutor for CudaTransferExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use claymore_scheduler::{Scheduler, SchedulerConfig, TaskKind, TaskSpec};
 
     #[test]
     fn taking_read_result_transfers_ownership_and_removes_retained_bytes() {
-        let task_id = TaskId(7);
+        let mut scheduler = Scheduler::new(SchedulerConfig::default()).unwrap();
+        let task_id = scheduler.submit(TaskSpec::new(TaskKind::Transfer)).unwrap();
         let mut results = BTreeMap::from([(task_id, vec![1, 2, 3, 4])]);
 
-        assert_eq!(take_read_result(&mut results, task_id), Some(vec![1, 2, 3, 4]));
+        assert_eq!(
+            take_read_result(&mut results, task_id),
+            Some(vec![1, 2, 3, 4])
+        );
         assert!(results.is_empty());
         assert_eq!(take_read_result(&mut results, task_id), None);
     }
