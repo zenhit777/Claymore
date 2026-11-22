@@ -616,7 +616,7 @@ impl CudaMemoryManager {
     /// treated as success.
     pub fn poll_completed_transfers(&mut self, tick: u64) -> Result<usize, CudaMemoryError> {
         self.advance_tick(tick)?;
-        poll_pending_transfers(&mut self.transfers.policy, &mut self.transfers.pending, tick)
+        self.transfers.poll(tick)
     }
 
     /// Query the associated CUDA event without blocking. A token is complete
@@ -657,6 +657,7 @@ impl CudaMemoryManager {
             return Err(CudaMemoryError::UnknownTransferToken(token.id));
         }
         let allocation_ids = self
+            .transfers
             .pending
             .iter()
             .find(|transfer| {
@@ -681,13 +682,14 @@ impl CudaMemoryManager {
 
     pub fn wait_for_allocation(&mut self, id: &str, tick: u64) -> Result<(), CudaMemoryError> {
         self.advance_tick(tick)?;
-        wait_for_pending_allocation(&mut self.transfers.policy, &mut self.transfers.pending, id, tick)
+        self.transfers.wait_for_allocation(id, tick)
     }
 
     pub fn release(&mut self, id: &str, tick: u64) -> Result<Allocation, CudaMemoryError> {
         self.advance_tick(tick)?;
         self.wait_for_allocation(id, tick)?;
         let allocation = self
+            .transfers
             .policy
             .allocation(id)
             .ok_or_else(|| CudaMemoryError::UnknownAllocation(id.to_owned()))?;
