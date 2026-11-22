@@ -703,7 +703,7 @@ impl TensorDispatcher {
                     return Err(DispatchError::UnknownBackend(name.clone()));
                 };
                 let capabilities = backend.capabilities();
-                if Self::is_supported(&capabilities, &validated) {
+                if Self::is_supported(&capabilities, &validated, &request.op) {
                     report
                         .decisions
                         .push(BackendDecision::Selected(DispatchPlan {
@@ -713,7 +713,7 @@ impl TensorDispatcher {
                                 .into(),
                         }));
                 } else {
-                    let reason = Self::refusal(&capabilities, &validated);
+                    let reason = Self::refusal(&capabilities, &validated, &request.op);
                     report.decisions.push(BackendDecision::Refused {
                         backend: capabilities.name,
                         reason: reason.clone(),
