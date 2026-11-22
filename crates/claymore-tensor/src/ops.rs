@@ -170,7 +170,7 @@ mod tests {
         let a = tensor(&device, vec![1, 2], &[3.0, 4.0]);
         let scale = tensor(&device, vec![2], &[1.0, 2.0]);
         let out = values(&device, &rms_norm(&device, &a, &scale, 0.0).unwrap());
-        assert!((out[0] - 3.0 / 2.5).abs() < 1e-6);
-        assert!((out[1] - 8.0 / 2.5).abs() < 1e-6);
+        assert!((out[0] - 3.0 / 12.5f32.sqrt()).abs() < 1e-6);
+        assert!((out[1] - 8.0 / 12.5f32.sqrt()).abs() < 1e-6);
     }
 }
