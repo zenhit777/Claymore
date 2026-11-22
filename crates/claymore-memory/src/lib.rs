@@ -680,7 +680,7 @@ mod tests {
         // The general allocation is older in the global LRU order. Evicting
         // it first cannot reduce expert-cache usage and would over-evict.
         manager
-             .record_allocation(Allocation {
+            .record_allocation(Allocation {
                 expert: false,
                 ..allocation("general-old", 20, 1, 0)
             })
