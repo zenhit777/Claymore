@@ -334,7 +334,7 @@ M5 est livré : stream de transfert `CU_STREAM_NON_BLOCKING`, `poll_completed_tr
 
 #### M7.1 — implémenté dans la PR #22 (fusion en attente)
 
-Le périmètre logiciel M7.1 et sa préparation architecturale M8 sont implémentés dans la PR #22. La CI complète est verte sur le HEAD `63f7e3f76a9788f8e688982eeabd823f2865f45e` ; la revalidation matérielle des 17 tests CUDA sur RTX 5090 reste le dernier gate avant la fusion. Cette mention ne signifie pas que M7.1 est déjà présent sur `main`.
+Le périmètre logiciel M7.1 et sa préparation architecturale M8 sont implémentés dans la PR #22. La revalidation matérielle RTX 5090 est réussie au SHA de code `c16e9254994f24b6c7442c610332baf010352b1e` : 17/17 tests requis lors de deux campagnes, et 27/27 tests matériels workspace lors de chacune. Le commit documentaire `df749b9b8237855d859c2b4be87a88b4abf4ffa1` versionne le rapport et les logs ; sa CI complète est verte. La revue finale reste à confirmer et M7.1 n'est pas encore présent sur `main` tant que la PR n'est pas fusionnée.
 
 #### v0.3 — Memory Orchestrator (politiques host-side)
 
@@ -547,7 +547,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M5 | Robustesse et validation CUDA (issues #13, PR #17 et #18) | Livré ; chemin nominal validé sur RTX 5090 ; injection de fautes isolée dans l'issue #19 |
 | M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
 | M7 | Scheduler et orchestration mémoire | **Livré par la PR #21** |
-| M7.1 | Durcissement scheduler/runtime et préparation M8 | Implémenté dans la PR #22 ; CI logicielle verte sur le SHA précédent, revalidation RTX 5090 et revue finale en attente |
+| M7.1 | Durcissement scheduler/runtime et préparation M8 | Implémenté dans la PR #22 ; CI verte sur `df749b9`, revalidation RTX 5090 réussie (17/17 requis, deux campagnes) ; fusion/revue finale en attente |
 | M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
 | M9 | Stratégie autoregressive | Planifié |
 | M10 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
