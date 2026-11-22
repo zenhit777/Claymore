@@ -1,6 +1,6 @@
 //! Deterministic CPU reference operations for the native tensor contract.
 use claymore_core::MemoryTier;
-use claymore_device::{DType, Device, DeviceBuffer, DeviceError};
+use claymore_device::{DType, Device, DeviceError};
 use thiserror::Error;
 
 use crate::{Tensor, TensorError, TensorLayout};
