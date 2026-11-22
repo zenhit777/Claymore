@@ -12,7 +12,7 @@
 //! queue is priority-descending and FIFO for equal priorities.
 
 use std::cmp::Reverse;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::marker::PhantomData;
 use std::rc::Rc;
 use thiserror::Error;
@@ -171,6 +171,7 @@ struct TaskRecord {
 pub struct Scheduler {
     config: SchedulerConfig,
     tasks: BTreeMap<TaskId, TaskRecord>,
+    cancelled: BTreeSet<TaskId>,
     next_task_id: u64,
     next_sequence: u64,
     running_prefetches: usize,
@@ -185,6 +186,7 @@ impl Scheduler {
         Ok(Self {
             config,
             tasks: BTreeMap::new(),
+            cancelled: BTreeSet::new(),
             next_task_id: 1,
             next_sequence: 0,
             running_prefetches: 0,
@@ -262,6 +264,9 @@ impl Scheduler {
                 dependencies: spec.dependencies,
             },
         );
+        if state == TaskState::Cancelled {
+            self.cancelled.insert(id);
+        }
         self.next_task_id = next_task_id;
         self.next_sequence = next_sequence;
         Ok(id)
@@ -342,6 +347,7 @@ impl Scheduler {
             });
         }
         task.state = TaskState::Cancelled;
+        self.cancelled.insert(id);
         self.refresh_blocked_tasks();
         Ok(())
     }
@@ -363,17 +369,16 @@ impl Scheduler {
         if was_prefetch {
             self.running_prefetches -= 1;
         }
+        self.cancelled.insert(id);
         self.refresh_blocked_tasks();
         Ok(())
     }
 
     /// Return cancelled task IDs in deterministic submission order.
+    /// Return cancelled IDs from the incremental cancellation index rather
+    /// than rescanning every retained task record on each executor poll.
     pub fn cancelled_task_ids(&self) -> Vec<TaskId> {
-        self.tasks
-            .values()
-            .filter(|task| task.state == TaskState::Cancelled)
-            .map(|task| task.id)
-            .collect()
+        self.cancelled.iter().copied().collect()
     }
 
     pub fn task(&self, id: TaskId) -> Result<TaskSnapshot, SchedulerError> {
@@ -427,6 +432,7 @@ impl Scheduler {
                 .map(|(id, task)| (*id, task.state))
                 .collect();
             let mut changed = false;
+            let mut newly_cancelled = Vec::new();
             for task in self.tasks.values_mut() {
                 if task.state != TaskState::Blocked {
                     continue;
@@ -441,6 +447,7 @@ impl Scheduler {
                     .any(|state| matches!(state, TaskState::Failed | TaskState::Cancelled))
                 {
                     task.state = TaskState::Cancelled;
+                    newly_cancelled.push(task.id);
                     changed = true;
                 } else if dependency_states.len() == task.dependencies.len()
                     && dependency_states
@@ -451,6 +458,7 @@ impl Scheduler {
                     changed = true;
                 }
             }
+            self.cancelled.extend(newly_cancelled);
             if !changed {
                 break;
             }
