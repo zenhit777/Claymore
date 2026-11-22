@@ -29,6 +29,8 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Run tests
         run: cargo test --workspace --all-targets
+      - name: Test CUDA manager fault-injection boundary without a GPU
+        run: cargo test -p claymore-memory --features cuda-driver --lib
       - name: Check optional CUDA feature without linking or requiring a GPU
         run: |
           cargo check -p claymore-cuda --features cuda-driver --all-targets
