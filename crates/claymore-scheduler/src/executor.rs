@@ -49,6 +49,7 @@ pub struct QueueRunner<E> {
     kind: TaskKind,
     executor: E,
     metrics: QueueRunnerMetrics,
+    last_cancelled_generation: u64,
 }
 
 impl<E> QueueRunner<E> {
@@ -65,6 +66,7 @@ impl<E> QueueRunner<E> {
                 total_execution_ns: 0,
                 max_execution_ns: 0,
             },
+            last_cancelled_generation: 0,
         }
     }
 
@@ -91,7 +93,10 @@ impl<E> QueueRunner<E> {
 
 impl<E: TaskExecutor> QueueRunner<E> {
     fn prune_cancelled(&mut self, scheduler: &Scheduler) {
-        for task_id in scheduler.cancelled_task_ids() {
+        let (generation, task_ids) =
+            scheduler.cancelled_task_ids_since(self.last_cancelled_generation);
+        self.last_cancelled_generation = generation;
+        for task_id in task_ids {
             self.executor.discard(task_id);
         }
     }
