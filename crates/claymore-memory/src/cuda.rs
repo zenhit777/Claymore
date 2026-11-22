@@ -619,14 +619,11 @@ impl CudaMemoryManager {
 
     fn make_room_for_expert(&mut self, bytes: u64, tick: u64) -> Result<(), CudaMemoryError> {
         self.poll_completed_transfers(tick)?;
-        // Plan both independent limits before freeing any allocation.
-        let expert_plan = self.policy.plan_expert_admission(bytes, tick)?;
-        let vram_plan = self.policy.plan_admission(MemoryTier::Vram, bytes, tick)?;
-        let mut evict_ids = expert_plan.evict_ids;
-        evict_ids.extend(vram_plan.evict_ids);
-        evict_ids.sort();
-        evict_ids.dedup();
-        for id in evict_ids {
+        // Compute one victim set against both constraints. Independently
+        // planning expert and general VRAM admission can over-evict when the
+        // two plans choose different candidates.
+        let plan = self.policy.plan_expert_vram_admission(bytes, tick)?;
+        for id in plan.evict_ids {
             self.release(&id, tick)?;
         }
         Ok(())
