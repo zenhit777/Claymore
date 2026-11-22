@@ -256,6 +256,33 @@ pub enum ShapeSignature {
     },
 }
 
+/// CUDA grid limits for the launch configurations used by the M8 kernels.
+const CUDA_GRID_X_MAX: usize = 2_147_483_647;
+const CUDA_GRID_Y_MAX: usize = 65_535;
+
+fn cuda_grid_limit(signature: ShapeSignature) -> Option<UnsupportedReason> {
+    let (grid_x, grid_y) = match signature {
+        ShapeSignature::Elementwise { numel } => (numel.div_ceil(256), 1),
+        ShapeSignature::MatMul { m, n, .. } => (n.div_ceil(16), m.div_ceil(16)),
+        ShapeSignature::LastDim { rows, .. } => (rows, 1),
+    };
+    if grid_x > CUDA_GRID_X_MAX {
+        return Some(UnsupportedReason::LaunchLimit {
+            axis: "x",
+            blocks: grid_x,
+            maximum: CUDA_GRID_X_MAX,
+        });
+    }
+    if grid_y > CUDA_GRID_Y_MAX {
+        return Some(UnsupportedReason::LaunchLimit {
+            axis: "y",
+            blocks: grid_y,
+            maximum: CUDA_GRID_Y_MAX,
+        });
+    }
+    None
+}
+
 impl TensorOp<'_> {
     pub fn shape_signature(&self) -> ShapeSignature {
         match self {
@@ -304,6 +331,12 @@ pub struct ValidatedOp {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnsupportedReason {
     OperationNotImplemented,
+    /// The operation's CUDA launch grid exceeds a hardware axis limit.
+    LaunchLimit {
+        axis: &'static str,
+        blocks: usize,
+        maximum: usize,
+    },
     DType { dtype: DType },
     Layout { layout: LayoutRequirement },
     Tier { tier: MemoryTier },
@@ -317,6 +350,9 @@ impl fmt::Display for UnsupportedReason {
         match self {
             UnsupportedReason::OperationNotImplemented => {
                 formatter.write_str("operation is not implemented by this backend")
+            }
+            UnsupportedReason::LaunchLimit { axis, blocks, maximum } => {
+                write!(formatter, "CUDA grid axis {axis} requires {blocks} blocks; maximum is {maximum}")
             }
             UnsupportedReason::DType { dtype } => {
                 write!(formatter, "dtype {dtype:?} is not implemented")
@@ -494,13 +530,22 @@ impl TensorDispatcher {
             .collect()
     }
 
-    fn refusal(capabilities: &BackendCapabilities, validated: &ValidatedOp) -> UnsupportedReason {
+    fn refusal(
+        capabilities: &BackendCapabilities,
+        validated: &ValidatedOp,
+        op: &TensorOp<'_>,
+    ) -> UnsupportedReason {
         if capabilities.device_kind != DeviceKind::Cpu
             && capabilities.device_kind != DeviceKind::Cuda
         {
             return UnsupportedReason::DeviceKind {
                 kind: capabilities.device_kind,
             };
+        }
+        if capabilities.device_kind == DeviceKind::Cuda {
+            if let Some(reason) = cuda_grid_limit(op.shape_signature()) {
+                return reason;
+            }
         }
         let support = capabilities.support_for(
             validated.kind,
@@ -552,17 +597,23 @@ impl TensorDispatcher {
         }
     }
 
-    fn is_supported(capabilities: &BackendCapabilities, validated: &ValidatedOp) -> bool {
-        capabilities
-            .support_for(
-                validated.kind,
-                validated.dtype,
-                validated.input_tier,
-                validated.output_tier,
-                validated.layout,
-                validated.alias_rule,
-            )
-            .is_some()
+    fn is_supported(
+        capabilities: &BackendCapabilities,
+        validated: &ValidatedOp,
+        op: &TensorOp<'_>,
+    ) -> bool {
+        (capabilities.device_kind != DeviceKind::Cuda
+            || cuda_grid_limit(op.shape_signature()).is_none())
+            && capabilities
+                .support_for(
+                    validated.kind,
+                    validated.dtype,
+                    validated.input_tier,
+                    validated.output_tier,
+                    validated.layout,
+                    validated.alias_rule,
+                )
+                .is_some()
     }
 
     /// Explain every candidate decision without executing anything.
@@ -577,7 +628,7 @@ impl TensorDispatcher {
                 let mut selected = false;
                 for backend in &self.backends {
                     let capabilities = backend.capabilities();
-                    if Self::is_supported(&capabilities, &validated) {
+                    if Self::is_supported(&capabilities, &validated, &request.op) {
                         if selected {
                             report.decisions.push(BackendDecision::Refused {
                                 backend: capabilities.name,
@@ -601,7 +652,7 @@ impl TensorDispatcher {
                     } else {
                         report.decisions.push(BackendDecision::Refused {
                             backend: capabilities.name,
-                            reason: Self::refusal(&capabilities, &validated),
+                            reason: Self::refusal(&capabilities, &validated, &request.op),
                         });
                     }
                 }
@@ -879,6 +930,39 @@ mod tests {
             .chunks_exact(4)
             .map(|bytes| f32::from_ne_bytes(bytes.try_into().unwrap()))
             .collect()
+    }
+
+    #[test]
+    fn cuda_launch_grid_limits_are_axis_specific_and_typed() {
+        assert_eq!(cuda_grid_limit(ShapeSignature::MatMul {
+            m: 65_535 * 16,
+            k: 1,
+            n: 16,
+        }), None);
+        assert_eq!(
+            cuda_grid_limit(ShapeSignature::MatMul {
+                m: 65_536 * 16,
+                k: 1,
+                n: 16,
+            }),
+            Some(UnsupportedReason::LaunchLimit {
+                axis: "y",
+                blocks: 65_536,
+                maximum: CUDA_GRID_Y_MAX,
+            })
+        );
+        assert_eq!(
+            cuda_grid_limit(ShapeSignature::LastDim {
+                rows: CUDA_GRID_X_MAX + 1,
+                width: 1,
+                epsilon: None,
+            }),
+            Some(UnsupportedReason::LaunchLimit {
+                axis: "x",
+                blocks: CUDA_GRID_X_MAX + 1,
+                maximum: CUDA_GRID_X_MAX,
+            })
+        );
     }
 
     #[test]
