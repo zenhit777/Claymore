@@ -113,7 +113,12 @@ impl CudaComputeEngine {
 
     /// Elementwise F32 addition. All three device pointers must reference live
     /// allocations of at least `numel` F32 elements in this context.
-    pub fn add(
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context. The allocations must remain live and
+    /// inaccessible to conflicting operations until the stream completion
+    /// event has been observed by the caller.
+    pub unsafe fn add(
         &self,
         lhs: u64,
         rhs: u64,
@@ -150,7 +155,12 @@ impl CudaComputeEngine {
 
     /// Rank-2 row-major F32 matrix multiplication.
     #[allow(clippy::too_many_arguments)]
-    pub fn matmul(
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context. The allocations must remain live and
+    /// inaccessible to conflicting operations until the stream completion
+    /// event has been observed by the caller.
+    pub unsafe fn matmul(
         &self,
         lhs: u64,
         rhs: u64,
@@ -194,7 +204,12 @@ impl CudaComputeEngine {
     }
 
     /// Stable softmax over the last dimension, one CUDA block per row.
-    pub fn softmax_last_dim(
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context. The allocations must remain live and
+    /// inaccessible to conflicting operations until the stream completion
+    /// event has been observed by the caller.
+    pub unsafe fn softmax_last_dim(
         &self,
         input: u64,
         output: u64,
@@ -229,7 +244,12 @@ impl CudaComputeEngine {
 
     /// RMS normalization over the last dimension with an explicit F32 scale.
     #[allow(clippy::too_many_arguments)]
-    pub fn rms_norm(
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context. The allocations must remain live and
+    /// inaccessible to conflicting operations until the stream completion
+    /// event has been observed by the caller.
+    pub unsafe fn rms_norm(
         &self,
         input: u64,
         scale: u64,
@@ -273,7 +293,12 @@ impl CudaComputeEngine {
 
     /// Elementwise BF16 addition. Pointers address 16-bit elements; the kernel
     /// widens to FP32 and rounds the sum to nearest-even BF16.
-    pub fn add_bf16(
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context. The allocations must remain live and
+    /// inaccessible to conflicting operations until the stream completion
+    /// event has been observed by the caller.
+    pub unsafe fn add_bf16(
         &self,
         lhs: u64,
         rhs: u64,
@@ -308,7 +333,12 @@ impl CudaComputeEngine {
 
     /// Rank-2 row-major BF16 matrix multiplication with FP32 accumulation.
     #[allow(clippy::too_many_arguments)]
-    pub fn matmul_bf16(
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context. The allocations must remain live and
+    /// inaccessible to conflicting operations until the stream completion
+    /// event has been observed by the caller.
+    pub unsafe fn matmul_bf16(
         &self,
         lhs: u64,
         rhs: u64,
@@ -352,7 +382,12 @@ impl CudaComputeEngine {
     }
 
     /// Stable BF16 softmax over the last dimension, one CUDA block per row.
-    pub fn softmax_last_dim_bf16(
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context. The allocations must remain live and
+    /// inaccessible to conflicting operations until the stream completion
+    /// event has been observed by the caller.
+    pub unsafe fn softmax_last_dim_bf16(
         &self,
         input: u64,
         output: u64,
@@ -387,7 +422,12 @@ impl CudaComputeEngine {
 
     /// RMS normalization over the last dimension with an explicit BF16 scale.
     #[allow(clippy::too_many_arguments)]
-    pub fn rms_norm_bf16(
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context. The allocations must remain live and
+    /// inaccessible to conflicting operations until the stream completion
+    /// event has been observed by the caller.
+    pub unsafe fn rms_norm_bf16(
         &self,
         input: u64,
         scale: u64,
