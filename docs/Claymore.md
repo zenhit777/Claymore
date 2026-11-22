@@ -385,9 +385,9 @@ Le build par défaut reste indépendant du matériel. La feature CUDA requiert u
 
 Ce jalon livre des abstractions backend-neutres et leur validation CPU ; il ne livre aucun calcul tensoriel ni opérateur. Le backend CUDA existant n'implémente pas encore `Device` et son raccordement reste conditionné à un contrat de libération faillible et de protection des allocations en vol (voir §7.3 et l'audit M2).
 
-#### M7 — Scheduler et orchestration mémoire (PR #21)
+#### M7 — Scheduler et orchestration mémoire
 
-**État : M7 livré par la PR #21.** Le jalon relie les requêtes Compute, les tâches Transfer/Prefetch, les exécuteurs mémoire backend-neutres et l'exécuteur CUDA event-backed.
+**État : livré sur `main` par la PR #21.** Le jalon relie les requêtes Compute, les tâches Transfer/Prefetch, les exécuteurs mémoire backend-neutres et l'exécuteur CUDA event-backed.
 
 Le scheduler et les exécuteurs sont mono-propriétaires et synchrones. `CudaTransferExecutor` attend l'event CUDA après chaque copie H2D/D2H avant de retourner le succès à `QueueRunner`. Le périmètre ne fournit donc ni recouvrement transfert/calcul, ni préchargement concurrent, ni exécution asynchrone des requêtes Compute. La campagne RTX 5090 versionnée rapporte 34/34 exécutions de tests matériels réussies sur le SHA de code indiqué dans le rapport ; ses limites (transfert M7 de 1 MiB, cache expert à petite échelle, absence de kernels et d'injection de fautes) restent applicables.
 
