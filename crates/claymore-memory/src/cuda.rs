@@ -1089,6 +1089,140 @@ mod tests {
         assert!(synchronize_stream(&FakeStream(None)).is_ok());
     }
 
+    // These tests exercise the exact transfer-state component owned by
+    // CudaMemoryManager, rather than calling the free helper functions directly.
+    #[test]
+    fn manager_tracker_poll_and_admission_share_the_production_state() {
+        let mut policy = fake_policy();
+        guarded_allocation(&mut policy, "guarded");
+        let completed = Arc::new(AtomicBool::new(false));
+        let mut tracker = CudaTransferTracker {
+            policy,
+            pending: vec![PendingTransfer {
+                id: 41,
+                allocation_ids: vec!["guarded".to_owned()],
+                event: FakeEvent {
+                    complete: false,
+                    query_error: None,
+                    sync_error: None,
+                },
+                completed: Arc::clone(&completed),
+            }],
+        };
+
+        // NOT_READY must preserve the manager-owned pending record and guard.
+        assert_eq!(tracker.poll(10).unwrap(), 0);
+        assert_eq!(tracker.pending.len(), 1);
+        assert!(!completed.load(Ordering::Acquire));
+        assert_eq!(
+            tracker.policy.allocation("guarded").unwrap().safe_after_tick,
+            IN_FLIGHT
+        );
+
+        // A query failure through the manager tracker must abort admission
+        // before a plan can release any victim.
+        tracker.pending[0].event.query_error = Some(719);
+        assert!(matches!(
+            tracker.plan_admission(MemoryTier::Vram, 8, 11),
+            Err(CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuEventQuery",
+                code: 719
+            }))
+        ));
+        assert_eq!(tracker.pending.len(), 1);
+        assert!(tracker.policy.allocation("guarded").is_some());
+        assert_eq!(
+            tracker.policy.allocation("guarded").unwrap().safe_after_tick,
+            IN_FLIGHT
+        );
+        assert!(!completed.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn manager_tracker_wait_and_shared_event_retirement_preserve_guards() {
+        let mut policy = fake_policy();
+        guarded_allocation(&mut policy, "shared");
+        let first = Arc::new(AtomicBool::new(false));
+        let second = Arc::new(AtomicBool::new(false));
+        let mut tracker = CudaTransferTracker {
+            policy,
+            pending: vec![
+                PendingTransfer {
+                    id: 42,
+                    allocation_ids: vec!["shared".to_owned()],
+                    event: FakeEvent {
+                        complete: true,
+                        query_error: None,
+                        sync_error: None,
+                    },
+                    completed: Arc::clone(&first),
+                },
+                PendingTransfer {
+                    id: 43,
+                    allocation_ids: vec!["shared".to_owned()],
+                    event: FakeEvent {
+                        complete: false,
+                        query_error: None,
+                        sync_error: None,
+                    },
+                    completed: Arc::clone(&second),
+                },
+            ],
+        };
+
+        assert_eq!(tracker.poll(10).unwrap(), 1);
+        assert!(first.load(Ordering::Acquire));
+        assert!(!second.load(Ordering::Acquire));
+        assert_eq!(tracker.pending.len(), 1);
+        assert_eq!(
+            tracker.policy.allocation("shared").unwrap().safe_after_tick,
+            IN_FLIGHT
+        );
+
+        tracker.pending[0].event.complete = true;
+        assert_eq!(tracker.poll(11).unwrap(), 1);
+        assert!(second.load(Ordering::Acquire));
+        assert!(tracker.pending.is_empty());
+        assert_eq!(
+            tracker.policy.allocation("shared").unwrap().safe_after_tick,
+            11
+        );
+    }
+
+    #[test]
+    fn manager_tracker_wait_failure_keeps_event_and_every_guard() {
+        let mut policy = fake_policy();
+        guarded_allocation(&mut policy, "buffer");
+        let completed = Arc::new(AtomicBool::new(false));
+        let mut tracker = CudaTransferTracker {
+            policy,
+            pending: vec![PendingTransfer {
+                id: 44,
+                allocation_ids: vec!["buffer".to_owned()],
+                event: FakeEvent {
+                    complete: false,
+                    query_error: None,
+                    sync_error: Some(722),
+                },
+                completed: Arc::clone(&completed),
+            }],
+        };
+
+        assert!(matches!(
+            tracker.wait_for_allocation("buffer", 10),
+            Err(CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuEventSynchronize",
+                code: 722
+            }))
+        ));
+        assert_eq!(tracker.pending.len(), 1);
+        assert!(!completed.load(Ordering::Acquire));
+        assert_eq!(
+            tracker.policy.allocation("buffer").unwrap().safe_after_tick,
+            IN_FLIGHT
+        );
+    }
+
     #[test]
     fn transfer_token_clones_share_completion_state() {
         let completed = Arc::new(AtomicBool::new(false));
