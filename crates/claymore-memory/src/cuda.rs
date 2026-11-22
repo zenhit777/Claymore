@@ -671,18 +671,52 @@ impl CudaMemoryManager {
         let mut allocation_ids: Vec<String> = input_ids.iter().map(|id| (*id).to_owned()).collect();
         allocation_ids.push(output_id.to_owned());
         let mut pointers = Vec::with_capacity(allocation_ids.len());
-        for id in &allocation_ids {
+        for (index, id) in input_ids.iter().enumerate() {
             let buffer = self
                 .device
-                .get(id)
-                .ok_or_else(|| CudaMemoryError::UnknownAllocation(id.clone()))?;
-            pointers.push(buffer.device_ptr());
+                .get(*id)
+                .ok_or_else(|| CudaMemoryError::UnknownAllocation((*id).to_owned()))?;
+            let tensor = inputs[index];
+            let offset = tensor.offset_bytes();
+            let end = offset
+                .checked_add(tensor.layout().span_bytes())
+                .ok_or(CudaMemoryError::Tensor(OpError::Tensor(
+                    claymore_tensor::TensorError::SizeOverflow,
+                )))?;
+            if end > buffer.len() {
+                return Err(CudaMemoryError::Cuda(CudaError::BufferTooSmall {
+                    requested: end,
+                    capacity: buffer.len(),
+                }));
+            }
+            let pointer = buffer
+                .device_ptr()
+                .checked_add(u64::try_from(offset).map_err(|_| CudaError::SizeOverflow)?)
+                .ok_or(CudaError::SizeOverflow)?;
+            pointers.push(pointer);
         }
+        let output_buffer = self
+            .device
+            .get(output_id)
+            .ok_or_else(|| CudaMemoryError::UnknownAllocation(output_id.to_owned()))?;
+        let output_elements = op.output_shape().into_iter().try_fold(1usize, |n, d| {
+            n.checked_mul(d).ok_or(CudaError::SizeOverflow)
+        })?;
+        let output_bytes = output_elements
+            .checked_mul(validated.dtype.element_size_bytes())
+            .ok_or(CudaError::SizeOverflow)?;
+        if output_bytes > output_buffer.len() {
+            return Err(CudaMemoryError::Cuda(CudaError::BufferTooSmall {
+                requested: output_bytes,
+                capacity: output_buffer.len(),
+            }));
+        }
+        pointers.push(output_buffer.device_ptr());
 
         let shapes = op.shape_signature();
-        for id in &allocation_ids {
-            self.transfers.policy.mark_in_flight_until(id, IN_FLIGHT)?;
-        }
+        // Allocate fallible bookkeeping resources before submitting device work.
+        let transfer_id = allocate_transfer_id()?;
+        let event = self.driver.create_event()?;
 
         let engine = &self.compute_engine;
         let stream = &self.compute_stream;
@@ -745,13 +779,42 @@ impl CudaMemoryManager {
             }
         };
         if let Err(error) = launch {
-            // Guards remain IN_FLIGHT: a failed launch may still have enqueued
-            // work, so no allocation may be released or evicted.
+            // A driver error may be reported after work was partially submitted.
+            // Prove stream quiescence before returning control to the caller.
+            if let Err(sync_error) = synchronize_stream(&self.compute_stream) {
+                self.poisoned = true;
+                for id in &allocation_ids {
+                    let _ = self.transfers.policy.mark_in_flight_until(id, IN_FLIGHT);
+                }
+                return Err(sync_error.into());
+            }
             return Err(error.into());
         }
 
-        let transfer_id = allocate_transfer_id()?;
-        let event = self.driver.create_event()?;
+        // The manager is exclusively borrowed for this whole method, so no
+        // release/eviction can race between enqueue and installing these guards.
+        let mut guarded = Vec::with_capacity(allocation_ids.len());
+        for id in &allocation_ids {
+            if let Err(error) = self.transfers.policy.mark_in_flight_until(id, IN_FLIGHT) {
+                match synchronize_stream(&self.compute_stream) {
+                    Ok(()) => {
+                        for guarded_id in &guarded {
+                            self.transfers.policy.mark_in_flight_until(guarded_id, tick)?;
+                        }
+                        return Err(error.into());
+                    }
+                    Err(sync_error) => {
+                        self.poisoned = true;
+                        for guarded_id in &allocation_ids {
+                            let _ = self.transfers.policy.mark_in_flight_until(guarded_id, IN_FLIGHT);
+                        }
+                        return Err(sync_error.into());
+                    }
+                }
+            }
+            guarded.push(id.clone());
+        }
+
         if let Err(error) = event.record(&self.compute_stream) {
             match synchronize_stream(&self.compute_stream) {
                 Ok(()) => {
@@ -763,7 +826,7 @@ impl CudaMemoryManager {
                 Err(sync_error) => {
                     self.poisoned = true;
                     for id in &allocation_ids {
-                        self.transfers.policy.mark_in_flight_until(id, IN_FLIGHT)?;
+                        let _ = self.transfers.policy.mark_in_flight_until(id, IN_FLIGHT);
                     }
                     return Err(sync_error.into());
                 }
