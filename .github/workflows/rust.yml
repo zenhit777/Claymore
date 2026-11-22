@@ -38,6 +38,11 @@ jobs:
           RUSTFLAGS: -L native=/tmp/claymore-cuda-stub
           LD_LIBRARY_PATH: /tmp/claymore-cuda-stub
         run: cargo test -p claymore-memory --features cuda-driver --lib --locked
+      - name: Test CUDA crate unit tests without a GPU
+        env:
+          RUSTFLAGS: -L native=/tmp/claymore-cuda-stub
+          LD_LIBRARY_PATH: /tmp/claymore-cuda-stub
+        run: cargo test -p claymore-cuda --features cuda-driver --lib --locked
       - name: Check optional CUDA feature without linking or requiring a GPU
         run: |
           cargo check -p claymore-cuda --features cuda-driver --all-targets --locked
