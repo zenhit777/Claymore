@@ -82,6 +82,16 @@ pub struct Tensor {
     offset_bytes: usize,
 }
 
+impl std::fmt::Debug for Tensor {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_struct("Tensor")
+            .field("layout", &self.layout)
+            .field("offset_bytes", &self.offset_bytes)
+            .field("storage_len", &self.storage.len())
+            .finish()
+    }
+}
+
 impl Tensor {
     pub fn new(
         storage: Box<dyn DeviceBuffer>,
