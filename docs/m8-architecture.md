@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This document is the architectural preparation deliverable produced during M7.1. It is a design contract, not an assertion that the M8 tensor engine is implemented. M8 implementation starts only after M7.1 is reviewed and merged.
+This document began as the architectural preparation deliverable produced during M7.1. M7.1 is now merged. M8 implementation is in progress; the first proposed increment introduces `claymore-tensor` metadata and storage ownership on the CPU reference path. This remains a partial foundation, not a complete tensor engine.
 
 M8 establishes Claymore's native tensor execution foundation. Claymore owns the tensor model, storage and lifetime rules, operation contracts, dispatch policy, and integration with its scheduler and memory manager. CUDA provides device execution primitives; it must not become the owner of Claymore tensor semantics or orchestration.
 
@@ -75,7 +75,8 @@ Kernel dispatch follows a strict order: validate semantic requirements, query ba
 
 ## M8 delivery sequence
 
-1. Finalize tensor metadata and storage ownership types; add checked shape/stride arithmetic.
+1. **In progress (PR M8.1):** establish tensor metadata and storage ownership types; checked shape/stride arithmetic and CPU tests are proposed in `claymore-tensor`. The existing `claymore-device::Tensor` remains for compatibility during this increment; migration/removal requires a separate reviewed change.
+
 2. Implement CPU storage and a minimal reference operation set with exhaustive unit tests.
 3. Add operation descriptors, shape inference, typed validation errors, and explicit casting.
 4. Add the backend capability interface and adapt the existing CPU device.
