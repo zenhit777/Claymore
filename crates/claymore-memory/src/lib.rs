@@ -630,6 +630,9 @@ mod tests {
             })
             .unwrap();
         manager
+            .record_allocation(allocation("expert-new", 20, 9, 0))
+            .unwrap();
+        manager
             .record_allocation(Allocation {
                 expert: false,
                 ..allocation("general-new", 20, 10, 0)
