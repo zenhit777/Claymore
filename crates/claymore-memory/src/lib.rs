@@ -365,14 +365,34 @@ impl MemoryOrchestrator {
         let mut selected = Vec::new();
         let mut reclaimed = 0_u64;
         let mut expert_reclaimed = 0_u64;
-        for candidate in candidates {
-            if reclaimed >= needed_soft && expert_reclaimed >= needed_expert {
-                break;
-            }
-            selected.push(candidate.id.clone());
-            reclaimed = reclaimed.saturating_add(candidate.bytes);
-            if candidate.expert {
+
+        // Satisfy the expert-cache constraint first. General allocations do
+        // not contribute to this constraint, so evicting them before enough
+        // expert bytes have been reclaimed can only create unnecessary churn.
+        if needed_expert > 0 {
+            for candidate in candidates.iter().filter(|candidate| candidate.expert) {
+                selected.push(candidate.id.clone());
+                reclaimed = reclaimed.saturating_add(candidate.bytes);
                 expert_reclaimed = expert_reclaimed.saturating_add(candidate.bytes);
+                if expert_reclaimed >= needed_expert {
+                    break;
+                }
+            }
+        }
+
+        // Complete the same victim set against the soft VRAM target (and,
+        // consequently, the hard ceiling) using the original global eviction
+        // order. Already-selected expert victims are not counted twice.
+        if reclaimed < needed_soft {
+            for candidate in &candidates {
+                if selected.iter().any(|id| id == &candidate.id) {
+                    continue;
+                }
+                selected.push(candidate.id.clone());
+                reclaimed = reclaimed.saturating_add(candidate.bytes);
+                if reclaimed >= needed_soft {
+                    break;
+                }
             }
         }
 
@@ -646,6 +666,43 @@ mod tests {
         assert_eq!(plan.evict_ids, vec!["expert-old"]);
         assert_eq!(plan.projected_usage_bytes, 80);
         assert_eq!(manager.usage_bytes(MemoryTier::Vram), 80);
+    }
+
+    #[test]
+    fn joint_expert_admission_prioritizes_expert_victim_over_older_general_allocation() {
+        let mut constrained = budgets();
+        constrained.vram_soft_bytes = 80;
+        constrained.vram_hard_bytes = 100;
+        constrained.expert_cache_target_bytes = 40;
+        constrained.expert_cache_max_bytes = 50;
+        let mut manager = MemoryOrchestrator::new(constrained, EvictionPolicy::Lru).unwrap();
+
+        // The general allocation is older in the global LRU order. Evicting
+        // it first cannot reduce expert-cache usage and would over-evict.
+        manager
+             .record_allocation(Allocation {
+                expert: false,
+                ..allocation("general-old", 20, 1, 0)
+            })
+            .unwrap();
+        manager
+            .record_allocation(allocation("expert-old", 20, 2, 0))
+            .unwrap();
+        manager
+            .record_allocation(Allocation {
+                expert: false,
+                ..allocation("general-new", 20, 9, 0)
+            })
+            .unwrap();
+        manager
+            .record_allocation(allocation("expert-new", 20, 10, 0))
+            .unwrap();
+
+        let plan = manager.plan_expert_vram_admission(20, 10).unwrap();
+        assert_eq!(plan.evict_ids, vec!["expert-old"]);
+        assert_eq!(plan.projected_usage_bytes, 80);
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 80);
+        assert_eq!(manager.expert_cache_usage_bytes(), 40);
     }
 
     #[test]
