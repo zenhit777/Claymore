@@ -1,6 +1,6 @@
 //! Deterministic CPU reference operations for the native tensor contract.
 use claymore_core::MemoryTier;
-use claymore_device::{DType, Device, DeviceError};
+use claymore_device::{DType, Device, DeviceError, DeviceKind};
 use thiserror::Error;
 
 use crate::{Tensor, TensorError, TensorLayout};
@@ -17,6 +17,10 @@ pub enum OpError {
     InvalidRank,
     #[error("RMSNorm scale length must match the final tensor dimension")]
     ScaleMismatch,
+    #[error("CPU reference operations require the CPU device and host-resident tensors")]
+    CpuReferenceRequiresHostBuffers,
+    #[error("epsilon must be finite and non-negative")]
+    InvalidEpsilon,
     #[error(transparent)]
     Tensor(#[from] TensorError),
     #[error(transparent)]
@@ -24,6 +28,9 @@ pub enum OpError {
 }
 
 fn read_f32(device: &dyn Device, tensor: &Tensor) -> Result<Vec<f32>, OpError> {
+    if device.info().kind != DeviceKind::Cpu || tensor.storage().tier() != MemoryTier::Host {
+        return Err(OpError::CpuReferenceRequiresHostBuffers);
+    }
     if tensor.layout().dtype() != DType::F32 {
         return Err(OpError::UnsupportedDType);
     }
@@ -99,7 +106,7 @@ pub fn softmax_last_dim(device: &dyn Device, input: &Tensor) -> Result<Tensor, O
 /// RMS normalization on the final dimension with an explicit F32 scale vector.
 pub fn rms_norm(device: &dyn Device, input: &Tensor, scale: &Tensor, epsilon: f32) -> Result<Tensor, OpError> {
     if !epsilon.is_finite() || epsilon < 0.0 {
-        return Err(OpError::ShapeMismatch);
+        return Err(OpError::InvalidEpsilon);
     }
     let shape = input.layout().shape();
     let width = *shape.last().ok_or(OpError::InvalidRank)?;
