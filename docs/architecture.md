@@ -24,3 +24,8 @@
 - Keep a safety reserve; never plan to consume all reported VRAM.
 - Evict only after outstanding device work using an allocation has completed.
 - Swap is not a model-weight tier.
+
+
+## M8 tensor-engine design
+
+The M8 design contract and implementation gates are specified in [m8-architecture.md](m8-architecture.md). M8 is a Claymore-owned tensor execution layer; CUDA is a device backend, not the owner of tensor semantics, storage policy, graph scheduling, or model orchestration.
