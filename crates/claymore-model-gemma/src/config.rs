@@ -93,10 +93,7 @@ mod tests {
     #[test]
     fn rejects_implicit_or_unsupported_precision() {
         let error = GemmaModelConfig::from_json(r#"{"torch_dtype":"float16"}"#).unwrap_err();
-        assert!(matches!(
-            error,
-            GemmaConfigError::UnsupportedWeightDType(_)
-        ));
+        assert!(matches!(error, GemmaConfigError::UnsupportedWeightDType(_)));
     }
 
     #[test]
