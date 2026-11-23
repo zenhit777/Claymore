@@ -412,6 +412,7 @@ impl DiffusionOrchestrator {
             return Err(DiffusionError::SessionTerminal(id));
         }
         session.cancellation.cancel();
+        let safe_boundary = session.snapshot.current_step.is_none();
         for task_id in &session.tasks {
             if matches!(
                 self.scheduler.task(*task_id)?.state,
@@ -420,7 +421,7 @@ impl DiffusionOrchestrator {
                 self.scheduler.cancel(*task_id)?;
             }
         }
-        if session.snapshot.state == DiffusionSessionState::Queued {
+        if session.snapshot.state == DiffusionSessionState::Queued || safe_boundary {
             self.finish_cancelled(id);
         }
         Ok(())
