@@ -18,15 +18,15 @@ Le module `claymore_runtime::diffusion` expose :
 
 1. Chaque bloc suit strictement préparation → une ou plusieurs itérations de débruitage → validation → commit.
 2. Les blocs d'un plan sont traités dans l'ordre croissant de leur identifiant.
-3. Les étapes d'une session forment une chaîne de dépendances dans le scheduler partagé. Des sessions distinctes peuvent s'entrelacer selon la priorité et l'ordre FIFO du scheduler.
-4. Le scheduler ne transporte que des identifiants et des dépendances. Les tenseurs, buffers, événements CUDA et poids restent possédés par les couches d'exécution et de mémoire.
+3. Les étapes d'une session forment une chaîne de dépendances dans une instance dédiée de `Scheduler`. `ScheduledRuntime` expose une façade pour soumettre et exécuter ces sessions avec la même configuration validée que le scheduler des requêtes/transferts. Les deux graphes restent isolés afin de préserver la file Compute existante des requêtes opaques.
+4. Le scheduler dédié ne transporte que des identifiants et des dépendances. Les tenseurs, buffers, événements CUDA et poids restent possédés par les couches d'exécution et de mémoire.
 5. L'annulation est coopérative et observée aux frontières d'étapes. Une étape en cours n'est pas déclarée annulée avant le retour de l'exécuteur.
 6. Une erreur d'étape échoue la session et le scheduler annule les étapes dépendantes restantes.
 7. Le module ne suppose ni moteur autoregressif token-par-token, ni graphe identique entre Gemma et Clover.
 
 ## Exécution
 
-Créer un `DiffusionPlan`, construire `DiffusionOrchestrator` avec la configuration du scheduler, puis appeler `submit`. L'adaptateur implémente `DiffusionExecutor::execute_step`. Chaque appel à `run_one` exécute au plus une étape prête ; l'appelant peut ainsi rendre la main entre étapes, inspecter `session`/ `metrics`, ou demander une annulation via `cancel`/ `CancellationToken`.
+Créer un `DiffusionPlan`, soit construire `DiffusionOrchestrator` avec la configuration du scheduler, soit utiliser `ScheduledRuntime::submit_diffusion` / `run_diffusion_one` comme façade. L'adaptateur implémente `DiffusionExecutor::execute_step`. Chaque appel à `run_one` exécute au plus une étape prête ; l'appelant peut ainsi rendre la main entre étapes, inspecter `session`/ `metrics`, ou demander une annulation via `cancel`/ `CancellationToken`.
 
 L'orchestrateur est synchrone et reste confiné au thread propriétaire du scheduler. Il n'enqueue pas de kernels et ne prétend pas que le retour d'une mise en file CUDA constitue une fin de calcul : l'adaptateur doit retourner uniquement lorsque la frontière d'étape est sûre.
 
