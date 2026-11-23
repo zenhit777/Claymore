@@ -120,6 +120,8 @@ fn synthetic_failure_isolated_and_reported_without_gpu() {
     );
     assert_eq!(orchestrator.metrics().sessions_failed, 1);
     assert_eq!(orchestrator.metrics().steps_failed, 1);
+    // The failed first step cancels the seven remaining dependent steps (8 total).
+    assert_eq!(orchestrator.metrics().steps_cancelled, 7);
     assert_eq!(orchestrator.metrics().blocks_pending, 1);
 
     let mut executor = RecordingExecutor::default();
