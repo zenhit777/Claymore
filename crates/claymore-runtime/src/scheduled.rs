@@ -15,10 +15,10 @@ use claymore_scheduler::{
 use thiserror::Error;
 
 use crate::{
-    CancellationToken, ExecutionReport, GenerationStrategy, HardwareProfile, HardwareProfileError,
-    DiffusionError, DiffusionExecutor, DiffusionMetrics, DiffusionOrchestrator, DiffusionPlan,
-    DiffusionRunOutcome, DiffusionSessionId, DiffusionSessionSnapshot,
-    RequestInput, RequestState, Runtime, RuntimeConfig, RuntimeError,
+    CancellationToken, DiffusionError, DiffusionExecutor, DiffusionMetrics, DiffusionOrchestrator,
+    DiffusionPlan, DiffusionRunOutcome, DiffusionSessionId, DiffusionSessionSnapshot,
+    ExecutionReport, GenerationStrategy, HardwareProfile, HardwareProfileError, RequestInput,
+    RequestState, Runtime, RuntimeConfig, RuntimeError,
 };
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -635,7 +635,9 @@ mod tests {
     }
     #[test]
     fn scheduled_runtime_facade_drives_diffusion_sessions() {
-        use crate::{BlockId, DiffusionExecutor, DiffusionPlan, DiffusionRunOutcome, DiffusionStep};
+        use crate::{
+            BlockId, DiffusionExecutor, DiffusionPlan, DiffusionRunOutcome, DiffusionStep,
+        };
 
         struct StepCounter(Cell<usize>);
         impl DiffusionExecutor for StepCounter {
@@ -648,7 +650,10 @@ mod tests {
         let mut runtime = runtime(Echo);
         let plan = DiffusionPlan::new(vec![
             DiffusionStep::PrepareBlock { block: BlockId(0) },
-            DiffusionStep::Denoise { block: BlockId(0), iteration: 0 },
+            DiffusionStep::Denoise {
+                block: BlockId(0),
+                iteration: 0,
+            },
             DiffusionStep::ValidateBlock { block: BlockId(0) },
             DiffusionStep::CommitBlock { block: BlockId(0) },
         ])
