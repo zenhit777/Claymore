@@ -526,18 +526,33 @@ impl DiffusionOrchestrator {
             .ok_or(DiffusionError::UnknownSession(id))?
             .tasks
             .clone();
-        for task_id in tasks {
-            if Some(task_id) == except {
+        let mut cancelled_before = 0_u64;
+        for task_id in &tasks {
+            if self.scheduler.task(*task_id)?.state == TaskState::Cancelled {
+                cancelled_before = cancelled_before.saturating_add(1);
+            }
+        }
+        for task_id in &tasks {
+            if Some(*task_id) == except {
                 continue;
             }
             if matches!(
-                self.scheduler.task(task_id)?.state,
+                self.scheduler.task(*task_id)?.state,
                 TaskState::Ready | TaskState::Blocked
             ) {
-                self.scheduler.cancel(task_id)?;
-                self.metrics.steps_cancelled = self.metrics.steps_cancelled.saturating_add(1);
+                self.scheduler.cancel(*task_id)?;
             }
         }
+        let mut cancelled_after = 0_u64;
+        for task_id in &tasks {
+            if self.scheduler.task(*task_id)?.state == TaskState::Cancelled {
+                cancelled_after = cancelled_after.saturating_add(1);
+            }
+        }
+        self.metrics.steps_cancelled = self
+            .metrics
+            .steps_cancelled
+            .saturating_add(cancelled_after.saturating_sub(cancelled_before));
         Ok(())
     }
 
