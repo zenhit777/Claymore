@@ -7,6 +7,10 @@ license.workspace = true
 
 [dependencies]
 claymore-core = { path = "../claymore-core" }
+claymore-runtime = { path = "../claymore-runtime" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+claymore-scheduler = { path = "../claymore-scheduler" }

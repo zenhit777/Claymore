@@ -7,6 +7,7 @@ use claymore_device::{DType, DeviceBuffer, DeviceError};
 
 pub mod bf16;
 pub mod contracts;
+pub mod diffusion;
 pub mod ops;
 pub use bf16::Bf16;
 pub use contracts::{
@@ -14,6 +15,10 @@ pub use contracts::{
     DispatchError, DispatchPlan, DispatchReport, ExecutionError, ExecutionRequest,
     LayoutRequirement, OpKind, OpSupport, ShapeSignature, TensorComputeBackend, TensorDispatcher,
     TensorOp, UnsupportedReason, ValidatedOp,
+};
+pub use diffusion::{
+    attention, bidirectional_mask, causal_mask, linear, padding_mask, rope_inv_freq, rope_tables,
+    rotary_embed, scale, sliding_window_mask, soft_cap, validate_mask, RopeType, MASK_BLOCKED,
 };
 pub use ops::{add, matmul, rms_norm, softmax_last_dim, OpError};
 use thiserror::Error;

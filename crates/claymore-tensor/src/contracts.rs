@@ -14,21 +14,36 @@ use claymore_device::{CpuDevice, DType, Device, DeviceKind};
 use crate::ops::{self, OpError};
 use crate::{Bf16, Tensor};
 
-/// The complete set of tensor operations covered by the M8 contract.
+/// The complete set of tensor operations covered by the Claymore contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OpKind {
     Add,
     MatMul,
     SoftmaxLastDim,
     RmsNorm,
+    /// Dense projection without bias: `[tokens, in] x [out, in] -> [tokens, out]`.
+    Linear,
+    /// Rotary embedding applied to `[tokens, heads, head_dim]`.
+    RotaryEmbed,
+    /// Grouped-query multi-head attention.
+    Attention,
+    /// Logit soft-capping: `cap * tanh(x / cap)`.
+    SoftCap,
+    /// Explicit broadcast multiplication by a factor tensor.
+    Scale,
 }
 
 impl OpKind {
-    pub const ALL: [OpKind; 4] = [
+    pub const ALL: [OpKind; 9] = [
         OpKind::Add,
         OpKind::MatMul,
         OpKind::SoftmaxLastDim,
         OpKind::RmsNorm,
+        OpKind::Linear,
+        OpKind::RotaryEmbed,
+        OpKind::Attention,
+        OpKind::SoftCap,
+        OpKind::Scale,
     ];
 
     pub fn name(self) -> &'static str {
@@ -37,6 +52,11 @@ impl OpKind {
             OpKind::MatMul => "matmul",
             OpKind::SoftmaxLastDim => "softmax_last_dim",
             OpKind::RmsNorm => "rms_norm",
+            OpKind::Linear => "linear",
+            OpKind::RotaryEmbed => "rotary_embed",
+            OpKind::Attention => "attention",
+            OpKind::SoftCap => "soft_cap",
+            OpKind::Scale => "scale",
         }
     }
 }
@@ -131,6 +151,30 @@ pub enum TensorOp<'a> {
         scale: &'a Tensor,
         epsilon: f32,
     },
+    Linear {
+        input: &'a Tensor,
+        weight: &'a Tensor,
+    },
+    RotaryEmbed {
+        input: &'a Tensor,
+        cos: &'a Tensor,
+        sin: &'a Tensor,
+    },
+    Attention {
+        query: &'a Tensor,
+        key: &'a Tensor,
+        value: &'a Tensor,
+        mask: Option<&'a Tensor>,
+        scale: f32,
+    },
+    SoftCap {
+        input: &'a Tensor,
+        cap: f32,
+    },
+    Scale {
+        input: &'a Tensor,
+        factor: &'a Tensor,
+    },
 }
 
 impl<'a> TensorOp<'a> {
@@ -140,6 +184,11 @@ impl<'a> TensorOp<'a> {
             TensorOp::MatMul { .. } => OpKind::MatMul,
             TensorOp::SoftmaxLastDim { .. } => OpKind::SoftmaxLastDim,
             TensorOp::RmsNorm { .. } => OpKind::RmsNorm,
+            TensorOp::Linear { .. } => OpKind::Linear,
+            TensorOp::RotaryEmbed { .. } => OpKind::RotaryEmbed,
+            TensorOp::Attention { .. } => OpKind::Attention,
+            TensorOp::SoftCap { .. } => OpKind::SoftCap,
+            TensorOp::Scale { .. } => OpKind::Scale,
         }
     }
 
@@ -148,6 +197,23 @@ impl<'a> TensorOp<'a> {
             TensorOp::Add { lhs, rhs } | TensorOp::MatMul { lhs, rhs } => vec![lhs, rhs],
             TensorOp::SoftmaxLastDim { input } => vec![input],
             TensorOp::RmsNorm { input, scale, .. } => vec![input, scale],
+            TensorOp::Linear { input, weight } => vec![input, weight],
+            TensorOp::RotaryEmbed { input, cos, sin } => vec![input, cos, sin],
+            TensorOp::Attention {
+                query,
+                key,
+                value,
+                mask,
+                ..
+            } => {
+                let mut inputs: Vec<&'a Tensor> = vec![query, key, value];
+                if let Some(mask) = *mask {
+                    inputs.push(mask);
+                }
+                inputs
+            }
+            TensorOp::SoftCap { input, .. } => vec![input],
+            TensorOp::Scale { input, factor } => vec![input, factor],
         }
     }
 
@@ -159,6 +225,13 @@ impl<'a> TensorOp<'a> {
             }
             TensorOp::SoftmaxLastDim { input } => input.layout().shape().to_vec(),
             TensorOp::RmsNorm { input, .. } => input.layout().shape().to_vec(),
+            TensorOp::Linear { input, weight } => {
+                vec![input.layout().shape()[0], weight.layout().shape()[0]]
+            }
+            TensorOp::RotaryEmbed { input, .. } => input.layout().shape().to_vec(),
+            TensorOp::Attention { query, .. } => query.layout().shape().to_vec(),
+            TensorOp::SoftCap { input, .. } => input.layout().shape().to_vec(),
+            TensorOp::Scale { input, .. } => input.layout().shape().to_vec(),
         }
     }
 
@@ -223,6 +296,75 @@ impl<'a> TensorOp<'a> {
                     return Err(OpError::InvalidEpsilon);
                 }
             }
+            TensorOp::Linear { input, weight } => {
+                let input_shape = input.layout().shape();
+                let weight_shape = weight.layout().shape();
+                if input_shape.len() != 2 || weight_shape.len() != 2 {
+                    return Err(OpError::ShapeMismatch);
+                }
+                if input_shape[1] != weight_shape[1] {
+                    return Err(OpError::ShapeMismatch);
+                }
+            }
+            TensorOp::RotaryEmbed { input, cos, sin } => {
+                let shape = input.layout().shape();
+                if shape.len() != 3 || shape[2] % 2 != 0 {
+                    return Err(OpError::ShapeMismatch);
+                }
+                if cos.layout().shape() != [shape[0], shape[2]]
+                    || sin.layout().shape() != [shape[0], shape[2]]
+                {
+                    return Err(OpError::ShapeMismatch);
+                }
+            }
+            TensorOp::Attention {
+                query,
+                key,
+                value,
+                mask,
+                scale,
+            } => {
+                let query_shape = query.layout().shape();
+                let key_shape = key.layout().shape();
+                let value_shape = value.layout().shape();
+                if query_shape.len() != 3 || key_shape.len() != 3 || value_shape.len() != 3 {
+                    return Err(OpError::ShapeMismatch);
+                }
+                if key_shape != value_shape || key_shape[2] != query_shape[2] {
+                    return Err(OpError::ShapeMismatch);
+                }
+                if query_shape[1] == 0 || key_shape[1] == 0 || query_shape[1] % key_shape[1] != 0 {
+                    return Err(OpError::InvalidHeadConfiguration(format!(
+                        "heads {} must be a non-zero multiple of kv_heads {}",
+                        query_shape[1], key_shape[1]
+                    )));
+                }
+                if !scale.is_finite() || *scale == 0.0 {
+                    return Err(OpError::InvalidAttentionScale);
+                }
+                if let Some(mask) = *mask {
+                    if mask.layout().shape() != [query_shape[0], key_shape[0]] {
+                        return Err(OpError::ShapeMismatch);
+                    }
+                }
+            }
+            TensorOp::SoftCap { input, cap } => {
+                let _ = input;
+                if !cap.is_finite() || *cap <= 0.0 {
+                    return Err(OpError::InvalidSoftCap);
+                }
+            }
+            TensorOp::Scale { input, factor } => {
+                let shape = input.layout().shape();
+                if shape.is_empty() {
+                    return Err(OpError::InvalidRank);
+                }
+                let width = shape[shape.len() - 1];
+                let factor_shape = factor.layout().shape();
+                if factor_shape != [1] && factor_shape != [width] {
+                    return Err(OpError::ScaleMismatch);
+                }
+            }
         }
         Ok(ValidatedOp {
             kind: self.kind(),
@@ -254,9 +396,36 @@ pub enum ShapeSignature {
         width: usize,
         epsilon: Option<f32>,
     },
+    Linear {
+        tokens: usize,
+        in_features: usize,
+        out_features: usize,
+    },
+    RotaryEmbed {
+        tokens: usize,
+        heads: usize,
+        head_dim: usize,
+    },
+    Attention {
+        query_tokens: usize,
+        key_tokens: usize,
+        heads: usize,
+        kv_heads: usize,
+        head_dim: usize,
+        masked: bool,
+    },
+    SoftCap {
+        numel: usize,
+        cap: f32,
+    },
+    Scale {
+        numel: usize,
+        width: usize,
+        factor_width: usize,
+    },
 }
 
-/// CUDA grid limits for the launch configurations used by the M8 kernels.
+/// CUDA grid limits for the launch configurations used by the Claymore kernels.
 const CUDA_GRID_X_MAX: usize = 2_147_483_647;
 const CUDA_GRID_Y_MAX: usize = 65_535;
 
@@ -265,6 +434,19 @@ fn cuda_grid_limit(signature: ShapeSignature) -> Option<UnsupportedReason> {
         ShapeSignature::Elementwise { numel } => (numel.div_ceil(256), 1),
         ShapeSignature::MatMul { m, n, .. } => (n.div_ceil(16), m.div_ceil(16)),
         ShapeSignature::LastDim { rows, .. } => (rows, 1),
+        ShapeSignature::Linear {
+            tokens,
+            out_features,
+            ..
+        } => (out_features.div_ceil(256), tokens),
+        ShapeSignature::RotaryEmbed { tokens, heads, .. } => (tokens.saturating_mul(heads), 1),
+        ShapeSignature::Attention {
+            query_tokens,
+            heads,
+            ..
+        } => (query_tokens.saturating_mul(heads), 1),
+        ShapeSignature::SoftCap { numel, .. } => (numel.div_ceil(256), 1),
+        ShapeSignature::Scale { numel, .. } => (numel.div_ceil(256), 1),
     };
     if grid_x > CUDA_GRID_X_MAX {
         return Some(UnsupportedReason::LaunchLimit {
@@ -308,6 +490,38 @@ impl TensorOp<'_> {
                     rows: input.layout().numel() / width,
                     width,
                     epsilon: Some(*epsilon),
+                }
+            }
+            TensorOp::Linear { input, weight } => ShapeSignature::Linear {
+                tokens: input.layout().shape()[0],
+                in_features: input.layout().shape()[1],
+                out_features: weight.layout().shape()[0],
+            },
+            TensorOp::RotaryEmbed { input, .. } => ShapeSignature::RotaryEmbed {
+                tokens: input.layout().shape()[0],
+                heads: input.layout().shape()[1],
+                head_dim: input.layout().shape()[2],
+            },
+            TensorOp::Attention {
+                query, key, mask, ..
+            } => ShapeSignature::Attention {
+                query_tokens: query.layout().shape()[0],
+                key_tokens: key.layout().shape()[0],
+                heads: query.layout().shape()[1],
+                kv_heads: key.layout().shape()[1],
+                head_dim: query.layout().shape()[2],
+                masked: mask.is_some(),
+            },
+            TensorOp::SoftCap { input, cap } => ShapeSignature::SoftCap {
+                numel: input.layout().numel(),
+                cap: *cap,
+            },
+            TensorOp::Scale { input, factor } => {
+                let width = input.layout().shape().last().copied().unwrap_or(0);
+                ShapeSignature::Scale {
+                    numel: input.layout().numel(),
+                    width,
+                    factor_width: factor.layout().numel(),
                 }
             }
         }
@@ -824,7 +1038,7 @@ impl CpuReferenceBackend {
     }
 }
 
-const CPU_OPS: [OpSupport; 8] = [
+const CPU_OPS: [OpSupport; 18] = [
     OpSupport {
         kind: OpKind::Add,
         dtype: DType::F32,
@@ -858,6 +1072,46 @@ const CPU_OPS: [OpSupport; 8] = [
         alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
     },
     OpSupport {
+        kind: OpKind::Linear,
+        dtype: DType::F32,
+        input_tier: MemoryTier::Host,
+        output_tier: MemoryTier::Host,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::RotaryEmbed,
+        dtype: DType::F32,
+        input_tier: MemoryTier::Host,
+        output_tier: MemoryTier::Host,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::Attention,
+        dtype: DType::F32,
+        input_tier: MemoryTier::Host,
+        output_tier: MemoryTier::Host,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::SoftCap,
+        dtype: DType::F32,
+        input_tier: MemoryTier::Host,
+        output_tier: MemoryTier::Host,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::Scale,
+        dtype: DType::F32,
+        input_tier: MemoryTier::Host,
+        output_tier: MemoryTier::Host,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
         kind: OpKind::Add,
         dtype: DType::BF16,
         input_tier: MemoryTier::Host,
@@ -883,6 +1137,46 @@ const CPU_OPS: [OpSupport; 8] = [
     },
     OpSupport {
         kind: OpKind::RmsNorm,
+        dtype: DType::BF16,
+        input_tier: MemoryTier::Host,
+        output_tier: MemoryTier::Host,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::Linear,
+        dtype: DType::BF16,
+        input_tier: MemoryTier::Host,
+        output_tier: MemoryTier::Host,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::RotaryEmbed,
+        dtype: DType::BF16,
+        input_tier: MemoryTier::Host,
+        output_tier: MemoryTier::Host,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::Attention,
+        dtype: DType::BF16,
+        input_tier: MemoryTier::Host,
+        output_tier: MemoryTier::Host,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::SoftCap,
+        dtype: DType::BF16,
+        input_tier: MemoryTier::Host,
+        output_tier: MemoryTier::Host,
+        layout: LayoutRequirement::Contiguous,
+        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+    },
+    OpSupport {
+        kind: OpKind::Scale,
         dtype: DType::BF16,
         input_tier: MemoryTier::Host,
         output_tier: MemoryTier::Host,
@@ -911,6 +1205,25 @@ impl TensorComputeBackend for CpuReferenceBackend {
                 scale,
                 epsilon,
             } => ops::rms_norm(&self.device, input, scale, *epsilon),
+            TensorOp::Linear { input, weight } => {
+                crate::diffusion::linear(&self.device, input, weight)
+            }
+            TensorOp::RotaryEmbed { input, cos, sin } => {
+                crate::diffusion::rotary_embed(&self.device, input, cos, sin)
+            }
+            TensorOp::Attention {
+                query,
+                key,
+                value,
+                mask,
+                scale,
+            } => crate::diffusion::attention(&self.device, query, key, value, *mask, *scale),
+            TensorOp::SoftCap { input, cap } => {
+                crate::diffusion::soft_cap(&self.device, input, *cap)
+            }
+            TensorOp::Scale { input, factor } => {
+                crate::diffusion::scale(&self.device, input, factor)
+            }
         }
     }
 }
@@ -980,6 +1293,88 @@ mod tests {
             Some(UnsupportedReason::LaunchLimit {
                 axis: "x",
                 blocks: CUDA_GRID_X_MAX + 1,
+                maximum: CUDA_GRID_X_MAX,
+            })
+        );
+    }
+
+    #[test]
+    fn scale_factor_shape_is_validated_and_explained() {
+        let (dispatcher, device) = dispatcher();
+        let input = host_tensor(&device, vec![2, 3], &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        // A scalar factor is accepted and keeps the input shape.
+        let scalar = host_tensor(&device, vec![1], &[0.5]);
+        let op = TensorOp::Scale {
+            input: &input,
+            factor: &scalar,
+        };
+        assert_eq!(op.kind(), OpKind::Scale);
+        assert_eq!(op.output_shape(), vec![2, 3]);
+        assert_eq!(
+            op.shape_signature(),
+            ShapeSignature::Scale {
+                numel: 6,
+                width: 3,
+                factor_width: 1
+            }
+        );
+        let request = ExecutionRequest::new(TensorOp::Scale {
+            input: &input,
+            factor: &scalar,
+        });
+        assert_eq!(dispatcher.plan(&request).unwrap().backend, "cpu-reference");
+        let values = f32_values(&device, &dispatcher.execute(&request).unwrap());
+        assert_eq!(values, [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]);
+
+        // A per-column factor is accepted.
+        let columns = host_tensor(&device, vec![3], &[1.0, 2.0, 3.0]);
+        let request = ExecutionRequest::new(TensorOp::Scale {
+            input: &input,
+            factor: &columns,
+        });
+        let values = f32_values(&device, &dispatcher.execute(&request).unwrap());
+        assert_eq!(values, [1.0, 4.0, 9.0, 4.0, 10.0, 18.0]);
+
+        // A factor matching neither [1] nor the last dimension is refused by
+        // the contract, so no backend is ever consulted.
+        let rows = host_tensor(&device, vec![2], &[1.0, 2.0]);
+        let request = ExecutionRequest::new(TensorOp::Scale {
+            input: &input,
+            factor: &rows,
+        });
+        assert_eq!(
+            dispatcher.explain(&request).unwrap_err(),
+            DispatchError::Contract(OpError::ScaleMismatch)
+        );
+        assert!(matches!(
+            dispatcher.execute(&request),
+            Err(ExecutionError::Dispatch(DispatchError::Contract(
+                OpError::ScaleMismatch
+            )))
+        ));
+    }
+
+    #[test]
+    fn scale_uses_the_elementwise_launch_grid_rule() {
+        // The scale kernel is a strided elementwise kernel: 256 threads per
+        // block on the x axis, and the y axis stays at 1.
+        assert_eq!(
+            cuda_grid_limit(ShapeSignature::Scale {
+                numel: 6 * 256,
+                width: 3,
+                factor_width: 1
+            }),
+            None
+        );
+        assert_eq!(
+            cuda_grid_limit(ShapeSignature::Scale {
+                numel: (CUDA_GRID_X_MAX + 1) * 256,
+                width: 3,
+                factor_width: 3
+            }),
+            Some(UnsupportedReason::LaunchLimit {
+                axis: "x",
+                blocks: (CUDA_GRID_X_MAX + 1) * 256 / 256,
                 maximum: CUDA_GRID_X_MAX,
             })
         );
@@ -1146,9 +1541,9 @@ mod tests {
     }
 
     #[test]
-    fn cpu_capabilities_cover_both_dtypes_for_all_four_operations() {
+    fn cpu_capabilities_cover_both_dtypes_for_every_operation() {
         let capabilities = CpuReferenceBackend::new().capabilities();
-        assert_eq!(capabilities.supported_ops.len(), 8);
+        assert_eq!(capabilities.supported_ops.len(), OpKind::ALL.len() * 2);
         for dtype in [DType::F32, DType::BF16] {
             for kind in OpKind::ALL {
                 assert!(

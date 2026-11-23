@@ -124,8 +124,34 @@ impl GemmaCanvas {
     where
         I: IntoIterator<Item = (usize, u32, f32)>,
     {
+        let accepted = vec![true; self.positions.len()];
+        self.apply_iteration_with_mask(candidates, &accepted, commit_threshold)
+    }
+
+    /// Apply one iteration with an explicit acceptance mask.
+    ///
+    /// The mask carries the reference acceptance decision (for DiffusionGemma:
+    /// the entropy-bound prefix of the pinned sampler). A position is committed
+    /// only when the mask accepts it *and* its confidence reaches the
+    /// threshold; every other candidate stays provisional and is re-noised by
+    /// the adapter.
+    pub fn apply_iteration_with_mask<I>(
+        &mut self,
+        candidates: I,
+        accepted: &[bool],
+        commit_threshold: f32,
+    ) -> Result<CanvasMetrics, CanvasError>
+    where
+        I: IntoIterator<Item = (usize, u32, f32)>,
+    {
         if !commit_threshold.is_finite() || !(0.0..=1.0).contains(&commit_threshold) {
             return Err(CanvasError::InvalidThreshold);
+        }
+        if accepted.len() != self.positions.len() {
+            return Err(CanvasError::AcceptanceMaskLength {
+                expected: self.positions.len(),
+                actual: accepted.len(),
+            });
         }
 
         let next_iteration = self
@@ -161,7 +187,7 @@ impl GemmaCanvas {
         for (index, token_id, confidence) in updates {
             let position = &mut self.positions[index];
             position.confidence = confidence;
-            if confidence >= commit_threshold {
+            if accepted[index] && confidence >= commit_threshold {
                 position.token_id = Some(token_id);
                 position.state = CanvasTokenState::Committed;
                 metrics.newly_committed += 1;
@@ -200,6 +226,8 @@ pub enum CanvasError {
     EmptyCanvas,
     #[error("confidence threshold must be finite and within [0, 1]")]
     InvalidThreshold,
+    #[error("acceptance mask has {actual} entries, expected {expected}")]
+    AcceptanceMaskLength { expected: usize, actual: usize },
     #[error("candidate position {index} is outside canvas length {length}")]
     PositionOutOfBounds { index: usize, length: usize },
     #[error("candidate position {0} appears more than once in an iteration")]
