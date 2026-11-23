@@ -563,9 +563,9 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
 | M7 | Scheduler et orchestration mémoire | **Livré sur `main` par la PR #21** |
 | M7.1 | Durcissement scheduler/runtime et préparation M8 | **Livré sur `main` par la PR #22** ; CI verte ; revalidation RTX 5090 réussie au SHA de code `c16e925` (17/17 requis par campagne, deux campagnes ; 27/27 tests workspace par campagne) ; limites restantes suivies dans l'issue #23 |
-| M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **Implémenté dans la PR #24, finalisation BF16 incluse ; PR ouverte, non fusionnée dans `main`** (branche `feat/m8-tensor-foundation`) — Tensor canonique, contrats, dispatch, kernels CUDA F32 et BF16, intégration mémoire/scheduler ; preuves matérielles RTX 5090 versionnées |
-| M9 | Orchestration de diffusion modulaire commune | Planifié |
-| M10 | Adaptateur et intégration DiffusionGemma | Planifié |
+| M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **Livré sur `main`** par la PR #24 ; validation F32/BF16 RTX 5090 documentée |
+| M9 | Orchestration de diffusion modulaire commune | **Livré sur `main`** par la PR #32 ; limites et suivis #33 à #38 |
+| M10 | Adaptateur et intégration DiffusionGemma | **En cours** — branche `feat/m10-diffusiongemma` ; socle CPU de configuration/canvas préparé, exécution réelle et validation RTX 5090 restantes |
 | M11 | Adaptateur et intégration Clover | Planifié |
 | M12 | Optimisation et validation de performance | Planifié |
 
@@ -737,6 +737,8 @@ Critères d'acceptation :
 
 ### M9 — Orchestration de diffusion modulaire commune
 
+**État :** livré sur `main` par la PR #32 (fusionnée le 23 novembre 2026). L'API `DiffusionPlan`, `DiffusionExecutor`, `DiffusionOrchestrator`, les étapes Prepare/Denoise/Validate/Commit, les dépendances de scheduler, l'annulation coopérative et les tests CPU sont livrés. Les limites et suites sont suivies par les issues #33 à #38. Voir [m9-diffusion-orchestration.md](m9-diffusion-orchestration.md).
+
 **Objectif :** construire le moteur d'orchestration de diffusion commun de Claymore, modulaire et extensible, au-dessus du runtime et du socle tensoriel M8.
 
 Travaux :
@@ -753,6 +755,8 @@ Critères d'acceptation :
 - sûreté des ressources et annulation vérifiées de bout en bout.
 
 ### M10 — Adaptateur DiffusionGemma
+
+**État :** en cours sur `feat/m10-diffusiongemma`. Le premier incrément ajoute le parsing typé de configuration BF16 et l'état CPU du canvas avec transitions de confiance atomiques ; il ne constitue pas encore une exécution du checkpoint. Le périmètre détaillé et le gate matériel figurent dans [m10-diffusiongemma.md](m10-diffusiongemma.md), avec le [prompt agent RTX 5090](agents/m10-rtx5090-agent-prompt.md).
 
 **Objectif :** intégrer google/diffusiongemma-26B-A4B-it au moteur de diffusion commun, en conservant les exigences propres à son architecture.
 
@@ -904,6 +908,9 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 - `docs/audits/m3-device-foundations.md` — audit et durcissement des fondations Device.
 - `docs/audits/m4-device-lifecycle-contracts.md` — audit des contrats de libération, complétion asynchrone et vues tensor.
 - `docs/m8-architecture.md` — socle tensoriel natif, politique numérique F32/BF16 et tolérances.
+- `docs/m9-diffusion-orchestration.md` — contrats et limites de l'orchestration diffusion M9.
+- `docs/m10-diffusiongemma.md` — périmètre, critères et séquencement de l'adaptateur DiffusionGemma.
+- `docs/agents/m10-rtx5090-agent-prompt.md` — consignes de réalisation et de validation matérielle M10.
 - `docs/audits/m8-model-graph-requirements.md` — exigences de graphe et frontières M8/M9/M10/M11.
 - `docs/audits/m8-rtx5090-hardware-validation.md` — campagne matérielle F32.
 - `docs/audits/m8-bf16-rtx5090-hardware-validation.md` — campagne matérielle BF16.
