@@ -459,7 +459,7 @@ La limite `max_payload_bytes` porte explicitement sur les seuls octets du payloa
 
 La tranche M6 n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâches, ne charge pas de modèle et n'effectue aucun calcul tensoriel. Elle est validée par des tests CPU.
 
- - exécution concurrente/asynchrone des requêtes, stratégie de génération concrète et intégration de modèles dans le runtime (extensions futures de M6/M8+) ;
+ - exécution concurrente/asynchrone des requêtes et stratégie de génération concrète (extensions futures du runtime) ;
 - pool allocator VRAM, réutilisation de blocs et défragmentation (hors périmètre M7.1) ;
 - intégration des tâches Transfer/Prefetch au scheduler M7 : livrée dans la première tranche, avec exécution synchrone sur le thread propriétaire ;
 - prefetch prédictif intégré au cache d'experts ;
@@ -467,10 +467,10 @@ La tranche M6 n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâch
 - graphes complets et chemins d'inférence effectifs des modèles ;
 - chargement et exécution réels de DiffusionGemma ;
 - chargement et exécution réels de Clover-35B-A3B-preview ;
-- kernels CUDA spécialisés propres aux graphes complets des modèles et optimisations non encore livrées ;
+- kernels CUDA spécialisés propres aux graphes complets des modèles et optimisations non encore livrées ;\n- extensions post-M9 : équité round-robin, hooks de stratégie/retry, rétention/purge des sessions et convergence des schedulers (issues #33 à #38) ;
 - validation de performance et de qualité sur la RTX 5090 cible.
 
-Les crates modèles constituent à ce stade des frontières de workspace, pas la preuve que les modèles sont exécutables.
+Les crates modèles et adaptateurs ne constituent pas à eux seuls la preuve que les modèles sont exécutables. La PR #40 a livré une première tranche DiffusionGemma (chargeur strict, primitives et sous-graphe partiel), mais elle déclare explicitement ouverts le streaming complet, les chemins MoE/vision, le cache encodeur/cross-attention et la génération réelle du checkpoint 26B.
 
 ### 7.3 Limites connues du backend CUDA actuel
 
@@ -573,7 +573,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M7.1 | Durcissement scheduler/runtime et préparation M8 | **Livré sur `main` par la PR #22** ; CI verte ; revalidation RTX 5090 réussie au SHA de code `c16e925` (17/17 requis par campagne, deux campagnes ; 27/27 tests workspace par campagne) ; limites restantes suivies dans l'issue #23 |
 | M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **Livré sur `main` par la PR #24** — Tensor canonique, contrats, dispatch, kernels CUDA F32/BF16 et intégration mémoire/scheduler ; preuves matérielles versionnées |
 | M9 | Orchestration de diffusion modulaire commune | Cœur livré par la PR #32 ; compléments CPU-only et documentation suivis dans l'issue #31 |
-| M10 | Adaptateur et intégration DiffusionGemma | Planifié |
+| M10 | Adaptateur et intégration DiffusionGemma | En cours dans la PR #40 ; génération complète et gates listés non validés |
 | M11 | Adaptateur et intégration Clover | Planifié |
 | M12 | Optimisation et validation de performance | Planifié |
 
