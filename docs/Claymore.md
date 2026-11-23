@@ -318,7 +318,7 @@ Ces composants peuvent fournir des primitives spécialisées, mais l'API tensori
 
 `grid_for` calcule `total.div_ceil(block)` et convertit le résultat en `c_uint` : au-delà de la plage `u32`, le lancement est refusé par `InvalidLaunchConfiguration("grid dimension exceeds CUDA limit")`. Aucune interrogation des limites réelles du device n'est effectuée. Les dimensions nulles sont rejetées en amont (`checked_count`, `checked_matmul`, `checked_last_dim`). Le matmul est une implémentation simple, sans tuilage en mémoire partagée ni Tensor Core ; la performance relève de M12.
 
-Le profil matériel impose exactement **un stream compute et un stream transfer** (`HardwareProfile::validate`) ; `CudaMemoryManager` les crée tous deux avec `CU_STREAM_NON_BLOCKING`. Toutes les opérations tensorielless d'un même manager sont sérialisées sur ce stream compute unique, chacune avec son propre event CUDA : les gardes `IN_FLIGHT` sont installés avant le retour de `launch_tensor_op` (la soumission a lieu sous emprunt exclusif de `&mut self`) et levés seulement après `wait_for_transfer`. Aucun recouvrement transfert/calcul ni préchargement concurrent n'est revendiqué ; l'expression explicite des dépendances compute ↔ transfert reste une limite suivie (§7.3). Les écarts numériques CPU/CUDA et la provenance des PTX sont documentés dans [audits/m8-cpu-cuda-numerics.md](audits/m8-cpu-cuda-numerics.md) et [audits/m8-ptx-provenance.md](audits/m8-ptx-provenance.md).
+Le profil matériel impose exactement **un stream compute et un stream transfer** (`HardwareProfile::validate`) ; `CudaMemoryManager` les crée tous deux avec `CU_STREAM_NON_BLOCKING`. Toutes les opérations tensoriellesss d'un même manager sont sérialisées sur ce stream compute unique, chacune avec son propre event CUDA : les gardes `IN_FLIGHT` sont installés avant le retour de `launch_tensor_op` (la soumission a lieu sous emprunt exclusif de `&mut self`) et levés seulement après `wait_for_transfer`. Aucun recouvrement transfert/calcul ni préchargement concurrent n'est revendiqué ; l'expression explicite des dépendances compute ↔ transfert reste une limite suivie (§7.3). Les écarts numériques CPU/CUDA et la provenance des PTX sont documentés dans [audits/m8-cpu-cuda-numerics.md](audits/m8-cpu-cuda-numerics.md) et [audits/m8-ptx-provenance.md](audits/m8-ptx-provenance.md).
 
 
 ---
@@ -464,10 +464,10 @@ La tranche M6 n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâch
 - intégration des tâches Transfer/Prefetch au scheduler M7 : livrée dans la première tranche, avec exécution synchrone sur le thread propriétaire ;
 - prefetch prédictif intégré au cache d'experts ;
 - télémétrie consolidée CPU/RAM/VRAM/transferts ;
-- moteur tensoriel natif et chemin d'inférence effectif ;
+- graphes complets et chemins d'inférence effectifs des modèles ;
 - chargement et exécution réels de DiffusionGemma ;
 - chargement et exécution réels de Clover-35B-A3B-preview ;
-- kernels CUDA spécialisés et kernel dispatcher opérationnel ;
+- kernels CUDA spécialisés propres aux graphes complets des modèles et optimisations non encore livrées ;
 - validation de performance et de qualité sur la RTX 5090 cible.
 
 Les crates modèles constituent à ce stade des frontières de workspace, pas la preuve que les modèles sont exécutables.
@@ -558,7 +558,7 @@ Chaque moteur de modèle doit pouvoir préparer, exécuter et libérer ses état
 
 ## 10. Feuille de route et phases de développement
 
-Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (politiques mémoire, backend CUDA et adaptateur Memory ↔ CUDA). La feuille de route ci-dessous repart de l'état réel du dépôt et utilise une numérotation de travail M0 à M8 ; elle ne réécrit pas l'historique des versions.
+Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (politiques mémoire, backend CUDA et adaptateur Memory ↔ CUDA). La feuille de route ci-dessous repart de l'état réel du dépôt et utilise une numérotation de travail M0 à M12 ; elle ne réécrit pas l'historique des versions.
 
 | Phase | Nom | Statut |
 |---|---|---|
@@ -745,20 +745,20 @@ Critères d'acceptation :
 
 ### M9 — Orchestration de diffusion modulaire commune
 
-**Objectif :** construire le moteur d'orchestration de diffusion commun de Claymore, modulaire et extensible, au-dessus du runtime et du socle tensoriel M8.
+**État :** cœur d'orchestration livré par la PR #32 ; les compléments CPU-only de couverture et de documentation sont livrés dans cette contribution (issue #31). Les follow-ups d'équité, de hooks de stratégie, de rétention et de convergence des schedulers restent suivis séparément (#33 à #38).
 
-Travaux :
-- définir le cycle de génération, les états et les contrats de progression communs ;
-- factoriser les invariants partagés sans imposer une boucle ou un graphe unique ;
-- définir les interfaces de stratégies et points d'extension pour canvas/state, denoising, attention, block diffusion, GDN et routage expert ;
-- intégrer scheduler, mémoire, transferts, annulation et télémétrie ;
-- valider les transitions et erreurs par des stratégies simulées CPU.
+Travaux livrés dans le cœur :
+- cycle de génération par blocs, plan validé et transitions explicites ;
+- dépendances de tâches et exécution d'une étape bornée ;
+- annulation coopérative aux frontières sûres et propagation d'échec ;
+- métriques CPU de sessions, étapes, blocs et durées d'exécution par phase ;
+- tests unitaires et d'intégration synthétiques CPU multi-blocs.
 
-Critères d'acceptation :
-- un seul moteur d'orchestration de diffusion et des stratégies composables ;
-- aucune dépendance aux détails d'un modèle dans le cœur commun ;
-- tests démontrant l'extensibilité sans imposer de fausse abstraction commune ;
-- sûreté des ressources et annulation vérifiées de bout en bout.
+Critères de validation CPU-only :
+- tests d'intégration couvrant progression multi-blocs, commit, erreur isolée, annulation, session indépendante et nouvelle session après annulation ;
+- compteurs reproductibles de blocs/étapes/sessions ; durées monotones par phase exposées comme diagnostics et sans effet sur l'ordonnancement ;
+- documentation du cycle de vie, du diagramme de séquence, de la propriété/synchronisation et des limites de reprise ;
+- aucune génération de modèle, compatibilité de checkpoint ou métrique GPU revendiquée.
 
 ### M10 — Adaptateur DiffusionGemma
 
