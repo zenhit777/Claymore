@@ -44,6 +44,7 @@ impl GemmaModelConfig {
                 return Err(GemmaConfigError::UnsupportedWeightDType(dtype.to_owned()));
             }
         }
+
         for (name, value) in [
             ("hidden_size", self.hidden_size),
             ("num_hidden_layers", self.num_hidden_layers),
@@ -51,7 +52,9 @@ impl GemmaModelConfig {
             ("num_attention_heads", self.num_attention_heads),
             ("num_key_value_heads", self.num_key_value_heads),
         ] {
-            if value == Some(0) { return Err(GemmaConfigError::ZeroDimension(name)); }
+            if value == Some(0) {
+                return Err(GemmaConfigError::ZeroDimension(name));
+            }
         }
         Ok(())
     }
@@ -79,7 +82,9 @@ mod tests {
 
     #[test]
     fn parses_bf16_config_without_assuming_optional_fields() {
-        let config = GemmaModelConfig::from_json(r#"{"torch_dtype":"bfloat16","hidden_size":2048}"#).unwrap();
+        let config =
+            GemmaModelConfig::from_json(r#"{"torch_dtype":"bfloat16","hidden_size":2048}"#)
+                .unwrap();
         assert!(config.requires_bf16());
         assert_eq!(config.hidden_size, Some(2048));
         assert_eq!(config.num_hidden_layers, None);
@@ -88,12 +93,21 @@ mod tests {
     #[test]
     fn rejects_implicit_or_unsupported_precision() {
         let error = GemmaModelConfig::from_json(r#"{"torch_dtype":"float16"}"#).unwrap_err();
-        assert!(matches!(error, GemmaConfigError::UnsupportedWeightDType(_)));
+        assert!(matches!(
+            error,
+            GemmaConfigError::UnsupportedWeightDType(_)
+        ));
     }
 
     #[test]
     fn rejects_zero_dimensions() {
-        let config = GemmaModelConfig { hidden_size: Some(0), ..GemmaModelConfig::from_json("{}").unwrap() };
-        assert_eq!(config.validate().unwrap_err().to_string(), "configuration field hidden_size must be non-zero");
+        let config = GemmaModelConfig {
+            hidden_size: Some(0),
+            ..GemmaModelConfig::from_json("{}").unwrap()
+        };
+        assert_eq!(
+            config.validate().unwrap_err().to_string(),
+            "configuration field hidden_size must be non-zero"
+        );
     }
 }
