@@ -35,6 +35,7 @@ impl DiffusionExecutor for RecordingExecutor {
 #[test]
 fn synthetic_multiblock_session_reports_progress_and_phase_metrics() {
     let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+    let expected_steps = plan(3, 2).steps().to_vec();
     let id = orchestrator
         .submit(plan(3, 2), CancellationToken::new(), TaskPriority::Normal)
         .unwrap();
@@ -73,6 +74,7 @@ fn synthetic_multiblock_session_reports_progress_and_phase_metrics() {
     assert_eq!(final_metrics.steps_completed, 15);
     assert_eq!(final_metrics.sessions_completed, 1);
     assert_eq!(executor.calls.len(), 15);
+    assert_eq!(executor.calls, expected_steps);
     assert_eq!(
         final_metrics.execution_duration_ns,
         final_metrics.prepare_duration_ns
@@ -143,7 +145,7 @@ fn synthetic_cancellation_is_observed_at_a_safe_boundary() {
     let metrics = orchestrator.metrics();
     assert_eq!(orchestrator.session(id).unwrap().state, DiffusionSessionState::Cancelled);
     assert_eq!(metrics.steps_completed, 1);
-    assert_eq!(metrics.steps_cancelled, 0);
+    assert_eq!(metrics.steps_cancelled, 7);
     assert_eq!(metrics.sessions_cancelled, 1);
     assert_eq!(metrics.blocks_pending, 0);
 }
