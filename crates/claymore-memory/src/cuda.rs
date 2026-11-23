@@ -1281,6 +1281,225 @@ impl CudaMemoryManager {
                 self.honor_launch_fault(launch)?;
                 true
             }
+            TensorOp::Widen { input } => {
+                let launch = unsafe {
+                    self.compute_engine.widen_bf16(
+                        pointers[0],
+                        pointers[1],
+                        input.layout().numel(),
+                        &self.compute_stream,
+                    )
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::RouterTopK {
+                scores,
+                per_expert_scale: _,
+                top_k,
+            } => {
+                let shape = scores.layout().shape();
+                let launch = unsafe {
+                    self.compute_engine.router_top_k(
+                        pointers[0],
+                        pointers[1],
+                        pointers[2],
+                        shape[0],
+                        shape[1],
+                        *top_k,
+                        &self.compute_stream,
+                    )
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::GeluMulUp { gate, .. } => {
+                let launch = if gate.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.gelu_mul_up_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            gate.layout().numel(),
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.gelu_mul_up(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            gate.layout().numel(),
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::GatherRows { input, indices } => {
+                let launch = if input.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.gather_rows_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            indices.layout().numel(),
+                            input.layout().shape()[1],
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.gather_rows(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            indices.layout().numel(),
+                            input.layout().shape()[1],
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::ScatterAdd {
+                source,
+                weights: _,
+                rows: _,
+                out_rows,
+            } => {
+                // Atomic accumulation requires a pre-zeroed destination.
+                let element_bytes = if source.layout().dtype() == DType::BF16 {
+                    2
+                } else {
+                    4
+                };
+                let width = source.layout().shape()[1];
+                let zero = unsafe {
+                    self.compute_engine.zero(
+                        pointers[3],
+                        *out_rows * width * element_bytes,
+                        &self.compute_stream,
+                    )
+                };
+                self.honor_launch_fault(zero)?;
+                let launch = if source.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.scatter_add_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            pointers[3],
+                            source.layout().shape()[0],
+                            width,
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.scatter_add(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            pointers[3],
+                            source.layout().shape()[0],
+                            width,
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::EmbedGather { ids, table, scale } => {
+                let launch = if table.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.embed_gather_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            ids.layout().numel(),
+                            table.layout().shape()[1],
+                            *scale,
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.embed_gather(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            ids.layout().numel(),
+                            table.layout().shape()[1],
+                            *scale,
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::RowMask { input, flags: _ } => {
+                let shape = input.layout().shape();
+                let launch = if input.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.row_mask_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            shape[0],
+                            shape[1],
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.row_mask(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            shape[0],
+                            shape[1],
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::ScaleBias { input, .. } => {
+                let launch = if input.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.scale_bias_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            pointers[3],
+                            input.layout().numel(),
+                            input.layout().shape()[1],
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.scale_bias(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            pointers[3],
+                            input.layout().numel(),
+                            input.layout().shape()[1],
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
             _ => false,
         };
         Ok(if handled { Some(()) } else { None })

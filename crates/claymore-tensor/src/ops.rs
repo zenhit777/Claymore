@@ -38,6 +38,16 @@ pub enum OpError {
     InvalidAttentionScale,
     #[error("soft cap must be finite and strictly positive")]
     InvalidSoftCap,
+    #[error("index tensors must encode exact integer rows")]
+    InvalidIndex,
+    #[error("top-k selection is invalid: top_k {0} for {1} experts")]
+    InvalidTopK(usize, usize),
+    #[error("scatter-add requires a non-zero output row count")]
+    InvalidOutputRows,
+    #[error("index/weight/flag tensors must be F32")]
+    IndexDTypeMismatch,
+    #[error("embedding scale must be finite")]
+    InvalidEmbedScale,
     #[error("RoPE parameters are invalid: {0}")]
     InvalidRopeParameter(String),
     #[error("attention head configuration is invalid: {0}")]

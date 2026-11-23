@@ -46,6 +46,21 @@ const ATTENTION_BF16: &[u8] = b"claymore_attention_bf16\0";
 const SOFT_CAP_BF16: &[u8] = b"claymore_soft_cap_bf16\0";
 const SCALE_BF16: &[u8] = b"claymore_scale_bf16\0";
 
+const WIDEN_BF16_F32: &[u8] = b"claymore_widen_bf16_f32\0";
+const ROUTER_TOP_K_F32: &[u8] = b"claymore_router_top_k_f32\0";
+const GELU_MUL_UP_F32: &[u8] = b"claymore_gelu_mul_up_f32\0";
+const GELU_MUL_UP_BF16: &[u8] = b"claymore_gelu_mul_up_bf16\0";
+const GATHER_ROWS_F32: &[u8] = b"claymore_gather_rows_f32\0";
+const GATHER_ROWS_BF16: &[u8] = b"claymore_gather_rows_bf16\0";
+const SCATTER_ADD_F32: &[u8] = b"claymore_scatter_add_f32\0";
+const SCATTER_ADD_BF16: &[u8] = b"claymore_scatter_add_bf16\0";
+const EMBED_GATHER_F32: &[u8] = b"claymore_embed_gather_f32\0";
+const EMBED_GATHER_BF16: &[u8] = b"claymore_embed_gather_bf16\0";
+const ROW_MASK_F32: &[u8] = b"claymore_row_mask_f32\0";
+const ROW_MASK_BF16: &[u8] = b"claymore_row_mask_bf16\0";
+const SCALE_BIAS_F32: &[u8] = b"claymore_scale_bias_f32\0";
+const SCALE_BIAS_BF16: &[u8] = b"claymore_scale_bias_bf16\0";
+
 const ELEMENTWISE_BLOCK: u32 = 256;
 const MATMUL_TILE: u32 = 16;
 const LINEAR_TILE: u32 = 64;
@@ -89,6 +104,20 @@ struct Kernels {
     attention_bf16: CuFunctionRaw,
     soft_cap_bf16: CuFunctionRaw,
     scale_bf16: CuFunctionRaw,
+    widen_bf16_f32: CuFunctionRaw,
+    router_top_k_f32: CuFunctionRaw,
+    gelu_mul_up_f32: CuFunctionRaw,
+    gelu_mul_up_bf16: CuFunctionRaw,
+    gather_rows_f32: CuFunctionRaw,
+    gather_rows_bf16: CuFunctionRaw,
+    scatter_add_f32: CuFunctionRaw,
+    scatter_add_bf16: CuFunctionRaw,
+    embed_gather_f32: CuFunctionRaw,
+    embed_gather_bf16: CuFunctionRaw,
+    row_mask_f32: CuFunctionRaw,
+    row_mask_bf16: CuFunctionRaw,
+    scale_bias_f32: CuFunctionRaw,
+    scale_bias_bf16: CuFunctionRaw,
 }
 
 /// Owns the embedded PTX modules. Cheap to clone; all clones share one module
@@ -136,6 +165,24 @@ impl CudaComputeEngine {
             attention_bf16: load_function(&module_m10, ATTENTION_BF16, "claymore_attention_bf16")?,
             soft_cap_bf16: load_function(&module_m10, SOFT_CAP_BF16, "claymore_soft_cap_bf16")?,
             scale_bf16: load_function(&module_m10, SCALE_BF16, "claymore_scale_bf16")?,
+            widen_bf16_f32: load_function(&module_m10, WIDEN_BF16_F32, "claymore_widen_bf16_f32")?,
+            router_top_k_f32: load_function(
+                &module_m10,
+                ROUTER_TOP_K_F32,
+                "claymore_router_top_k_f32",
+            )?,
+            gelu_mul_up_f32: load_function(&module_m10, GELU_MUL_UP_F32, "claymore_gelu_mul_up_f32")?,
+            gelu_mul_up_bf16: load_function(&module_m10, GELU_MUL_UP_BF16, "claymore_gelu_mul_up_bf16")?,
+            gather_rows_f32: load_function(&module_m10, GATHER_ROWS_F32, "claymore_gather_rows_f32")?,
+            gather_rows_bf16: load_function(&module_m10, GATHER_ROWS_BF16, "claymore_gather_rows_bf16")?,
+            scatter_add_f32: load_function(&module_m10, SCATTER_ADD_F32, "claymore_scatter_add_f32")?,
+            scatter_add_bf16: load_function(&module_m10, SCATTER_ADD_BF16, "claymore_scatter_add_bf16")?,
+            embed_gather_f32: load_function(&module_m10, EMBED_GATHER_F32, "claymore_embed_gather_f32")?,
+            embed_gather_bf16: load_function(&module_m10, EMBED_GATHER_BF16, "claymore_embed_gather_bf16")?,
+            row_mask_f32: load_function(&module_m10, ROW_MASK_F32, "claymore_row_mask_f32")?,
+            row_mask_bf16: load_function(&module_m10, ROW_MASK_BF16, "claymore_row_mask_bf16")?,
+            scale_bias_f32: load_function(&module_m10, SCALE_BIAS_F32, "claymore_scale_bias_f32")?,
+            scale_bias_bf16: load_function(&module_m10, SCALE_BIAS_BF16, "claymore_scale_bias_bf16")?,
         });
         Ok(Self {
             context,
@@ -1080,6 +1127,605 @@ impl CudaComputeEngine {
                     ptr::null_mut(),
                 ),
                 "cuLaunchKernel(scale)",
+            )
+        }
+    }
+
+    /// Zero a live device allocation. Used to prepare scatter-add outputs,
+    /// the only accumulation kernel in the contract; atomics require a
+    /// pre-zeroed destination.
+    /// # Safety
+    /// `output` must reference a live allocation of at least `bytes` bytes in
+    /// this engine's CUDA context.
+    pub unsafe fn zero(
+        &self,
+        output: u64,
+        bytes: usize,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.prepare(stream)?;
+        if bytes == 0 {
+            return Err(invalid("zero-sized memset"));
+        }
+        // SAFETY: the memset targets a live allocation on this stream.
+        unsafe {
+            check(
+                crate::driver::cuMemsetD8Async(output, 0, bytes, stream.raw),
+                "cuMemsetD8Async",
+            )
+        }
+    }
+
+    /// Bit-exact BF16 widening to F32. The BF16 input uses `numel` elements;
+    /// the F32 output must reserve `numel * 4` bytes.
+    /// # Safety
+    /// Both pointers must reference live, sufficiently sized allocations in
+    /// this engine's CUDA context.
+    pub unsafe fn widen_bf16(
+        &self,
+        input: u64,
+        output: u64,
+        numel: usize,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.prepare(stream)?;
+        let count = checked_count(numel, "widen requires at least one element")?;
+        let grid = grid_for(count, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX)?;
+        let params = [p(&input), p(&output), p(&count)];
+        // SAFETY: identical lifetime contract to `add`.
+        unsafe {
+            check(
+                crate::driver::cuLaunchKernel(
+                    self.kernels.widen_bf16_f32,
+                    grid,
+                    1,
+                    1,
+                    ELEMENTWISE_BLOCK,
+                    1,
+                    1,
+                    0,
+                    stream.raw,
+                    params.as_ptr(),
+                    ptr::null_mut(),
+                ),
+                "cuLaunchKernel(widen)",
+            )
+        }
+    }
+
+    /// Router selection for `[tokens, experts]` FP32 scores. One block per
+    /// token; the block covers every expert, so `experts` must not exceed the
+    /// launch block width.
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context.
+    pub unsafe fn router_top_k(
+        &self,
+        scores: u64,
+        per_expert_scale: u64,
+        output: u64,
+        tokens: usize,
+        experts: usize,
+        top_k: usize,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.prepare(stream)?;
+        if tokens == 0 || experts == 0 || top_k == 0 || top_k > experts {
+            return Err(invalid("router dimensions are invalid"));
+        }
+        if experts as u32 > ELEMENTWISE_BLOCK {
+            return Err(invalid(
+                "router expert count exceeds the launch block width",
+            ));
+        }
+        // probs + the 32-lane block reduction buffer, in dynamic shared memory.
+        let shared = (experts as u32)
+            .checked_mul(4)
+            .and_then(|n| n.checked_add(32 * 4))
+            .ok_or_else(|| invalid("router shared memory overflow"))?;
+        if shared > 48 * 1024 {
+            return Err(invalid("router shared memory exceeds 48 KiB"));
+        }
+        let tokens64 = u64::try_from(tokens).map_err(|_| invalid("token count overflow"))?;
+        let experts64 = u64::try_from(experts).map_err(|_| invalid("expert count overflow"))?;
+        let top_k64 = u64::try_from(top_k).map_err(|_| invalid("top-k overflow"))?;
+        let params = [
+            p(&scores),
+            p(&per_expert_scale),
+            p(&output),
+            p(&tokens64),
+            p(&experts64),
+            p(&top_k64),
+        ];
+        // SAFETY: identical lifetime contract to `add`.
+        unsafe {
+            check(
+                crate::driver::cuLaunchKernel(
+                    self.kernels.router_top_k_f32,
+                    tokens64 as c_uint,
+                    1,
+                    1,
+                    ELEMENTWISE_BLOCK,
+                    1,
+                    1,
+                    shared,
+                    stream.raw,
+                    params.as_ptr(),
+                    ptr::null_mut(),
+                ),
+                "cuLaunchKernel(router_top_k)",
+            )
+        }
+    }
+
+    /// `gelu_pytorch_tanh(gate) * up` over `[rows, cols]`, F32.
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context.
+    pub unsafe fn gelu_mul_up(
+        &self,
+        gate: u64,
+        up: u64,
+        output: u64,
+        numel: usize,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.gelu_mul_up_dispatch(gate, up, output, numel, false, stream)
+    }
+
+    /// BF16 variant of `gelu_mul_up`.
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context.
+    pub unsafe fn gelu_mul_up_bf16(
+        &self,
+        gate: u64,
+        up: u64,
+        output: u64,
+        numel: usize,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.gelu_mul_up_dispatch(gate, up, output, numel, true, stream)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn gelu_mul_up_dispatch(
+        &self,
+        gate: u64,
+        up: u64,
+        output: u64,
+        numel: usize,
+        bf16: bool,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.prepare(stream)?;
+        let count = checked_count(numel, "gelu_mul_up requires at least one element")?;
+        let grid = grid_for(count, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX)?;
+        let params = [p(&gate), p(&up), p(&output), p(&count)];
+        let function = if bf16 {
+            self.kernels.gelu_mul_up_bf16
+        } else {
+            self.kernels.gelu_mul_up_f32
+        };
+        // SAFETY: identical lifetime contract to `add`.
+        unsafe {
+            check(
+                crate::driver::cuLaunchKernel(
+                    function,
+                    grid,
+                    1,
+                    1,
+                    ELEMENTWISE_BLOCK,
+                    1,
+                    1,
+                    0,
+                    stream.raw,
+                    params.as_ptr(),
+                    ptr::null_mut(),
+                ),
+                "cuLaunchKernel(gelu_mul_up)",
+            )
+        }
+    }
+
+    /// Row gather with F32-encoded indices: `input [rows, width]`,
+    /// `indices [out_rows]` -> `output [out_rows, width]`.
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context.
+    pub unsafe fn gather_rows(
+        &self,
+        input: u64,
+        indices: u64,
+        output: u64,
+        out_rows: usize,
+        width: usize,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.gather_rows_dispatch(input, indices, output, out_rows, width, false, stream)
+    }
+
+    /// BF16 variant of `gather_rows`.
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context.
+    pub unsafe fn gather_rows_bf16(
+        &self,
+        input: u64,
+        indices: u64,
+        output: u64,
+        out_rows: usize,
+        width: usize,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.gather_rows_dispatch(input, indices, output, out_rows, width, true, stream)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn gather_rows_dispatch(
+        &self,
+        input: u64,
+        indices: u64,
+        output: u64,
+        out_rows: usize,
+        width: usize,
+        bf16: bool,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.prepare(stream)?;
+        let (rows64, width64) = checked_last_dim(out_rows, width)?;
+        let grid_y = grid_for(width64, ELEMENTWISE_BLOCK, CUDA_GRID_Y_MAX)?;
+        let params = [p(&input), p(&indices), p(&output), p(&rows64), p(&width64)];
+        let function = if bf16 {
+            self.kernels.gather_rows_bf16
+        } else {
+            self.kernels.gather_rows_f32
+        };
+        // SAFETY: identical lifetime contract to `add`.
+        unsafe {
+            check(
+                crate::driver::cuLaunchKernel(
+                    function,
+                    rows64 as c_uint,
+                    grid_y,
+                    1,
+                    ELEMENTWISE_BLOCK,
+                    1,
+                    1,
+                    0,
+                    stream.raw,
+                    params.as_ptr(),
+                    ptr::null_mut(),
+                ),
+                "cuLaunchKernel(gather_rows)",
+            )
+        }
+    }
+
+    /// Weighted scatter-add with FP32 atomics. The destination `output` must
+    /// be zeroed by `zero` on the same stream before this launch; the
+    /// accumulation order is not deterministic, so the differential budget is
+    /// a model-derived bound rather than a ULP budget.
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context. `output` must be pre-zeroed.
+    pub unsafe fn scatter_add(
+        &self,
+        source: u64,
+        weights: u64,
+        rows: u64,
+        output: u64,
+        pairs: usize,
+        width: usize,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.scatter_add_dispatch(source, weights, rows, output, pairs, width, false, stream)
+    }
+
+    /// BF16 variant of `scatter_add` (bf16 atomic accumulation, matching the
+    /// pinned upstream bf16 index_add behaviour).
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context. `output` must be pre-zeroed.
+    pub unsafe fn scatter_add_bf16(
+        &self,
+        source: u64,
+        weights: u64,
+        rows: u64,
+        output: u64,
+        pairs: usize,
+        width: usize,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.scatter_add_dispatch(source, weights, rows, output, pairs, width, true, stream)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn scatter_add_dispatch(
+        &self,
+        source: u64,
+        weights: u64,
+        rows: u64,
+        output: u64,
+        pairs: usize,
+        width: usize,
+        bf16: bool,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.prepare(stream)?;
+        let (pairs64, width64) = checked_last_dim(pairs, width)?;
+        let grid_y = grid_for(width64, ELEMENTWISE_BLOCK, CUDA_GRID_Y_MAX)?;
+        let params = [
+            p(&source),
+            p(&weights),
+            p(&rows),
+            p(&output),
+            p(&pairs64),
+            p(&width64),
+        ];
+        let function = if bf16 {
+            self.kernels.scatter_add_bf16
+        } else {
+            self.kernels.scatter_add_f32
+        };
+        // SAFETY: identical lifetime contract to `add`; `output` is pre-zeroed.
+        unsafe {
+            check(
+                crate::driver::cuLaunchKernel(
+                    function,
+                    pairs64 as c_uint,
+                    grid_y,
+                    1,
+                    ELEMENTWISE_BLOCK,
+                    1,
+                    1,
+                    0,
+                    stream.raw,
+                    params.as_ptr(),
+                    ptr::null_mut(),
+                ),
+                "cuLaunchKernel(scatter_add)",
+            )
+        }
+    }
+
+    /// Embedding gather with F32-encoded ids and an explicit scale:
+    /// `ids [tokens]`, `table [vocab, width]` -> `output [tokens, width]`.
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context.
+    pub unsafe fn embed_gather(
+        &self,
+        ids: u64,
+        table: u64,
+        output: u64,
+        tokens: usize,
+        width: usize,
+        scale: f32,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.embed_gather_dispatch(ids, table, output, tokens, width, scale, false, stream)
+    }
+
+    /// BF16 variant of `embed_gather`.
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context.
+    pub unsafe fn embed_gather_bf16(
+        &self,
+        ids: u64,
+        table: u64,
+        output: u64,
+        tokens: usize,
+        width: usize,
+        scale: f32,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.embed_gather_dispatch(ids, table, output, tokens, width, scale, true, stream)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn embed_gather_dispatch(
+        &self,
+        ids: u64,
+        table: u64,
+        output: u64,
+        tokens: usize,
+        width: usize,
+        scale: f32,
+        bf16: bool,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.prepare(stream)?;
+        let (tokens64, width64) = checked_last_dim(tokens, width)?;
+        let grid_y = grid_for(width64, ELEMENTWISE_BLOCK, CUDA_GRID_Y_MAX)?;
+        let params = [
+            p(&ids),
+            p(&table),
+            p(&output),
+            p(&tokens64),
+            p(&width64),
+            &scale as *const f32 as *const c_void,
+        ];
+        let function = if bf16 {
+            self.kernels.embed_gather_bf16
+        } else {
+            self.kernels.embed_gather_f32
+        };
+        // SAFETY: identical lifetime contract to `add`.
+        unsafe {
+            check(
+                crate::driver::cuLaunchKernel(
+                    function,
+                    tokens64 as c_uint,
+                    grid_y,
+                    1,
+                    ELEMENTWISE_BLOCK,
+                    1,
+                    1,
+                    0,
+                    stream.raw,
+                    params.as_ptr(),
+                    ptr::null_mut(),
+                ),
+                "cuLaunchKernel(embed_gather)",
+            )
+        }
+    }
+
+    /// Per-row zeroing by F32 flags: `flags [rows]`, `flags[row] == 1.0`
+    /// yields zeros for that row.
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context.
+    pub unsafe fn row_mask(
+        &self,
+        input: u64,
+        flags: u64,
+        output: u64,
+        rows: usize,
+        width: usize,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.row_mask_dispatch(input, flags, output, rows, width, false, stream)
+    }
+
+    /// BF16 variant of `row_mask`.
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context.
+    pub unsafe fn row_mask_bf16(
+        &self,
+        input: u64,
+        flags: u64,
+        output: u64,
+        rows: usize,
+        width: usize,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.row_mask_dispatch(input, flags, output, rows, width, true, stream)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn row_mask_dispatch(
+        &self,
+        input: u64,
+        flags: u64,
+        output: u64,
+        rows: usize,
+        width: usize,
+        bf16: bool,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.prepare(stream)?;
+        let (rows64, width64) = checked_last_dim(rows, width)?;
+        let grid_y = grid_for(width64, ELEMENTWISE_BLOCK, CUDA_GRID_Y_MAX)?;
+        let params = [p(&input), p(&flags), p(&output), p(&rows64), p(&width64)];
+        let function = if bf16 {
+            self.kernels.row_mask_bf16
+        } else {
+            self.kernels.row_mask_f32
+        };
+        // SAFETY: identical lifetime contract to `add`.
+        unsafe {
+            check(
+                crate::driver::cuLaunchKernel(
+                    function,
+                    rows64 as c_uint,
+                    grid_y,
+                    1,
+                    ELEMENTWISE_BLOCK,
+                    1,
+                    1,
+                    0,
+                    stream.raw,
+                    params.as_ptr(),
+                    ptr::null_mut(),
+                ),
+                "cuLaunchKernel(row_mask)",
+            )
+        }
+    }
+
+    /// `(x * scale) - bias` over the last dimension, F32.
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context.
+    pub unsafe fn scale_bias(
+        &self,
+        input: u64,
+        scale: u64,
+        bias: u64,
+        output: u64,
+        numel: usize,
+        width: usize,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.scale_bias_dispatch(input, scale, bias, output, numel, width, false, stream)
+    }
+
+    /// BF16 variant of `scale_bias`.
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context.
+    pub unsafe fn scale_bias_bf16(
+        &self,
+        input: u64,
+        scale: u64,
+        bias: u64,
+        output: u64,
+        numel: usize,
+        width: usize,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.scale_bias_dispatch(input, scale, bias, output, numel, width, true, stream)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn scale_bias_dispatch(
+        &self,
+        input: u64,
+        scale: u64,
+        bias: u64,
+        output: u64,
+        numel: usize,
+        width: usize,
+        bf16: bool,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.prepare(stream)?;
+        let (count, width64) = checked_last_dim(numel, width)?;
+        let grid = grid_for(count, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX)?;
+        let params = [
+            p(&input),
+            p(&scale),
+            p(&bias),
+            p(&output),
+            p(&count),
+            p(&width64),
+        ];
+        let function = if bf16 {
+            self.kernels.scale_bias_bf16
+        } else {
+            self.kernels.scale_bias_f32
+        };
+        // SAFETY: identical lifetime contract to `add`.
+        unsafe {
+            check(
+                crate::driver::cuLaunchKernel(
+                    function,
+                    grid,
+                    1,
+                    1,
+                    ELEMENTWISE_BLOCK,
+                    1,
+                    1,
+                    0,
+                    stream.raw,
+                    params.as_ptr(),
+                    ptr::null_mut(),
+                ),
+                "cuLaunchKernel(scale_bias)",
             )
         }
     }

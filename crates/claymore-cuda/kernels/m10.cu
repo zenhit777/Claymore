@@ -365,3 +365,279 @@ extern "C" __global__ void claymore_scale_bf16(
     out[index] = to_bf16_rn(product);
   }
 }
+// ---------------------------------------------------------------------------
+// M10.2 kernels: MoE router, gated activation, gather/scatter, embedding,
+// row masking and explicit scale-bias. The same numerical policy applies:
+// widen BF16 to FP32, accumulate in FP32, round once with RN-even.
+// ---------------------------------------------------------------------------
+
+extern "C" __global__ void claymore_widen_bf16_f32(
+    const __nv_bfloat16 *__restrict__ input,
+    float *__restrict__ out,
+    uint64_t numel) {
+  uint64_t stride = (uint64_t)blockDim.x * gridDim.x;
+  for (uint64_t index = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+       index < numel; index += stride) {
+    out[index] = to_f32(input[index]);
+  }
+}
+
+extern "C" __global__ void claymore_router_top_k_f32(
+    const float *__restrict__ scores,
+    const float *__restrict__ per_expert_scale,
+    float *__restrict__ out,
+    uint64_t tokens,
+    uint64_t experts,
+    uint64_t top_k) {
+  uint64_t token = blockIdx.x;
+  if (token >= tokens) {
+    return;
+  }
+  extern __shared__ float shared[];
+  float *probs = shared;
+  const float *row = scores + token * experts;
+  uint64_t tid = threadIdx.x;
+  float max_value = -INFINITY;
+  for (uint64_t index = tid; index < experts; index += blockDim.x) {
+    max_value = fmaxf(max_value, row[index]);
+  }
+  __syncthreads();
+  // One thread per expert is guaranteed (blockDim >= experts).
+  if (tid < experts) {
+    probs[tid] = expf(row[tid] - max_value);
+  }
+  __syncthreads();
+  float sum = 0.0f;
+  for (uint64_t index = tid; index < experts; index += blockDim.x) {
+    sum += probs[index];
+  }
+  __shared__ float block_sum[32];
+  // Reduce the sum across the block.
+  if (tid < 32) {
+    float partial = 0.0f;
+    for (uint64_t index = tid; index < experts; index += 32) {
+      partial += probs[index];
+    }
+    block_sum[tid] = partial;
+  }
+  __syncthreads();
+  if (tid == 0) {
+    float total = 0.0f;
+    for (uint32_t lane = 0; lane < 32; ++lane) {
+      total += block_sum[lane];
+    }
+    for (uint64_t index = 0; index < experts; ++index) {
+      probs[index] /= total;
+    }
+    // Deterministic top-k: descending probability, ascending index on ties.
+    float weight_sum = 0.0f;
+    for (uint64_t slot = 0; slot < top_k; ++slot) {
+      uint64_t best = 0;
+      float best_value = probs[0];
+      for (uint64_t index = 1; index < experts; ++index) {
+        if (probs[index] > best_value) {
+          best_value = probs[index];
+          best = index;
+        }
+      }
+      weight_sum += best_value;
+      probs[best] = -INFINITY;
+      out[token * 2 * top_k + slot] = best_value;
+      out[token * 2 * top_k + top_k + slot] = (float)best;
+    }
+    for (uint64_t slot = 0; slot < top_k; ++slot) {
+      float weight = out[token * 2 * top_k + slot] / weight_sum;
+      uint64_t expert = (uint64_t)out[token * 2 * top_k + top_k + slot];
+      out[token * 2 * top_k + slot] = weight * per_expert_scale[expert];
+    }
+  }
+}
+
+extern "C" __global__ void claymore_gelu_mul_up_f32(
+    const float *__restrict__ gate,
+    const float *__restrict__ up,
+    float *__restrict__ out,
+    uint64_t numel) {
+  uint64_t stride = (uint64_t)blockDim.x * gridDim.x;
+  const float k = sqrtf(2.0f / 3.14159265358979323846f);
+  for (uint64_t index = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+       index < numel; index += stride) {
+    float g = gate[index];
+    float inner = k * (g + 0.044715f * g * g * g);
+    out[index] = 0.5f * g * (1.0f + tanhf(inner)) * up[index];
+  }
+}
+
+extern "C" __global__ void claymore_gelu_mul_up_bf16(
+    const __nv_bfloat16 *__restrict__ gate,
+    const __nv_bfloat16 *__restrict__ up,
+    __nv_bfloat16 *__restrict__ out,
+    uint64_t numel) {
+  uint64_t stride = (uint64_t)blockDim.x * gridDim.x;
+  const float k = sqrtf(2.0f / 3.14159265358979323846f);
+  for (uint64_t index = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+       index < numel; index += stride) {
+    float g = to_f32(gate[index]);
+    float inner = k * (g + 0.044715f * g * g * g);
+    out[index] = to_bf16_rn(0.5f * g * (1.0f + tanhf(inner)) * to_f32(up[index]));
+  }
+}
+
+extern "C" __global__ void claymore_gather_rows_f32(
+    const float *__restrict__ input,
+    const float *__restrict__ indices,
+    float *__restrict__ out,
+    uint64_t out_rows,
+    uint64_t width) {
+  uint64_t row = blockIdx.x;
+  uint64_t column = (uint64_t)blockIdx.y * blockDim.x + threadIdx.x;
+  if (row >= out_rows || column >= width) {
+    return;
+  }
+  uint64_t source = (uint64_t)indices[row];
+  out[row * width + column] = input[source * width + column];
+}
+
+extern "C" __global__ void claymore_gather_rows_bf16(
+    const __nv_bfloat16 *__restrict__ input,
+    const float *__restrict__ indices,
+    __nv_bfloat16 *__restrict__ out,
+    uint64_t out_rows,
+    uint64_t width) {
+  uint64_t row = blockIdx.x;
+  uint64_t column = (uint64_t)blockIdx.y * blockDim.x + threadIdx.x;
+  if (row >= out_rows || column >= width) {
+    return;
+  }
+  uint64_t source = (uint64_t)indices[row];
+  out[row * width + column] = input[source * width + column];
+}
+
+extern "C" __global__ void claymore_scatter_add_f32(
+    const float *__restrict__ source,
+    const float *__restrict__ weights,
+    const float *__restrict__ rows,
+    float *__restrict__ out,
+    uint64_t pairs,
+    uint64_t width) {
+  uint64_t pair = blockIdx.x;
+  uint64_t column = (uint64_t)blockIdx.y * blockDim.x + threadIdx.x;
+  if (pair >= pairs || column >= width) {
+    return;
+  }
+  uint64_t row = (uint64_t)rows[pair];
+  atomicAdd(&out[row * width + column], weights[pair] * source[pair * width + column]);
+}
+
+extern "C" __global__ void claymore_scatter_add_bf16(
+    const __nv_bfloat16 *__restrict__ source,
+    const float *__restrict__ weights,
+    const float *__restrict__ rows,
+    __nv_bfloat16 *__restrict__ out,
+    uint64_t pairs,
+    uint64_t width) {
+  uint64_t pair = blockIdx.x;
+  uint64_t column = (uint64_t)blockIdx.y * blockDim.x + threadIdx.x;
+  if (pair >= pairs || column >= width) {
+    return;
+  }
+  uint64_t row = (uint64_t)rows[pair];
+  // BF16 atomic add is rounded at every accumulation step, matching the
+  // pinned upstream bf16 index_add_ CUDA behaviour. Differential tolerance is
+  // a model-derived bound, not a ULP budget, because the accumulation order is
+  // not deterministic.
+  __nv_bfloat16 value = to_bf16_rn(weights[pair] * to_f32(source[pair * width + column]));
+  atomicAdd(&out[row * width + column], value);
+}
+
+extern "C" __global__ void claymore_embed_gather_f32(
+    const float *__restrict__ ids,
+    const float *__restrict__ table,
+    float *__restrict__ out,
+    uint64_t tokens,
+    uint64_t width,
+    float scale) {
+  uint64_t token = blockIdx.x;
+  uint64_t column = (uint64_t)blockIdx.y * blockDim.x + threadIdx.x;
+  if (token >= tokens || column >= width) {
+    return;
+  }
+  uint64_t row = (uint64_t)ids[token];
+  out[token * width + column] = table[row * width + column] * scale;
+}
+
+extern "C" __global__ void claymore_embed_gather_bf16(
+    const float *__restrict__ ids,
+    const __nv_bfloat16 *__restrict__ table,
+    __nv_bfloat16 *__restrict__ out,
+    uint64_t tokens,
+    uint64_t width,
+    float scale) {
+  uint64_t token = blockIdx.x;
+  uint64_t column = (uint64_t)blockIdx.y * blockDim.x + threadIdx.x;
+  if (token >= tokens || column >= width) {
+    return;
+  }
+  uint64_t row = (uint64_t)ids[token];
+  out[token * width + column] = to_bf16_rn(to_f32(table[row * width + column]) * scale);
+}
+
+extern "C" __global__ void claymore_row_mask_f32(
+    const float *__restrict__ input,
+    const float *__restrict__ flags,
+    float *__restrict__ out,
+    uint64_t rows,
+    uint64_t width) {
+  uint64_t row = blockIdx.x;
+  uint64_t column = (uint64_t)blockIdx.y * blockDim.x + threadIdx.x;
+  if (row >= rows || column >= width) {
+    return;
+  }
+  out[row * width + column] = flags[row] == 1.0f ? 0.0f : input[row * width + column];
+}
+
+extern "C" __global__ void claymore_row_mask_bf16(
+    const __nv_bfloat16 *__restrict__ input,
+    const float *__restrict__ flags,
+    __nv_bfloat16 *__restrict__ out,
+    uint64_t rows,
+    uint64_t width) {
+  uint64_t row = blockIdx.x;
+  uint64_t column = (uint64_t)blockIdx.y * blockDim.x + threadIdx.x;
+  if (row >= rows || column >= width) {
+    return;
+  }
+  out[row * width + column] =
+      flags[row] == 1.0f ? to_bf16_rn(0.0f) : input[row * width + column];
+}
+
+extern "C" __global__ void claymore_scale_bias_f32(
+    const float *__restrict__ input,
+    const float *__restrict__ scale,
+    const float *__restrict__ bias,
+    float *__restrict__ out,
+    uint64_t numel,
+    uint64_t width) {
+  uint64_t stride = (uint64_t)blockDim.x * gridDim.x;
+  for (uint64_t index = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+       index < numel; index += stride) {
+    uint64_t column = index % width;
+    out[index] = fmaf(input[index], scale[column], -bias[column]);
+  }
+}
+
+extern "C" __global__ void claymore_scale_bias_bf16(
+    const __nv_bfloat16 *__restrict__ input,
+    const __nv_bfloat16 *__restrict__ scale,
+    const __nv_bfloat16 *__restrict__ bias,
+    __nv_bfloat16 *__restrict__ out,
+    uint64_t numel,
+    uint64_t width) {
+  uint64_t stride = (uint64_t)blockDim.x * gridDim.x;
+  for (uint64_t index = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+       index < numel; index += stride) {
+    uint64_t column = index % width;
+    out[index] = to_bf16_rn(
+        fmaf(to_f32(input[index]), to_f32(scale[column]), -to_f32(bias[column])));
+  }
+}

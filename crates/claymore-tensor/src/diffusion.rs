@@ -535,6 +535,297 @@ pub fn validate_mask(mask: &[f32], query_tokens: usize, key_tokens: usize) -> Re
     Ok(())
 }
 
+/// Bit-exact BF16 widening to an F32 tensor (the contract's one explicit
+/// cross-dtype operation).
+pub fn widen(device: &dyn Device, input: &Tensor) -> Result<Tensor, OpError> {
+    let source = read_numeric(device, input)?;
+    if source.dtype() != DType::BF16 {
+        return Err(OpError::UnsupportedDType);
+    }
+    write_numeric(
+        device,
+        &source.to_f32(),
+        input.layout().shape().to_vec(),
+        DType::F32,
+    )
+}
+
+/// Router scores -> stable softmax, deterministic top-k, weight normalization
+/// and per-expert scale, emitted as `[tokens, 2 * top_k]` F32: the first `k`
+/// columns are weights, the last `k` columns are expert indices.
+///
+/// Ties break on ascending expert index, matching the CPU reference order used
+/// by the pinned upstream top-k on host tensors.
+pub fn router_top_k(
+    device: &dyn Device,
+    scores: &Tensor,
+    per_expert_scale: &Tensor,
+    top_k: usize,
+) -> Result<Tensor, OpError> {
+    let shape = scores.layout().shape();
+    if shape.len() != 2 {
+        return Err(OpError::ShapeMismatch);
+    }
+    let (tokens, experts) = (shape[0], shape[1]);
+    if top_k == 0 || top_k > experts {
+        return Err(OpError::InvalidTopK(top_k, experts));
+    }
+    let scores = read_numeric(device, scores)?;
+    if scores.dtype() != DType::F32 {
+        return Err(OpError::UnsupportedDType);
+    }
+    let per_expert = read_numeric(device, per_expert_scale)?;
+    if per_expert.dtype() != DType::F32 {
+        return Err(OpError::UnsupportedDType);
+    }
+    if per_expert.to_f32().len() != experts {
+        return Err(OpError::ScaleMismatch);
+    }
+    let per_expert = per_expert.to_f32();
+    let scores = scores.to_f32();
+    let mut out = vec![0.0f32; tokens * 2 * top_k];
+    for token in 0..tokens {
+        let row = &scores[token * experts..token * experts + experts];
+        // Stable softmax in FP32; NaN scores propagate as NaN.
+        let max_value = row.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        let mut sum = 0.0f32;
+        let mut probs = vec![0.0f32; experts];
+        for (index, score) in row.iter().enumerate() {
+            let value = (score - max_value).exp();
+            probs[index] = value;
+            sum += value;
+        }
+        for prob in probs.iter_mut() {
+            *prob /= sum;
+        }
+        // Deterministic top-k: descending probability, ascending index on ties.
+        let mut order: Vec<(usize, f32)> = probs.iter().enumerate().map(|(i, p)| (i, *p)).collect();
+        order.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let mut weight_sum = 0.0f32;
+        for (_, probability) in order.iter().take(top_k) {
+            weight_sum += probability;
+        }
+        for (slot, (index, probability)) in order.into_iter().take(top_k).enumerate() {
+            let weight = probability / weight_sum * per_expert[index];
+            out[token * 2 * top_k + slot] = weight;
+            out[token * 2 * top_k + top_k + slot] = index as f32;
+        }
+    }
+    write_numeric(device, &out, vec![tokens, 2 * top_k], DType::F32)
+}
+
+/// `gelu_pytorch_tanh(gate) * up`, accumulated in FP32 and rounded once.
+pub fn gelu_mul_up(
+    device: &dyn Device,
+    gate: &Tensor,
+    up: &Tensor,
+) -> Result<Tensor, OpError> {
+    if gate.layout().shape() != up.layout().shape() {
+        return Err(OpError::ShapeMismatch);
+    }
+    let shape = gate.layout().shape().to_vec();
+    let gate = read_numeric(device, gate)?;
+    let up = read_numeric(device, up)?;
+    if gate.dtype() != up.dtype() {
+        return Err(OpError::MixedDType);
+    }
+    let dtype = gate.dtype();
+    let g = gate.to_f32();
+    let u = up.to_f32();
+    let k = (2.0f32 / std::f32::consts::PI).sqrt();
+    let mut out = vec![0.0f32; g.len()];
+    for (index, gate_value) in g.iter().enumerate() {
+        let inner = k * (gate_value + 0.044715 * gate_value * gate_value * gate_value);
+        out[index] = 0.5 * gate_value * (1.0 + inner.tanh()) * u[index];
+    }
+    write_numeric(device, &out, shape, dtype)
+}
+
+/// Row gather with F32-encoded integer indices.
+pub fn gather_rows(
+    device: &dyn Device,
+    input: &Tensor,
+    indices: &Tensor,
+) -> Result<Tensor, OpError> {
+    let shape = input.layout().shape();
+    if shape.len() != 2 {
+        return Err(OpError::ShapeMismatch);
+    }
+    let (rows, width) = (shape[0], shape[1]);
+    let source = read_numeric(device, input)?;
+    let idx = read_numeric(device, indices)?;
+    if idx.dtype() != DType::F32 {
+        return Err(OpError::IndexDTypeMismatch);
+    }
+    let idx = idx.to_f32();
+    let values = source.to_f32();
+    let mut out = Vec::with_capacity(idx.len() * width);
+    for index in &idx {
+        let row = index.to_int_index(rows)?;
+        out.extend_from_slice(&values[row * width..row * width + width]);
+    }
+    write_numeric(device, &out, vec![idx.len(), width], source.dtype())
+}
+
+/// Weighted scatter-add into a fresh zeroed `[out_rows, width]` tensor.
+/// Deterministic accumulation walks the pairs in index order; the CUDA kernel
+/// uses atomics, so its differential budget is a model-derived bound, not ULP.
+pub fn scatter_add(
+    device: &dyn Device,
+    source: &Tensor,
+    weights: &Tensor,
+    rows: &Tensor,
+    out_rows: usize,
+) -> Result<Tensor, OpError> {
+    let shape = source.layout().shape();
+    if shape.len() != 2 {
+        return Err(OpError::ShapeMismatch);
+    }
+    let (pairs, width) = (shape[0], shape[1]);
+    if out_rows == 0 {
+        return Err(OpError::InvalidOutputRows);
+    }
+    let source = read_numeric(device, source)?;
+    let weights = read_numeric(device, weights)?;
+    let rows = read_numeric(device, rows)?;
+    if weights.dtype() != DType::F32 || rows.dtype() != DType::F32 {
+        return Err(OpError::IndexDTypeMismatch);
+    }
+    let weights = weights.to_f32();
+    let rows = rows.to_f32();
+    if weights.len() != pairs || rows.len() != pairs {
+        return Err(OpError::ScaleMismatch);
+    }
+    let dtype = source.dtype();
+    let source = source.to_f32();
+    let mut out = vec![0.0f32; out_rows * width];
+    for pair in 0..pairs {
+        let row = rows[pair].to_int_index(out_rows)?;
+        let weight = weights[pair];
+        let src_row = &source[pair * width..pair * width + width];
+        let dst = &mut out[row * width..row * width + width];
+        for (cell, value) in src_row.iter().enumerate() {
+            dst[cell] += weight * value;
+        }
+    }
+    write_numeric(device, &out, vec![out_rows, width], dtype)
+}
+
+/// Embedding gather with F32-encoded token ids and an explicit scale.
+pub fn embed_gather(
+    device: &dyn Device,
+    ids: &Tensor,
+    table: &Tensor,
+    scale: f32,
+) -> Result<Tensor, OpError> {
+    let shape = table.layout().shape();
+    if shape.len() != 2 {
+        return Err(OpError::ShapeMismatch);
+    }
+    let (vocab, width) = (shape[0], shape[1]);
+    let ids = read_numeric(device, ids)?;
+    if ids.dtype() != DType::F32 {
+        return Err(OpError::IndexDTypeMismatch);
+    }
+    let ids = ids.to_f32();
+    let table_values = read_numeric(device, table)?;
+    let dtype = table_values.dtype();
+    let table = table_values.to_f32();
+    let mut out = Vec::with_capacity(ids.len() * width);
+    for id in &ids {
+        let row = id.to_int_index(vocab)?;
+        for column in 0..width {
+            out.push(table[row * width + column] * scale);
+        }
+    }
+    write_numeric(device, &out, vec![ids.len(), width], dtype)
+}
+
+/// Zero rows flagged as padding: `flags[row] == 1.0` yields zeros.
+pub fn row_mask(
+    device: &dyn Device,
+    input: &Tensor,
+    flags: &Tensor,
+) -> Result<Tensor, OpError> {
+    let shape = input.layout().shape();
+    if shape.len() != 2 {
+        return Err(OpError::ShapeMismatch);
+    }
+    let (rows, width) = (shape[0], shape[1]);
+    let source = read_numeric(device, input)?;
+    let flags = read_numeric(device, flags)?;
+    if flags.dtype() != DType::F32 {
+        return Err(OpError::IndexDTypeMismatch);
+    }
+    let flags = flags.to_f32();
+    if flags.len() != rows {
+        return Err(OpError::ScaleMismatch);
+    }
+    let dtype = source.dtype();
+    let source = source.to_f32();
+    let mut out = vec![0.0f32; rows * width];
+    for row in 0..rows {
+        if flags[row] != 1.0 {
+            out[row * width..row * width + width]
+                .copy_from_slice(&source[row * width..row * width + width]);
+        }
+    }
+    write_numeric(device, &out, shape.to_vec(), dtype)
+}
+
+/// `(x * scale) - bias` over the last dimension, FP32, rounded once.
+pub fn scale_bias(
+    device: &dyn Device,
+    input: &Tensor,
+    scale: &Tensor,
+    bias: &Tensor,
+) -> Result<Tensor, OpError> {
+    let shape = input.layout().shape();
+    if shape.len() != 2 {
+        return Err(OpError::ShapeMismatch);
+    }
+    let (rows, width) = (shape[0], shape[1]);
+    let source = read_numeric(device, input)?;
+    let scale = read_numeric(device, scale)?;
+    let bias = read_numeric(device, bias)?;
+    if source.dtype() != scale.dtype() || source.dtype() != bias.dtype() {
+        return Err(OpError::MixedDType);
+    }
+    let dtype = source.dtype();
+    let scale = scale.to_f32();
+    let bias = bias.to_f32();
+    if scale.len() != width || bias.len() != width {
+        return Err(OpError::ScaleMismatch);
+    }
+    let source = source.to_f32();
+    let mut out = vec![0.0f32; rows * width];
+    for row in 0..rows {
+        for column in 0..width {
+            out[row * width + column] =
+                source[row * width + column].mul_add(scale[column], -bias[column]);
+        }
+    }
+    write_numeric(device, &out, shape.to_vec(), dtype)
+}
+
+/// F32 index values must encode exact integers within the tensor's row count.
+trait IntIndex {
+    fn to_int_index(&self, rows: usize) -> Result<usize, OpError>;
+}
+
+impl IntIndex for f32 {
+    fn to_int_index(&self, rows: usize) -> Result<usize, OpError> {
+        if !self.is_finite() || *self < 0.0 || *self >= rows as f32 {
+            return Err(OpError::InvalidIndex);
+        }
+        let index = *self as usize;
+        if (index as f32) != *self {
+            return Err(OpError::InvalidIndex);
+        }
+        Ok(index)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -840,5 +1131,133 @@ mod tests {
         let mask = canvas_prefix_mask(2, 3, 2);
         assert_eq!(mask.len(), 10);
         assert!(mask.iter().all(|value| *value == 0.0));
+    }
+
+    #[test]
+    fn widening_is_the_only_cross_dtype_operation_and_is_exact() {
+        let device = CpuDevice::new();
+        let input = bf16_tensor(&device, vec![2, 2], &[1.0, 2.0, 3.0, 256.0]);
+        let out = widen(&device, &input).unwrap();
+        assert_eq!(out.layout().dtype(), DType::F32);
+        assert_eq!(values(&device, &out), [1.0, 2.0, 3.0, 256.0]);
+        let f32_input = tensor(&device, vec![2, 2], &[1.0; 4]);
+        assert_eq!(widen(&device, &f32_input).unwrap_err(), OpError::UnsupportedDType);
+    }
+
+    #[test]
+    fn router_top_k_selects_normalized_top_weights() {
+        let device = CpuDevice::new();
+        // One token, three experts: probabilities [0.6, 0.3, 0.1] are produced
+        // by scores whose softmax is exactly these values.
+        let scores = tensor(&device, vec![1, 3], &[0.5, -0.2, -1.1]);
+        let per_expert = tensor(&device, vec![3], &[1.0, 1.0, 1.0]);
+        let out = values(&device, &router_top_k(&device, &scores, &per_expert, 2).unwrap());
+        let e: Vec<f32> = [0.5f32, -0.2, -1.1].iter().map(|v| (v - 0.5f32).exp()).collect();
+        let s: f32 = e.iter().sum();
+        let probs: Vec<f32> = e.iter().map(|v| v / s).collect();
+        let top_sum = probs[0] + probs[1];
+        assert_eq!(out[0], probs[0] / top_sum);
+        assert_eq!(out[1], probs[1] / top_sum);
+        assert_eq!(out[2], 0.0);
+        assert_eq!(out[3], 1.0);
+    }
+
+    #[test]
+    fn router_top_k_applies_per_expert_scale_and_rejects_bad_top_k() {
+        let device = CpuDevice::new();
+        let scores = tensor(&device, vec![1, 3], &[1.0, 0.0, -1.0]);
+        let per_expert = tensor(&device, vec![3], &[2.0, 1.0, 0.5]);
+        let out = values(&device, &router_top_k(&device, &scores, &per_expert, 2).unwrap());
+        // probabilities: p0 > p1 > p2; weights = p_i/(p0+p1) * per_expert_i.
+        let e1 = 1.0f32;
+        let e2 = (0.0f32 - 1.0).exp();
+        let e3 = (-1.0f32 - 1.0).exp();
+        let s = e1 + e2 + e3;
+        let p0 = e1 / s;
+        let p1 = e2 / s;
+        let top = p0 + p1;
+        assert!((out[0] - p0 / top * 2.0).abs() < 1e-6);
+        assert!((out[1] - p1 / top * 1.0).abs() < 1e-6);
+        assert_eq!(router_top_k(&device, &scores, &per_expert, 4).unwrap_err(),
+            OpError::InvalidTopK(4, 3));
+    }
+
+    #[test]
+    fn gelu_mul_up_matches_the_pinned_activation() {
+        let device = CpuDevice::new();
+        let gate = tensor(&device, vec![1, 4], &[0.0, 1.0, -1.0, 2.0]);
+        let up = tensor(&device, vec![1, 4], &[7.0, 1.0, 1.0, 1.0]);
+        let out = values(&device, &gelu_mul_up(&device, &gate, &up).unwrap());
+        assert_eq!(out[0], 0.0);
+        let k = (2.0f32 / std::f32::consts::PI).sqrt();
+        let gelu = |x: f32| 0.5 * x * (1.0 + (k * (x + 0.044715 * x * x * x)).tanh());
+        assert!((out[1] - gelu(1.0)).abs() < 1e-6);
+        assert!((out[2] - gelu(-1.0)).abs() < 1e-6);
+        assert!((out[3] - gelu(2.0) * 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn gather_rows_and_scatter_add_round_trip_indices() {
+        let device = CpuDevice::new();
+        let input = tensor(&device, vec![3, 2], &[10.0, 11.0, 20.0, 21.0, 30.0, 31.0]);
+        let indices = tensor(&device, vec![4], &[2.0, 0.0, 0.0, 1.0]);
+        let gathered = values(&device, &gather_rows(&device, &input, &indices).unwrap());
+        assert_eq!(gathered, [30.0, 31.0, 10.0, 11.0, 10.0, 11.0, 20.0, 21.0]);
+
+        // Scatter the gathered rows back with weights [1,1,2,1] into 3 rows.
+        let gathered_tensor = tensor(&device, vec![4, 2], &gathered);
+        let weights = tensor(&device, vec![4], &[1.0, 1.0, 2.0, 1.0]);
+        let rows = tensor(&device, vec![4], &[2.0, 0.0, 0.0, 1.0]);
+        let out = values(&device, &scatter_add(&device, &gathered_tensor, &weights, &rows, 3).unwrap());
+        assert_eq!(out, [30.0, 33.0, 20.0, 21.0, 30.0, 31.0]);
+    }
+
+    #[test]
+    fn gather_rows_rejects_index_dtype_and_fractional_indices() {
+        let device = CpuDevice::new();
+        let input = tensor(&device, vec![3, 2], &[1.0; 6]);
+        let bad = bf16_tensor(&device, vec![2], &[1.0, 2.0]);
+        assert_eq!(
+            gather_rows(&device, &input, &bad).unwrap_err(),
+            OpError::IndexDTypeMismatch
+        );
+        let fractional = tensor(&device, vec![2], &[1.5, 0.0]);
+        assert_eq!(
+            gather_rows(&device, &input, &fractional).unwrap_err(),
+            OpError::InvalidIndex
+        );
+        let out_of_range = tensor(&device, vec![1], &[3.0]);
+        assert_eq!(
+            gather_rows(&device, &input, &out_of_range).unwrap_err(),
+            OpError::InvalidIndex
+        );
+    }
+
+    #[test]
+    fn embed_gather_scales_rows_by_the_explicit_factor() {
+        let device = CpuDevice::new();
+        let table = tensor(&device, vec![3, 2], &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let ids = tensor(&device, vec![2], &[2.0, 0.0]);
+        let out = values(&device, &embed_gather(&device, &ids, &table, 2.0).unwrap());
+        assert_eq!(out, [10.0, 12.0, 2.0, 4.0]);
+    }
+
+    #[test]
+    fn row_mask_zeroes_flagged_rows() {
+        let device = CpuDevice::new();
+        let input = tensor(&device, vec![3, 2], &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let flags = tensor(&device, vec![3], &[0.0, 1.0, 0.0]);
+        let out = values(&device, &row_mask(&device, &input, &flags).unwrap());
+        assert_eq!(out, [1.0, 2.0, 0.0, 0.0, 5.0, 6.0]);
+    }
+
+    #[test]
+    fn scale_bias_applies_explicit_vectors() {
+        let device = CpuDevice::new();
+        let input = tensor(&device, vec![2, 2], &[1.0, 2.0, 3.0, 4.0]);
+        let scale = tensor(&device, vec![2], &[2.0, 0.5]);
+        let bias = tensor(&device, vec![2], &[1.0, 1.0]);
+        let out = values(&device, &scale_bias(&device, &input, &scale, &bias).unwrap());
+        assert_eq!(out, [1.0, 0.0, 5.0, 1.0]);
     }
 }
