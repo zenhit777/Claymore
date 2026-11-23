@@ -318,7 +318,7 @@ Ces composants peuvent fournir des primitives spécialisées, mais l'API tensori
 
 `grid_for` calcule `total.div_ceil(block)` et convertit le résultat en `c_uint` : au-delà de la plage `u32`, le lancement est refusé par `InvalidLaunchConfiguration("grid dimension exceeds CUDA limit")`. Aucune interrogation des limites réelles du device n'est effectuée. Les dimensions nulles sont rejetées en amont (`checked_count`, `checked_matmul`, `checked_last_dim`). Le matmul est une implémentation simple, sans tuilage en mémoire partagée ni Tensor Core ; la performance relève de M12.
 
-Le profil matériel impose exactement **un stream compute et un stream transfer** (`HardwareProfile::validate`) ; `CudaMemoryManager` les crée tous deux avec `CU_STREAM_NON_BLOCKING`. Toutes les opérations tensoriellesss d'un même manager sont sérialisées sur ce stream compute unique, chacune avec son propre event CUDA : les gardes `IN_FLIGHT` sont installés avant le retour de `launch_tensor_op` (la soumission a lieu sous emprunt exclusif de `&mut self`) et levés seulement après `wait_for_transfer`. Aucun recouvrement transfert/calcul ni préchargement concurrent n'est revendiqué ; l'expression explicite des dépendances compute ↔ transfert reste une limite suivie (§7.3). Les écarts numériques CPU/CUDA et la provenance des PTX sont documentés dans [audits/m8-cpu-cuda-numerics.md](audits/m8-cpu-cuda-numerics.md) et [audits/m8-ptx-provenance.md](audits/m8-ptx-provenance.md).
+Le profil matériel impose exactement **un stream compute et un stream transfer** (`HardwareProfile::validate`) ; `CudaMemoryManager` les crée tous deux avec `CU_STREAM_NON_BLOCKING`. Toutes les opérations tensorielles d'un même manager sont sérialisées sur ce stream compute unique, chacune avec son propre event CUDA : les gardes `IN_FLIGHT` sont installés avant le retour de `launch_tensor_op` (la soumission a lieu sous emprunt exclusif de `&mut self`) et levés seulement après `wait_for_transfer`. Aucun recouvrement transfert/calcul ni préchargement concurrent n'est revendiqué ; l'expression explicite des dépendances compute ↔ transfert reste une limite suivie (§7.3). Les écarts numériques CPU/CUDA et la provenance des PTX sont documentés dans [audits/m8-cpu-cuda-numerics.md](audits/m8-cpu-cuda-numerics.md) et [audits/m8-ptx-provenance.md](audits/m8-ptx-provenance.md).
 
 
 ---
@@ -467,7 +467,8 @@ La tranche M6 n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâch
 - graphes complets et chemins d'inférence effectifs des modèles ;
 - chargement et exécution réels de DiffusionGemma ;
 - chargement et exécution réels de Clover-35B-A3B-preview ;
-- kernels CUDA spécialisés propres aux graphes complets des modèles et optimisations non encore livrées ;\n- extensions post-M9 : équité round-robin, hooks de stratégie/retry, rétention/purge des sessions et convergence des schedulers (issues #33 à #38) ;
+- kernels CUDA spécialisés propres aux graphes complets des modèles et optimisations non encore livrées ;
+- extensions post-M9 : équité round-robin, hooks de stratégie/retry, rétention/purge des sessions et convergence des schedulers (issues #33 à #38) ;
 - validation de performance et de qualité sur la RTX 5090 cible.
 
 Les crates modèles et adaptateurs ne constituent pas à eux seuls la preuve que les modèles sont exécutables. La PR #40 a livré une première tranche DiffusionGemma (chargeur strict, primitives et sous-graphe partiel), mais elle déclare explicitement ouverts le streaming complet, les chemins MoE/vision, le cache encodeur/cross-attention et la génération réelle du checkpoint 26B.
@@ -949,7 +950,8 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-22 | M7 : scheduler, `QueueRunner` et exécuteur CUDA sont synchrones et mono-propriétaires ; H2D/D2H ne complètent une tâche qu'après attente de l'event. Aucun overlap transfert/calcul ou prefetch concurrent n'est revendiqué. |
 | 2026-11-22 | Éviction Adaptive : comparer d'abord la chaleur (hit count), puis la récence (tick), et utiliser le coût de rechargement en nanosecondes uniquement comme départage ; un coût inconnu vaut zéro pour ce seul départage. Aucun chargeur ne l'alimente automatiquement à ce stade. |
 | 2026-11-22 | Finalisation M8 : BF16 est implémenté en 16 bits exacts avec conversion FP32 explicite et arrondi round-to-nearest-even. Matmul et réductions accumulent en FP32 ; la sortie BF16 est arrondie une seule fois. FP16 reste non supporté et aucun cast/fallback implicite n'est autorisé. |
-| 2026-11-22 | Les deux modules PTX (`m8_f32.ptx` et `m8_bf16.ptx`) ciblent `sm_120` ; les kernels BF16 utilisent `cvt.rn.bf16.f32` et `fma.rn.f32`. La tolérance matérielle BF16 est exprimée en pas représentables (0 pour add, 1 pour matmul/softmax/RMSNorm), fixée avant la campagne. |\n| 2026-11-23 | DiffusionGemma est initialement ciblé en génération de texte uniquement ; image et vidéo sont hors périmètre sans décision produit et spécification multimodale ultérieures. Le runtime M9 expose les métriques CPU d'orchestration et des durées observées par phase, sans métriques GPU simulées. |
+| 2026-11-22 | Les deux modules PTX (`m8_f32.ptx` et `m8_bf16.ptx`) ciblent `sm_120` ; les kernels BF16 utilisent `cvt.rn.bf16.f32` et `fma.rn.f32`. La tolérance matérielle BF16 est exprimée en pas représentables (0 pour add, 1 pour matmul/softmax/RMSNorm), fixée avant la campagne. |
+| 2026-11-23 | DiffusionGemma est initialement ciblé en génération de texte uniquement ; image et vidéo sont hors périmètre sans décision produit et spécification multimodale ultérieures. Le runtime M9 expose les métriques CPU d'orchestration et des durées observées par phase, sans métriques GPU simulées. |
 
 ### Correspondance de la feuille de route historique
 
