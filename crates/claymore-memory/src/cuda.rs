@@ -326,10 +326,11 @@ fn mark_launch_guard(
 /// no allocation stays in flight. If synchronization cannot be confirmed, the
 /// manager is poisoned and every allocation touched by the launch is pinned at
 /// `IN_FLIGHT`, so nothing that the GPU may still be using can be released.
-fn recover_launch_failure<S: CudaStreamOps>(
+fn recover_launch_failure<S: CudaStreamOps, E>(
     original: CudaMemoryError,
     allocation_ids: &[String],
     guarded: &[String],
+    pending: &[PendingTransfer<E>],
     stream: &S,
     policy: &mut MemoryOrchestrator,
     tick: u64,
@@ -338,6 +339,17 @@ fn recover_launch_failure<S: CudaStreamOps>(
     match synchronize_compute_stream(stream) {
         Ok(()) => {
             for id in guarded {
+                // A successful compute-stream sync only proves that work on
+                // that stream is quiescent. Another tracked transfer may still
+                // reference the same allocation (for example H2D/D2H on the
+                // dedicated transfer stream), so preserve its guard until the
+                // shared pending-work tracker retires that event.
+                let still_in_flight = pending.iter().any(|transfer| {
+                    transfer.allocation_ids.iter().any(|pending_id| pending_id == id)
+                });
+                if still_in_flight {
+                    continue;
+                }
                 if let Err(error) = policy.mark_in_flight_until(id, tick) {
                     // Lifting a guard failed; fail closed instead of allowing
                     // an uncertain allocation to become evictable.
@@ -761,15 +773,19 @@ impl CudaMemoryManager {
     /// Output allocation has already gone through `allocate_device` (and thus
     /// through the memory policy). Input tensor `offset_bytes` values are
     /// applied to their device pointers; the output is always written at the
-    /// base of its allocation because `TensorOp` carries no output view. Every
-    /// touched allocation is marked in flight immediately after enqueue, while
-    /// this exclusive `&mut self` borrow rules out any concurrent manager
-    /// operation, and is protected by a real CUDA event recorded on the
+    /// base of its allocation because `TensorOp` carries no output view.
+    ///
+    /// The kernel is enqueued before this method installs its in-flight guards.
+    /// This ordering is safe because the exclusive `&mut self` borrow prevents
+    /// every other manager operation (release, eviction, transfer submission,
+    /// or another launch) from interleaving between enqueue and guard setup.
+    /// Once installed, the guards remain protected by a real CUDA event on the
     /// dedicated compute stream. The returned token must be waited on with
     /// `wait_for_transfer` before the caller may read, release or evict any of
     /// those allocations. On a recoverable launch/event failure, stream
-    /// quiescence is confirmed before guards are lifted; if quiescence cannot
-    /// be confirmed the guards are retained and the manager is poisoned.
+    /// quiescence is confirmed before guards are lifted; guards still covered
+    /// by another pending transfer remain in flight. If quiescence cannot be
+    /// confirmed the guards are retained and the manager is poisoned.
     pub fn launch_tensor_op(
         &mut self,
         op: &TensorOp<'_>,
@@ -920,6 +936,7 @@ impl CudaMemoryManager {
                 error.into(),
                 &allocation_ids,
                 &[],
+                &self.transfers.pending,
                 stream,
                 &mut self.transfers.policy,
                 tick,
@@ -937,6 +954,7 @@ impl CudaMemoryManager {
                     error.into(),
                     &allocation_ids,
                     &guarded,
+                    &self.transfers.pending,
                     stream,
                     &mut self.transfers.policy,
                     tick,
@@ -957,6 +975,7 @@ impl CudaMemoryManager {
                 error.into(),
                 &allocation_ids,
                 &allocation_ids,
+                &self.transfers.pending,
                 stream,
                 &mut self.transfers.policy,
                 tick,
@@ -1526,6 +1545,88 @@ mod tests {
         release_and_confirm(&mut backend, &mut policy, "buffer", 1).unwrap();
         assert!(policy.allocation("buffer").is_none());
         assert_eq!(policy.usage_bytes(MemoryTier::Vram), 0);
+    }
+
+    #[test]
+    fn launch_recovery_keeps_guard_while_another_pending_transfer_uses_allocation() {
+        let mut policy = fake_policy();
+        guarded_allocation(&mut policy, "shared");
+        guarded_allocation(&mut policy, "launch-only");
+        let completed = Arc::new(AtomicBool::new(false));
+        let pending = vec![PendingTransfer {
+            id: 90,
+            allocation_ids: vec!["shared".to_owned()],
+            event: FakeEvent {
+                complete: false,
+                query_error: None,
+                sync_error: None,
+            },
+            completed,
+        }];
+        let allocation_ids = vec!["shared".to_owned(), "launch-only".to_owned()];
+        let original = CudaMemoryError::Cuda(CudaError::Driver {
+            operation: "cuLaunchKernel",
+            code: 700,
+        });
+        let mut poisoned = false;
+
+        let recovered = recover_launch_failure(
+            original,
+            &allocation_ids,
+            &allocation_ids,
+            &pending,
+            &FakeStream(None),
+            &mut policy,
+            10,
+            &mut poisoned,
+        );
+
+        assert!(matches!(
+            recovered,
+            CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuLaunchKernel",
+                code: 700
+            })
+        ));
+        assert!(!poisoned);
+        assert_eq!(policy.allocation("shared").unwrap().safe_after_tick, IN_FLIGHT);
+        assert_eq!(policy.allocation("launch-only").unwrap().safe_after_tick, 10);
+    }
+
+    #[test]
+    fn launch_recovery_poisons_and_pins_every_touched_allocation_when_sync_fails() {
+        let mut policy = fake_policy();
+        guarded_allocation(&mut policy, "input");
+        guarded_allocation(&mut policy, "output");
+        let allocation_ids = vec!["input".to_owned(), "output".to_owned()];
+        let original = CudaMemoryError::Cuda(CudaError::Driver {
+            operation: "cuLaunchKernel",
+            code: 700,
+        });
+        let mut poisoned = false;
+
+        let recovered = recover_launch_failure(
+            original,
+            &allocation_ids,
+            &allocation_ids,
+            &[],
+            &FakeStream(Some(901)),
+            &mut policy,
+            10,
+            &mut poisoned,
+        );
+
+        assert!(matches!(
+            recovered,
+            CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuStreamSynchronize",
+                code: 901
+            })
+        ));
+        assert!(poisoned);
+        for id in &allocation_ids {
+            assert_eq!(policy.allocation(id).unwrap().safe_after_tick, IN_FLIGHT);
+        }
     }
 
     #[test]
