@@ -391,6 +391,7 @@ impl DiffusionOrchestrator {
         if cancelled_before_step {
             self.scheduler.cancel_running(task_id)?;
             self.metrics.steps_cancelled = self.metrics.steps_cancelled.saturating_add(1);
+            self.cancel_pending_steps(session_id, Some(task_id))?;
             self.finish_cancelled(session_id);
             return Ok(DiffusionRunOutcome::SessionCancelled {
                 session_id,
@@ -451,15 +452,7 @@ impl DiffusionOrchestrator {
                         step,
                     })
                 } else if cancelled_after_step {
-                    let pending = session.tasks.clone();
-                    for pending_id in pending {
-                        if matches!(
-                            self.scheduler.task(pending_id)?.state,
-                            TaskState::Ready | TaskState::Blocked
-                        ) {
-                            self.scheduler.cancel(pending_id)?;
-                        }
-                    }
+                    self.cancel_pending_steps(session_id, None)?;
                     self.finish_cancelled(session_id);
                     Ok(DiffusionRunOutcome::SessionCancelled {
                         session_id,
@@ -507,16 +500,36 @@ impl DiffusionOrchestrator {
         }
         session.cancellation.cancel();
         let safe_boundary = session.snapshot.current_step.is_none();
-        for task_id in &session.tasks {
+        let queued = session.snapshot.state == DiffusionSessionState::Queued;
+        self.cancel_pending_steps(id, None)?;
+        if queued || safe_boundary {
+            self.finish_cancelled(id);
+        }
+        Ok(())
+    }
+
+    fn cancel_pending_steps(
+        &mut self,
+        id: DiffusionSessionId,
+        except: Option<TaskId>,
+    ) -> Result<(), DiffusionError> {
+        let tasks = self
+            .sessions
+            .get(&id)
+            .ok_or(DiffusionError::UnknownSession(id))?
+            .tasks
+            .clone();
+        for task_id in tasks {
+            if Some(task_id) == except {
+                continue;
+            }
             if matches!(
-                self.scheduler.task(*task_id)?.state,
+                self.scheduler.task(task_id)?.state,
                 TaskState::Ready | TaskState::Blocked
             ) {
-                self.scheduler.cancel(*task_id)?;
+                self.scheduler.cancel(task_id)?;
+                self.metrics.steps_cancelled = self.metrics.steps_cancelled.saturating_add(1);
             }
-        }
-        if session.snapshot.state == DiffusionSessionState::Queued || safe_boundary {
-            self.finish_cancelled(id);
         }
         Ok(())
     }
