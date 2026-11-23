@@ -470,6 +470,13 @@ impl DiffusionOrchestrator {
             Err(error) => {
                 self.scheduler.fail(task_id)?;
                 self.metrics.steps_failed = self.metrics.steps_failed.saturating_add(1);
+                let session_tasks = self.sessions[&session_id].tasks.clone();
+                for dependent_id in session_tasks {
+                    if self.scheduler.task(dependent_id)?.state == TaskState::Cancelled {
+                        self.metrics.steps_cancelled =
+                            self.metrics.steps_cancelled.saturating_add(1);
+                    }
+                }
                 let session = self
                     .sessions
                     .get_mut(&session_id)
