@@ -15,8 +15,8 @@ use std::sync::{Mutex, MutexGuard};
 use claymore_core::MemoryTier;
 use claymore_device::{CpuDevice, DType, Device};
 use claymore_memory::{
-    CudaMemoryManager, CudaTensorBackend, CudaTensorComputeExecutor,
-    CudaTensorError, CudaTensorMemory, CudaTensorTask, EvictionPolicy, MemoryBudgets,
+    CudaMemoryManager, CudaTensorBackend, CudaTensorComputeExecutor, CudaTensorError,
+    CudaTensorMemory, CudaTensorTask, EvictionPolicy, MemoryBudgets,
 };
 use claymore_scheduler::{
     ExecutionOutcome, QueueRunner, Scheduler, SchedulerConfig, TaskKind, TaskSpec,
