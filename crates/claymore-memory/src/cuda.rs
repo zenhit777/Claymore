@@ -326,6 +326,7 @@ fn mark_launch_guard(
 /// no allocation stays in flight. If synchronization cannot be confirmed, the
 /// manager is poisoned and every allocation touched by the launch is pinned at
 /// `IN_FLIGHT`, so nothing that the GPU may still be using can be released.
+#[allow(clippy::too_many_arguments)]
 fn recover_launch_failure<S: CudaStreamOps, E>(
     original: CudaMemoryError,
     allocation_ids: &[String],
