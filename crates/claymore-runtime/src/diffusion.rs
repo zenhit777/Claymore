@@ -288,6 +288,9 @@ impl DiffusionOrchestrator {
                 },
             );
             self.metrics.sessions_submitted = self.metrics.sessions_submitted.saturating_add(1);
+            self.metrics.blocks_submitted = self.metrics.blocks_submitted.saturating_add(
+                u64::try_from(plan.block_count()).unwrap_or(u64::MAX),
+            );
             self.metrics.sessions_cancelled = self.metrics.sessions_cancelled.saturating_add(1);
             return Ok(id);
         }
