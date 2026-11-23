@@ -6,7 +6,7 @@
 > **Dépôt :** https://github.com/zenhit777/Claymore  
 > **Version de référence du workspace :** 0.5.0  
 > **État du document :** référence vivante, à mettre à jour à chaque jalon  
-> **Dernière mise à jour :** 22 novembre 2026
+> **Dernière mise à jour :** 23 novembre 2026
 
 ---
 
@@ -98,7 +98,7 @@ Les deux cibles fonctionnelles initiales sont indépendantes et disposent chacun
 
 **Modèle cible exact :** `google/diffusiongemma-26B-A4B-it` (identifiant Hugging Face).
 
-Objectif : construire un chemin d'exécution adapté à ce modèle de diffusion de texte. Les mentions de « Gemma » seules désignent la famille ou le backbone architectural, jamais une cible modèle interchangeable.
+Objectif : construire un chemin d'exécution adapté à ce modèle de diffusion de texte. **Décision de périmètre initial : texte uniquement.** Les entrées image et vidéo, leur prétraitement et les chemins multimodaux associés sont hors périmètre de la première intégration Claymore ; aucune interface ni compatibilité image/vidéo n'est revendiquée. Une extension multimodale nécessitera une décision produit et une spécification dédiées (formats d'entrée, prétraitement, interfaces modèle, ressources et validation) avant développement. Les mentions de « Gemma » seules désignent la famille ou le backbone architectural, jamais une cible modèle interchangeable.
 
 Les travaux spécifiques prévus comprennent :
 
@@ -144,7 +144,7 @@ La première cible de développement et de validation est la machine suivante :
 | RAM système | 128 Gio |
 | Environnement | WSL2 sous Windows |
 | Langage | Rust, édition 2021 |
-| Backend de tenseurs visé | Moteur tensoriel natif Claymore (socle implémenté en M8 dans la PR #24 non fusionnée, extensions M9-M12) |
+| Backend de tenseurs visé | Moteur tensoriel natif Claymore (socle M8 livré sur `main` par la PR #24 ; extensions modèles M10/M11 et optimisations M12) |
 | Politique numérique | précision mixte, BF16 et FP32 supportés dans les primitives M8 ; FP16 non implémenté |
 
 Cette configuration est le profil de référence, pas une limite architecturale du projet. Les paramètres matériels doivent rester configurables.
@@ -425,6 +425,14 @@ Périmètre de livraison :
 
 La préparation architecturale de M8 fait également partie de M7.1 : [docs/m8-architecture.md](m8-architecture.md) fixe les frontières Tensor / Device / Operations / Kernel dispatch / Runtime / Model adapters, les invariants d'ownership et les validations CPU/CI et RTX 5090. Ce document ne signifie pas que le code M8 est déjà implémenté.
 
+#### M8 — Socle tensoriel natif Claymore (PR #24)
+
+**État : livré sur `main` par la PR #24.** `claymore-tensor` possède les types Tensor/Layout/Vues canoniques, les opérations de référence CPU F32/BF16 et les contrats de dispatch explicites. Les kernels CUDA F32/BF16 et leur intégration au gestionnaire mémoire sont décrits dans [m8-architecture.md](m8-architecture.md) et les audits matériels versionnés. Cette livraison fournit le socle de calcul ; elle ne signifie pas que les graphes complets de DiffusionGemma ou Clover sont exécutables.
+
+#### M9 — Orchestration de diffusion commune (PR #32)
+
+**État : cœur livré sur `main` par la PR #32 ; couverture CPU et documentation de finalisation suivies dans l'issue #31.** Le runtime expose des plans validés par blocs, une chaîne de dépendances par session, une exécution bornée par étape, l'annulation coopérative et la propagation des échecs. Les données de modèle et les tenseurs restent hors des payloads du scheduler. Les métriques M9 sont des compteurs d'orchestration CPU ; aucune télémétrie GPU n'est déduite ou simulée.
+
 Les lots logiciels sont validés par la CI CPU, y compris les tests de fault injection avec la feature CUDA activée mais sans GPU. Le chemin de production `CudaMemoryManager` refactoré a également été revalidé sur la RTX 5090 au SHA de code `c16e9254994f24b6c7442c610332baf010352b1e` : les 17 tests matériels ciblés ont réussi lors de deux campagnes consécutives (34/34), et les 27 tests matériels découverts par la commande workspace ont également réussi lors de chacune des deux campagnes (54/54). Le vrai driver NVIDIA WSL2 a été utilisé, sans stub ; le rapport, les logs et leurs empreintes SHA-256 sont versionnés dans `docs/audits/m7.1-rtx5090-hardware-validation.md` et les fichiers associés. Cette validation ne couvre pas les kernels tensoriels ni les performances M8 ; ces gates restent distincts.
 
 #### Limites CUDA explicitement suivies après la revue M7.1
@@ -563,8 +571,8 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
 | M7 | Scheduler et orchestration mémoire | **Livré sur `main` par la PR #21** |
 | M7.1 | Durcissement scheduler/runtime et préparation M8 | **Livré sur `main` par la PR #22** ; CI verte ; revalidation RTX 5090 réussie au SHA de code `c16e925` (17/17 requis par campagne, deux campagnes ; 27/27 tests workspace par campagne) ; limites restantes suivies dans l'issue #23 |
-| M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **Implémenté dans la PR #24, finalisation BF16 incluse ; PR ouverte, non fusionnée dans `main`** (branche `feat/m8-tensor-foundation`) — Tensor canonique, contrats, dispatch, kernels CUDA F32 et BF16, intégration mémoire/scheduler ; preuves matérielles RTX 5090 versionnées |
-| M9 | Orchestration de diffusion modulaire commune | Planifié |
+| M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **Livré sur `main` par la PR #24** — Tensor canonique, contrats, dispatch, kernels CUDA F32/BF16 et intégration mémoire/scheduler ; preuves matérielles versionnées |
+| M9 | Orchestration de diffusion modulaire commune | Cœur livré par la PR #32 ; compléments CPU-only et documentation suivis dans l'issue #31 |
 | M10 | Adaptateur et intégration DiffusionGemma | Planifié |
 | M11 | Adaptateur et intégration Clover | Planifié |
 | M12 | Optimisation et validation de performance | Planifié |
@@ -717,7 +725,7 @@ Critères d'acceptation :
 
 **Objectif :** livrer un seul modèle Tensor natif, les opérations de référence, le dispatch explicite et les backends CPU/CUDA qui serviront à l'orchestration de diffusion et aux deux adaptateurs. M8 ne développe aucune stratégie autoregressive ni boucle de génération de modèle.
 
-**État :** implémenté dans la **PR #24 ouverte, non fusionnée dans `main`** (branche `feat/m8-tensor-foundation`), y compris la finalisation BF16 et la validation matérielle documentée séparément. Le crate claymore-tensor porte le Tensor canonique, les layouts validés, les vues empruntées, les opérations CPU F32 **et BF16** de référence (add, matmul, softmax, RMSNorm), les contrats typés (`contracts.rs`) et le dispatch déterministe avec explication de chaque refus. Les définitions Tensor concurrentes ont été retirées de claymore-device. Les huit kernels CUDA (quatre F32, quatre BF16) sont intégrés via une feature optionnelle, avec deux PTX `sm_120` versionnés, chargement par la Driver API, event de complétion réel et intégration aux budgets/gardes de claymore-memory et aux files du scheduler. BF16 utilise une représentation 16 bits exacte, une conversion FP32 explicite avec arrondi round-to-nearest-even et une accumulation FP32 pour matmul et réductions. FP16 reste non supporté. Le détail figure dans [m8-architecture.md](m8-architecture.md), dans le [rapport F32](audits/m8-rtx5090-hardware-validation.md), dans le [rapport BF16](audits/m8-bf16-rtx5090-hardware-validation.md), dans l'[audit des exigences de graphe](audits/m8-model-graph-requirements.md), dans l'[audit des différences numériques CPU/CUDA](audits/m8-cpu-cuda-numerics.md) et dans le [manifeste de provenance des PTX](audits/m8-ptx-provenance.md). Les opérations spécifiques aux modèles relèvent des adaptateurs M10/M11.
+**État : livré sur `main` par la PR #24**, y compris la finalisation BF16 et la validation matérielle documentée séparément. Le crate claymore-tensor porte le Tensor canonique, les layouts validés, les vues empruntées, les opérations CPU F32 **et BF16** de référence (add, matmul, softmax, RMSNorm), les contrats typés (`contracts.rs`) et le dispatch déterministe avec explication de chaque refus. Les définitions Tensor concurrentes ont été retirées de claymore-device. Les huit kernels CUDA (quatre F32, quatre BF16) sont intégrés via une feature optionnelle, avec deux PTX `sm_120` versionnés, chargement par la Driver API, event de complétion réel et intégration aux budgets/gardes de claymore-memory et aux files du scheduler. BF16 utilise une représentation 16 bits exacte, une conversion FP32 explicite avec arrondi round-to-nearest-even et une accumulation FP32 pour matmul et réductions. FP16 reste non supporté. Le détail figure dans [m8-architecture.md](m8-architecture.md), dans le [rapport F32](audits/m8-rtx5090-hardware-validation.md), dans le [rapport BF16](audits/m8-bf16-rtx5090-hardware-validation.md), dans l'[audit des exigences de graphe](audits/m8-model-graph-requirements.md), dans l'[audit des différences numériques CPU/CUDA](audits/m8-cpu-cuda-numerics.md) et dans le [manifeste de provenance des PTX](audits/m8-ptx-provenance.md). Les opérations spécifiques aux modèles relèvent des adaptateurs M10/M11.
 
 Travaux :
 - finaliser les contrats Tensor, layouts, vues, aliasing et durée de vie ;
@@ -843,7 +851,7 @@ Historique de référence :
 - **v0.3** : memory orchestrator host-side ;
 - **v0.4** : backend CUDA Driver API optionnel.
 
-Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in). La PR #6 a livré M2 (`Device` / `Tensor` et simulateur CPU ; le type `Tensor` a ensuite été recentré dans `claymore-tensor` pendant M8). Les PR #15 et #16 ont livré M3 et M4 ; les PR #17 et #18 ont livré M5, dont le chemin nominal a été validé sur RTX 5090. La PR #20 a livré la première tranche M6. L'injection de fautes reste suivie séparément dans l'issue #19.
+Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in) ; la PR #5 a livré M1 (consolidation de la fondation matérielle). La PR #6 a livré M2 (`Device` / `Tensor` et simulateur CPU ; le type `Tensor` a ensuite été recentré dans `claymore-tensor` pendant M8). Les PR #15 et #16 ont livré M3 et M4 ; les PR #17 et #18 ont livré M5, dont le chemin nominal a été validé sur RTX 5090. La PR #20 a livré la première tranche M6 ; les PR #21 et #22 ont livré M7 et M7.1 ; la PR #24 a livré M8 ; la PR #32 a livré le cœur de l'orchestration M9. La PR #40 propose l'adaptateur DiffusionGemma M10, mais reste ouverte et ne revendique pas une génération complète du checkpoint.
 
 Une PR ne doit pas être déclarée prête uniquement parce que le code existe : elle doit préciser si les tests couvrent le build par défaut, la feature CUDA, le matériel réel ou seulement un backend simulé.
 
@@ -930,7 +938,7 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-19 | Correspondance de la feuille de route précédente : ancien M2 (backend Driver) → socle livré v0.4/M0 ; ancien M3 (Memory ↔ CUDA) → v0.5/M0 et durcissement M1 ; ancien M4 (scheduler) → nouveau M4 ; ancien M5 (moteurs modèles) → M5/M6/M7 selon le chemin d'exécution ; ancien M6 (optimisation) → M8. Les tests simulés de l'adaptateur sont reportés à M2/M3 ; la preuve de protection d'une allocation en vol jusqu'à l'event relève de M4. |
 | 2026-11-19 | Le backend CUDA utilise `Rc` car son contexte n'est pas `Send`/`Sync` : driver, buffers, streams, events et `CudaMemoryManager` sont confinés au thread propriétaire ; M4 doit prévoir un thread CUDA dédié ou une évolution sûre de ce modèle. |
 | 2026-11-18 | Cette référence est rédigée en français ; README et documentation technique existante restent en anglais. |
-| 2026-11-18 | DiffusionGemma (`google/diffusiongemma-26B-A4B-it`) et Clover disposent de moteurs distincts partageant les services transverses du runtime. |
+| 2026-11-18 | DiffusionGemma (`google/diffusiongemma-26B-A4B-it`) et Clover disposent d'adaptateurs spécialisés partageant le runtime, le socle tensoriel et les services transverses. |
 | 2026-11-20 | Claymore ne fonde pas son moteur tensoriel sur un runtime tensoriel externe : les contrats Device/Buffer/Tensor, l'ownership, la synchronisation, la politique mémoire et l'exécution des modèles doivent rester cohérents et maîtrisés dans le projet, sans adapter les invariants Claymore au cycle de vie d'un framework tiers. Ce choix évite une dépendance structurante et les frictions d'interopérabilité autour des contextes CUDA, des buffers et des transferts ; il augmente en contrepartie fortement l'effort d'implémentation, de maintenance, de correction numérique et d'optimisation. Claymore pourra s'appuyer sur des bibliothèques de calcul bas niveau et des outils CUDA selon §6.4, sans leur déléguer ses abstractions ni son runtime. |
 | 2026-11-20 | Candle et les autres projets externes restent des références d'étude uniquement ; Claymore possède ses contrats Device/Buffer/Tensor et son futur moteur tensoriel natif. DiffusionGemma est référencé par son identifiant Hugging Face exact. |
 | 2026-11-20 | M4 introduit une libération de buffer explicite et faillible, des tokens de complétion H2D/D2H vérifiables par CUDA event et des vues tensor stridées ; aucun raccordement CUDA au trait Device n'est autorisé avant validation de ces contrats. |
@@ -941,7 +949,7 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-22 | M7 : scheduler, `QueueRunner` et exécuteur CUDA sont synchrones et mono-propriétaires ; H2D/D2H ne complètent une tâche qu'après attente de l'event. Aucun overlap transfert/calcul ou prefetch concurrent n'est revendiqué. |
 | 2026-11-22 | Éviction Adaptive : comparer d'abord la chaleur (hit count), puis la récence (tick), et utiliser le coût de rechargement en nanosecondes uniquement comme départage ; un coût inconnu vaut zéro pour ce seul départage. Aucun chargeur ne l'alimente automatiquement à ce stade. |
 | 2026-11-22 | Finalisation M8 : BF16 est implémenté en 16 bits exacts avec conversion FP32 explicite et arrondi round-to-nearest-even. Matmul et réductions accumulent en FP32 ; la sortie BF16 est arrondie une seule fois. FP16 reste non supporté et aucun cast/fallback implicite n'est autorisé. |
-| 2026-11-22 | Les deux modules PTX (`m8_f32.ptx` et `m8_bf16.ptx`) ciblent `sm_120` ; les kernels BF16 utilisent `cvt.rn.bf16.f32` et `fma.rn.f32`. La tolérance matérielle BF16 est exprimée en pas représentables (0 pour add, 1 pour matmul/softmax/RMSNorm), fixée avant la campagne. |
+| 2026-11-22 | Les deux modules PTX (`m8_f32.ptx` et `m8_bf16.ptx`) ciblent `sm_120` ; les kernels BF16 utilisent `cvt.rn.bf16.f32` et `fma.rn.f32`. La tolérance matérielle BF16 est exprimée en pas représentables (0 pour add, 1 pour matmul/softmax/RMSNorm), fixée avant la campagne. |\n| 2026-11-23 | DiffusionGemma est initialement ciblé en génération de texte uniquement ; image et vidéo sont hors périmètre sans décision produit et spécification multimodale ultérieures. Le runtime M9 expose les métriques CPU d'orchestration et des durées observées par phase, sans métriques GPU simulées. |
 
 ### Correspondance de la feuille de route historique
 
