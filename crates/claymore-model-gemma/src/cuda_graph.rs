@@ -1212,6 +1212,69 @@ impl CudaGraph {
         let proj = self.weight("model.encoder.embed_vision.embedding_projection.weight")?;
         self.linear(normed, proj)
     }
+
+    /// One full denoising block on the card: canvas -> decoder -> logits ->
+    /// EntropyBound acceptance, repeating until the stopping criteria fire.
+    /// `rng` draws uniform vocabulary indices. Returns the accepted canvas.
+    #[allow(clippy::too_many_arguments)]
+    pub fn generate_block(
+        &mut self,
+        canvas: Vec<u32>,
+        cache: &mut Vec<(usize, usize, usize, Vec<Bf16>, Vec<Bf16>)>,
+        policy: &crate::generation_loop::SamplerPolicy,
+        rng: &mut dyn FnMut(usize) -> usize,
+    ) -> Result<Vec<u32>, GraphError> {
+        use crate::generation_loop::{
+            accept_canvas, mean_entropy, position_entropy, should_stop, CanvasState,
+        };
+        let vocab = policy.vocab_size;
+        let temperature = 0.4f32;
+        let mut state = CanvasState {
+            canvas: canvas.clone(),
+            accepted: vec![false; canvas.len()],
+            logits: Vec::new(),
+            step: 0,
+            stable_count: 0,
+            last_accepted: canvas.clone(),
+        };
+        let mut self_cond: Option<Vec<f32>> = None;
+        for step in 0..policy.max_denoising_steps {
+            // Linear temperature schedule t_min 0.4 -> t_max 0.8.
+            let temperature =
+                0.4 + (0.8 - 0.4) * (step as f32) / (policy.max_denoising_steps - 1) as f32;
+            let hidden = self.decoder_forward(&state.canvas, cache, self_cond.as_ref())?;
+            let logits_idx = self.lm_logits(hidden)?;
+            let logits = self.download_f32(logits_idx)?;
+            let entropies = position_entropy(&logits, canvas.len(), vocab, temperature);
+            let argmax: Vec<u32> = (0..canvas.len())
+                .map(|c| {
+                    let row = &logits[c * vocab..(c + 1) * vocab];
+                    let mut best = 0usize;
+                    let mut best_value = f32::NEG_INFINITY;
+                    for (i, v) in row.iter().enumerate() {
+                        if *v > best_value {
+                            best_value = *v;
+                            best = i;
+                        }
+                    }
+                    best as u32
+                })
+                .collect();
+            let (canvas_next, accepted) = accept_canvas(&state, &argmax, &entropies, policy, rng);
+            let mean = mean_entropy(&entropies);
+            let stop = should_stop(&state, &accepted, &canvas_next, mean, policy);
+            state.canvas = canvas_next;
+            state.accepted = accepted;
+            state.last_accepted = state.canvas.clone();
+            state.step = step + 1;
+            state.logits = logits;
+            self_cond = Some(state.logits.clone());
+            if stop {
+                return Ok(state.canvas);
+            }
+        }
+        Ok(state.canvas)
+    }
 }
 
 #[cfg(test)]

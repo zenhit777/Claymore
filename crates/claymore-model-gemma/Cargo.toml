@@ -26,3 +26,8 @@ claymore-scheduler = { path = "../claymore-scheduler" }
 name = "hardware_m10_streaming"
 path = "tests/hardware_m10_streaming.rs"
 required-features = ["cuda-streaming"]
+
+[[test]]
+name = "hardware_m10_generation"
+path = "tests/hardware_m10_generation.rs"
+required-features = ["cuda-streaming"]
