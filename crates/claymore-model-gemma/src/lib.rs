@@ -1,9 +1,10 @@
-//! DiffusionGemma integration boundary.
-///
-/// TODO: implement Claymore-native model loading, bidirectional attention, diffusion
-/// denoising/canvas state, and validated KV/state management.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GemmaEngineState {
-    Uninitialized,
-    Ready,
-}
+//! DiffusionGemma model adapter boundary.
+//!
+//! This crate owns model-specific configuration and generation state. Tensor
+//! storage, device execution, scheduling and memory admission remain owned by
+//! the corresponding Claymore crates.
+pub mod canvas;
+pub mod config;
+
+pub use canvas::{CanvasError, CanvasMetrics, CanvasPosition, CanvasTokenState, GemmaCanvas};
+pub use config::{GemmaConfigError, GemmaModelConfig, MODEL_ID};
