@@ -342,6 +342,7 @@ impl DiffusionOrchestrator {
 
         if cancelled_before_step {
             self.scheduler.cancel_running(task_id)?;
+            self.metrics.steps_cancelled = self.metrics.steps_cancelled.saturating_add(1);
             self.finish_cancelled(session_id);
             return Ok(DiffusionRunOutcome::SessionCancelled {
                 session_id,
