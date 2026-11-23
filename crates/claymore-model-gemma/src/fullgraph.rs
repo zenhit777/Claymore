@@ -338,7 +338,7 @@ pub fn encoder_forward(
             ),
             eps,
         );
-        let (weights, indices) = router_forward(
+        let (_scores, weights, indices) = router_forward(
             host,
             &residual,
             &tensor_of(
@@ -430,6 +430,8 @@ pub fn scale_bias(host: &Host, x: &Tensor, scale: &Tensor, bias: &Tensor) -> Ten
 
 /// Decoder canvas forward with self-conditioning. `self_cond` is F32 logits
 /// `[canvas_len, vocab]` from the previous step, None for the first step.
+/// Traced decoder pass: `trace` receives `(scores, weights, indices)` for
+/// every layer, in layer order, as F32 vectors.
 pub fn decoder_forward(
     host: &Host,
     ckpt: &Checkpoint,
@@ -437,6 +439,7 @@ pub fn decoder_forward(
     canvas: &[u32],
     cache: &mut crate::graph::KvCache,
     self_cond: Option<&Vec<f32>>,
+    trace: &mut Vec<(Vec<f32>, Vec<f32>, Vec<f32>)>,
 ) -> Tensor {
     let text = cfg.text_config.as_ref().unwrap();
     let hidden = text.hidden_size.unwrap();
@@ -593,7 +596,7 @@ pub fn decoder_forward(
             ),
             eps,
         );
-        let (weights, indices) = router_forward(
+        let (scores, weights, indices) = router_forward(
             host,
             &x,
             &tensor_of(
@@ -615,6 +618,7 @@ pub fn decoder_forward(
             (hidden as f32).powf(-0.5),
             text.top_k_experts.unwrap(),
         );
+        trace.push((scores, weights.to_vec(), indices.to_vec()));
         let exp = experts_forward(
             host,
             &pre2,

@@ -126,24 +126,46 @@ fn decoder_first_step_matches_pinned_upstream_on_the_real_checkpoint() {
         .collect::<Vec<u32>>();
     let mut cache = KvCache::new(30);
     encoder_forward(&host, &ckpt, &cfg, &ids, &mut cache);
-    let canvas = load("canvas0_direct", &[1, 256])
+    let canvas = load("canvas0_direct", &[1, 16])
         .iter()
         .map(|v| *v as u32)
         .collect::<Vec<u32>>();
-    assert_eq!(canvas.len(), 256);
-    let hidden = decoder_forward(&host, &ckpt, &cfg, &canvas, &mut cache, None);
+    assert_eq!(canvas.len(), 16);
+    let mut trace = Vec::new();
+    let hidden = decoder_forward(&host, &ckpt, &cfg, &canvas, &mut cache, None, &mut trace);
     let rust_hidden = host.to_f32(&hidden);
-    let golden_hidden = load("decoder_last_hidden0_direct", &[1, 256, 2816]);
+    let golden_hidden = load("decoder_last_hidden0_direct", &[1, 16, 2816]);
     let (hmax, hrms) = stats(&rust_hidden, &golden_hidden);
     eprintln!("decoder_last_hidden0 max_abs={hmax:.6} rms={hrms:.6}");
     assert!(hmax <= 0.12, "decoder hidden drift {hmax}");
     assert!(hrms <= 4e-3, "decoder hidden rms {hrms}");
     let logits = lm_logits(&host, &ckpt, &cfg, &hidden);
     let rust_logits = host.to_f32(&logits);
-    let golden_logits = load("decoder_logits0_direct", &[1, 256, 262144]);
+    let golden_logits = load("decoder_logits0_direct", &[1, 16, 262144]);
     let (lmax, lrms) = stats(&rust_logits, &golden_logits);
     eprintln!("decoder_logits0 max_abs={lmax:.6} rms={lrms:.6}");
     // Logits carry the full 30-layer drift; the campaign documents this bound.
     assert!(lmax <= 2.0, "decoder logits drift {lmax}");
     assert!(lrms <= 0.1, "decoder logits rms {lrms}");
+
+    // Layer-0 MoE router: scores, top-k weights and indices.
+    let (scores, weights, indices) = &trace[0];
+    let golden_scores = load("moe0_router_logits", &[16, 128]);
+    let (smax, srms) = stats(scores, &golden_scores);
+    eprintln!("moe0 router scores max_abs={smax:.6} rms={srms:.6}");
+    assert!(smax <= 0.02, "router scores drift {smax}");
+    let golden_weights = load("moe0_topk_weights", &[16, 8]);
+    let (wmax, wrms) = stats(weights, &golden_weights);
+    eprintln!("moe0 topk weights max_abs={wmax:.6} rms={wrms:.6}");
+    assert!(wmax <= 0.01, "router weights drift {wmax}");
+    let golden_indices = load("moe0_topk_indices", &[16, 8]);
+    assert_eq!(
+        indices.iter().map(|v| *v as u32).collect::<Vec<u32>>(),
+        golden_indices
+            .iter()
+            .map(|v| *v as u32)
+            .collect::<Vec<u32>>(),
+        "router top-k indices must match exactly"
+    );
+    println!("moe0 router: indices exact, weights rms={wrms:.6}");
 }

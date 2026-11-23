@@ -158,7 +158,9 @@ Provenance : venv `transformers 5.24.0.dev0 @ 671aa77576266f41f33f9c28e2d824bfd1
 révision `cd40195554d3cfcb56f34b9adfb66efc790ed5b6`.
 Prompt fixe `"What is the capital of France?"` (7 tokens), image
 déterministe (seed 1234, 48×48 → 9 patches → pooling 3 → 1 token
-vision), canvas seed 42. Golden capturés : `vision_last_hidden_direct`,
+vision), canvas seed 42 de 16 positions (la composition du canvas est
+indépendante de la longueur ; 16 rend la référence CPU complète
+exécutable dans le créneau de la campagne). Golden capturés : `vision_last_hidden_direct`,
 `embed_vision_output_direct`, `encoder_last_hidden_direct`,
 `enc_kv_{0..29}_{keys,values}_direct`, `canvas0_direct`,
 `decoder_last_hidden0_direct`, `decoder_logits0_direct`

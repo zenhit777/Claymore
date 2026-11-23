@@ -21,3 +21,8 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 claymore-scheduler = { path = "../claymore-scheduler" }
+
+[[test]]
+name = "hardware_m10_streaming"
+path = "tests/hardware_m10_streaming.rs"
+required-features = ["cuda-streaming"]

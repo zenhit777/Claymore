@@ -220,7 +220,9 @@ pub fn dense_mlp(host: &Host, x: &Tensor, gate: &Tensor, up: &Tensor, down: &Ten
 
 /// Router: RMSNorm(no scale) -> *scale*scalar_root -> proj -> softmax ->
 /// deterministic top-k -> normalized weights * per-expert scale.
-/// Returns `[tokens, top_k]` F32 weights and `[tokens, top_k]` F32 indices.
+/// Returns `(scores [tokens, experts], weights [tokens*top_k], indices [tokens*top_k])`
+/// as F32 vectors: the raw router scores, the normalized weights scaled per
+/// expert, and the selected expert indices.
 #[allow(clippy::too_many_arguments)]
 pub fn router_forward(
     host: &Host,
@@ -231,7 +233,7 @@ pub fn router_forward(
     eps: f64,
     root_scale: f32,
     top_k: usize,
-) -> (Vec<f32>, Vec<f32>) {
+) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
     let normed = rms_norm_unscaled(host, x, eps);
     let scale_v = host.to_f32(scale);
     let width = normed.layout().shape()[1];
@@ -270,7 +272,7 @@ pub fn router_forward(
             indices[t * top_k + slot] = i as f32;
         }
     }
-    (weights, indices)
+    (scores, weights, indices)
 }
 
 /// Experts: for each (token, slot) pair run expert e = index; gate/up from
