@@ -565,7 +565,7 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M7.1 | Durcissement scheduler/runtime et préparation M8 | **Livré sur `main` par la PR #22** ; CI verte ; revalidation RTX 5090 réussie au SHA de code `c16e925` (17/17 requis par campagne, deux campagnes ; 27/27 tests workspace par campagne) ; limites restantes suivies dans l'issue #23 |
 | M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **Livré sur `main`** par la PR #24 ; validation F32/BF16 RTX 5090 documentée |
 | M9 | Orchestration de diffusion modulaire commune | **Livré sur `main`** par la PR #32 ; limites et suivis #33 à #38 |
-| M10 | Adaptateur et intégration DiffusionGemma | **En cours** — branche `feat/m10-diffusiongemma` ; socle CPU de configuration/canvas préparé, exécution réelle et validation RTX 5090 restantes |
+| M10 | Adaptateur et intégration DiffusionGemma | **En cours** — branche `feat/m10-diffusiongemma` ; ingestion épinglée du checkpoint réel, primitives M10 F32/BF16, adaptateur `DiffusionExecutor` et **campagne RTX 5090 livrée** (66 tests matériels verts au SHA `ea115ab`) ; exécution du graphe complet et génération réelle **en gate ouvert** |
 | M11 | Adaptateur et intégration Clover | Planifié |
 | M12 | Optimisation et validation de performance | Planifié |
 
@@ -756,13 +756,15 @@ Critères d'acceptation :
 
 ### M10 — Adaptateur DiffusionGemma
 
-**État :** en cours sur `feat/m10-diffusiongemma`. Le premier incrément ajoute le parsing typé de configuration BF16 et l'état CPU du canvas avec transitions de confiance atomiques ; il ne constitue pas encore une exécution du checkpoint. Le périmètre détaillé et le gate matériel figurent dans [m10-diffusiongemma.md](m10-diffusiongemma.md), avec le [prompt agent RTX 5090](agents/m10-rtx5090-agent-prompt.md).
+**État :** en cours sur `feat/m10-diffusiongemma`, campagne matérielle livrée au SHA `ea115ab337d492d81ac50f69c09cd79e050b79a6`. Livré et réellement exercé sur la RTX 5090 : ingestion stricte et épinglée du checkpoint réel (`google/diffusiongemma-26B-A4B-it`, révision `cd40195554d3cfcb56f34b9adfb66efc790ed5b6`, 1047 tenseurs / 51 647 562 456 octets / 11 shards, couverture complète vérifiée), validation complète de la configuration, primitives M10 `Linear`/`RotaryEmbed`/`Attention`/`SoftCap`/`Scale` (référence CPU déterministe et 10 kernels `sm_120`, dispatch exact), politique `EntropyBoundSampler` avec canvas 256 et acceptation masquée par seuil de confiance, adaptateur `DiffusionExecutor` branché sur M9, admission mémoire bornée et gardes `IN_FLIGHT` sur les lancements M10. **Un sous-graphe de couche décodeur construit avec les poids réels** (embedding → norms → projections → RoPE → attention GQA → `o_proj` → norme → résiduel → `layer_scalar` appris) est exécuté sur la carte et comparé à la référence CPU par étape isolée.
+
+**Non livré et non revendiqué :** exécuteur de streaming borné par couche, primitives MoE (routeur top-8, gather/scatter), tour de vision, auto-conditionnement, cache KV encodeur et cross-attention. Le **gate de génération réelle reste ouvert** : aucune génération de texte n'a été produite. Les portes manquantes sont des portes de **code**, pas une limite de capacité mémoire — le plafond de 28 Gio est un seuil d'admission et les poids sont streamés depuis VRAM + RAM. Le périmètre détaillé, les tolérances fixées avant campagne et les résultats bruts figurent dans [m10-diffusiongemma.md](m10-diffusiongemma.md) et dans le [rapport de validation](audits/m10-rtx5090-hardware-validation.md), avec le [prompt agent RTX 5090](agents/m10-rtx5090-agent-prompt.md).
 
 **Objectif :** intégrer google/diffusiongemma-26B-A4B-it au moteur de diffusion commun, en conservant les exigences propres à son architecture.
 
 Travaux : lecture du checkpoint et de sa configuration, représentation canvas/état, progression de denoising, attention bidirectionnelle, choix de précision et validation numérique, chargement des poids et gestion des tenseurs intermédiaires.
 
-Critères d'acceptation : étape réelle et reproductible du graphe du modèle, comparaison numérique à une référence fiable, gestion mémoire et campagne RTX 5090 versionnée.
+Critères d'acceptation : étape réelle et reproductible du graphe du modèle, comparaison numérique à une référence fiable, gestion mémoire et campagne RTX 5090 versionnée. **Premier critère partiellement satisfait** : une étape réelle du graphe décodeur à poids réels est exécutée et comparée ; le chemin encodeur/KV cache/cross-attention et le graphe complet restent à livrer.
 
 ### M11 — Adaptateur Clover
 
@@ -909,8 +911,10 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 - `docs/audits/m4-device-lifecycle-contracts.md` — audit des contrats de libération, complétion asynchrone et vues tensor.
 - `docs/m8-architecture.md` — socle tensoriel natif, politique numérique F32/BF16 et tolérances.
 - `docs/m9-diffusion-orchestration.md` — contrats et limites de l'orchestration diffusion M9.
-- `docs/m10-diffusiongemma.md` — périmètre, critères et séquencement de l'adaptateur DiffusionGemma.
+- `docs/m10-diffusiongemma.md` — périmètre, critères, tolérances et gates de l'adaptateur DiffusionGemma.
 - `docs/agents/m10-rtx5090-agent-prompt.md` — consignes de réalisation et de validation matérielle M10.
+- `docs/audits/m10-rtx5090-hardware-validation.md` — campagne matérielle M10 sur RTX 5090 : traçabilité du checkpoint épinglé, primitives, sous-graphe à poids réels, budgets, défaut corrigé et gates ouverts.
+- `docs/audits/fixtures/diffusiongemma-config.json` et `docs/audits/fixtures/diffusiongemma-generation-config.json` — copies de référence épinglées de la configuration et de la politique de génération.
 - `docs/audits/m8-model-graph-requirements.md` — exigences de graphe et frontières M8/M9/M10/M11.
 - `docs/audits/m8-rtx5090-hardware-validation.md` — campagne matérielle F32.
 - `docs/audits/m8-bf16-rtx5090-hardware-validation.md` — campagne matérielle BF16.
@@ -949,6 +953,12 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-22 | Éviction Adaptive : comparer d'abord la chaleur (hit count), puis la récence (tick), et utiliser le coût de rechargement en nanosecondes uniquement comme départage ; un coût inconnu vaut zéro pour ce seul départage. Aucun chargeur ne l'alimente automatiquement à ce stade. |
 | 2026-11-22 | Finalisation M8 : BF16 est implémenté en 16 bits exacts avec conversion FP32 explicite et arrondi round-to-nearest-even. Matmul et réductions accumulent en FP32 ; la sortie BF16 est arrondie une seule fois. FP16 reste non supporté et aucun cast/fallback implicite n'est autorisé. |
 | 2026-11-22 | Les deux modules PTX (`m8_f32.ptx` et `m8_bf16.ptx`) ciblent `sm_120` ; les kernels BF16 utilisent `cvt.rn.bf16.f32` et `fma.rn.f32`. La tolérance matérielle BF16 est exprimée en pas représentables (0 pour add, 1 pour matmul/softmax/RMSNorm), fixée avant la campagne. |
+| 2026-11-23 | M10 : le checkpoint est épinglé par révision et empreintes SHA-256 (`config.json`, index, `generation_config.json`) contrôlées à l'ouverture ; aucune révision mobile n'est suivie. La politique canonique de génération est l'`EntropyBoundSampler` de transformers ; le `scheduler_config.json` (abstraction `diffusers` `BlockRefinementScheduler`) est enregistré comme artefact séparé et non fusionné. |
+| 2026-11-23 | M10 : `layer_scalar` est une valeur apprise par couche (`0,068847656` en couche 0), pas `1.0`. Une primitive `Scale` explicite (F32/BF16, scalaire ou par colonne) est ajoutée pour l'appliquer comme dernière opération de couche ; aucune identité implicite n'est supposée. |
+| 2026-11-23 | M10 : pour une réduction dont la sortie peut s'annuler, le compte d'ULP n'est pas une borne (un élément proche de zéro peut avoir un ULP arbitrairement grand à erreur absolue bornée). Le critère d'attention BF16 est **dérivé du modèle d'erreur** : `max_abs ≤ 2^-8 · max|v|` (l'arrondi BF16 des probabilités de softmax apporte ≤ `2^-9` d'erreur relative, plus un bit de marge). L'ULP, le max, le RMS et le relatif restent mesurés et publiés. Les tolérances F32 (`1e-4`) et BF16 élémentaire/réduction (1 ULP) sont inchangées. |
+| 2026-11-23 | M10 : la dérive d'une chaîne complète est mesurée et publiée séparément des budgets par opération (un budget par opération n'est pas un budget de chaîne : 1 ULP de RMSNorm est amplifié par une projection à 2816 termes qui s'annule partiellement). La politique numérique de la chaîne complète (BF16 de bout en bout contre activations maîtresses FP32) reste une **décision ouverte**. |
+| 2026-11-23 | M10 : les lancements M10 installent les **mêmes gardes `IN_FLIGHT`** que les lancements M8 et passent par la même frontière de récupération (quiescence du flux prouvée avant de rendre la main, gestionnaire empoisonné si la synchronisation échoue). Découvert par la campagne : sans garde, une éviction pouvait libérer un tampon lu par un kernel en cours d'exécution. Verrouillé par quatre tests d'injection de fautes sur la branche M10. |
+| 2026-11-23 | M10 : le plafond dur de 28 Gio est un **seuil d'admission**, pas une limite de taille de modèle. Les poids vivent en VRAM **et** RAM et sont streamés couche par couche ; ce qui manque pour le graphe complet est du **code** (exécuteur de streaming borné, primitives MoE, tour de vision, auto-conditionnement, cache KV encodeur), pas de la capacité mémoire. Le **gate de génération réelle reste ouvert** ; aucune génération n'est revendiquée. |
 
 ### Correspondance de la feuille de route historique
 
@@ -970,7 +980,7 @@ Les références exactes (URL et révision/commit) doivent être consignées ava
 
 - FreeToken — URL/révision à compléter après vérification.
 - Strata (Niko1221) — URL/révision à compléter après vérification.
-- DiffusionGemma — `google/diffusiongemma-26B-A4B-it` ; révision exacte du dépôt à consigner avant l'implémentation du chargeur.
+- DiffusionGemma — `google/diffusiongemma-26B-A4B-it` ; **révision épinglée consignée** : dépôt `cd40195554d3cfcb56f34b9adfb66efc790ed5b6`, code de référence transformers `671aa77576266f41f33f9c28e2d824bfd1b1b63c`, empreintes SHA-256 de `config.json`, `model.safetensors.index.json` et `generation_config.json` (§1.1 de [m10-rtx5090-hardware-validation.md](audits/m10-rtx5090-hardware-validation.md)).
 - Clover-35B-A3B-preview — dépôt Hugging Face et révision à compléter après vérification.
 
 
