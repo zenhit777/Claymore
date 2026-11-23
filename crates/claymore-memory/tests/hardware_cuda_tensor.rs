@@ -569,7 +569,7 @@ fn hw_m8_09_grid_y_limit_is_enforced_by_dispatch_and_launch_boundary() {
     // dispatch before a backend is selected, even though the CPU backend
     // cannot consume VRAM tensors either.
     let oversized_lhs = memory
-        .allocate_tensor(vec![1_048_577, 1], DType::F32)
+        .allocate_tensor(vec![1_048_561, 1], DType::F32)
         .unwrap();
     let oversized = ExecutionRequest::new(TensorOp::MatMul {
         lhs: &oversized_lhs,
@@ -599,7 +599,7 @@ fn hw_m8_09_grid_y_limit_is_enforced_by_dispatch_and_launch_boundary() {
     // the production manager. This must fail as a configuration error without
     // submitting a kernel or leaving guards/events behind.
     let output = memory
-        .allocate_tensor(vec![1_048_577, 1], DType::F32)
+        .allocate_tensor(vec![1_048_561, 1], DType::F32)
         .unwrap();
     let lhs_id = memory.buffer_id(&oversized_lhs).unwrap();
     let rhs_id = memory.buffer_id(&rhs).unwrap();
