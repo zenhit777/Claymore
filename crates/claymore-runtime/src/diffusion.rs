@@ -426,7 +426,9 @@ impl DiffusionOrchestrator {
             Err(error) => {
                 self.scheduler.fail(task_id)?;
                 self.metrics.steps_failed = self.metrics.steps_failed.saturating_add(1);
-                let session = self.sessions.get_mut(&session_id)
+                let session = self
+                    .sessions
+                    .get_mut(&session_id)
                     .ok_or(DiffusionError::UnknownSession(session_id))?;
                 session.snapshot.state = DiffusionSessionState::Failed;
                 session.snapshot.current_step = None;
@@ -719,7 +721,8 @@ mod tests {
                 iteration: 0
             },
             DiffusionStep::CommitBlock { block: BlockId(0) },
-        ]).is_err());
+        ])
+        .is_err());
     }
 
     #[test]
