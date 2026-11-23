@@ -15,15 +15,15 @@ use std::sync::{Mutex, MutexGuard};
 use claymore_core::MemoryTier;
 use claymore_device::{CpuDevice, DType, Device};
 use claymore_memory::{
-    CudaMemoryError, CudaMemoryManager, CudaTensorBackend, CudaTensorComputeExecutor,
+    CudaMemoryManager, CudaTensorBackend, CudaTensorComputeExecutor,
     CudaTensorError, CudaTensorMemory, CudaTensorTask, EvictionPolicy, MemoryBudgets,
 };
 use claymore_scheduler::{
     ExecutionOutcome, QueueRunner, Scheduler, SchedulerConfig, TaskKind, TaskSpec,
 };
 use claymore_tensor::{
-    Bf16, CpuReferenceBackend, DispatchError, ExecutionRequest, OpError, Tensor,
-    TensorDispatcher, TensorError, TensorLayout, TensorOp, UnsupportedReason,
+    Bf16, CpuReferenceBackend, DispatchError, ExecutionRequest, OpError, Tensor, TensorDispatcher,
+    TensorError, TensorLayout, TensorOp, UnsupportedReason,
 };
 
 static GPU_LOCK: Mutex<()> = Mutex::new(());
@@ -619,8 +619,7 @@ fn hw_m8_09_grid_y_limit_is_enforced_by_dispatch_and_launch_boundary() {
         )
         .expect_err("the defensive CUDA launch check must reject grid.y > 65,535");
     assert!(
-        error.to_string().contains("65,536")
-            || error.to_string().contains("65536"),
+        error.to_string().contains("65,536") || error.to_string().contains("65536"),
         "unexpected grid-limit error: {error}"
     );
     assert!(
@@ -629,7 +628,9 @@ fn hw_m8_09_grid_y_limit_is_enforced_by_dispatch_and_launch_boundary() {
             && memory.manager().allocation(&output_id).is_some(),
         "all allocations must remain accounted after the rejected launch"
     );
-    println!("HW-M8 grid limit: exact boundary accepted; overflow rejected before kernel submission");
+    println!(
+        "HW-M8 grid limit: exact boundary accepted; overflow rejected before kernel submission"
+    );
 }
 
 // ---------------------------------------------------------------------------
