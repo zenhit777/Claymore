@@ -5,7 +5,7 @@
 //! adapters provide the work for each bounded step through `DiffusionExecutor`.
 //! Cancellation is observed at step boundaries, so an in-flight backend call is
 //! never reported cancelled before the executor returns.
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Instant};
 
 use claymore_scheduler::{
     Scheduler, SchedulerConfig, SchedulerError, TaskId, TaskKind, TaskPriority, TaskSpec, TaskState,
@@ -166,6 +166,19 @@ pub struct DiffusionMetrics {
     pub steps_completed: u64,
     pub steps_failed: u64,
     pub steps_cancelled: u64,
+    /// Cumulative number of blocks admitted across all sessions.
+    pub blocks_submitted: u64,
+    /// Cumulative number of successfully committed blocks.
+    pub blocks_completed: u64,
+    /// Current blocks not yet committed in non-terminal sessions.
+    pub blocks_pending: u64,
+    /// Observed executor time, in nanoseconds, grouped by step phase.
+    pub prepare_duration_ns: u64,
+    pub denoise_duration_ns: u64,
+    pub validate_duration_ns: u64,
+    pub commit_duration_ns: u64,
+    /// Sum of measured executor durations; excludes scheduler and queue wait.
+    pub execution_duration_ns: u64,
 }
 
 /// Result of executing at most one scheduled diffusion step.
@@ -217,6 +230,7 @@ struct SessionRecord {
     snapshot: DiffusionSessionSnapshot,
     cancellation: CancellationToken,
     tasks: Vec<TaskId>,
+    completed_blocks: usize,
 }
 
 /// Deterministic block/step orchestrator backed by Claymore's shared scheduler.
@@ -270,6 +284,7 @@ impl DiffusionOrchestrator {
                     },
                     cancellation,
                     tasks: Vec::new(),
+                    completed_blocks: 0,
                 },
             );
             self.metrics.sessions_submitted = self.metrics.sessions_submitted.saturating_add(1);
@@ -316,10 +331,15 @@ impl DiffusionOrchestrator {
                 },
                 cancellation,
                 tasks,
+                completed_blocks: 0,
             },
         );
+        let block_count = plan.block_count();
         self.plans.insert(id, plan);
         self.metrics.sessions_submitted = self.metrics.sessions_submitted.saturating_add(1);
+        self.metrics.blocks_submitted = self.metrics.blocks_submitted.saturating_add(
+            u64::try_from(block_count).unwrap_or(u64::MAX),
+        );
         Ok(id)
     }
 
@@ -376,7 +396,16 @@ impl DiffusionOrchestrator {
             });
         }
 
+        let started_at = Instant::now();
         let execution = executor.execute_step(step);
+        let elapsed_ns = u64::try_from(started_at.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        self.metrics.execution_duration_ns = self.metrics.execution_duration_ns.saturating_add(elapsed_ns);
+        match step {
+            DiffusionStep::PrepareBlock { .. } => self.metrics.prepare_duration_ns = self.metrics.prepare_duration_ns.saturating_add(elapsed_ns),
+            DiffusionStep::Denoise { .. } => self.metrics.denoise_duration_ns = self.metrics.denoise_duration_ns.saturating_add(elapsed_ns),
+            DiffusionStep::ValidateBlock { .. } => self.metrics.validate_duration_ns = self.metrics.validate_duration_ns.saturating_add(elapsed_ns),
+            DiffusionStep::CommitBlock { .. } => self.metrics.commit_duration_ns = self.metrics.commit_duration_ns.saturating_add(elapsed_ns),
+        }
         let cancelled_after_step = self.sessions[&session_id].cancellation.is_cancelled();
         match execution {
             Ok(()) => {
@@ -389,6 +418,10 @@ impl DiffusionOrchestrator {
                     .get_mut(&session_id)
                     .ok_or(DiffusionError::UnknownSession(session_id))?;
                 session.snapshot.completed_steps += 1;
+                if matches!(step, DiffusionStep::CommitBlock { .. }) {
+                    session.completed_blocks = session.completed_blocks.saturating_add(1);
+                    self.metrics.blocks_completed = self.metrics.blocks_completed.saturating_add(1);
+                }
                 session.snapshot.current_step = None;
                 if session.snapshot.completed_steps == session.snapshot.total_steps {
                     session.snapshot.state = DiffusionSessionState::Completed;
@@ -491,7 +524,18 @@ impl DiffusionOrchestrator {
     }
 
     pub fn metrics(&self) -> DiffusionMetrics {
-        self.metrics
+        let mut metrics = self.metrics;
+        metrics.blocks_pending = self.sessions.values().fold(0_u64, |pending, session| {
+            if session.snapshot.state.is_terminal() {
+                pending
+            } else {
+                let total = self.plans.get(&session.snapshot.id).map_or(0, DiffusionPlan::block_count);
+                pending.saturating_add(
+                    u64::try_from(total.saturating_sub(session.completed_blocks)).unwrap_or(u64::MAX),
+                )
+            }
+        });
+        metrics
     }
 
     pub fn scheduler(&self) -> &Scheduler {
