@@ -16,6 +16,8 @@ use thiserror::Error;
 
 use crate::{
     CancellationToken, ExecutionReport, GenerationStrategy, HardwareProfile, HardwareProfileError,
+    DiffusionError, DiffusionExecutor, DiffusionMetrics, DiffusionOrchestrator, DiffusionPlan,
+    DiffusionRunOutcome, DiffusionSessionId, DiffusionSessionSnapshot,
     RequestInput, RequestState, Runtime, RuntimeConfig, RuntimeError,
 };
 
@@ -33,6 +35,8 @@ pub enum ScheduledRuntimeError {
     ComputeTaskRequiresRequest,
     #[error("the Compute queue is reserved for ScheduledRuntime::run_one")]
     ComputeQueueReserved,
+    #[error(transparent)]
+    Diffusion(#[from] DiffusionError),
 }
 
 /// A request report paired with the scheduler task that drove it.
@@ -62,6 +66,7 @@ pub struct ScheduledRuntimeMetrics {
 pub struct ScheduledRuntime<S> {
     runtime: Runtime<S>,
     scheduler: Scheduler,
+    diffusion: DiffusionOrchestrator,
     pending: BTreeMap<TaskId, (RequestInput, CancellationToken)>,
     metrics: ScheduledRuntimeMetrics,
     last_cancelled_generation: u64,
@@ -76,6 +81,7 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
         Ok(Self {
             runtime: Runtime::new(runtime_config, strategy)?,
             scheduler: Scheduler::new(scheduler_config)?,
+            diffusion: DiffusionOrchestrator::new(scheduler_config)?,
             pending: BTreeMap::new(),
             metrics: ScheduledRuntimeMetrics::default(),
             last_cancelled_generation: 0,
@@ -135,6 +141,40 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
         self.pending.insert(task_id, (input, cancellation));
         self.prune_cancelled_requests();
         Ok(task_id)
+    }
+
+    /// Admit a block-based diffusion plan through the ScheduledRuntime facade.
+    ///
+    /// Diffusion steps use a dedicated scheduler instance with the same
+    /// validated configuration as request/transfer scheduling. This keeps
+    /// diffusion's multi-step lifecycle independent from opaque request
+    /// payloads while preserving the same deterministic scheduler semantics.
+    pub fn submit_diffusion(
+        &mut self,
+        plan: DiffusionPlan,
+        cancellation: CancellationToken,
+        priority: TaskPriority,
+    ) -> Result<DiffusionSessionId, ScheduledRuntimeError> {
+        Ok(self.diffusion.submit(plan, cancellation, priority)?)
+    }
+
+    /// Execute at most one ready diffusion step on the caller/owner thread.
+    pub fn run_diffusion_one<E: DiffusionExecutor>(
+        &mut self,
+        executor: &mut E,
+    ) -> Result<DiffusionRunOutcome, ScheduledRuntimeError> {
+        Ok(self.diffusion.run_one(executor)?)
+    }
+
+    pub fn diffusion_session(
+        &self,
+        id: DiffusionSessionId,
+    ) -> Result<DiffusionSessionSnapshot, ScheduledRuntimeError> {
+        Ok(self.diffusion.session(id)?)
+    }
+
+    pub fn diffusion_metrics(&self) -> DiffusionMetrics {
+        self.diffusion.metrics()
     }
 
     /// Execute at most one ready Compute request. Blocked requests remain
