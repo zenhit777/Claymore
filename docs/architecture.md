@@ -41,8 +41,8 @@ Les adaptateurs ne constituent pas des moteurs tensoriels ou runtimes autonomes 
 ## Jalons
 
 - M8 : socle tensoriel natif, opérations de référence, dispatch et backends.
-- M9 : orchestration de diffusion modulaire commune (API de plans par blocs, chaîne de dépendances dans le scheduler, annulation coopérative, propagation d'échec et métriques ; voir [m9-diffusion-orchestration.md](m9-diffusion-orchestration.md)).
-- M10 : intégration DiffusionGemma.
+- M9 : **livré sur `main`** par la PR #32 — orchestration de diffusion modulaire commune (plans par blocs, dépendances scheduler, annulation coopérative et propagation d'échec ; voir [m9-diffusion-orchestration.md](m9-diffusion-orchestration.md)).
+- M10 : **en cours** — intégration DiffusionGemma (voir [m10-diffusiongemma.md](m10-diffusiongemma.md)).
 - M11 : intégration Clover.
 - M12 : optimisation et validation de performance.
 
