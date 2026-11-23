@@ -178,7 +178,10 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
     }
 
     /// Cancel a diffusion session through the runtime facade.
-    pub fn cancel_diffusion(&mut self, id: DiffusionSessionId) -> Result<(), ScheduledRuntimeError> {
+    pub fn cancel_diffusion(
+        &mut self,
+        id: DiffusionSessionId,
+    ) -> Result<(), ScheduledRuntimeError> {
         self.diffusion.cancel(id)?;
         Ok(())
     }
