@@ -633,4 +633,43 @@ mod tests {
         assert_eq!(runtime.runtime().strategy().0.get(), 0);
         assert_eq!(runtime.task(id).unwrap().state, TaskState::Cancelled);
     }
+    #[test]
+    fn scheduled_runtime_facade_drives_diffusion_sessions() {
+        use crate::{BlockId, DiffusionExecutor, DiffusionPlan, DiffusionRunOutcome, DiffusionStep};
+
+        struct StepCounter(Cell<usize>);
+        impl DiffusionExecutor for StepCounter {
+            fn execute_step(&mut self, _step: DiffusionStep) -> Result<(), String> {
+                self.0.set(self.0.get() + 1);
+                Ok(())
+            }
+        }
+
+        let mut runtime = runtime(Echo);
+        let plan = DiffusionPlan::new(vec![
+            DiffusionStep::PrepareBlock { block: BlockId(0) },
+            DiffusionStep::Denoise { block: BlockId(0), iteration: 0 },
+            DiffusionStep::ValidateBlock { block: BlockId(0) },
+            DiffusionStep::CommitBlock { block: BlockId(0) },
+        ])
+        .unwrap();
+        let id = runtime
+            .submit_diffusion(plan, CancellationToken::new(), TaskPriority::Normal)
+            .unwrap();
+        let mut executor = StepCounter(Cell::new(0));
+        loop {
+            match runtime.run_diffusion_one(&mut executor).unwrap() {
+                DiffusionRunOutcome::StepCompleted { .. } => {}
+                DiffusionRunOutcome::SessionCompleted { .. } => break,
+                other => panic!("unexpected diffusion outcome: {other:?}"),
+            }
+        }
+        assert_eq!(executor.0.get(), 4);
+        assert_eq!(
+            runtime.diffusion_session(id).unwrap().state,
+            crate::DiffusionSessionState::Completed
+        );
+        assert_eq!(runtime.diffusion_metrics().steps_completed, 4);
+    }
+
 }
