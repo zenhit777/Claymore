@@ -402,12 +402,27 @@ impl DiffusionOrchestrator {
         let started_at = Instant::now();
         let execution = executor.execute_step(step);
         let elapsed_ns = u64::try_from(started_at.elapsed().as_nanos()).unwrap_or(u64::MAX);
-        self.metrics.execution_duration_ns = self.metrics.execution_duration_ns.saturating_add(elapsed_ns);
+        self.metrics.execution_duration_ns = self
+            .metrics
+            .execution_duration_ns
+            .saturating_add(elapsed_ns);
         match step {
-            DiffusionStep::PrepareBlock { .. } => self.metrics.prepare_duration_ns = self.metrics.prepare_duration_ns.saturating_add(elapsed_ns),
-            DiffusionStep::Denoise { .. } => self.metrics.denoise_duration_ns = self.metrics.denoise_duration_ns.saturating_add(elapsed_ns),
-            DiffusionStep::ValidateBlock { .. } => self.metrics.validate_duration_ns = self.metrics.validate_duration_ns.saturating_add(elapsed_ns),
-            DiffusionStep::CommitBlock { .. } => self.metrics.commit_duration_ns = self.metrics.commit_duration_ns.saturating_add(elapsed_ns),
+            DiffusionStep::PrepareBlock { .. } => {
+                self.metrics.prepare_duration_ns =
+                    self.metrics.prepare_duration_ns.saturating_add(elapsed_ns);
+            }
+            DiffusionStep::Denoise { .. } => {
+                self.metrics.denoise_duration_ns =
+                    self.metrics.denoise_duration_ns.saturating_add(elapsed_ns);
+            }
+            DiffusionStep::ValidateBlock { .. } => {
+                self.metrics.validate_duration_ns =
+                    self.metrics.validate_duration_ns.saturating_add(elapsed_ns);
+            }
+            DiffusionStep::CommitBlock { .. } => {
+                self.metrics.commit_duration_ns =
+                    self.metrics.commit_duration_ns.saturating_add(elapsed_ns);
+            }
         }
         let cancelled_after_step = self.sessions[&session_id].cancellation.is_cancelled();
         match execution {
@@ -528,16 +543,23 @@ impl DiffusionOrchestrator {
 
     pub fn metrics(&self) -> DiffusionMetrics {
         let mut metrics = self.metrics;
-        metrics.blocks_pending = self.sessions.values().fold(0_u64, |pending, session| {
-            if session.snapshot.state.is_terminal() {
-                pending
-            } else {
-                let total = self.plans.get(&session.snapshot.id).map_or(0, DiffusionPlan::block_count);
-                pending.saturating_add(
-                    u64::try_from(total.saturating_sub(session.completed_blocks)).unwrap_or(u64::MAX),
-                )
-            }
-        });
+        metrics.blocks_pending = self
+            .sessions
+            .values()
+            .fold(0_u64, |pending, session| {
+                if session.snapshot.state.is_terminal() {
+                    pending
+                } else {
+                    let total = self
+                        .plans
+                        .get(&session.snapshot.id)
+                        .map_or(0, DiffusionPlan::block_count);
+                    pending.saturating_add(
+                        u64::try_from(total.saturating_sub(session.completed_blocks))
+                            .unwrap_or(u64::MAX),
+                    )
+                }
+            });
         metrics
     }
 
