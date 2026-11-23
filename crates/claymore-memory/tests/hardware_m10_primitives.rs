@@ -30,8 +30,9 @@ use claymore_core::MemoryTier;
 use claymore_device::DType;
 use claymore_memory::{CudaMemoryError, CudaTensorError, MemoryError};
 use claymore_tensor::{
-    add, attention, linear, rms_norm, rope_inv_freq, rope_tables, rotary_embed, scale, soft_cap,
-    Bf16, ExecutionRequest, OpKind, RopeType, ShapeSignature, TensorOp,
+    add, attention, embed_gather, gather_rows, gelu_mul_up, linear, rms_norm, rope_inv_freq,
+    rope_tables, rotary_embed, router_top_k, row_mask, scale, scale_bias, scatter_add, soft_cap,
+    widen, Bf16, ExecutionRequest, OpKind, RopeType, ShapeSignature, TensorOp,
 };
 
 /// FP32 differential tolerance (absolute) for every M10 primitive.
@@ -599,6 +600,495 @@ fn hw_m10_08_scale_f32_and_bf16_match_cpu() {
             ))
         ),
         "a [rows] factor must be refused as ScaleMismatch, got {refusal:?}"
+    );
+}
+
+// -----------------------------------------------------------------------
+// M10.2 primitives: MoE, embedding, masking and widening.
+//
+// Extra tolerances declared before the campaign:
+// - F32 scatter-add: absolute error <= 1e-3. Atomic accumulation order is not
+//   deterministic; the bound is derived from per-pair products with weights
+//   in [-1, 1] and inputs in [-1, 1] over at most 8 pairs per row.
+// - BF16 scatter-add: at most 4 representable BF16 steps, because each bf16
+//   `atomicAdd` rounds its partial sum, and a few accumulation orders can
+//   move a result across two rounding boundaries.
+// - Widen, gather, embed-gather and row-mask are pure data movement: exact.
+
+/// F32 absolute tolerance for the atomic scatter-add kernel.
+const F32_SCATTER_ABS_TOLERANCE: f32 = 1e-3;
+/// BF16 ULP budget for the atomic scatter-add kernel.
+const BF16_SCATTER_ULP: u32 = 4;
+
+#[test]
+#[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+fn hw_m10_10_widen_bf16_is_bit_exact() {
+    let _serial = common::serial();
+    let cpu = common::cpu();
+    let memory = common::memory();
+    let dispatcher = common::dispatcher(&memory);
+
+    let shape = vec![5usize, 9usize];
+    let bits: Vec<Bf16> = (0..45)
+        .map(|i| Bf16::from_f32(((i % 15) as f32 - 7.0) / 4.0))
+        .collect();
+
+    let cpu_out = {
+        let input = common::bf16_tensor(&cpu, shape.clone(), &bits);
+        common::values(&cpu, &widen(&cpu, &input).unwrap())
+    };
+
+    let input = memory.upload_bf16(shape, &bits).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::Widen { input: &input }))
+        .expect("widen launch");
+    let gpu_out = memory.download_f32(&output).unwrap();
+
+    assert_eq!(cpu_out, gpu_out, "widen must be bit-exact");
+    println!("HW-M10 widen bf16->f32: n={} exact", cpu_out.len());
+
+    // An F32 input is refused: `widen` is the contract's BF16-only op.
+    let f32_input = memory.upload_f32(vec![4], &[0.5, 1.5, 2.5, 3.5]).unwrap();
+    let refusal = dispatcher.execute(&ExecutionRequest::new(TensorOp::Widen {
+        input: &f32_input,
+    }));
+    assert!(
+        refusal.is_err(),
+        "F32 widen must be refused, got {refusal:?}"
+    );
+}
+
+#[test]
+#[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+fn hw_m10_11_router_top_k_matches_cpu() {
+    let _serial = common::serial();
+    let cpu = common::cpu();
+    let memory = common::memory();
+    let dispatcher = common::dispatcher(&memory);
+
+    let (tokens, experts, top_k) = (4usize, 16usize, 4usize);
+    let scores: Vec<f32> = (0..tokens * experts)
+        .map(|i| ((i % 23) as f32 - 11.0) / 8.0)
+        .collect();
+    let per_expert: Vec<f32> = (0..experts).map(|i| 1.0 + (i as f32) / 32.0).collect();
+
+    let cpu_out = {
+        let scores_t = common::f32_tensor(&cpu, vec![tokens, experts], &scores);
+        let scale_t = common::f32_tensor(&cpu, vec![experts], &per_expert);
+        common::values(
+            &cpu,
+            &router_top_k(&cpu, &scores_t, &scale_t, top_k).unwrap(),
+        )
+    };
+
+    let scores_t = memory.upload_f32(vec![tokens, experts], &scores).unwrap();
+    let scale_t = memory.upload_f32(vec![experts], &per_expert).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::RouterTopK {
+            scores: &scores_t,
+            per_expert_scale: &scale_t,
+            top_k,
+        }))
+        .expect("router launch");
+    let gpu_out = memory.download_f32(&output).unwrap();
+
+    // Expert indices are integers: they must match exactly; weights use the
+    // F32 budget.
+    assert_eq!(gpu_out.len(), cpu_out.len());
+    for (slot, (want, got)) in cpu_out.iter().zip(gpu_out.iter()).enumerate() {
+        if slot % (2 * top_k) >= top_k {
+            assert_eq!(
+                *want as u32, *got as u32,
+                "router index mismatch at {slot}: cpu={want} gpu={got}"
+            );
+        }
+    }
+    assert_close("router_top_k f32", &cpu_out, &gpu_out);
+
+    // BF16 scores are refused: the router is the contract's F32-only op.
+    let bf16_scores: Vec<Bf16> = scores.iter().map(|v| Bf16::from_f32(*v)).collect();
+    let scores_bf16 = memory
+        .upload_bf16(vec![tokens, experts], &bf16_scores)
+        .unwrap();
+    let refusal = dispatcher.execute(&ExecutionRequest::new(TensorOp::RouterTopK {
+        scores: &scores_bf16,
+        per_expert_scale: &scale_t,
+        top_k,
+    }));
+    assert!(
+        refusal.is_err(),
+        "BF16 router scores must be refused, got {refusal:?}"
+    );
+}
+
+#[test]
+#[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+fn hw_m10_12_gelu_mul_up_f32_and_bf16_match_cpu() {
+    let _serial = common::serial();
+    let cpu = common::cpu();
+    let memory = common::memory();
+    let dispatcher = common::dispatcher(&memory);
+
+    let shape = vec![6usize, 20usize];
+    let gate: Vec<f32> = (0..120).map(|i| ((i % 21) as f32 - 10.0) / 5.0).collect();
+    let up: Vec<f32> = (0..120).map(|i| ((i % 13) as f32 - 6.0) / 8.0).collect();
+    let gate_bf16: Vec<Bf16> = gate.iter().map(|v| Bf16::from_f32(*v)).collect();
+    let up_bf16: Vec<Bf16> = up.iter().map(|v| Bf16::from_f32(*v)).collect();
+
+    let cpu_f32 = {
+        let g = common::f32_tensor(&cpu, shape.clone(), &gate);
+        let u = common::f32_tensor(&cpu, shape.clone(), &up);
+        common::values(&cpu, &gelu_mul_up(&cpu, &g, &u).unwrap())
+    };
+    let g = memory.upload_f32(shape.clone(), &gate).unwrap();
+    let u = memory.upload_f32(shape.clone(), &up).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::GeluMulUp {
+            gate: &g,
+            up: &u,
+        }))
+        .expect("gelu_mul_up f32 launch");
+    assert_close(
+        "gelu_mul_up f32",
+        &cpu_f32,
+        &memory.download_f32(&output).unwrap(),
+    );
+
+    let cpu_bf16 = {
+        let g = common::bf16_tensor(&cpu, shape.clone(), &gate_bf16);
+        let u = common::bf16_tensor(&cpu, shape.clone(), &up_bf16);
+        common::bf16_values(&cpu, &gelu_mul_up(&cpu, &g, &u).unwrap())
+    };
+    let g = memory.upload_bf16(shape.clone(), &gate_bf16).unwrap();
+    let u = memory.upload_bf16(shape, &up_bf16).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::GeluMulUp {
+            gate: &g,
+            up: &u,
+        }))
+        .expect("gelu_mul_up bf16 launch");
+    assert_bf16(
+        "gelu_mul_up bf16",
+        &cpu_bf16,
+        &memory.download_bf16(&output).unwrap(),
+        BF16_ULP,
+    );
+}
+
+#[test]
+#[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+fn hw_m10_13_gather_rows_f32_and_bf16_are_exact() {
+    let _serial = common::serial();
+    let cpu = common::cpu();
+    let memory = common::memory();
+    let dispatcher = common::dispatcher(&memory);
+
+    let (rows, width) = (7usize, 5usize);
+    let values: Vec<f32> = (0..rows * width)
+        .map(|i| ((i % 11) as f32 - 5.0) / 4.0)
+        .collect();
+    let indices: Vec<f32> = vec![6.0, 0.0, 3.0, 3.0, 5.0];
+
+    let cpu_out = {
+        let input = common::f32_tensor(&cpu, vec![rows, width], &values);
+        let idx = common::f32_tensor(&cpu, vec![indices.len()], &indices);
+        common::values(&cpu, &gather_rows(&cpu, &input, &idx).unwrap())
+    };
+    let input = memory.upload_f32(vec![rows, width], &values).unwrap();
+    let idx = memory.upload_f32(vec![indices.len()], &indices).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::GatherRows {
+            input: &input,
+            indices: &idx,
+        }))
+        .expect("gather_rows f32 launch");
+    assert_eq!(
+        cpu_out,
+        memory.download_f32(&output).unwrap(),
+        "f32 gather must be exact"
+    );
+
+    let bits: Vec<Bf16> = values.iter().map(|v| Bf16::from_f32(*v)).collect();
+    let cpu_out = {
+        let input = common::bf16_tensor(&cpu, vec![rows, width], &bits);
+        let idx = common::f32_tensor(&cpu, vec![indices.len()], &indices);
+        common::bf16_values(&cpu, &gather_rows(&cpu, &input, &idx).unwrap())
+    };
+    let input = memory.upload_bf16(vec![rows, width], &bits).unwrap();
+    let idx = memory.upload_f32(vec![indices.len()], &indices).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::GatherRows {
+            input: &input,
+            indices: &idx,
+        }))
+        .expect("gather_rows bf16 launch");
+    assert_eq!(
+        cpu_out,
+        memory.download_bf16(&output).unwrap(),
+        "bf16 gather must be exact"
+    );
+    println!("HW-M10 gather_rows: exact on f32 and bf16");
+
+    // Out-of-range indices are refused before launch.
+    let bad = memory.upload_f32(vec![1], &[7.0]).unwrap();
+    let refusal = dispatcher.execute(&ExecutionRequest::new(TensorOp::GatherRows {
+        input: &input,
+        indices: &bad,
+    }));
+    assert!(
+        refusal.is_err(),
+        "out-of-range gather index must be refused, got {refusal:?}"
+    );
+}
+
+#[test]
+#[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+fn hw_m10_14_scatter_add_f32_and_bf16_match_cpu_within_derived_bounds() {
+    let _serial = common::serial();
+    let cpu = common::cpu();
+    let memory = common::memory();
+    let dispatcher = common::dispatcher(&memory);
+
+    let (pairs, width, out_rows) = (12usize, 6usize, 5usize);
+    let source: Vec<f32> = (0..pairs * width)
+        .map(|i| ((i % 17) as f32 - 8.0) / 8.0)
+        .collect();
+    let weights: Vec<f32> = (0..pairs).map(|i| 1.0 / (i as f32 + 1.0)).collect();
+    // Rows repeat targets so that atomics collide.
+    let rows: Vec<f32> = (0..pairs).map(|i| (i % out_rows) as f32).collect();
+
+    let cpu_out = {
+        let src = common::f32_tensor(&cpu, vec![pairs, width], &source);
+        let w = common::f32_tensor(&cpu, vec![pairs], &weights);
+        let r = common::f32_tensor(&cpu, vec![pairs], &rows);
+        common::values(&cpu, &scatter_add(&cpu, &src, &w, &r, out_rows).unwrap())
+    };
+    let src = memory.upload_f32(vec![pairs, width], &source).unwrap();
+    let w = memory.upload_f32(vec![pairs], &weights).unwrap();
+    let r = memory.upload_f32(vec![pairs], &rows).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::ScatterAdd {
+            source: &src,
+            weights: &w,
+            rows: &r,
+            out_rows,
+        }))
+        .expect("scatter_add f32 launch");
+    let gpu_out = memory.download_f32(&output).unwrap();
+    assert_eq!(gpu_out.len(), cpu_out.len());
+    let mut max_abs = 0.0f32;
+    for (want, got) in cpu_out.iter().zip(gpu_out.iter()) {
+        max_abs = max_abs.max((got - want).abs());
+        assert!(
+            max_abs <= F32_SCATTER_ABS_TOLERANCE,
+            "f32 scatter drift {max_abs} > {F32_SCATTER_ABS_TOLERANCE}"
+        );
+    }
+    println!(
+        "HW-M10 scatter_add f32: n={} max_abs={max_abs:e}",
+        cpu_out.len()
+    );
+
+    let bits: Vec<Bf16> = source.iter().map(|v| Bf16::from_f32(*v)).collect();
+    let cpu_out = {
+        let src = common::bf16_tensor(&cpu, vec![pairs, width], &bits);
+        let w = common::f32_tensor(&cpu, vec![pairs], &weights);
+        let r = common::f32_tensor(&cpu, vec![pairs], &rows);
+        common::bf16_values(&cpu, &scatter_add(&cpu, &src, &w, &r, out_rows).unwrap())
+    };
+    let src = memory.upload_bf16(vec![pairs, width], &bits).unwrap();
+    let w = memory.upload_f32(vec![pairs], &weights).unwrap();
+    let r = memory.upload_f32(vec![pairs], &rows).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::ScatterAdd {
+            source: &src,
+            weights: &w,
+            rows: &r,
+            out_rows,
+        }))
+        .expect("scatter_add bf16 launch");
+    assert_bf16(
+        "scatter_add bf16",
+        &cpu_out,
+        &memory.download_bf16(&output).unwrap(),
+        BF16_SCATTER_ULP,
+    );
+}
+
+#[test]
+#[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+fn hw_m10_15_embed_gather_f32_and_bf16_match_cpu() {
+    let _serial = common::serial();
+    let cpu = common::cpu();
+    let memory = common::memory();
+    let dispatcher = common::dispatcher(&memory);
+
+    let (vocab, width, tokens) = (11usize, 8usize, 4usize);
+    let table: Vec<f32> = (0..vocab * width)
+        .map(|i| ((i % 19) as f32 - 9.0) / 16.0)
+        .collect();
+    let ids: Vec<f32> = vec![10.0, 0.0, 7.0, 3.0];
+    let scale = 0.25f32;
+
+    let cpu_out = {
+        let t = common::f32_tensor(&cpu, vec![vocab, width], &table);
+        let ids_t = common::f32_tensor(&cpu, vec![tokens], &ids);
+        common::values(&cpu, &embed_gather(&cpu, &ids_t, &t, scale).unwrap())
+    };
+    let t = memory.upload_f32(vec![vocab, width], &table).unwrap();
+    let ids_t = memory.upload_f32(vec![tokens], &ids).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::EmbedGather {
+            ids: &ids_t,
+            table: &t,
+            scale,
+        }))
+        .expect("embed_gather f32 launch");
+    assert_close(
+        "embed_gather f32",
+        &cpu_out,
+        &memory.download_f32(&output).unwrap(),
+    );
+
+    let bits: Vec<Bf16> = table.iter().map(|v| Bf16::from_f32(*v)).collect();
+    let cpu_out = {
+        let t = common::bf16_tensor(&cpu, vec![vocab, width], &bits);
+        let ids_t = common::f32_tensor(&cpu, vec![tokens], &ids);
+        common::bf16_values(&cpu, &embed_gather(&cpu, &ids_t, &t, scale).unwrap())
+    };
+    let t = memory.upload_bf16(vec![vocab, width], &bits).unwrap();
+    let ids_t = memory.upload_f32(vec![tokens], &ids).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::EmbedGather {
+            ids: &ids_t,
+            table: &t,
+            scale,
+        }))
+        .expect("embed_gather bf16 launch");
+    assert_bf16(
+        "embed_gather bf16",
+        &cpu_out,
+        &memory.download_bf16(&output).unwrap(),
+        BF16_ULP,
+    );
+}
+
+#[test]
+#[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+fn hw_m10_16_row_mask_f32_and_bf16_are_exact() {
+    let _serial = common::serial();
+    let cpu = common::cpu();
+    let memory = common::memory();
+    let dispatcher = common::dispatcher(&memory);
+
+    let (rows, width) = (6usize, 4usize);
+    let values: Vec<f32> = (0..rows * width)
+        .map(|i| ((i % 9) as f32 - 4.0) / 2.0)
+        .collect();
+    let flags: Vec<f32> = vec![1.0, 0.0, 1.0, 0.0, 1.0, 1.0];
+
+    let cpu_out = {
+        let input = common::f32_tensor(&cpu, vec![rows, width], &values);
+        let f = common::f32_tensor(&cpu, vec![rows], &flags);
+        common::values(&cpu, &row_mask(&cpu, &input, &f).unwrap())
+    };
+    let input = memory.upload_f32(vec![rows, width], &values).unwrap();
+    let f = memory.upload_f32(vec![rows], &flags).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::RowMask {
+            input: &input,
+            flags: &f,
+        }))
+        .expect("row_mask f32 launch");
+    let gpu = memory.download_f32(&output).unwrap();
+    for (index, (want, got)) in cpu_out.iter().zip(gpu.iter()).enumerate() {
+        if flags[index / width] == 1.0 {
+            assert_eq!(*got, 0.0f32, "masked row {index} must be zero");
+        } else {
+            assert_eq!(want, got, "unmasked row {index} must be verbatim");
+        }
+    }
+    println!("HW-M10 row_mask f32: exact");
+
+    let bits: Vec<Bf16> = values.iter().map(|v| Bf16::from_f32(*v)).collect();
+    let input = memory.upload_bf16(vec![rows, width], &bits).unwrap();
+    let f = memory.upload_f32(vec![rows], &flags).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::RowMask {
+            input: &input,
+            flags: &f,
+        }))
+        .expect("row_mask bf16 launch");
+    let gpu = memory.download_bf16(&output).unwrap();
+    for (index, got) in gpu.iter().enumerate() {
+        if flags[index / width] == 1.0 {
+            assert_eq!(got.to_f32(), 0.0f32, "bf16 masked row {index} must be zero");
+        }
+    }
+    println!("HW-M10 row_mask bf16: masked rows zeroed");
+}
+
+#[test]
+#[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+fn hw_m10_17_scale_bias_f32_and_bf16_match_cpu() {
+    let _serial = common::serial();
+    let cpu = common::cpu();
+    let memory = common::memory();
+    let dispatcher = common::dispatcher(&memory);
+
+    let (rows, width) = (5usize, 7usize);
+    let values: Vec<f32> = (0..rows * width)
+        .map(|i| ((i % 15) as f32 - 7.0) / 8.0)
+        .collect();
+    let scales: Vec<f32> = (0..width).map(|i| 1.0 + (i as f32) / 16.0).collect();
+    let biases: Vec<f32> = (0..width).map(|i| (i as f32 - 3.0) / 32.0).collect();
+
+    let cpu_out = {
+        let input = common::f32_tensor(&cpu, vec![rows, width], &values);
+        let s = common::f32_tensor(&cpu, vec![width], &scales);
+        let b = common::f32_tensor(&cpu, vec![width], &biases);
+        common::values(&cpu, &scale_bias(&cpu, &input, &s, &b).unwrap())
+    };
+    let input = memory.upload_f32(vec![rows, width], &values).unwrap();
+    let s = memory.upload_f32(vec![width], &scales).unwrap();
+    let b = memory.upload_f32(vec![width], &biases).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::ScaleBias {
+            input: &input,
+            scale: &s,
+            bias: &b,
+        }))
+        .expect("scale_bias f32 launch");
+    assert_close(
+        "scale_bias f32",
+        &cpu_out,
+        &memory.download_f32(&output).unwrap(),
+    );
+
+    let bits: Vec<Bf16> = values.iter().map(|v| Bf16::from_f32(*v)).collect();
+    let s_bits: Vec<Bf16> = scales.iter().map(|v| Bf16::from_f32(*v)).collect();
+    let b_bits: Vec<Bf16> = biases.iter().map(|v| Bf16::from_f32(*v)).collect();
+    let cpu_out = {
+        let input = common::bf16_tensor(&cpu, vec![rows, width], &bits);
+        let s = common::bf16_tensor(&cpu, vec![width], &s_bits);
+        let b = common::bf16_tensor(&cpu, vec![width], &b_bits);
+        common::bf16_values(&cpu, &scale_bias(&cpu, &input, &s, &b).unwrap())
+    };
+    let input = memory.upload_bf16(vec![rows, width], &bits).unwrap();
+    let s = memory.upload_bf16(vec![width], &s_bits).unwrap();
+    let b = memory.upload_bf16(vec![width], &b_bits).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::ScaleBias {
+            input: &input,
+            scale: &s,
+            bias: &b,
+        }))
+        .expect("scale_bias bf16 launch");
+    assert_bf16(
+        "scale_bias bf16",
+        &cpu_out,
+        &memory.download_bf16(&output).unwrap(),
+        BF16_ULP,
     );
 }
 
