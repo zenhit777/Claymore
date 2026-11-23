@@ -5,7 +5,7 @@
 //! adapters provide the work for each bounded step through `DiffusionExecutor`.
 //! Cancellation is observed at step boundaries, so an in-flight backend call is
 //! never reported cancelled before the executor returns.
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Instant};
 
 use claymore_scheduler::{
     Scheduler, SchedulerConfig, SchedulerError, TaskId, TaskKind, TaskPriority, TaskSpec, TaskState,
@@ -166,6 +166,19 @@ pub struct DiffusionMetrics {
     pub steps_completed: u64,
     pub steps_failed: u64,
     pub steps_cancelled: u64,
+    /// Cumulative number of blocks admitted across all sessions.
+    pub blocks_submitted: u64,
+    /// Cumulative number of successfully committed blocks.
+    pub blocks_completed: u64,
+    /// Current blocks not yet committed in non-terminal sessions.
+    pub blocks_pending: u64,
+    /// Observed executor time, in nanoseconds, grouped by step phase.
+    pub prepare_duration_ns: u64,
+    pub denoise_duration_ns: u64,
+    pub validate_duration_ns: u64,
+    pub commit_duration_ns: u64,
+    /// Sum of measured executor durations; excludes scheduler and queue wait.
+    pub execution_duration_ns: u64,
 }
 
 /// Result of executing at most one scheduled diffusion step.
@@ -217,6 +230,7 @@ struct SessionRecord {
     snapshot: DiffusionSessionSnapshot,
     cancellation: CancellationToken,
     tasks: Vec<TaskId>,
+    completed_blocks: usize,
 }
 
 /// Deterministic block/step orchestrator backed by Claymore's shared scheduler.
@@ -270,9 +284,14 @@ impl DiffusionOrchestrator {
                     },
                     cancellation,
                     tasks: Vec::new(),
+                    completed_blocks: 0,
                 },
             );
             self.metrics.sessions_submitted = self.metrics.sessions_submitted.saturating_add(1);
+            self.metrics.blocks_submitted = self
+                .metrics
+                .blocks_submitted
+                .saturating_add(u64::try_from(plan.block_count()).unwrap_or(u64::MAX));
             self.metrics.sessions_cancelled = self.metrics.sessions_cancelled.saturating_add(1);
             return Ok(id);
         }
@@ -316,10 +335,16 @@ impl DiffusionOrchestrator {
                 },
                 cancellation,
                 tasks,
+                completed_blocks: 0,
             },
         );
+        let block_count = plan.block_count();
         self.plans.insert(id, plan);
         self.metrics.sessions_submitted = self.metrics.sessions_submitted.saturating_add(1);
+        self.metrics.blocks_submitted = self
+            .metrics
+            .blocks_submitted
+            .saturating_add(u64::try_from(block_count).unwrap_or(u64::MAX));
         Ok(id)
     }
 
@@ -368,6 +393,7 @@ impl DiffusionOrchestrator {
         if cancelled_before_step {
             self.scheduler.cancel_running(task_id)?;
             self.metrics.steps_cancelled = self.metrics.steps_cancelled.saturating_add(1);
+            self.cancel_pending_steps(session_id, Some(task_id))?;
             self.finish_cancelled(session_id);
             return Ok(DiffusionRunOutcome::SessionCancelled {
                 session_id,
@@ -376,7 +402,31 @@ impl DiffusionOrchestrator {
             });
         }
 
+        let started_at = Instant::now();
         let execution = executor.execute_step(step);
+        let elapsed_ns = u64::try_from(started_at.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        self.metrics.execution_duration_ns = self
+            .metrics
+            .execution_duration_ns
+            .saturating_add(elapsed_ns);
+        match step {
+            DiffusionStep::PrepareBlock { .. } => {
+                self.metrics.prepare_duration_ns =
+                    self.metrics.prepare_duration_ns.saturating_add(elapsed_ns);
+            }
+            DiffusionStep::Denoise { .. } => {
+                self.metrics.denoise_duration_ns =
+                    self.metrics.denoise_duration_ns.saturating_add(elapsed_ns);
+            }
+            DiffusionStep::ValidateBlock { .. } => {
+                self.metrics.validate_duration_ns =
+                    self.metrics.validate_duration_ns.saturating_add(elapsed_ns);
+            }
+            DiffusionStep::CommitBlock { .. } => {
+                self.metrics.commit_duration_ns =
+                    self.metrics.commit_duration_ns.saturating_add(elapsed_ns);
+            }
+        }
         let cancelled_after_step = self.sessions[&session_id].cancellation.is_cancelled();
         match execution {
             Ok(()) => {
@@ -389,6 +439,10 @@ impl DiffusionOrchestrator {
                     .get_mut(&session_id)
                     .ok_or(DiffusionError::UnknownSession(session_id))?;
                 session.snapshot.completed_steps += 1;
+                if matches!(step, DiffusionStep::CommitBlock { .. }) {
+                    session.completed_blocks = session.completed_blocks.saturating_add(1);
+                    self.metrics.blocks_completed = self.metrics.blocks_completed.saturating_add(1);
+                }
                 session.snapshot.current_step = None;
                 if session.snapshot.completed_steps == session.snapshot.total_steps {
                     session.snapshot.state = DiffusionSessionState::Completed;
@@ -400,15 +454,7 @@ impl DiffusionOrchestrator {
                         step,
                     })
                 } else if cancelled_after_step {
-                    let pending = session.tasks.clone();
-                    for pending_id in pending {
-                        if matches!(
-                            self.scheduler.task(pending_id)?.state,
-                            TaskState::Ready | TaskState::Blocked
-                        ) {
-                            self.scheduler.cancel(pending_id)?;
-                        }
-                    }
+                    self.cancel_pending_steps(session_id, None)?;
                     self.finish_cancelled(session_id);
                     Ok(DiffusionRunOutcome::SessionCancelled {
                         session_id,
@@ -426,6 +472,13 @@ impl DiffusionOrchestrator {
             Err(error) => {
                 self.scheduler.fail(task_id)?;
                 self.metrics.steps_failed = self.metrics.steps_failed.saturating_add(1);
+                let session_tasks = self.sessions[&session_id].tasks.clone();
+                for dependent_id in session_tasks {
+                    if self.scheduler.task(dependent_id)?.state == TaskState::Cancelled {
+                        self.metrics.steps_cancelled =
+                            self.metrics.steps_cancelled.saturating_add(1);
+                    }
+                }
                 let session = self
                     .sessions
                     .get_mut(&session_id)
@@ -456,7 +509,35 @@ impl DiffusionOrchestrator {
         }
         session.cancellation.cancel();
         let safe_boundary = session.snapshot.current_step.is_none();
-        for task_id in &session.tasks {
+        let queued = session.snapshot.state == DiffusionSessionState::Queued;
+        self.cancel_pending_steps(id, None)?;
+        if queued || safe_boundary {
+            self.finish_cancelled(id);
+        }
+        Ok(())
+    }
+
+    fn cancel_pending_steps(
+        &mut self,
+        id: DiffusionSessionId,
+        except: Option<TaskId>,
+    ) -> Result<(), DiffusionError> {
+        let tasks = self
+            .sessions
+            .get(&id)
+            .ok_or(DiffusionError::UnknownSession(id))?
+            .tasks
+            .clone();
+        let mut cancelled_before = 0_u64;
+        for task_id in &tasks {
+            if self.scheduler.task(*task_id)?.state == TaskState::Cancelled {
+                cancelled_before = cancelled_before.saturating_add(1);
+            }
+        }
+        for task_id in &tasks {
+            if Some(*task_id) == except {
+                continue;
+            }
             if matches!(
                 self.scheduler.task(*task_id)?.state,
                 TaskState::Ready | TaskState::Blocked
@@ -464,9 +545,16 @@ impl DiffusionOrchestrator {
                 self.scheduler.cancel(*task_id)?;
             }
         }
-        if session.snapshot.state == DiffusionSessionState::Queued || safe_boundary {
-            self.finish_cancelled(id);
+        let mut cancelled_after = 0_u64;
+        for task_id in &tasks {
+            if self.scheduler.task(*task_id)?.state == TaskState::Cancelled {
+                cancelled_after = cancelled_after.saturating_add(1);
+            }
         }
+        self.metrics.steps_cancelled = self
+            .metrics
+            .steps_cancelled
+            .saturating_add(cancelled_after.saturating_sub(cancelled_before));
         Ok(())
     }
 
@@ -491,7 +579,22 @@ impl DiffusionOrchestrator {
     }
 
     pub fn metrics(&self) -> DiffusionMetrics {
-        self.metrics
+        let mut metrics = self.metrics;
+        metrics.blocks_pending = self.sessions.values().fold(0_u64, |pending, session| {
+            if session.snapshot.state.is_terminal() {
+                pending
+            } else {
+                let total = self
+                    .plans
+                    .get(&session.snapshot.id)
+                    .map_or(0, DiffusionPlan::block_count);
+                pending.saturating_add(
+                    u64::try_from(total.saturating_sub(session.completed_blocks))
+                        .unwrap_or(u64::MAX),
+                )
+            }
+        });
+        metrics
     }
 
     pub fn scheduler(&self) -> &Scheduler {
@@ -629,7 +732,7 @@ mod tests {
         assert_eq!(snapshot.completed_steps, 1);
         assert_eq!(snapshot.state, DiffusionSessionState::Cancelled);
         assert_eq!(orchestrator.metrics().steps_completed, 1);
-        assert_eq!(orchestrator.metrics().steps_cancelled, 0);
+        assert_eq!(orchestrator.metrics().steps_cancelled, 8);
     }
 
     #[test]
