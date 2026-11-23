@@ -576,6 +576,100 @@ mod tests {
             orchestrator.run_one(&mut FailOnce(true)).unwrap(),
             DiffusionRunOutcome::Idle
         ));
+        for task_id in &orchestrator.sessions[&id].tasks {
+            assert!(matches!(
+                orchestrator.scheduler().task(*task_id).unwrap().state,
+                TaskState::Failed | TaskState::Cancelled
+            ));
+        }
+    }
+
+    #[test]
+    fn cancellation_during_successful_step_counts_effect_before_cancel() {
+        let token = CancellationToken::new();
+        let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let id = orchestrator.submit(plan(), token.clone(), TaskPriority::Normal).unwrap();
+        struct CancelAfterStep(CancellationToken);
+        impl DiffusionExecutor for CancelAfterStep {
+            fn execute_step(&mut self, _step: DiffusionStep) -> Result<(), String> {
+                self.0.cancel();
+                Ok(())
+            }
+        }
+        assert!(matches!(
+            orchestrator.run_one(&mut CancelAfterStep(token)).unwrap(),
+            DiffusionRunOutcome::SessionCancelled { .. }
+        ));
+        let snapshot = orchestrator.session(id).unwrap();
+        assert_eq!(snapshot.completed_steps, 1);
+        assert_eq!(snapshot.state, DiffusionSessionState::Cancelled);
+        assert_eq!(orchestrator.metrics().steps_completed, 1);
+        assert_eq!(orchestrator.metrics().steps_cancelled, 0);
+    }
+
+    #[test]
+    fn pre_cancelled_session_is_terminal_without_scheduler_tasks() {
+        let token = CancellationToken::new();
+        token.cancel();
+        let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let id = orchestrator.submit(plan(), token, TaskPriority::Normal).unwrap();
+        assert_eq!(orchestrator.session(id).unwrap().state, DiffusionSessionState::Cancelled);
+        assert_eq!(orchestrator.scheduler().ready_count(TaskKind::Compute), 0);
+    }
+
+    #[test]
+    fn queued_session_can_be_cancelled_before_execution() {
+        let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let id = orchestrator.submit(plan(), CancellationToken::new(), TaskPriority::Normal).unwrap();
+        orchestrator.cancel(id).unwrap();
+        assert_eq!(orchestrator.session(id).unwrap().state, DiffusionSessionState::Cancelled);
+        assert_eq!(orchestrator.scheduler().ready_count(TaskKind::Compute), 0);
+    }
+
+    #[test]
+    fn equal_priority_sessions_are_fifo_and_not_interleaved() {
+        let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let first = orchestrator.submit(plan(), CancellationToken::new(), TaskPriority::Normal).unwrap();
+        let second = orchestrator.submit(plan(), CancellationToken::new(), TaskPriority::Normal).unwrap();
+        let mut recorder = Recorder(RefCell::new(Vec::new()));
+        while orchestrator.session(first).unwrap().state != DiffusionSessionState::Completed {
+            orchestrator.run_one(&mut recorder).unwrap();
+        }
+        assert_eq!(orchestrator.session(second).unwrap().state, DiffusionSessionState::Queued);
+        assert_eq!(recorder.0.borrow().len(), plan().steps().len());
+    }
+
+    #[test]
+    fn invalid_plans_reject_empty_wrong_block_and_missing_validation() {
+        assert!(DiffusionPlan::new(vec![]).is_err());
+        assert!(DiffusionPlan::new(vec![
+            DiffusionStep::PrepareBlock { block: BlockId(1) },
+            DiffusionStep::Denoise { block: BlockId(1), iteration: 0 },
+            DiffusionStep::ValidateBlock { block: BlockId(1) },
+            DiffusionStep::CommitBlock { block: BlockId(1) },
+        ]).is_err());
+        assert!(DiffusionPlan::new(vec![
+            DiffusionStep::PrepareBlock { block: BlockId(0) },
+            DiffusionStep::Denoise { block: BlockId(0), iteration: 0 },
+            DiffusionStep::CommitBlock { block: BlockId(0) },
+        ]).is_err());
+    }
+
+    #[test]
+    fn failure_does_not_cancel_an_independent_session() {
+        struct FailFirst(bool);
+        impl DiffusionExecutor for FailFirst {
+            fn execute_step(&mut self, _step: DiffusionStep) -> Result<(), String> {
+                if !self.0 { self.0 = true; Err("failure".into()) } else { Ok(()) }
+            }
+        }
+        let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let failed = orchestrator.submit(plan(), CancellationToken::new(), TaskPriority::High).unwrap();
+        let independent = orchestrator.submit(plan(), CancellationToken::new(), TaskPriority::Low).unwrap();
+        assert!(matches!(orchestrator.run_one(&mut FailFirst(false)).unwrap(), DiffusionRunOutcome::StepFailed { .. }));
+        assert_eq!(orchestrator.session(failed).unwrap().state, DiffusionSessionState::Failed);
+        assert_eq!(orchestrator.session(independent).unwrap().state, DiffusionSessionState::Queued);
+        assert!(matches!(orchestrator.run_one(&mut FailFirst(true)).unwrap(), DiffusionRunOutcome::StepCompleted { .. }));
     }
 
     #[test]
