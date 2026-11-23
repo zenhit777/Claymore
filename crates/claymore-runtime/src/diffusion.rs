@@ -205,6 +205,10 @@ pub enum DiffusionError {
     UnknownSession(DiffusionSessionId),
     #[error("diffusion session {0:?} is already terminal")]
     SessionTerminal(DiffusionSessionId),
+    #[error("scheduler returned an unowned diffusion task {0:?}")]
+    UnknownTask(TaskId),
+    #[error("diffusion plan for session {0:?} is missing")]
+    MissingPlan(DiffusionSessionId),
     #[error(transparent)]
     Scheduler(#[from] SchedulerError),
 }
@@ -241,8 +245,9 @@ impl DiffusionOrchestrator {
         })
     }
 
-    /// Admit a plan as a serial dependency chain. This preserves block and
-    /// denoising order while allowing unrelated sessions to interleave.
+    /// Admit a plan as a serial dependency chain. Equal-priority sessions are
+    /// FIFO by admission: an earlier session's full chain precedes a later
+    /// session. Higher-priority ready work may run first.
     pub fn submit(
         &mut self,
         plan: DiffusionPlan,
@@ -280,9 +285,19 @@ impl DiffusionOrchestrator {
             if let Some(dependency) = previous {
                 spec = spec.depends_on(dependency);
             }
-            let task_id = self.scheduler.submit(spec)?;
-            tasks.push(task_id);
-            previous = Some(task_id);
+            match self.scheduler.submit(spec) {
+                Ok(task_id) => {
+                    tasks.push(task_id);
+                    previous = Some(task_id);
+                }
+                Err(error) => {
+                    // Roll back all tasks admitted for this not-yet-visible session.
+                    for task_id in tasks.iter().copied() {
+                        let _ = self.scheduler.cancel(task_id);
+                    }
+                    return Err(error.into());
+                }
+            }
         }
 
         for (index, task_id) in tasks.iter().copied().enumerate() {
@@ -303,8 +318,6 @@ impl DiffusionOrchestrator {
                 tasks,
             },
         );
-        // The immutable plan is stored separately as step-index entries in the
-        // task index companion map below.
         self.plans.insert(id, plan);
         self.metrics.sessions_submitted = self.metrics.sessions_submitted.saturating_add(1);
         Ok(id)
@@ -328,14 +341,20 @@ impl DiffusionOrchestrator {
         let Some(task_id) = self.scheduler.start_next(TaskKind::Compute) else {
             return Ok(DiffusionRunOutcome::Idle);
         };
-        let (session_id, index) = *self
-            .task_index
-            .get(&task_id)
-            .expect("every diffusion compute task has an owner");
-        let step = self.plans[&session_id].steps[index];
-        let cancelled_before_step = self.sessions[&session_id].cancellation.is_cancelled();
-        {
-            let session = self.sessions.get_mut(&session_id).expect("session exists");
+        let Some((session_id, index)) = self.task_index.get(&task_id).copied() else {
+            self.scheduler.fail(task_id)?;
+            return Err(DiffusionError::UnknownTask(task_id));
+        };
+        let Some(step) = self.plans.get(&session_id).and_then(|p| p.steps.get(index)).copied() else {
+            self.scheduler.fail(task_id)?;
+            return Err(DiffusionError::MissingPlan(session_id));
+        };
+        let Some(session) = self.sessions.get(&session_id) else {
+            self.scheduler.fail(task_id)?;
+            return Err(DiffusionError::UnknownSession(session_id));
+        };
+        let cancelled_before_step = session.cancellation.is_cancelled();
+        if let Some(session) = self.sessions.get_mut(&session_id) {
             session.snapshot.state = DiffusionSessionState::Running;
             session.snapshot.current_step = Some(step);
         }
@@ -355,43 +374,38 @@ impl DiffusionOrchestrator {
         let execution = executor.execute_step(step);
         let cancelled_after_step = self.sessions[&session_id].cancellation.is_cancelled();
         match execution {
-            Ok(()) if cancelled_after_step => {
-                self.scheduler.cancel_running(task_id)?;
-                self.metrics.steps_cancelled = self.metrics.steps_cancelled.saturating_add(1);
-                self.finish_cancelled(session_id);
-                Ok(DiffusionRunOutcome::SessionCancelled {
-                    session_id,
-                    task_id,
-                    step,
-                })
-            }
             Ok(()) => {
+                // A successful bounded operation has taken effect, including CommitBlock.
+                // Account for it before observing cancellation at the next boundary.
                 self.scheduler.complete(task_id)?;
                 self.metrics.steps_completed = self.metrics.steps_completed.saturating_add(1);
-                let session = self.sessions.get_mut(&session_id).expect("session exists");
+                let session = self.sessions.get_mut(&session_id)
+                    .ok_or(DiffusionError::UnknownSession(session_id))?;
                 session.snapshot.completed_steps += 1;
                 session.snapshot.current_step = None;
                 if session.snapshot.completed_steps == session.snapshot.total_steps {
                     session.snapshot.state = DiffusionSessionState::Completed;
                     self.metrics.sessions_completed =
                         self.metrics.sessions_completed.saturating_add(1);
-                    Ok(DiffusionRunOutcome::SessionCompleted {
-                        session_id,
-                        task_id,
-                        step,
-                    })
+                    Ok(DiffusionRunOutcome::SessionCompleted { session_id, task_id, step })
+                } else if cancelled_after_step {
+                    let pending = session.tasks.clone();
+                    for pending_id in pending {
+                        if matches!(self.scheduler.task(pending_id)?.state, TaskState::Ready | TaskState::Blocked) {
+                            self.scheduler.cancel(pending_id)?;
+                        }
+                    }
+                    self.finish_cancelled(session_id);
+                    Ok(DiffusionRunOutcome::SessionCancelled { session_id, task_id, step })
                 } else {
-                    Ok(DiffusionRunOutcome::StepCompleted {
-                        session_id,
-                        task_id,
-                        step,
-                    })
+                    Ok(DiffusionRunOutcome::StepCompleted { session_id, task_id, step })
                 }
             }
             Err(error) => {
                 self.scheduler.fail(task_id)?;
                 self.metrics.steps_failed = self.metrics.steps_failed.saturating_add(1);
-                let session = self.sessions.get_mut(&session_id).expect("session exists");
+                let session = self.sessions.get_mut(&session_id)
+                    .ok_or(DiffusionError::UnknownSession(session_id))?;
                 session.snapshot.state = DiffusionSessionState::Failed;
                 session.snapshot.current_step = None;
                 session.snapshot.error = Some(error.clone());
@@ -460,9 +474,6 @@ impl DiffusionOrchestrator {
         &self.scheduler
     }
 
-    pub fn scheduler_mut(&mut self) -> &mut Scheduler {
-        &mut self.scheduler
-    }
 }
 
 #[cfg(test)]
