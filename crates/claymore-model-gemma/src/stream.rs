@@ -14,7 +14,7 @@ use std::io::{Read, Seek, SeekFrom};
 #[cfg(feature = "cuda-streaming")]
 use claymore_core::MemoryTier;
 #[cfg(feature = "cuda-streaming")]
-use claymore_memory::{CudaMemoryError, CudaMemoryManager, EvictionPolicy, MemoryBudgets};
+use claymore_memory::{CudaMemoryError, CudaTensorMemory, MemoryBudgets};
 
 #[cfg(feature = "cuda-streaming")]
 use crate::checkpoint::Checkpoint;
@@ -194,7 +194,6 @@ pub fn lru_victims(
 #[cfg(feature = "cuda-streaming")]
 pub struct WeightStream {
     checkpoint: Checkpoint,
-    manager: CudaMemoryManager,
     resident: BTreeMap<String, Resident>,
     budgets: MemoryBudgets,
     metrics: StreamMetrics,
@@ -207,13 +206,14 @@ impl WeightStream {
     pub fn open_pinned(
         root: impl AsRef<std::path::Path>,
         budgets: MemoryBudgets,
-        eviction: EvictionPolicy,
     ) -> Result<Self, StreamError> {
         let checkpoint = Checkpoint::open_pinned(root)?;
-        let manager = CudaMemoryManager::new(0, budgets.clone(), eviction)?;
+        budgets
+            .validate()
+            .map_err(CudaMemoryError::Policy)
+            .map_err(StreamError::Memory)?;
         Ok(Self {
             checkpoint,
-            manager,
             resident: BTreeMap::new(),
             budgets,
             metrics: StreamMetrics::new(),
@@ -230,12 +230,8 @@ impl WeightStream {
         &self.metrics
     }
 
-    pub fn manager(&self) -> &CudaMemoryManager {
-        &self.manager
-    }
-
-    pub fn manager_mut(&mut self) -> &mut CudaMemoryManager {
-        &mut self.manager
+    pub fn budgets(&self) -> &MemoryBudgets {
+        &self.budgets
     }
 
     pub fn resident_ids(&self) -> Vec<String> {
@@ -257,8 +253,14 @@ impl WeightStream {
     }
 
     /// Release LRU residents so the soft VRAM budget can admit `need` bytes.
-    fn evict_for(&mut self, tensor: &str, need: u64, tick: u64) -> Result<(), StreamError> {
-        let usage = self.manager.usage_bytes(MemoryTier::Vram);
+    fn evict_for(
+        &mut self,
+        memory: &CudaTensorMemory,
+        tensor: &str,
+        need: u64,
+        tick: u64,
+    ) -> Result<(), StreamError> {
+        let usage = memory.manager_mut().usage_bytes(MemoryTier::Vram);
         let victims = lru_victims(&self.resident, need, self.budgets.vram_soft_bytes, usage);
         let mut evictable = 0u64;
         for name in victims {
@@ -267,11 +269,11 @@ impl WeightStream {
                 evictable += entry.bytes;
                 continue;
             }
-            match self.manager.release(&entry.device_id, tick) {
+            match memory.manager_mut().release(&entry.device_id, tick) {
                 Ok(alloc) => {
                     self.resident.remove(&name);
                     self.metrics.evictions += 1;
-                    if self.manager.usage_bytes(MemoryTier::Vram) + need
+                    if memory.manager_mut().usage_bytes(MemoryTier::Vram) + need
                         <= self.budgets.vram_soft_bytes
                     {
                         return Ok(());
@@ -284,7 +286,8 @@ impl WeightStream {
                 Err(error) => return Err(error.into()),
             }
         }
-        if self.manager.usage_bytes(MemoryTier::Vram) + need <= self.budgets.vram_hard_bytes {
+        if memory.manager_mut().usage_bytes(MemoryTier::Vram) + need <= self.budgets.vram_hard_bytes
+        {
             return Ok(());
         }
         Err(StreamError::BudgetExhausted {
@@ -296,7 +299,12 @@ impl WeightStream {
 
     /// Load one tensor into VRAM, returning its manager allocation id.
     /// Cache hits are recorded; misses stream the payload in bounded chunks.
-    pub fn ensure_tensor(&mut self, name: &str, tick: u64) -> Result<String, StreamError> {
+    pub fn ensure_tensor(
+        &mut self,
+        memory: &CudaTensorMemory,
+        name: &str,
+        tick: u64,
+    ) -> Result<String, StreamError> {
         if self.closed {
             return Err(StreamError::Closed);
         }
@@ -314,16 +322,20 @@ impl WeightStream {
         if let Some(resident) = self.resident.get_mut(name) {
             resident.last_used = tick;
             self.metrics.cache_hits += 1;
-            self.manager.record_reload_cost(&device_id, 0, tick)?;
+            memory
+                .manager_mut()
+                .record_reload_cost(&device_id, 0, tick)?;
             return Ok(device_id);
         }
-        self.evict_for(name, bytes, tick)?;
+        self.evict_for(memory, name, bytes, tick)?;
         let pinned_id = format!("p:{name}");
-        self.manager.allocate_pinned(&pinned_id, bytes, tick)?;
+        memory
+            .manager_mut()
+            .allocate_pinned(&pinned_id, bytes, tick)?;
         self.metrics.peak_pinned_bytes = self
             .metrics
             .peak_pinned_bytes
-            .max(self.manager.usage_bytes(MemoryTier::PinnedHost));
+            .max(memory.manager_mut().usage_bytes(MemoryTier::PinnedHost));
         let mut file = std::fs::File::open(&shard_path).map_err(|source| StreamError::Io {
             shard: shard_path.clone(),
             source,
@@ -343,28 +355,30 @@ impl WeightStream {
                     shard: shard_path.clone(),
                     source,
                 })?;
-            self.manager
+            memory
+                .manager_mut()
                 .write_pinned(&pinned_id, offset, &buffer, tick)?;
             offset += chunk;
             remaining -= chunk as u64;
             self.metrics.disk_read_bytes += chunk as u64;
         }
-        self.manager
+        memory
+            .manager_mut()
             .allocate_device(&device_id, bytes, tick, is_expert_tensor(name))?;
         self.metrics.peak_vram_bytes = self
             .metrics
             .peak_vram_bytes
-            .max(self.manager.usage_bytes(MemoryTier::Vram));
-        let token = self
-            .manager
+            .max(memory.manager_mut().usage_bytes(MemoryTier::Vram));
+        let token = memory
+            .manager_mut()
             .copy_h2d(&pinned_id, &device_id, bytes as usize, tick)?;
         self.metrics.transferred_bytes += bytes;
         self.metrics.peak_vram_bytes = self
             .metrics
             .peak_vram_bytes
-            .max(self.manager.usage_bytes(MemoryTier::Vram));
-        self.manager.wait_for_transfer(&token, tick)?;
-        self.manager.release(&pinned_id, tick)?;
+            .max(memory.manager_mut().usage_bytes(MemoryTier::Vram));
+        memory.manager_mut().wait_for_transfer(&token, tick)?;
+        memory.manager_mut().release(&pinned_id, tick)?;
         self.resident.insert(
             name.to_owned(),
             Resident {
@@ -379,17 +393,27 @@ impl WeightStream {
     }
 
     /// Load a whole planned layer; returns the device ids in plan order.
-    pub fn ensure_plan(&mut self, names: &[String], tick: u64) -> Result<Vec<String>, StreamError> {
+    pub fn ensure_plan(
+        &mut self,
+        memory: &CudaTensorMemory,
+        names: &[String],
+        tick: u64,
+    ) -> Result<Vec<String>, StreamError> {
         let mut ids = Vec::with_capacity(names.len());
         for name in names {
-            ids.push(self.ensure_tensor(name, tick)?);
+            ids.push(self.ensure_tensor(memory, name, tick)?);
         }
         Ok(ids)
     }
 
     /// Release one resident tensor (the caller must have observed the CUDA
     /// completion event for every operation that used it).
-    pub fn release(&mut self, name: &str, tick: u64) -> Result<(), StreamError> {
+    pub fn release(
+        &mut self,
+        memory: &CudaTensorMemory,
+        name: &str,
+        tick: u64,
+    ) -> Result<(), StreamError> {
         if self.closed {
             return Err(StreamError::Closed);
         }
@@ -400,7 +424,7 @@ impl WeightStream {
             .ok_or(StreamError::MissingWeight {
                 tensor: name.to_owned(),
             })?;
-        self.manager.release(&entry.device_id, tick)?;
+        memory.manager_mut().release(&entry.device_id, tick)?;
         Ok(())
     }
 
@@ -408,7 +432,7 @@ impl WeightStream {
     /// in LRU order, then mark the stream closed. In-flight tensors remain
     /// guarded by the manager; the manager's poisoned flag keeps them
     /// non-evictable until synchronization succeeds.
-    pub fn cancel(&mut self, tick: u64) -> Result<(), StreamError> {
+    pub fn cancel(&mut self, memory: &CudaTensorMemory, tick: u64) -> Result<(), StreamError> {
         if self.closed {
             return Ok(());
         }
@@ -423,7 +447,7 @@ impl WeightStream {
             .collect();
         for name in names {
             let device_id = self.resident[&name].device_id.clone();
-            match self.manager.release(&device_id, tick) {
+            match memory.manager_mut().release(&device_id, tick) {
                 Ok(_) => {
                     self.resident.remove(&name);
                     self.metrics.evictions += 1;

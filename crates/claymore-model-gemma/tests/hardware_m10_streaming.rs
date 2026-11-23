@@ -14,8 +14,7 @@
 //! ```
 
 use claymore_core::MemoryTier;
-use claymore_memory::{EvictionPolicy, MemoryBudgets};
-use claymore_model_gemma::config::GemmaModelConfig;
+use claymore_memory::{CudaMemoryManager, CudaTensorMemory, EvictionPolicy, MemoryBudgets};
 use claymore_model_gemma::stream::{decoder_layer_names, text_prefix_names, WeightStream};
 
 fn checkpoint_root() -> Option<std::path::PathBuf> {
@@ -36,6 +35,12 @@ fn budgets(vram_soft: u64, vram_hard: u64) -> MemoryBudgets {
     }
 }
 
+fn owner(vram_soft: u64, vram_hard: u64) -> CudaTensorMemory {
+    let manager = CudaMemoryManager::new(0, budgets(vram_soft, vram_hard), EvictionPolicy::Lru)
+        .expect("CUDA memory manager");
+    CudaTensorMemory::from_manager(manager).expect("tensor memory owner from the manager")
+}
+
 #[test]
 #[ignore = "requires a CUDA driver, the pinned checkpoint, and release profile"]
 fn streaming_layer_plan_streams_through_the_manager() {
@@ -46,16 +51,13 @@ fn streaming_layer_plan_streams_through_the_manager() {
             return;
         }
     };
-    let mut stream = WeightStream::open_pinned(
-        root,
-        budgets(26 * 1024 * 1024 * 1024, 28 * 1024 * 1024 * 1024),
-        EvictionPolicy::Lru,
-    )
-    .expect("pinned checkpoint open through the streaming executor");
+    let memory = owner(26 * 1024 * 1024 * 1024, 28 * 1024 * 1024 * 1024);
+    let mut stream = WeightStream::open_pinned(root, budgets(26 << 30, 28 << 30))
+        .expect("pinned checkpoint open through the streaming executor");
     let cfg = stream.checkpoint().config().clone();
     let names = decoder_layer_names(&cfg, 0);
     let ids = stream
-        .ensure_plan(&names, 1)
+        .ensure_plan(&memory, &names, 1)
         .expect("layer 0 plan streamed");
     assert_eq!(ids.len(), names.len());
 
@@ -80,19 +82,19 @@ fn streaming_layer_plan_streams_through_the_manager() {
         "peak VRAM must cover the resident plan"
     );
     assert_eq!(
-        stream.manager().usage_bytes(MemoryTier::Vram),
+        memory.usage_bytes(MemoryTier::Vram),
         total,
         "residency equals the streamed bytes"
     );
     // Pinned staging buffers are released after the transfer event completes.
     assert_eq!(
-        stream.manager().usage_bytes(MemoryTier::PinnedHost),
+        memory.usage_bytes(MemoryTier::PinnedHost),
         0,
         "staging must not stay resident"
     );
 
     // Cache hits: re-requesting the same plan must not touch disk.
-    let again = stream.ensure_plan(&names, 2).expect("cache hits");
+    let again = stream.ensure_plan(&memory, &names, 2).expect("cache hits");
     assert_eq!(again.len(), names.len());
     let metrics = stream.metrics();
     assert_eq!(metrics.cache_hits, names.len() as u64);
@@ -113,34 +115,27 @@ fn streaming_evicts_lru_residents_before_admission() {
             return;
         }
     };
-    // Soft ceiling just above one text prefix (embedding table 1.4 GiB),
-    // hard ceiling below two prefixes: the second prefix forces LRU eviction.
-    let embedding_bytes = {
-        let probe = WeightStream::open_pinned(
-            &root,
-            budgets(2 * 1024 * 1024 * 1024, 3 * 1024 * 1024 * 1024),
-            EvictionPolicy::Lru,
-        )
-        .expect("probe open");
-        let names = text_prefix_names(probe.checkpoint().config());
-        let bytes = probe
-            .checkpoint()
-            .tensor(&names[0])
-            .expect("embedding tensor present")
-            .entry
-            .byte_len();
-        drop(probe);
-        bytes
-    };
+    // Probe the embedding-table size through the pinned inventory.
+    let probe = WeightStream::open_pinned(&root, budgets(2 << 30, 3 << 30)).expect("probe open");
+    let names = text_prefix_names(probe.checkpoint().config());
+    let embedding_bytes = probe
+        .checkpoint()
+        .tensor(&names[0])
+        .expect("embedding tensor present")
+        .entry
+        .byte_len();
+    drop(probe);
+
     let soft = embedding_bytes + 64 * 1024 * 1024;
     let hard = embedding_bytes * 3 / 2;
-    let mut stream = WeightStream::open_pinned(&root, budgets(soft, hard), EvictionPolicy::Lru)
-        .expect("tight budgets open");
+    let memory = owner(soft, hard);
+    let mut stream =
+        WeightStream::open_pinned(&root, budgets(soft, hard)).expect("tight budgets open");
 
     let names = text_prefix_names(stream.checkpoint().config());
     let first = names[0].clone();
     stream
-        .ensure_tensor(&first, 1)
+        .ensure_tensor(&memory, &first, 1)
         .expect("first prefix resident");
     assert!(
         stream.metrics().evictions == 0,
@@ -160,23 +155,25 @@ fn streaming_evicts_lru_residents_before_admission() {
         .cloned()
         .expect("a prefix tensor larger than the headroom");
     stream
-        .ensure_tensor(&big, 2)
+        .ensure_tensor(&memory, &big, 2)
         .expect("eviction admits the second tensor");
     assert!(
         stream.metrics().evictions >= 1,
         "LRU eviction must have released the oldest resident"
     );
     assert!(
-        stream.manager().usage_bytes(MemoryTier::Vram) <= hard,
+        memory.usage_bytes(MemoryTier::Vram) <= hard,
         "admission never exceeds the hard ceiling"
     );
 
     // Release after completion, and the stream closes safely.
-    stream.release(&big, 3).expect("release after completion");
-    stream.cancel(4).expect("cancel drains residents");
+    stream
+        .release(&memory, &big, 3)
+        .expect("release after completion");
+    stream.cancel(&memory, 4).expect("cancel drains residents");
     assert!(stream.is_closed());
     assert!(
-        stream.ensure_tensor(&first, 5).is_err(),
+        stream.ensure_tensor(&memory, &first, 5).is_err(),
         "a closed stream refuses loads"
     );
 }

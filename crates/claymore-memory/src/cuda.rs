@@ -482,6 +482,11 @@ impl CudaMemoryManager {
         self.transfers.policy.usage_bytes(tier)
     }
 
+    /// The declared tier budgets this manager admits against.
+    pub fn budgets(&self) -> MemoryBudgets {
+        self.transfers.policy.budgets()
+    }
+
     /// Policy accounting entry for one managed allocation, if it is live.
     pub fn allocation(&self, id: &str) -> Option<&Allocation> {
         self.transfers.policy.allocation(id)

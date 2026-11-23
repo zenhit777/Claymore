@@ -107,6 +107,24 @@ impl CudaTensorMemory {
         })
     }
 
+    /// Build a tensor memory owner on top of an existing `CudaMemoryManager`
+    /// (the streaming executor and the CUDA graph must share one admission
+    /// owner, never two parallel managers).
+    pub fn from_manager(manager: CudaMemoryManager) -> Result<Self, CudaTensorError> {
+        let device_info = manager.device_info().clone();
+        let device_id = device_info.name.clone();
+        Ok(Self {
+            inner: Rc::new(CudaTensorInner {
+                manager: RefCell::new(manager),
+                next_tick: Cell::new(0),
+                next_id: Cell::new(0),
+                device_id,
+                instance_id: DeviceInstanceId::new(),
+                device_info,
+            }),
+        })
+    }
+
     /// Next monotonic logical tick shared by this memory owner and every
     /// tensor buffer it manages. Callers driving low-level launch/wait APIs
     /// must use this clock instead of inventing ticks.

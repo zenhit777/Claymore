@@ -8,6 +8,8 @@
 pub mod canvas;
 pub mod checkpoint;
 pub mod config;
+#[cfg(feature = "cuda-streaming")]
+pub mod cuda_graph;
 pub mod executor;
 pub mod fullgraph;
 pub mod generation;
