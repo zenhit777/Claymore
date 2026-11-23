@@ -646,6 +646,26 @@ mod tests {
     }
 
     #[test]
+    fn token_cancellation_after_admission_prevents_step_execution() {
+        let token = CancellationToken::new();
+        let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let id = orchestrator
+            .submit(plan(), token.clone(), TaskPriority::Normal)
+            .unwrap();
+        token.cancel();
+        let mut recorder = Recorder(RefCell::new(Vec::new()));
+        assert!(matches!(
+            orchestrator.run_one(&mut recorder).unwrap(),
+            DiffusionRunOutcome::SessionCancelled { .. }
+        ));
+        assert!(recorder.0.borrow().is_empty());
+        assert_eq!(
+            orchestrator.session(id).unwrap().state,
+            DiffusionSessionState::Cancelled
+        );
+    }
+
+    #[test]
     fn queued_session_can_be_cancelled_before_execution() {
         let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
         let id = orchestrator
