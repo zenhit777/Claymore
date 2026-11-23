@@ -2,7 +2,7 @@
 
 ## Périmètre produit
 
-Claymore cible initialement deux modèles de diffusion : DiffusionGemma et Clover. Il ne développe pas de stratégie autoregressive générique sans décision produit ultérieure.
+Claymore cible initialement deux modèles de diffusion : DiffusionGemma et Clover. DiffusionGemma est ciblé en génération de texte uniquement ; image et vidéo sont hors périmètre initial et nécessitent une décision produit ainsi qu'une spécification multimodale avant tout développement. Claymore ne développe pas de stratégie autoregressive générique sans décision produit ultérieure.
 
 ## Architecture d'exécution
 
@@ -41,7 +41,7 @@ Les adaptateurs ne constituent pas des moteurs tensoriels ou runtimes autonomes 
 ## Jalons
 
 - M8 : socle tensoriel natif, opérations de référence, dispatch et backends.
-- M9 : orchestration de diffusion modulaire commune (API de plans par blocs, chaîne de dépendances dans le scheduler, annulation coopérative, propagation d'échec et métriques ; voir [m9-diffusion-orchestration.md](m9-diffusion-orchestration.md)).
+- M9 : cœur d'orchestration de diffusion modulaire livré par la PR #32 ; la validation CPU, les compteurs de progression, les durées d'exécution par phase et la documentation du cycle de vie sont suivis dans l'issue #31 (voir [m9-diffusion-orchestration.md](m9-diffusion-orchestration.md)).
 - M10 : intégration DiffusionGemma.
 - M11 : intégration Clover.
 - M12 : optimisation et validation de performance.
