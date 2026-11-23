@@ -29,9 +29,17 @@ pub struct CanvasPosition {
 }
 
 impl CanvasPosition {
-    pub const fn token_id(&self) -> Option<u32> { self.token_id }
-    pub const fn confidence(&self) -> f32 { self.confidence }
-    pub const fn state(&self) -> CanvasTokenState { self.state }
+    pub const fn token_id(&self) -> Option<u32> {
+        self.token_id
+    }
+
+    pub const fn confidence(&self) -> f32 {
+        self.confidence
+    }
+
+    pub const fn state(&self) -> CanvasTokenState {
+        self.state
+    }
 }
 
 /// Counters returned after applying one model-produced denoising iteration.
@@ -54,34 +62,54 @@ pub struct GemmaCanvas {
 impl GemmaCanvas {
     pub fn new() -> Self {
         Self {
-            positions: vec![CanvasPosition {
-                token_id: None,
-                confidence: 0.0,
-                state: CanvasTokenState::Masked,
-            }; GEMMA_CANVAS_TOKENS],
+            positions: vec![
+                CanvasPosition {
+                    token_id: None,
+                    confidence: 0.0,
+                    state: CanvasTokenState::Masked,
+                };
+                GEMMA_CANVAS_TOKENS
+            ],
             iteration: 0,
         }
     }
 
     pub fn with_length(length: usize) -> Result<Self, CanvasError> {
-        if length == 0 { return Err(CanvasError::EmptyCanvas); }
+        if length == 0 {
+            return Err(CanvasError::EmptyCanvas);
+        }
         Ok(Self {
-            positions: vec![CanvasPosition {
-                token_id: None,
-                confidence: 0.0,
-                state: CanvasTokenState::Masked,
-            }; length],
+            positions: vec![
+                CanvasPosition {
+                    token_id: None,
+                    confidence: 0.0,
+                    state: CanvasTokenState::Masked,
+                };
+                length
+            ],
             iteration: 0,
         })
     }
 
-    pub fn positions(&self) -> &[CanvasPosition] { &self.positions }
-    pub const fn iteration(&self) -> u32 { self.iteration }
-    pub fn committed_count(&self) -> usize {
-        self.positions.iter().filter(|p| p.state == CanvasTokenState::Committed).count()
+    pub fn positions(&self) -> &[CanvasPosition] {
+        &self.positions
     }
+
+    pub const fn iteration(&self) -> u32 {
+        self.iteration
+    }
+
+    pub fn committed_count(&self) -> usize {
+        self.positions
+            .iter()
+            .filter(|p| p.state == CanvasTokenState::Committed)
+            .count()
+    }
+
     pub fn is_complete(&self) -> bool {
-        self.positions.iter().all(|p| p.state == CanvasTokenState::Committed)
+        self.positions
+            .iter()
+            .all(|p| p.state == CanvasTokenState::Committed)
     }
 
     /// Apply a complete set of candidate updates for one denoising iteration.
@@ -99,13 +127,24 @@ impl GemmaCanvas {
         if !commit_threshold.is_finite() || !(0.0..=1.0).contains(&commit_threshold) {
             return Err(CanvasError::InvalidThreshold);
         }
+
+        let next_iteration = self
+            .iteration
+            .checked_add(1)
+            .ok_or(CanvasError::IterationOverflow)?;
         let updates: Vec<_> = candidates.into_iter().collect();
         let mut seen = std::collections::BTreeSet::new();
+
         for (index, _, confidence) in &updates {
             if *index >= self.positions.len() {
-                return Err(CanvasError::PositionOutOfBounds { index, length: self.positions.len() });
+                return Err(CanvasError::PositionOutOfBounds {
+                    index: *index,
+                    length: self.positions.len(),
+                });
             }
-            if !seen.insert(*index) { return Err(CanvasError::DuplicatePosition(*index)); }
+            if !seen.insert(*index) {
+                return Err(CanvasError::DuplicatePosition(*index));
+            }
             if !confidence.is_finite() || !(0.0..=1.0).contains(confidence) {
                 return Err(CanvasError::InvalidConfidence(*index));
             }
@@ -114,7 +153,11 @@ impl GemmaCanvas {
             }
         }
 
-        let mut metrics = CanvasMetrics { candidates_seen: updates.len(), ..CanvasMetrics::default() };
+        let mut metrics = CanvasMetrics {
+            candidates_seen: updates.len(),
+            ..CanvasMetrics::default()
+        };
+
         for (index, token_id, confidence) in updates {
             let position = &mut self.positions[index];
             position.confidence = confidence;
@@ -129,15 +172,26 @@ impl GemmaCanvas {
                 position.state = CanvasTokenState::Provisional;
             }
         }
-        self.iteration = self.iteration.checked_add(1).ok_or(CanvasError::IterationOverflow)?;
-        metrics.remaining_masked = self.positions.iter().filter(|p| p.state == CanvasTokenState::Masked).count();
-        metrics.remaining_provisional = self.positions.iter().filter(|p| p.state == CanvasTokenState::Provisional).count();
+
+        self.iteration = next_iteration;
+        metrics.remaining_masked = self
+            .positions
+            .iter()
+            .filter(|p| p.state == CanvasTokenState::Masked)
+            .count();
+        metrics.remaining_provisional = self
+            .positions
+            .iter()
+            .filter(|p| p.state == CanvasTokenState::Provisional)
+            .count();
         Ok(metrics)
     }
 }
 
 impl Default for GemmaCanvas {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
@@ -168,13 +222,18 @@ mod tests {
         assert_eq!(canvas.positions().len(), 256);
         assert_eq!(canvas.committed_count(), 0);
         assert!(!canvas.is_complete());
-        assert!(canvas.positions().iter().all(|p| p.state() == CanvasTokenState::Masked));
+        assert!(canvas
+            .positions()
+            .iter()
+            .all(|p| p.state() == CanvasTokenState::Masked));
     }
 
     #[test]
     fn iteration_commits_only_confident_positions() {
         let mut canvas = GemmaCanvas::with_length(3).unwrap();
-        let metrics = canvas.apply_iteration([(0, 11, 0.95), (1, 12, 0.4)], 0.8).unwrap();
+        let metrics = canvas
+            .apply_iteration([(0, 11, 0.95), (1, 12, 0.4)], 0.8)
+            .unwrap();
         assert_eq!(metrics.newly_committed, 1);
         assert_eq!(metrics.remaining_provisional, 1);
         assert_eq!(canvas.positions()[0].token_id(), Some(11));
@@ -207,8 +266,14 @@ mod tests {
     #[test]
     fn invalid_confidence_and_threshold_are_rejected() {
         let mut canvas = GemmaCanvas::with_length(1).unwrap();
-        assert_eq!(canvas.apply_iteration([(0, 1, f32::NAN)], 0.5), Err(CanvasError::InvalidConfidence(0)));
-        assert_eq!(canvas.apply_iteration([], f32::INFINITY), Err(CanvasError::InvalidThreshold));
+        assert_eq!(
+            canvas.apply_iteration([(0, 1, f32::NAN)], 0.5),
+            Err(CanvasError::InvalidConfidence(0))
+        );
+        assert_eq!(
+            canvas.apply_iteration([], f32::INFINITY),
+            Err(CanvasError::InvalidThreshold)
+        );
         assert_eq!(canvas.iteration(), 0);
     }
 }
