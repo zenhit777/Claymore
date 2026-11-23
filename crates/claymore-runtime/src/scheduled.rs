@@ -177,6 +177,12 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
         self.diffusion.metrics()
     }
 
+    /// Cancel a diffusion session through the runtime facade.
+    pub fn cancel_diffusion(&mut self, id: DiffusionSessionId) -> Result<(), ScheduledRuntimeError> {
+        self.diffusion.cancel(id)?;
+        Ok(())
+    }
+
     /// Execute at most one ready Compute request. Blocked requests remain
     /// queued until their scheduler dependencies have been confirmed complete.
     pub fn run_one(&mut self) -> Result<Option<ScheduledExecution>, ScheduledRuntimeError> {
