@@ -288,9 +288,10 @@ impl DiffusionOrchestrator {
                 },
             );
             self.metrics.sessions_submitted = self.metrics.sessions_submitted.saturating_add(1);
-            self.metrics.blocks_submitted = self.metrics.blocks_submitted.saturating_add(
-                u64::try_from(plan.block_count()).unwrap_or(u64::MAX),
-            );
+            self.metrics.blocks_submitted = self
+                .metrics
+                .blocks_submitted
+                .saturating_add(u64::try_from(plan.block_count()).unwrap_or(u64::MAX));
             self.metrics.sessions_cancelled = self.metrics.sessions_cancelled.saturating_add(1);
             return Ok(id);
         }
@@ -340,9 +341,10 @@ impl DiffusionOrchestrator {
         let block_count = plan.block_count();
         self.plans.insert(id, plan);
         self.metrics.sessions_submitted = self.metrics.sessions_submitted.saturating_add(1);
-        self.metrics.blocks_submitted = self.metrics.blocks_submitted.saturating_add(
-            u64::try_from(block_count).unwrap_or(u64::MAX),
-        );
+        self.metrics.blocks_submitted = self
+            .metrics
+            .blocks_submitted
+            .saturating_add(u64::try_from(block_count).unwrap_or(u64::MAX));
         Ok(id)
     }
 
@@ -578,23 +580,20 @@ impl DiffusionOrchestrator {
 
     pub fn metrics(&self) -> DiffusionMetrics {
         let mut metrics = self.metrics;
-        metrics.blocks_pending = self
-            .sessions
-            .values()
-            .fold(0_u64, |pending, session| {
-                if session.snapshot.state.is_terminal() {
-                    pending
-                } else {
-                    let total = self
-                        .plans
-                        .get(&session.snapshot.id)
-                        .map_or(0, DiffusionPlan::block_count);
-                    pending.saturating_add(
-                        u64::try_from(total.saturating_sub(session.completed_blocks))
-                            .unwrap_or(u64::MAX),
-                    )
-                }
-            });
+        metrics.blocks_pending = self.sessions.values().fold(0_u64, |pending, session| {
+            if session.snapshot.state.is_terminal() {
+                pending
+            } else {
+                let total = self
+                    .plans
+                    .get(&session.snapshot.id)
+                    .map_or(0, DiffusionPlan::block_count);
+                pending.saturating_add(
+                    u64::try_from(total.saturating_sub(session.completed_blocks))
+                        .unwrap_or(u64::MAX),
+                )
+            }
+        });
         metrics
     }
 
