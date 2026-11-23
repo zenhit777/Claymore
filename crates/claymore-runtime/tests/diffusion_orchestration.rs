@@ -164,3 +164,38 @@ fn pre_cancelled_plan_is_visible_but_never_scheduled() {
         DiffusionRunOutcome::Idle
     ));
 }
+
+#[test]
+fn retry_uses_a_new_session_instead_of_resuming_terminal_state() {
+    let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+    let cancelled = orchestrator
+        .submit(plan(1, 1), CancellationToken::new(), TaskPriority::Normal)
+        .unwrap();
+    orchestrator.cancel(cancelled).unwrap();
+    assert_eq!(
+        orchestrator.session(cancelled).unwrap().state,
+        DiffusionSessionState::Cancelled
+    );
+
+    // M9 does not resume a terminal session. A caller may submit a fresh plan.
+    let retry = orchestrator
+        .submit(plan(1, 1), CancellationToken::new(), TaskPriority::Normal)
+        .unwrap();
+    assert_ne!(cancelled, retry);
+    let mut executor = RecordingExecutor::default();
+    loop {
+        match orchestrator.run_one(&mut executor).unwrap() {
+            DiffusionRunOutcome::SessionCompleted { session_id, .. } if session_id == retry => break,
+            DiffusionRunOutcome::StepCompleted { .. } => {}
+            other => panic!("unexpected retry outcome: {other:?}"),
+        }
+    }
+    assert_eq!(
+        orchestrator.session(retry).unwrap().state,
+        DiffusionSessionState::Completed
+    );
+    assert_eq!(
+        orchestrator.session(cancelled).unwrap().state,
+        DiffusionSessionState::Cancelled
+    );
+}
