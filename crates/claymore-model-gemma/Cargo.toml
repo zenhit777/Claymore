@@ -5,9 +5,16 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+default = []
+cuda-streaming = ["claymore-memory/cuda-driver"]
+
 [dependencies]
 claymore-core = { path = "../claymore-core" }
 claymore-runtime = { path = "../claymore-runtime" }
+claymore-memory = { path = "../claymore-memory" }
+claymore-device = { path = "../claymore-device" }
+claymore-tensor = { path = "../claymore-tensor" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

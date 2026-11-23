@@ -13,7 +13,10 @@ pub mod generation;
 pub mod rng;
 pub mod safetensors;
 pub mod sampling;
+pub mod fullgraph;
+pub mod graph;
 pub mod sha256;
+pub mod stream;
 mod strict_json;
 
 pub use canvas::{CanvasError, CanvasMetrics, CanvasPosition, CanvasTokenState, GemmaCanvas};

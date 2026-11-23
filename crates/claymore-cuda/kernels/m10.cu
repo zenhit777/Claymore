@@ -284,7 +284,7 @@ extern "C" __global__ void claymore_attention_bf16(
     const __nv_bfloat16 *__restrict__ query,
     const __nv_bfloat16 *__restrict__ key,
     const __nv_bfloat16 *__restrict__ value,
-    const __nv_bfloat16 *__restrict__ mask,
+    const float *__restrict__ mask,
     __nv_bfloat16 *__restrict__ out,
     float scale,
     uint64_t query_tokens,
@@ -314,7 +314,7 @@ extern "C" __global__ void claymore_attention_bf16(
     }
     float score = accumulator * scale;
     if (masked && mask != nullptr) {
-      score += to_f32(mask[token * key_tokens + index]);
+      score += mask[token * key_tokens + index];
     }
     scores[index] = score;
   }

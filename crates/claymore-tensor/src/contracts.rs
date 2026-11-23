@@ -371,6 +371,13 @@ impl<'a> TensorOp<'a> {
             TensorOp::EmbedGather { .. } => &[0],
             TensorOp::RowMask { .. } => &[1],
             TensorOp::RouterTopK { .. } => &[0, 1],
+            TensorOp::Attention { mask, .. } => {
+                if mask.is_some() {
+                    &[3]
+                } else {
+                    &[]
+                }
+            }
             _ => &[],
         };
         let primary = match self {

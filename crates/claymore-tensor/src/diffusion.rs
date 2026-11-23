@@ -279,9 +279,12 @@ pub fn attention(
     let dtype = query_values.dtype();
     let mask_values = match mask {
         Some(mask) => {
+            // The additive mask is the contract's F32-typed slot: blocked keys
+            // are encoded as -Infinity in FP32 precision, independent of the
+            // activation dtype.
             let values = read_numeric(device, mask)?;
-            if values.dtype() != dtype {
-                return Err(OpError::MixedDType);
+            if values.dtype() != DType::F32 {
+                return Err(OpError::IndexDTypeMismatch);
             }
             Some(values.to_f32())
         }
