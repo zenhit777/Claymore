@@ -3,7 +3,7 @@
 - **Branche :** `feat/m10-diffusiongemma`
 - **SHA de code validé :** `ea115ab337d492d81ac50f69c09cd79e050b79a6`
 - **Date de campagne :** 23 novembre 2026, 16:10–16:12 UTC (campagne finale sur le SHA ci-dessus)
-- **PR :** ouverte sur `main` à partir de cette branche, non fusionnée (voir §14)
+- **PR :** [#40](https://github.com/zenhit777/Claymore/pull/40), cible `main`, **ouverte et non fusionnée** (voir §15)
 - **Statut :** **PASS PARTIEL** — 66/66 tests matériels verts, CI et MSRV verts, **gate de génération réelle du graphe complet laissé OUVERT** (§11)
 
 > **Ce que ce rapport prouve.** Le chemin M10 de Claymore — chargement strict du checkpoint épinglé, primitives tensorielles CPU de référence, kernels CUDA M10, admission mémoire bornée et garde des buffers en vol — est réellement exécuté sur une RTX 5090 et validé contre une référence CPU déterministe, y compris sur un **sous-graphe de couche décodeur construit à partir des poids réels** du checkpoint épinglé.
@@ -492,17 +492,39 @@ La campagne finale s'est déroulée **avec la GPU partagée** : au préflight, u
 
 ---
 
-## 14. Verdict
+## 14. SHA-256 des journaux bruts
+
+Les empreintes ci-dessous sont celles des fichiers livrés sous `docs/audits/`.
+
+| Fichier | SHA-256 |
+|---|---|
+| `docs/audits/m10-checkpoint-full-verification.log` | `32bac0a3fc51e35112cae7cec1837532a5c1bf01106170c0922d48ebeb84d31e` |
+| `docs/audits/m10-ci-suite.log` | `506fedc45d58533faf74e488830cc0dd52b7fb6e93cacdca924fb3ef43b7f6b5` |
+| `docs/audits/m10-msrv-1.86.log` | `25ecf68916a117225e7b52f287f57b8247ea2816bcc590a4c7446dffd46f6df4` |
+| `docs/audits/m10-rtx5090-final-preflight.log` | `dee0afd794c647e681ca6392ea7a7e9fca7129bc9cb1ea6c3a1d913f6cda772f` |
+| `docs/audits/m10-rtx5090-hw-cuda-driver.log` | `1b9a2cb1a267cb197b9a71328e2a2f03074235219bd32477546fb502f15683fc` |
+| `docs/audits/m10-rtx5090-hw-cuda-fault-injection.log` | `bae71c1996e318e197086943f320f45fa9e6033d4c8349fdf29c8fca277e0469` |
+| `docs/audits/m10-rtx5090-hw-cuda-memory.log` | `af5f7ea9a986ebdae7cc73a686f63703e95d247c55033ed447dad22031253a21` |
+| `docs/audits/m10-rtx5090-hw-cuda-tensor.log` | `f32fca374321146d8e08a4bf7a4386b707b4e33018c80bf9f741c5e5130e45e5` |
+| `docs/audits/m10-rtx5090-hw-m10-primitives.log` | `955dd8de835a27fabf678ee1212623220f91a9691c437632f485f3e9733c4b07` |
+| `docs/audits/m10-rtx5090-hw-m10-real-weights.log` | `094145bb5964482eaeaab31808e43764e668ac5cc42b0cf366f08b0528e622c3` |
+| `docs/audits/m10-rtx5090-postcampaign.log` | `0063700370c3ae4dfc0a6f26bb3be98061d85a1a4d03ba19636496065a591e78` |
+| `docs/audits/m10-rtx5090-preflight.log` | `4d1adbc984c1c67d570acefa2a1698b598fdfd3be8c5357815d38b6ba8ff6225` |
+
+Les copies de référence épinglées sont également versionnées : `docs/audits/fixtures/diffusiongemma-config.json` et `docs/audits/fixtures/diffusiongemma-generation-config.json`.
+
+## 15. Verdict
 
 **PASS PARTIEL, avec porte de génération réelle ouverte.**
 
 - SHA de code validé `ea115ab337d492d81ac50f69c09cd79e050b79a6`, identique avant et après campagne ;
 - **66/66 tests matériels** réussis sur la RTX 5090 (5 driver, 17 mémoire, 19 tenseurs, 13 gestionnaire dont 11 injections de fautes, 12 primitives M10) ;
 - **229 tests CPU** workspace et **60 tests** avec feature `cuda-driver` (stub) réussis ; **Rust 1.86 MSRV** vert sur le workspace, les checks CUDA et clippy `-D warnings` ;
+- **CI GitHub** : la suite CI complète a été exécutée **localement** au SHA de code `ea115ab` (§3.2, journaux `m10-ci-suite.log` et `m10-msrv-1.86.log`). Le push a transporté les deux commits dans une seule mise à jour de la branche : les runs CI #800 (`push`) et #801 (`pull_request`) ont donc été exécutés à la tête `a803032`, qui contient `ea115ab` comme ancêtre, et sont **success** sur les deux jobs (`Format, test, and lint` et `Minimum supported Rust 1.86`). Aucun run CI n'a été déclenché sur `ea115ab` isolé ; le commit `a803032` ne contient que de la documentation.
 - **checkpoint réel vérifié intégralement** : 1047 tenseurs, 51 647 562 456 octets, 11 shards, couverture complète et contiguë, empreintes SHA-256 de chaque tensor ;
 - **sous-graphe décodeur à poids réels exécuté sur la RTX 5090** : embedding réel → norms → projections → RoPE → attention → projection de sortie → norme → résiduel → `layer_scale` apprise, avec isolation différentielle par étape et dérive de chaîne mesurée et publiée ;
 - **un vrai défaut de sûreté mémoire détecté et corrigé** (gardes `IN_FLIGHT` absentes du chemin M10), verrouillé par quatre tests d'injection de fautes sur la branche M10 ;
 - **budgets respectés** : pic mesuré 25,4 Mio sur le sous-graphe réel, aucune allocation hors orchestrateur, aucune libération de tampon en vol ;
 - **aucune génération réelle du modèle 26B n'est revendiquée** : les portes listées au §11 sont des portes de code, à livrer dans un incrément ultérieur.
 
-La PR est ouverte sur `main` et **n'est pas fusionnée**.
+La PR [#40](https://github.com/zenhit777/Claymore/pull/40) est ouverte sur `main` et **n'est pas fusionnée** ; sa tête est `a80303260c2990971c3bcdd951697421f4db8b8a` (commit documentaire), dont le SHA de code validé `ea115ab337d492d81ac50f69c09cd79e050b79a6` est l'ancêtre. La décision de merge reste à l'architecte.
