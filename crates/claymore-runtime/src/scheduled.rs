@@ -676,5 +676,4 @@ mod tests {
         );
         assert_eq!(runtime.diffusion_metrics().steps_completed, 4);
     }
-
 }
