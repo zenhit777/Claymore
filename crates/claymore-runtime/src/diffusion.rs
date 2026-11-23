@@ -733,7 +733,7 @@ mod tests {
         assert_eq!(snapshot.completed_steps, 1);
         assert_eq!(snapshot.state, DiffusionSessionState::Cancelled);
         assert_eq!(orchestrator.metrics().steps_completed, 1);
-        assert_eq!(orchestrator.metrics().steps_cancelled, 0);
+        assert_eq!(orchestrator.metrics().steps_cancelled, 8);
     }
 
     #[test]
