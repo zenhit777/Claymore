@@ -345,7 +345,10 @@ fn recover_launch_failure<S: CudaStreamOps, E>(
                 // dedicated transfer stream), so preserve its guard until the
                 // shared pending-work tracker retires that event.
                 let still_in_flight = pending.iter().any(|transfer| {
-                    transfer.allocation_ids.iter().any(|pending_id| pending_id == id)
+                    transfer
+                        .allocation_ids
+                        .iter()
+                        .any(|pending_id| pending_id == id)
                 });
                 if still_in_flight {
                     continue;
@@ -1589,8 +1592,14 @@ mod tests {
             })
         ));
         assert!(!poisoned);
-        assert_eq!(policy.allocation("shared").unwrap().safe_after_tick, IN_FLIGHT);
-        assert_eq!(policy.allocation("launch-only").unwrap().safe_after_tick, 10);
+        assert_eq!(
+            policy.allocation("shared").unwrap().safe_after_tick,
+            IN_FLIGHT
+        );
+        assert_eq!(
+            policy.allocation("launch-only").unwrap().safe_after_tick,
+            10
+        );
     }
 
     #[test]
@@ -1609,7 +1618,7 @@ mod tests {
             original,
             &allocation_ids,
             &allocation_ids,
-            &[],
+            &[] as &[PendingTransfer<FakeEvent>],
             &FakeStream(Some(901)),
             &mut policy,
             10,
