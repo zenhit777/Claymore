@@ -46,7 +46,7 @@ fn synthetic_multiblock_session_reports_progress_and_phase_metrics() {
     assert_eq!(initial.blocks_pending, 3);
 
     // A block is complete only after its CommitBlock step succeeds.
-    for _ in 0..4 {
+    for _ in 0..5 {
         assert!(matches!(
             orchestrator.run_one(&mut executor).unwrap(),
             DiffusionRunOutcome::StepCompleted { .. }
@@ -55,7 +55,7 @@ fn synthetic_multiblock_session_reports_progress_and_phase_metrics() {
     let progress = orchestrator.metrics();
     assert_eq!(progress.blocks_completed, 1);
     assert_eq!(progress.blocks_pending, 2);
-    assert_eq!(orchestrator.session(id).unwrap().completed_steps, 4);
+    assert_eq!(orchestrator.session(id).unwrap().completed_steps, 5);
 
     loop {
         match orchestrator.run_one(&mut executor).unwrap() {
