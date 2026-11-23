@@ -8,6 +8,7 @@
 //! released only after the transfer event completes.
 
 use std::collections::BTreeMap;
+#[cfg(feature = "cuda-streaming")]
 use std::io::{Read, Seek, SeekFrom};
 
 #[cfg(feature = "cuda-streaming")]
@@ -15,6 +16,7 @@ use claymore_core::MemoryTier;
 #[cfg(feature = "cuda-streaming")]
 use claymore_memory::{CudaMemoryError, CudaMemoryManager, EvictionPolicy, MemoryBudgets};
 
+#[cfg(feature = "cuda-streaming")]
 use crate::checkpoint::Checkpoint;
 use crate::config::GemmaModelConfig;
 
@@ -55,7 +57,12 @@ pub fn decoder_layer_names(config: &GemmaModelConfig, layer: usize) -> Vec<Strin
         p("self_attn.q_proj.weight"),
         p("self_attn.k_proj.weight"),
     ];
-    if !config.text_config.as_ref().map(|t| t.is_global(layer)).unwrap_or(false) {
+    if !config
+        .text_config
+        .as_ref()
+        .map(|t| t.is_global(layer))
+        .unwrap_or(false)
+    {
         names.push(p("self_attn.v_proj.weight"));
     }
     names.push(p("self_attn.o_proj.weight"));
@@ -122,12 +129,13 @@ pub fn text_prefix_names(_config: &GemmaModelConfig) -> Vec<String> {
     ]
 }
 
+#[cfg(feature = "cuda-streaming")]
 fn is_expert_tensor(name: &str) -> bool {
     name.contains(".experts.")
 }
 
 /// Residency accounting and peak instrumentation for one streamed tensor.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct StreamMetrics {
     pub peak_vram_bytes: u64,
     pub peak_pinned_bytes: u64,
@@ -139,30 +147,27 @@ pub struct StreamMetrics {
 }
 
 impl StreamMetrics {
-    fn new() -> Self {
-        Self {
-            peak_vram_bytes: 0,
-            peak_pinned_bytes: 0,
-            transferred_bytes: 0,
-            disk_read_bytes: 0,
-            loads: 0,
-            cache_hits: 0,
-            evictions: 0,
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
 #[derive(Debug)]
-struct Resident {
-    device_id: String,
-    bytes: u64,
-    last_used: u64,
-    expert: bool,
+pub struct Resident {
+    pub device_id: String,
+    pub bytes: u64,
+    pub last_used: u64,
+    pub expert: bool,
 }
 
 /// Pure LRU victim order for the resident set: ascending `last_used`, with
 /// expert tensors released after non-expert tensors of the same tick.
-pub fn lru_victims(resident: &BTreeMap<String, Resident>, need: u64, soft: u64, usage: u64) -> Vec<String> {
+pub fn lru_victims(
+    resident: &BTreeMap<String, Resident>,
+    need: u64,
+    soft: u64,
+    usage: u64,
+) -> Vec<String> {
     if usage.saturating_add(need) <= soft {
         return Vec::new();
     }
@@ -234,7 +239,10 @@ impl WeightStream {
     }
 
     pub fn resident_ids(&self) -> Vec<String> {
-        self.resident.values().map(|r| r.device_id.clone()).collect()
+        self.resident
+            .values()
+            .map(|r| r.device_id.clone())
+            .collect()
     }
 
     pub fn is_closed(&self) -> bool {
@@ -316,11 +324,9 @@ impl WeightStream {
             .metrics
             .peak_pinned_bytes
             .max(self.manager.usage_bytes(MemoryTier::PinnedHost));
-        let mut file = std::fs::File::open(&shard_path).map_err(|source| {
-            StreamError::Io {
-                shard: shard_path.clone(),
-                source,
-            }
+        let mut file = std::fs::File::open(&shard_path).map_err(|source| StreamError::Io {
+            shard: shard_path.clone(),
+            source,
         })?;
         file.seek(SeekFrom::Start(data_start))
             .map_err(|source| StreamError::Io {
@@ -332,11 +338,13 @@ impl WeightStream {
         while remaining > 0 {
             let chunk = remaining.min(STAGING_CHUNK_BYTES as u64) as usize;
             let mut buffer = vec![0u8; chunk];
-            file.read_exact(&mut buffer).map_err(|source| StreamError::Io {
-                shard: shard_path.clone(),
-                source,
-            })?;
-            self.manager.write_pinned(&pinned_id, offset, &buffer, tick)?;
+            file.read_exact(&mut buffer)
+                .map_err(|source| StreamError::Io {
+                    shard: shard_path.clone(),
+                    source,
+                })?;
+            self.manager
+                .write_pinned(&pinned_id, offset, &buffer, tick)?;
             offset += chunk;
             remaining -= chunk as u64;
             self.metrics.disk_read_bytes += chunk as u64;
@@ -347,7 +355,9 @@ impl WeightStream {
             .metrics
             .peak_vram_bytes
             .max(self.manager.usage_bytes(MemoryTier::Vram));
-        let token = self.manager.copy_h2d(&pinned_id, &device_id, bytes as usize, tick)?;
+        let token = self
+            .manager
+            .copy_h2d(&pinned_id, &device_id, bytes as usize, tick)?;
         self.metrics.transferred_bytes += bytes;
         self.metrics.peak_vram_bytes = self
             .metrics
@@ -463,12 +473,13 @@ mod tests {
     fn decoder_plan_matches_the_pinned_inventory_shape_rules() {
         let text = std::fs::read_to_string("/tmp/opencode/m10/checkpoint/config.json")
             .expect("pinned config readable");
-        let config =
-            GemmaModelConfig::from_json(&text).expect("pinned config valid");
+        let config = GemmaModelConfig::from_json(&text).expect("pinned config valid");
         let names = decoder_layer_names(&config, 0);
         assert!(names.iter().any(|n| n.ends_with("self_attn.v_proj.weight")));
         let global = decoder_layer_names(&config, 5);
-        assert!(!global.iter().any(|n| n.ends_with("self_attn.v_proj.weight")));
+        assert!(!global
+            .iter()
+            .any(|n| n.ends_with("self_attn.v_proj.weight")));
         assert!(global.iter().any(|n| n.ends_with("experts.gate_up_proj")));
         // Layer scalars and router parameters are part of every layer plan.
         assert!(names.iter().any(|n| n.ends_with("layer_scalar")));

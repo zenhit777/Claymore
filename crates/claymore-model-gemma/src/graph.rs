@@ -44,11 +44,7 @@ impl KvCache {
             let mut vb = host.to_bits(&self.layers[layer].values);
             vb.extend(host.to_bits(&values));
             self.layers[layer] = CacheLayer {
-                keys: bf16_tensor(
-                    host,
-                    vec![rows + keys.layout().shape()[0], heads, dim],
-                    kb,
-                ),
+                keys: bf16_tensor(host, vec![rows + keys.layout().shape()[0], heads, dim], kb),
                 values: bf16_tensor(
                     host,
                     vec![rows + values.layout().shape()[0], heads, dim],
@@ -71,6 +67,12 @@ pub struct Host {
     dev: CpuDevice,
 }
 
+impl Default for Host {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Host {
     pub fn new() -> Self {
         Self {
@@ -87,14 +89,20 @@ impl Host {
             .iter()
             .flat_map(|v| Bf16::from_f32(*v).to_ne_bytes())
             .collect();
-        let mut buffer = self.dev.allocate(MemoryTier::Host, bytes.len() as u64).unwrap();
+        let mut buffer = self
+            .dev
+            .allocate(MemoryTier::Host, bytes.len() as u64)
+            .unwrap();
         self.dev.write(buffer.as_mut(), 0, &bytes).unwrap();
         Tensor::new(buffer, shape, DType::BF16).unwrap()
     }
 
     pub fn f32(&self, shape: Vec<usize>, values: &[f32]) -> Tensor {
         let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_ne_bytes()).collect();
-        let mut buffer = self.dev.allocate(MemoryTier::Host, bytes.len() as u64).unwrap();
+        let mut buffer = self
+            .dev
+            .allocate(MemoryTier::Host, bytes.len() as u64)
+            .unwrap();
         self.dev.write(buffer.as_mut(), 0, &bytes).unwrap();
         Tensor::new(buffer, shape, DType::F32).unwrap()
     }
@@ -127,7 +135,10 @@ impl Host {
 
 pub fn bf16_tensor(host: &Host, shape: Vec<usize>, bits: Vec<Bf16>) -> Tensor {
     let bytes: Vec<u8> = bits.iter().flat_map(|b| b.to_ne_bytes()).collect();
-    let mut buffer = host.dev.allocate(MemoryTier::Host, bytes.len() as u64).unwrap();
+    let mut buffer = host
+        .dev
+        .allocate(MemoryTier::Host, bytes.len() as u64)
+        .unwrap();
     host.dev.write(buffer.as_mut(), 0, &bytes).unwrap();
     Tensor::new(buffer, shape, DType::BF16).unwrap()
 }
@@ -158,7 +169,11 @@ pub fn concat_rows(host: &Host, a: &Tensor, b: &Tensor) -> Tensor {
     let width = a.layout().shape()[1];
     let mut bits = host.to_bits(a);
     bits.extend(host.to_bits(b));
-    bf16_tensor(host, vec![a.layout().shape()[0] + b.layout().shape()[0], width], bits)
+    bf16_tensor(
+        host,
+        vec![a.layout().shape()[0] + b.layout().shape()[0], width],
+        bits,
+    )
 }
 
 /// Weight `[out, in]` transposed to `[in, out]` for `ops::matmul`.
@@ -206,6 +221,7 @@ pub fn dense_mlp(host: &Host, x: &Tensor, gate: &Tensor, up: &Tensor, down: &Ten
 /// Router: RMSNorm(no scale) -> *scale*scalar_root -> proj -> softmax ->
 /// deterministic top-k -> normalized weights * per-expert scale.
 /// Returns `[tokens, top_k]` F32 weights and `[tokens, top_k]` F32 indices.
+#[allow(clippy::too_many_arguments)]
 pub fn router_forward(
     host: &Host,
     x: &Tensor,
@@ -228,7 +244,10 @@ pub fn router_forward(
     let scaled = host.bf16(normed.layout().shape().to_vec(), &scaled_values);
     let scores = linear(host, &scaled, proj);
     let scores = host.to_f32(&dfn::widen(host.device(), &scores).unwrap());
-    let (tokens, experts) = (scaled.layout().shape()[0], scores.len() / scaled.layout().shape()[0]);
+    let (tokens, experts) = (
+        scaled.layout().shape()[0],
+        scores.len() / scaled.layout().shape()[0],
+    );
     let per_expert = host.to_f32(per_expert_scale);
     let mut weights = vec![0.0f32; tokens * top_k];
     let mut indices = vec![0.0f32; tokens * top_k];
@@ -286,14 +305,22 @@ pub fn experts_forward(
                 acc_g += row[h] * gu[(e * 2 * inter + i) * width + h].to_f32();
                 acc_u += row[h] * gu[(e * 2 * inter + inter + i) * width + h].to_f32();
             }
-            let act = 0.5 * acc_g * (1.0 + ((2.0f32 / std::f32::consts::PI).sqrt() * (acc_g + 0.044715 * acc_g * acc_g * acc_g)).tanh());
+            let act = 0.5
+                * acc_g
+                * (1.0
+                    + ((2.0f32 / std::f32::consts::PI).sqrt()
+                        * (acc_g + 0.044715 * acc_g * acc_g * acc_g))
+                        .tanh());
             let v = act * acc_u;
             for (col, dst) in acc_row.iter_mut().enumerate().take(width) {
                 *dst += v * dp[(e * width + col) * inter + i].to_f32();
             }
         }
         let w = weights[p];
-        for (col, dst) in out[token * width..(token + 1) * width].iter_mut().enumerate() {
+        for (col, dst) in out[token * width..(token + 1) * width]
+            .iter_mut()
+            .enumerate()
+        {
             *dst += w * acc_row[col];
         }
     }
@@ -303,7 +330,11 @@ pub fn experts_forward(
 /// Axial 2D vision RoPE: `inv_freq` over `head_dim/2`, recomposed as
 /// `[h, h, w, w]` per patch, exactly as the pinned
 /// `Gemma4VisionRotaryEmbedding.recomposition_frequencies`.
-pub fn vision_rope_tables(head_dim: usize, theta: f32, positions: &[(u32, u32)]) -> (Vec<f32>, Vec<f32>) {
+pub fn vision_rope_tables(
+    head_dim: usize,
+    theta: f32,
+    positions: &[(u32, u32)],
+) -> (Vec<f32>, Vec<f32>) {
     let spatial = head_dim / 2;
     let inv: Vec<f32> = (0..spatial / 2)
         .map(|i| theta.powf((2 * i) as f32 / spatial as f32).recip())
@@ -324,7 +355,13 @@ pub fn vision_rope_tables(head_dim: usize, theta: f32, positions: &[(u32, u32)])
 /// Multidimensional RoPE on `[tokens, heads, head_dim]` with two axes: the
 /// head dimension splits into H and W parts of `head_dim/2`; each part gets
 /// `rotate_half` rotation with its recomposed cos/sin.
-pub fn apply_multidim_rope(host: &Host, x: &Tensor, cos: &[f32], sin: &[f32], heads: usize) -> Tensor {
+pub fn apply_multidim_rope(
+    host: &Host,
+    x: &Tensor,
+    cos: &[f32],
+    sin: &[f32],
+    heads: usize,
+) -> Tensor {
     let tokens = x.layout().shape()[0];
     let dim = x.layout().shape()[2];
     let part = dim / 2;
@@ -363,7 +400,13 @@ pub fn attention_op(
 ) -> Tensor {
     match dfn::attention(host.device(), q, k, v, mask, scale) {
         Ok(t) => t,
-        Err(e) => panic!("attention q{:?} k{:?} v{:?} mask{:?}: {e}", q.layout().shape(), k.layout().shape(), v.layout().shape(), mask.map(|m| m.layout().shape())),
+        Err(e) => panic!(
+            "attention q{:?} k{:?} v{:?} mask{:?}: {e}",
+            q.layout().shape(),
+            k.layout().shape(),
+            v.layout().shape(),
+            mask.map(|m| m.layout().shape())
+        ),
     }
 }
 

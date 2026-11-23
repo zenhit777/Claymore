@@ -308,11 +308,7 @@ impl<'a> TensorOp<'a> {
             } => vec![source, weights, rows],
             TensorOp::EmbedGather { ids, table, .. } => vec![ids, table],
             TensorOp::RowMask { input, flags } => vec![input, flags],
-            TensorOp::ScaleBias {
-                input,
-                scale,
-                bias,
-            } => vec![input, scale, bias],
+            TensorOp::ScaleBias { input, scale, bias } => vec![input, scale, bias],
         }
     }
 
@@ -332,19 +328,15 @@ impl<'a> TensorOp<'a> {
             TensorOp::SoftCap { input, .. } => input.layout().shape().to_vec(),
             TensorOp::Scale { input, .. } => input.layout().shape().to_vec(),
             TensorOp::Widen { input } => input.layout().shape().to_vec(),
-            TensorOp::RouterTopK {
-                scores,
-                top_k,
-                ..
-            } => vec![scores.layout().shape()[0], 2 * top_k],
+            TensorOp::RouterTopK { scores, top_k, .. } => {
+                vec![scores.layout().shape()[0], 2 * top_k]
+            }
             TensorOp::GeluMulUp { gate, .. } => gate.layout().shape().to_vec(),
             TensorOp::GatherRows { input, indices } => {
                 vec![indices.layout().numel(), input.layout().shape()[1]]
             }
             TensorOp::ScatterAdd {
-                source,
-                out_rows,
-                ..
+                source, out_rows, ..
             } => vec![*out_rows, source.layout().shape()[1]],
             TensorOp::EmbedGather { ids, table, .. } => {
                 vec![ids.layout().numel(), table.layout().shape()[1]]
@@ -533,8 +525,7 @@ impl<'a> TensorOp<'a> {
                 }
             }
             TensorOp::GeluMulUp { gate, up } => {
-                if gate.layout().shape() != up.layout().shape()
-                    || gate.layout().shape().len() != 2
+                if gate.layout().shape() != up.layout().shape() || gate.layout().shape().len() != 2
                 {
                     return Err(OpError::ShapeMismatch);
                 }
@@ -561,9 +552,7 @@ impl<'a> TensorOp<'a> {
                 if *out_rows == 0 {
                     return Err(OpError::InvalidOutputRows);
                 }
-                if weights.layout().shape() != [shape[0]]
-                    || rows.layout().shape() != [shape[0]]
-                {
+                if weights.layout().shape() != [shape[0]] || rows.layout().shape() != [shape[0]] {
                     return Err(OpError::ScaleMismatch);
                 }
             }
@@ -588,11 +577,7 @@ impl<'a> TensorOp<'a> {
                     return Err(OpError::ScaleMismatch);
                 }
             }
-            TensorOp::ScaleBias {
-                input,
-                scale,
-                bias,
-            } => {
+            TensorOp::ScaleBias { input, scale, bias } => {
                 let width = input.layout().shape().last().copied().unwrap_or(0);
                 if input.layout().shape().len() != 2 {
                     return Err(OpError::ShapeMismatch);
@@ -809,11 +794,7 @@ impl TensorOp<'_> {
             TensorOp::Widen { input } => ShapeSignature::Widen {
                 numel: input.layout().numel(),
             },
-            TensorOp::RouterTopK {
-                scores,
-                top_k,
-                ..
-            } => ShapeSignature::RouterTopK {
+            TensorOp::RouterTopK { scores, top_k, .. } => ShapeSignature::RouterTopK {
                 rows: scores.layout().shape()[0],
                 width: scores.layout().shape()[1],
                 top_k: *top_k,
@@ -826,9 +807,7 @@ impl TensorOp<'_> {
                 width: input.layout().shape()[1],
             },
             TensorOp::ScatterAdd {
-                source,
-                out_rows,
-                ..
+                source, out_rows, ..
             } => ShapeSignature::ScatterAdd {
                 out_rows: *out_rows,
                 pairs: source.layout().shape()[0],
@@ -1474,11 +1453,9 @@ impl TensorComputeBackend for CpuReferenceBackend {
             TensorOp::RowMask { input, flags } => {
                 crate::diffusion::row_mask(&self.device, input, flags)
             }
-            TensorOp::ScaleBias {
-                input,
-                scale,
-                bias,
-            } => crate::diffusion::scale_bias(&self.device, input, scale, bias),
+            TensorOp::ScaleBias { input, scale, bias } => {
+                crate::diffusion::scale_bias(&self.device, input, scale, bias)
+            }
         }
     }
 }

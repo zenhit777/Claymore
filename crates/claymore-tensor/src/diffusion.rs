@@ -618,11 +618,7 @@ pub fn router_top_k(
 }
 
 /// `gelu_pytorch_tanh(gate) * up`, accumulated in FP32 and rounded once.
-pub fn gelu_mul_up(
-    device: &dyn Device,
-    gate: &Tensor,
-    up: &Tensor,
-) -> Result<Tensor, OpError> {
+pub fn gelu_mul_up(device: &dyn Device, gate: &Tensor, up: &Tensor) -> Result<Tensor, OpError> {
     if gate.layout().shape() != up.layout().shape() {
         return Err(OpError::ShapeMismatch);
     }
@@ -745,11 +741,7 @@ pub fn embed_gather(
 }
 
 /// Zero rows flagged as padding: `flags[row] == 1.0` yields zeros.
-pub fn row_mask(
-    device: &dyn Device,
-    input: &Tensor,
-    flags: &Tensor,
-) -> Result<Tensor, OpError> {
+pub fn row_mask(device: &dyn Device, input: &Tensor, flags: &Tensor) -> Result<Tensor, OpError> {
     let shape = input.layout().shape();
     if shape.len() != 2 {
         return Err(OpError::ShapeMismatch);
@@ -1144,7 +1136,10 @@ mod tests {
         assert_eq!(out.layout().dtype(), DType::F32);
         assert_eq!(values(&device, &out), [1.0, 2.0, 3.0, 256.0]);
         let f32_input = tensor(&device, vec![2, 2], &[1.0; 4]);
-        assert_eq!(widen(&device, &f32_input).unwrap_err(), OpError::UnsupportedDType);
+        assert_eq!(
+            widen(&device, &f32_input).unwrap_err(),
+            OpError::UnsupportedDType
+        );
     }
 
     #[test]
@@ -1154,8 +1149,14 @@ mod tests {
         // by scores whose softmax is exactly these values.
         let scores = tensor(&device, vec![1, 3], &[0.5, -0.2, -1.1]);
         let per_expert = tensor(&device, vec![3], &[1.0, 1.0, 1.0]);
-        let out = values(&device, &router_top_k(&device, &scores, &per_expert, 2).unwrap());
-        let e: Vec<f32> = [0.5f32, -0.2, -1.1].iter().map(|v| (v - 0.5f32).exp()).collect();
+        let out = values(
+            &device,
+            &router_top_k(&device, &scores, &per_expert, 2).unwrap(),
+        );
+        let e: Vec<f32> = [0.5f32, -0.2, -1.1]
+            .iter()
+            .map(|v| (v - 0.5f32).exp())
+            .collect();
         let s: f32 = e.iter().sum();
         let probs: Vec<f32> = e.iter().map(|v| v / s).collect();
         let top_sum = probs[0] + probs[1];
@@ -1170,7 +1171,10 @@ mod tests {
         let device = CpuDevice::new();
         let scores = tensor(&device, vec![1, 3], &[1.0, 0.0, -1.0]);
         let per_expert = tensor(&device, vec![3], &[2.0, 1.0, 0.5]);
-        let out = values(&device, &router_top_k(&device, &scores, &per_expert, 2).unwrap());
+        let out = values(
+            &device,
+            &router_top_k(&device, &scores, &per_expert, 2).unwrap(),
+        );
         // probabilities: p0 > p1 > p2; weights = p_i/(p0+p1) * per_expert_i.
         let e1 = 1.0f32;
         let e2 = (0.0f32 - 1.0).exp();
@@ -1181,8 +1185,10 @@ mod tests {
         let top = p0 + p1;
         assert!((out[0] - p0 / top * 2.0).abs() < 1e-6);
         assert!((out[1] - p1 / top * 1.0).abs() < 1e-6);
-        assert_eq!(router_top_k(&device, &scores, &per_expert, 4).unwrap_err(),
-            OpError::InvalidTopK(4, 3));
+        assert_eq!(
+            router_top_k(&device, &scores, &per_expert, 4).unwrap_err(),
+            OpError::InvalidTopK(4, 3)
+        );
     }
 
     #[test]
@@ -1211,7 +1217,10 @@ mod tests {
         let gathered_tensor = tensor(&device, vec![4, 2], &gathered);
         let weights = tensor(&device, vec![4], &[1.0, 1.0, 2.0, 1.0]);
         let rows = tensor(&device, vec![4], &[2.0, 0.0, 0.0, 1.0]);
-        let out = values(&device, &scatter_add(&device, &gathered_tensor, &weights, &rows, 3).unwrap());
+        let out = values(
+            &device,
+            &scatter_add(&device, &gathered_tensor, &weights, &rows, 3).unwrap(),
+        );
         assert_eq!(out, [30.0, 33.0, 20.0, 21.0, 30.0, 31.0]);
     }
 
@@ -1260,7 +1269,10 @@ mod tests {
         let input = tensor(&device, vec![2, 2], &[1.0, 2.0, 3.0, 4.0]);
         let scale = tensor(&device, vec![2], &[2.0, 0.5]);
         let bias = tensor(&device, vec![2], &[1.0, 1.0]);
-        let out = values(&device, &scale_bias(&device, &input, &scale, &bias).unwrap());
+        let out = values(
+            &device,
+            &scale_bias(&device, &input, &scale, &bias).unwrap(),
+        );
         assert_eq!(out, [1.0, 0.0, 5.0, 1.0]);
     }
 }

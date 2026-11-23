@@ -63,7 +63,7 @@ Copie de référence versionnée : `docs/audits/fixtures/diffusiongemma-config.j
 | Attribut | Valeur épinglée |
 |---|---|
 | Type d'architecture | `DiffusionGemmaForBlockDiffusion` |
-| Couches | 30 (6 `full_attention` : 5, 11, 17, 19, 23, 29 ; 24 `sliding_attention`) |
+| Couches | 30 (5 `full_attention` : 5, 11, 17, 23, 29 ; 25 `sliding_attention`) |
 | Taille cachée | 2816 |
 | Têtes / têtes KV | 16 / 8 (2 KV globaux) |
 | Dimension de tête | 256 (512 pour les couches globales) |
@@ -78,7 +78,15 @@ Copie de référence versionnée : `docs/audits/fixtures/diffusiongemma-config.j
 | Fenêtre glissante | 1024 |
 | Attention bidirectionnelle | `use_bidirectional_attention = "vision"` |
 | `tie_word_embeddings` | `true` |
-| Tour de vision | 27 couches, cachée 1152, 355 tenseurs |
+| Tour de vision | 27 couches, cachée 1152, 356 tenseurs |
+
+> **Correction d'audit (M10, 23/11/2026)** : la première version de ce tableau
+> annonçait 6 couches `full_attention` (dont la couche 19) et 355 tenseurs de
+> vision. L'extraction directe de `layer_types` depuis le `config.json` épinglé
+> (révision `cd40195554d3cfcb56f34b9adfb66efc790ed5b6`) donne 5 couches
+> globales : `[5, 11, 17, 23, 29]`, et la tour de vision compte 356 tenseurs.
+> La vérification pin de `config.rs` (`layer % 6 == 5`), le graphe CPU complet
+> (`fullgraph.rs`) et l'inventaire du shard index sont la source de vérité.
 
 ---
 

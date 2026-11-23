@@ -171,18 +171,54 @@ impl CudaComputeEngine {
                 ROUTER_TOP_K_F32,
                 "claymore_router_top_k_f32",
             )?,
-            gelu_mul_up_f32: load_function(&module_m10, GELU_MUL_UP_F32, "claymore_gelu_mul_up_f32")?,
-            gelu_mul_up_bf16: load_function(&module_m10, GELU_MUL_UP_BF16, "claymore_gelu_mul_up_bf16")?,
-            gather_rows_f32: load_function(&module_m10, GATHER_ROWS_F32, "claymore_gather_rows_f32")?,
-            gather_rows_bf16: load_function(&module_m10, GATHER_ROWS_BF16, "claymore_gather_rows_bf16")?,
-            scatter_add_f32: load_function(&module_m10, SCATTER_ADD_F32, "claymore_scatter_add_f32")?,
-            scatter_add_bf16: load_function(&module_m10, SCATTER_ADD_BF16, "claymore_scatter_add_bf16")?,
-            embed_gather_f32: load_function(&module_m10, EMBED_GATHER_F32, "claymore_embed_gather_f32")?,
-            embed_gather_bf16: load_function(&module_m10, EMBED_GATHER_BF16, "claymore_embed_gather_bf16")?,
+            gelu_mul_up_f32: load_function(
+                &module_m10,
+                GELU_MUL_UP_F32,
+                "claymore_gelu_mul_up_f32",
+            )?,
+            gelu_mul_up_bf16: load_function(
+                &module_m10,
+                GELU_MUL_UP_BF16,
+                "claymore_gelu_mul_up_bf16",
+            )?,
+            gather_rows_f32: load_function(
+                &module_m10,
+                GATHER_ROWS_F32,
+                "claymore_gather_rows_f32",
+            )?,
+            gather_rows_bf16: load_function(
+                &module_m10,
+                GATHER_ROWS_BF16,
+                "claymore_gather_rows_bf16",
+            )?,
+            scatter_add_f32: load_function(
+                &module_m10,
+                SCATTER_ADD_F32,
+                "claymore_scatter_add_f32",
+            )?,
+            scatter_add_bf16: load_function(
+                &module_m10,
+                SCATTER_ADD_BF16,
+                "claymore_scatter_add_bf16",
+            )?,
+            embed_gather_f32: load_function(
+                &module_m10,
+                EMBED_GATHER_F32,
+                "claymore_embed_gather_f32",
+            )?,
+            embed_gather_bf16: load_function(
+                &module_m10,
+                EMBED_GATHER_BF16,
+                "claymore_embed_gather_bf16",
+            )?,
             row_mask_f32: load_function(&module_m10, ROW_MASK_F32, "claymore_row_mask_f32")?,
             row_mask_bf16: load_function(&module_m10, ROW_MASK_BF16, "claymore_row_mask_bf16")?,
             scale_bias_f32: load_function(&module_m10, SCALE_BIAS_F32, "claymore_scale_bias_f32")?,
-            scale_bias_bf16: load_function(&module_m10, SCALE_BIAS_BF16, "claymore_scale_bias_bf16")?,
+            scale_bias_bf16: load_function(
+                &module_m10,
+                SCALE_BIAS_BF16,
+                "claymore_scale_bias_bf16",
+            )?,
         });
         Ok(Self {
             context,
