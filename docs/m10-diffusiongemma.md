@@ -10,6 +10,8 @@ Référence d'architecture : `docs/audits/m8-model-graph-requirements.md`. La r�
 
 Validation matérielle complète et journaux bruts : [m10-rtx5090-hardware-validation.md](audits/m10-rtx5090-hardware-validation.md), au SHA de code `ea115ab337d492d81ac50f69c09cd79e050b79a6`.
 
+PR de la campagne : #40 (`feat/m10-diffusiongemma`, base `main`, non fusionné). PR de suivi M10.2 — M10.6 : #44 (`feat/m10-campaign-followup`, base `main`, lié à #40 et #42, non fusionné).
+
 ### Livré et réellement exercé sur RTX 5090
 
 - **Ingestion stricte et traçable** : lecteur JSON strict, SHA-256, lecteur Safetensors/ShardIndex borné avec validation de clés dupliquées, offsets, shapes, dtypes, couverture, shards ; ouverture `Checkpoint::open_pinned` qui refuse toute empreinte différente de la révision épinglée. Vérifié sur le checkpoint réel : 1047 tenseurs, 51 647 562 456 octets, 11 shards, couverture complète et contiguë.
