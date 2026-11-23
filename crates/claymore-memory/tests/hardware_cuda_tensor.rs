@@ -15,15 +15,15 @@ use std::sync::{Mutex, MutexGuard};
 use claymore_core::MemoryTier;
 use claymore_device::{CpuDevice, DType, Device};
 use claymore_memory::{
-    CudaMemoryManager, CudaTensorBackend, CudaTensorComputeExecutor, CudaTensorError,
-    CudaTensorMemory, CudaTensorTask, EvictionPolicy, MemoryBudgets,
+    CudaMemoryError, CudaMemoryManager, CudaTensorBackend, CudaTensorComputeExecutor,
+    CudaTensorError, CudaTensorMemory, CudaTensorTask, EvictionPolicy, MemoryBudgets,
 };
 use claymore_scheduler::{
     ExecutionOutcome, QueueRunner, Scheduler, SchedulerConfig, TaskKind, TaskSpec,
 };
 use claymore_tensor::{
-    Bf16, CpuReferenceBackend, DispatchError, ExecutionRequest, OpError, Tensor, TensorDispatcher,
-    TensorError, TensorLayout, TensorOp,
+    Bf16, CpuReferenceBackend, DispatchError, ExecutionRequest, OpError, Tensor,
+    TensorDispatcher, TensorError, TensorLayout, TensorOp, UnsupportedReason,
 };
 
 static GPU_LOCK: Mutex<()> = Mutex::new(());
@@ -538,6 +538,98 @@ fn hw_m8_08_scheduler_driven_compute_keeps_tensors_out_of_scheduler() {
     assert_eq!(runner.executor().pending_results(), 1);
     assert_eq!(runner.executor().pending_operations(), 0);
     println!("HW-M8 scheduler: completed={compute_id:?} dependent={dependent_id:?}");
+}
+
+#[test]
+#[ignore = "requires a CUDA driver and RTX 5090 to validate the real CUDA manager boundary"]
+fn hw_m8_09_grid_y_limit_is_enforced_by_dispatch_and_launch_boundary() {
+    let _serial = serial();
+    let memory = memory();
+    let cpu = CpuReferenceBackend::new();
+    let dispatcher = TensorDispatcher::new(vec![
+        Box::new(CudaTensorBackend::new(&memory)),
+        Box::new(CpuReferenceBackend::with_device(cpu.device().clone())),
+    ]);
+
+    // A 16x16 matmul tile produces exactly the maximum supported grid.y.
+    let boundary_lhs = memory
+        .allocate_tensor(vec![1_048_560, 1], DType::F32)
+        .unwrap();
+    let rhs = memory.allocate_tensor(vec![1, 1], DType::F32).unwrap();
+    let boundary = ExecutionRequest::new(TensorOp::MatMul {
+        lhs: &boundary_lhs,
+        rhs: &rhs,
+    });
+    assert!(
+        dispatcher.plan(&boundary).is_ok(),
+        "grid.y == 65,535 must remain dispatchable"
+    );
+
+    // One additional row requires grid.y == 65,536 and must be rejected by
+    // dispatch before a backend is selected, even though the CPU backend
+    // cannot consume VRAM tensors either.
+    let oversized_lhs = memory
+        .allocate_tensor(vec![1_048_577, 1], DType::F32)
+        .unwrap();
+    let oversized = ExecutionRequest::new(TensorOp::MatMul {
+        lhs: &oversized_lhs,
+        rhs: &rhs,
+    });
+    match dispatcher.plan(&oversized) {
+        Err(DispatchError::NoCapableBackend { refusals, .. }) => {
+            assert!(
+                refusals.iter().any(|(backend, reason)| {
+                    backend == "cuda-native"
+                        && matches!(
+                            reason,
+                            UnsupportedReason::LaunchLimit {
+                                axis: "y",
+                                blocks: 65_536,
+                                maximum: 65_535
+                            }
+                        )
+                }),
+                "CUDA must explain the exact grid limit: {refusals:?}"
+            );
+        }
+        other => panic!("oversized CUDA grid was not refused: {other:?}"),
+    }
+
+    // Exercise the defensive check immediately before cuLaunchKernel through
+    // the production manager. This must fail as a configuration error without
+    // submitting a kernel or leaving guards/events behind.
+    let output = memory
+        .allocate_tensor(vec![1_048_577, 1], DType::F32)
+        .unwrap();
+    let lhs_id = memory.buffer_id(&oversized_lhs).unwrap();
+    let rhs_id = memory.buffer_id(&rhs).unwrap();
+    let output_id = memory.buffer_id(&output).unwrap();
+    let input_ids = [lhs_id.as_str(), rhs_id.as_str()];
+    let tick = memory.tick();
+    let error = memory
+        .manager_mut()
+        .launch_tensor_op(
+            &TensorOp::MatMul {
+                lhs: &oversized_lhs,
+                rhs: &rhs,
+            },
+            &input_ids,
+            &output_id,
+            tick,
+        )
+        .expect_err("the defensive CUDA launch check must reject grid.y > 65,535");
+    assert!(
+        error.to_string().contains("65,536")
+            || error.to_string().contains("65536"),
+        "unexpected grid-limit error: {error}"
+    );
+    assert!(
+        memory.manager().allocation(&lhs_id).is_some()
+            && memory.manager().allocation(&rhs_id).is_some()
+            && memory.manager().allocation(&output_id).is_some(),
+        "all allocations must remain accounted after the rejected launch"
+    );
+    println!("HW-M8 grid limit: exact boundary accepted; overflow rejected before kernel submission");
 }
 
 // ---------------------------------------------------------------------------
