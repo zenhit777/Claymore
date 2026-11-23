@@ -1,0 +1,127 @@
+=== M8 RESERVATIONS RTX 5090 ENVIRONMENT ===
+captured_utc: 2026-11-23T01:58:52Z
+captured_local: 2026-11-23T02:58:52+0100
+
+--- git ---
+$ git rev-parse HEAD
+ea3e3d53a1d976c32bd28e086eb68905648c991a
+$ git branch --show-current
+feat/m8-tensor-foundation
+$ git status --short
+[status-end]
+$ git log -1 --format=fuller
+commit ea3e3d53a1d976c32bd28e086eb68905648c991a
+Author:     zenhit777 <198414479+zenhit777@users.noreply.github.com>
+AuthorDate: Mon Nov 23 02:47:37 2026 +0100
+Commit:     zenhit777 <198414479+zenhit777@users.noreply.github.com>
+CommitDate: Mon Nov 23 02:47:37 2026 +0100
+
+    style(cuda): allow explicit recovery context arguments
+
+--- host ---
+$ uname -a
+Linux Morpheus 6.18.58.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Tue Oct 27 00:24:11 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+$ cat /etc/os-release
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.5 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+
+--- nvidia-smi ---
+Mon Nov 23 02:58:52 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+|  0%   43C    P8             31W /  575W |    1471MiB /  32607MiB |      6%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A          540639      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+
+
+--- nvidia-smi query ---
+index, name, uuid, driver_version, memory.total [MiB], memory.used [MiB], memory.free [MiB], compute_cap, pstate, temperature.gpu, power.draw [W]
+0, NVIDIA GeForce RTX 5090, GPU-7556cae7-89a8-6267-b8b4-4e2edb9981d6, 616.64, 32607 MiB, 1471 MiB, 30717 MiB, 12.0, P8, 43, 31.79 W
+
+--- nvidia-smi compute apps ---
+pid, process_name, used_gpu_memory [MiB]
+
+--- nvcc ---
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2025 NVIDIA Corporation
+Built on Wed_Jul_16_07:30:01_PM_PDT_2025
+Cuda compilation tools, release 13.0, V13.0.48
+Build cuda_13.0.r13.0/compiler.36260728_0
+
+--- CUDA installs ---
+/usr/local/cuda
+/usr/local/cuda-12
+/usr/local/cuda-12.8
+/usr/local/cuda-13
+/usr/local/cuda-13.0
+/usr/local/cuda-13.3
+/usr/local/cuda-13.5
+/usr/local/cuda-13.5
+
+--- WSL CUDA driver library ---
+-r-xr-xr-x 4 root root 188024 Aug 25 01:01 /usr/lib/wsl/lib/libcuda.so
+-r-xr-xr-x 4 root root 188024 Aug 25 01:01 /usr/lib/wsl/lib/libcuda.so.1
+-r-xr-xr-x 4 root root 188024 Aug 25 01:01 /usr/lib/wsl/lib/libcuda.so.1.1
+/usr/lib/wsl/lib/libcuda.so.1
+697a5878b7b6320dcb5cfe1bc652d4b88359147d6864ab54dafacc64493aed9a  /usr/lib/wsl/lib/libcuda.so.1.1
+
+--- rust stable ---
+rustc 1.100.0 (0ef1bc386 2026-11-09)
+binary: rustc
+commit-hash: 0ef1bc386059596dada8fb65b50425aab2ea637a
+commit-date: 2026-11-09
+host: x86_64-unknown-linux-gnu
+release: 1.100.0
+LLVM version: 23.1.5
+cargo 1.100.0 (3acc79c0c 2026-11-05)
+
+--- rust 1.86 ---
+rustc 1.86.0 (05f9846f8 2025-03-31)
+binary: rustc
+commit-hash: 05f9846f893b09a1be1fc8560e33fc3c815cfecb
+commit-date: 2025-03-31
+host: x86_64-unknown-linux-gnu
+release: 1.86.0
+LLVM version: 19.1.7
+cargo 1.86.0 (adf9b6ad1 2025-02-28)
+
+--- rustup toolchains ---
+stable-x86_64-unknown-linux-gnu (active, default)
+1.86-x86_64-unknown-linux-gnu
+1.86.0-x86_64-unknown-linux-gnu
+
+--- effective environment ---
+RUSTFLAGS=-L native=/usr/lib/wsl/lib
+LD_LIBRARY_PATH=/usr/lib/wsl/lib:/usr/local/cuda-13.0/lib64:
+
+--- initial VRAM ---
+memory.total [MiB], memory.used [MiB], memory.free [MiB]
+32607 MiB, 1471 MiB, 30717 MiB
+
+--- lspci GPU ---
+lspci unavailable
