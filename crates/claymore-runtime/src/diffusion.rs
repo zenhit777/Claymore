@@ -550,7 +550,9 @@ mod tests {
             }
         }
         let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
-        let id = orchestrator.submit(plan(), CancellationToken::new(), TaskPriority::Normal).unwrap();
+        let id = orchestrator
+            .submit(plan(), CancellationToken::new(), TaskPriority::Normal)
+            .unwrap();
         assert!(matches!(
             orchestrator.run_one(&mut FailOnce(false)).unwrap(),
             DiffusionRunOutcome::StepFailed { .. }
