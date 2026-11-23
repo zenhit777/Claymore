@@ -177,7 +177,10 @@ fn pre_cancelled_plan_is_visible_but_never_scheduled() {
         .submit(plan(2, 1), token, TaskPriority::Normal)
         .unwrap();
 
-    assert_eq!(orchestrator.session(id).unwrap().state, DiffusionSessionState::Cancelled);
+    assert_eq!(
+        orchestrator.session(id).unwrap().state,
+        DiffusionSessionState::Cancelled
+    );
     assert_eq!(orchestrator.metrics().blocks_submitted, 2);
     assert_eq!(orchestrator.metrics().blocks_pending, 0);
     assert_eq!(orchestrator.metrics().steps_started, 0);
