@@ -556,6 +556,14 @@ mod cuda;
 #[cfg(feature = "cuda-driver")]
 pub use cuda::{CudaMemoryError, CudaMemoryManager, TransferToken};
 
+#[cfg(feature = "cuda-driver")]
+mod cuda_tensor;
+#[cfg(feature = "cuda-driver")]
+pub use cuda_tensor::{
+    CudaTensorBackend, CudaTensorComputeExecutor, CudaTensorError, CudaTensorMemory,
+    CudaTensorTask, CUDA_BACKEND_NAME,
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;

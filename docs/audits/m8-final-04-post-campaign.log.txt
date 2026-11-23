@@ -1,0 +1,33 @@
+=== POST-CAMPAIGN STATE 2026-11-22T21:06:49+00:00 ===
+SHA: 8fc3ca882ede2538bdf4106ba6a4ef14c4fbba25
+STATUS:
+?? docs/audits/m8-final-00-environment.log.txt
+?? docs/audits/m8-final-01-software-checks.log.txt
+?? docs/audits/m8-final-02-hardware-run1.log.txt
+?? docs/audits/m8-final-03-hardware-run2.log.txt
+?? docs/audits/m8-final-04-post-campaign.log.txt
+--- nvidia-smi query ---
+name, memory.total [MiB], memory.free [MiB], compute_cap, driver_version
+NVIDIA GeForce RTX 5090, 32607 MiB, 30809 MiB, 12.0, 616.64
+--- nvidia-smi ---
+Sun Nov 22 22:06:49 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+|  0%   50C    P8             47W /  575W |    1379MiB /  32607MiB |      6%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A          540639      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+

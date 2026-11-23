@@ -1,0 +1,709 @@
+SHA: 8fc3ca882ede2538bdf4106ba6a4ef14c4fbba25
+DATE: 2026-11-22T21:05:15+00:00
+================================================================================
+COMMAND: cargo fmt --all -- --check
+================================================================================
+[EXIT] rc=0 :: cargo fmt --all -- --check
+================================================================================
+COMMAND: cargo test --workspace --all-targets --locked
+================================================================================
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+warning: unused dependency `claymore-cuda`
+  --> crates/claymore-cli/Cargo.toml:13:1
+   |
+13 | claymore-cuda = { path = "../claymore-cuda" }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-cuda`
+warning: `claymore-cli` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/main.rs (target/debug/build/claymore-cli/4161dba38518b905/out/claymore_cli-4161dba38518b905)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-core/844901dd32f8a90d/out/claymore_core-844901dd32f8a90d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-cuda/318e1213662bd911/out/claymore_cuda-318e1213662bd911)
+
+running 1 test
+test tests::disabled_backend_reports_actionable_error ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-device/a28dad5053cf70a3/out/claymore_device-a28dad5053cf70a3)
+
+running 14 tests
+test tests::allocation_failure_is_reported_as_out_of_memory ... ok
+test tests::borrowed_completion_token_keeps_buffers_borrowed_until_drop ... ok
+test tests::cloned_device_handle_shares_instance_identity ... ok
+test tests::completion_token_exposes_query_and_wait_semantics ... ok
+test tests::cpu_buffer_explicit_release_is_checked_and_blocks_access ... ok
+test tests::cpu_capabilities_match_supported_operations_and_memory_tiers ... ok
+test tests::cpu_device_allocates_and_roundtrips_bytes ... ok
+test tests::cpu_device_copies_between_owned_buffers ... ok
+test tests::cpu_device_rejects_async_copy_when_capability_is_absent ... ok
+test tests::cpu_device_rejects_out_of_bounds_access ... ok
+test tests::cpu_device_rejects_unsupported_pinned_memory ... ok
+test tests::independent_devices_reject_each_others_buffers_for_all_operations ... ok
+test tests::size_overflow_is_distinct_from_allocation_failure ... ok
+test tests::zero_sized_allocation_is_rejected ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-memory/a0f05dab539b8578/out/claymore_memory-a0f05dab539b8578)
+
+running 34 tests
+test device::tests::aliased_copy_is_rejected_without_mutating_the_buffer ... ok
+test device::tests::completion_horizon_cannot_be_moved_backwards ... ok
+test device::tests::cpu_adapter_allocates_copies_and_releases_buffers ... ok
+test device::tests::cpu_adapter_rejects_duplicate_ids_and_non_monotonic_ticks ... ok
+test device::tests::cpu_adapter_uses_memory_policy_for_deterministic_eviction ... ok
+test device::tests::device_capabilities_are_reported_consistently_by_manager ... ok
+test device::tests::expert_allocations_must_use_vram ... ok
+test device::tests::expert_cache_max_is_enforced_by_cpu_device_manager ... ok
+test device::tests::failed_backend_release_keeps_buffer_and_accounting_for_retry ... ok
+test device::tests::in_flight_guard_prevents_release_and_eviction_until_horizon ... ok
+test device::tests::release_confirms_backend_release_before_removing_accounting ... ok
+test device::tests::zero_sized_allocation_is_rejected_without_accounting ... ok
+test executor::tests::executor_rejects_compute_queue_without_consuming_operation ... ok
+test executor::tests::failed_prerequisite_discards_cancelled_memory_payloads ... ok
+test executor::tests::memory_executor_reports_operation_counts_and_bytes ... ok
+test lifecycle::tests::monotonic_tick_accepts_equal_and_forward_transitions ... ok
+test executor::tests::scheduler_drives_cpu_memory_operations_in_dependency_order ... ok
+test lifecycle::tests::monotonic_tick_rejects_backward_transition ... ok
+test lifecycle::tests::release_horizon_is_inclusive_and_never_early ... ok
+test tests::adaptive_eviction_prefers_the_lower_reload_cost ... ok
+test tests::adaptive_eviction_prioritizes_coldness_before_reload_cost ... ok
+test tests::adaptive_eviction_treats_unknown_reload_cost_as_zero_only_after_heat_and_recency ... ok
+test tests::admission_succeeds_without_eviction_when_under_limit ... ok
+test tests::confirm_eviction_releases_accounted_capacity ... ok
+test tests::detects_duplicate_allocations ... ok
+test tests::expert_cache_admission_enforces_max_and_selects_only_idle_experts ... ok
+test tests::equal_priority_evictions_use_lexicographic_allocation_id ... ok
+test tests::in_flight_allocations_are_never_selected ... ok
+test tests::joint_expert_admission_prioritizes_expert_victim_over_older_general_allocation ... ok
+test tests::joint_expert_admission_uses_one_minimal_vram_victim_set ... ok
+test tests::lru_plan_selects_oldest_idle_allocation ... ok
+test tests::rejects_invalid_budget_relationships ... ok
+test tests::vram_soft_budget_triggers_proactive_eviction_before_hard_ceiling ... ok
+test tests::vram_soft_target_is_best_effort_but_hard_ceiling_is_mandatory ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-model-clover/87207de9bb32f9f6/out/claymore_model_clover-87207de9bb32f9f6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-model-gemma/9c8ddd6941daf5f6/out/claymore_model_gemma-9c8ddd6941daf5f6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-runtime/2f7035549e4fe0ef/out/claymore_runtime-2f7035549e4fe0ef)
+
+running 29 tests
+test profile::tests::profile_rejects_expert_cache_outside_model_working_set ... ok
+test profile::tests::profile_rejects_host_working_set_plus_pinned_over_budget ... ok
+test profile::tests::profile_rejects_pinned_budget_that_overcommits_disjoint_host_envelopes ... ok
+test profile::tests::profile_rejects_unsupported_stream_topology ... ok
+test profile::tests::profile_rejects_working_set_over_soft_vram_budget ... ok
+test profile::tests::reference_rtx5090_profile_loads_and_converts_to_runtime_budgets ... ok
+test scheduled::tests::failed_request_cancels_dependent_request ... ok
+test scheduled::tests::dependent_request_waits_for_predecessor_completion ... ok
+test scheduled::tests::failed_transfer_discards_dependent_request_payload ... ok
+test scheduled::tests::hardware_profile_supplies_scheduler_configuration ... ok
+test scheduled::tests::pre_cancelled_request_cancels_scheduler_task ... ok
+test scheduled::tests::queued_cancellation_prevents_strategy_execution ... ok
+test scheduled::tests::request_submitted_after_cancelled_dependency_is_cancelled_and_payload_pruned ... ok
+test scheduled::tests::request_submitted_after_failed_dependency_is_cancelled_and_payload_pruned ... ok
+test scheduled::tests::scheduled_runtime_collects_compute_request_metrics ... ok
+test scheduled::tests::scheduled_runtime_reserves_compute_queue_for_request_payloads ... ok
+test scheduled::tests::strategy_panic_fails_request_and_cancels_dependent_work ... ok
+test scheduled::tests::transfer_task_and_compute_request_share_one_dependency_graph ... ok
+test tests::cancellation_during_strategy_discards_output ... ok
+test tests::cancellation_takes_precedence_over_a_simultaneous_strategy_error ... ok
+test tests::invalid_runtime_configuration_is_rejected ... ok
+test tests::oversized_input_is_rejected_before_request_id_is_consumed ... ok
+test tests::pre_cancelled_request_never_enters_strategy ... ok
+test tests::request_id_exhaustion_is_reported_without_wrapping ... ok
+test tests::request_ids_are_monotonic_and_runtime_state_is_reused ... ok
+test tests::runtime_executes_a_model_neutral_request_end_to_end ... ok
+test tests::strategy_failure_is_reported_as_failed_request ... ok
+test tests::strategy_panic_propagates_and_consumes_the_request_id ... ok
+test tests::strategy_receives_its_own_request_id_and_metadata ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-scheduler/3a7eb81c5a0e1d6d/out/claymore_scheduler-3a7eb81c5a0e1d6d)
+
+running 20 tests
+test executor::tests::each_runner_drives_only_its_own_queue ... ok
+test executor::tests::executor_failure_fails_task_and_cancels_dependents ... ok
+test executor::tests::queue_runner_metrics_are_scoped_to_its_logical_queue ... ok
+test executor::tests::runner_executes_on_caller_and_releases_dependents_only_after_success ... ok
+test executor::tests::runner_reports_idle_without_invoking_executor ... ok
+test tests::cancellation_cursor_returns_only_new_events ... ok
+test tests::cancellation_index_tracks_direct_and_transitive_cancellations ... ok
+test tests::cancelling_prefetch_releases_lookahead_capacity ... ok
+test tests::cancelling_running_prefetch_releases_concurrency_slot ... ok
+test tests::dependent_task_becomes_ready_only_after_completion ... ok
+test tests::dispatches_by_priority_then_fifo_within_each_queue ... ok
+test tests::duplicate_and_unknown_dependencies_are_rejected ... ok
+test tests::failed_dependency_cancels_descendants_but_not_unrelated_work ... ok
+test tests::invalid_configuration_is_rejected ... ok
+test tests::prefetch_concurrency_and_lookahead_are_bounded ... ok
+test tests::queues_are_independent ... ok
+test tests::running_tasks_cannot_be_cancelled_or_completed_twice ... ok
+test tests::submission_cancels_tasks_with_already_failed_or_cancelled_dependencies ... ok
+test tests::terminal_records_are_compacted_and_remain_inspectable_as_dependencies ... ok
+test tests::zero_prefetch_concurrency_disables_prefetch_admission ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-tensor/a87cbc9d61bb46ab/out/claymore_tensor-a87cbc9d61bb46ab)
+
+running 39 tests
+test bf16::tests::equality_compares_raw_bits_not_numeric_value ... ok
+test bf16::tests::exact_values_convert_in_both_directions ... ok
+test bf16::tests::round_to_nearest_even_ties_and_neighbours ... ok
+test bf16::tests::special_values_and_limits_are_defined ... ok
+test bf16::tests::fp32_grid_rounds_monotonically ... ok
+test bf16::tests::subnormal_rounding_and_halfway_to_zero ... ok
+test contracts::tests::bf16_is_dispatched_and_executed_by_the_cpu_reference ... ok
+test contracts::tests::contract_rejects_non_contiguous_and_mixed_devices ... ok
+test contracts::tests::cpu_capabilities_cover_both_dtypes_for_all_four_operations ... ok
+test contracts::tests::cpu_dispatch_refuses_vram_inputs_without_implicit_transfer ... ok
+test bf16::tests::widening_is_monotonic_in_magnitude_for_all_non_nan_patterns ... ok
+test contracts::tests::dispatch_executes_through_the_cpu_reference_backend ... ok
+test contracts::tests::dispatch_explains_an_exact_match ... ok
+test bf16::tests::bitwise_roundtrip_is_exact_for_every_16_bit_pattern ... ok
+test bf16::tests::every_bf16_value_roundtrips_through_fp32 ... ok
+test contracts::tests::dispatch_rejects_unknown_and_unsupported_backends_without_fallback ... ok
+test contracts::tests::fp16_is_not_claimed_as_supported ... ok
+test contracts::tests::shape_signature_is_backend_neutral_and_checked_without_gpu ... ok
+test ops::tests::add_is_elementwise_and_rejects_implicit_broadcast ... ok
+test ops::tests::bf16_add_rounds_only_the_output ... ok
+test ops::tests::bf16_matmul_accumulates_in_fp32 ... ok
+test bf16::tests::nan_widening_quiets_and_from_f32_canonicalizes_for_every_pattern ... ok
+test ops::tests::bf16_rms_norm_uses_bf16_scale_and_fp32_reduction ... ok
+test ops::tests::bf16_ops_reject_mixed_dtype_and_unsupported_dtype ... ok
+test ops::tests::bf16_shape_scale_layout_and_epsilon_errors_are_typed ... ok
+test ops::tests::matmul_matches_reference_result ... ok
+test ops::tests::bf16_softmax_is_stable_and_normalized_after_rounding ... ok
+test ops::tests::rms_norm_applies_explicit_scale ... ok
+test ops::tests::softmax_is_stable_for_large_logits ... ok
+test tests::bf16_storage_uses_two_bytes_per_element_and_releases_explicitly ... ok
+test bf16::tests::widening_is_exactly_sign_symmetric_for_every_pattern ... ok
+test tests::contiguous_layout_uses_checked_element_strides ... ok
+test tests::non_contiguous_layout_is_not_misreported_as_contiguous ... ok
+test tests::rejects_rank_mismatch_zero_dimensions_and_overflow ... ok
+test tests::storage_capacity_is_checked_including_offset ... ok
+test tests::strided_view_checks_byte_span_and_borrows_storage ... ok
+test tests::tensor_accepts_aligned_nonzero_byte_offsets ... ok
+test tests::tensor_rejects_misaligned_byte_offsets ... ok
+test tests::view_cannot_escape_parent_tensor_span ... ok
+
+test result: ok. 39 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[EXIT] rc=0 :: cargo test --workspace --all-targets --locked
+================================================================================
+COMMAND: cargo clippy --workspace --all-targets --locked -- -D warnings
+================================================================================
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+warning: unused dependency `claymore-cuda`
+  --> crates/claymore-cli/Cargo.toml:13:1
+   |
+13 | claymore-cuda = { path = "../claymore-cuda" }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-cuda`
+warning: `claymore-cli` (manifest) generated 1 warning
+warning: unused dependency `thiserror`
+  --> crates/claymore-core/Cargo.toml:10:1
+   |
+10 | thiserror.workspace = true
+   | ^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `thiserror`
+warning: `claymore-core` (manifest) generated 1 warning
+warning: unused dependency `claymore-core`
+  --> crates/claymore-cuda/Cargo.toml:13:1
+   |
+13 | claymore-core = { path = "../claymore-core" }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-cuda` (manifest) generated 1 warning
+warning: unused dependency `claymore-tensor`
+  --> crates/claymore-memory/Cargo.toml:17:1
+   |
+17 | claymore-tensor = { path = "../claymore-tensor" }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-tensor`
+warning: `claymore-memory` (manifest) generated 1 warning
+warning: unused dependency `claymore-core`
+ --> crates/claymore-model-clover/Cargo.toml:9:1
+  |
+9 | claymore-core = { path = "../claymore-core" }
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-model-clover` (manifest) generated 1 warning
+warning: unused dependency `claymore-core`
+ --> crates/claymore-model-gemma/Cargo.toml:9:1
+  |
+9 | claymore-core = { path = "../claymore-core" }
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-model-gemma` (manifest) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+[EXIT] rc=0 :: cargo clippy --workspace --all-targets --locked -- -D warnings
+================================================================================
+COMMAND: cargo +1.86 test --workspace --all-targets --locked
+================================================================================
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/main.rs (target/debug/deps/claymore_cli-84135de545918584)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_core-31c25e8176766056)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_cuda-7465ef25c84f863e)
+
+running 1 test
+test tests::disabled_backend_reports_actionable_error ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_device-f4d58bd8342d77fe)
+
+running 14 tests
+test tests::allocation_failure_is_reported_as_out_of_memory ... ok
+test tests::cloned_device_handle_shares_instance_identity ... ok
+test tests::borrowed_completion_token_keeps_buffers_borrowed_until_drop ... ok
+test tests::cpu_buffer_explicit_release_is_checked_and_blocks_access ... ok
+test tests::cpu_capabilities_match_supported_operations_and_memory_tiers ... ok
+test tests::cpu_device_allocates_and_roundtrips_bytes ... ok
+test tests::completion_token_exposes_query_and_wait_semantics ... ok
+test tests::cpu_device_copies_between_owned_buffers ... ok
+test tests::cpu_device_rejects_async_copy_when_capability_is_absent ... ok
+test tests::cpu_device_rejects_out_of_bounds_access ... ok
+test tests::cpu_device_rejects_unsupported_pinned_memory ... ok
+test tests::independent_devices_reject_each_others_buffers_for_all_operations ... ok
+test tests::size_overflow_is_distinct_from_allocation_failure ... ok
+test tests::zero_sized_allocation_is_rejected ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_memory-ef5d52ab32c7ba67)
+
+running 34 tests
+test device::tests::completion_horizon_cannot_be_moved_backwards ... ok
+test device::tests::aliased_copy_is_rejected_without_mutating_the_buffer ... ok
+test device::tests::cpu_adapter_allocates_copies_and_releases_buffers ... ok
+test device::tests::cpu_adapter_uses_memory_policy_for_deterministic_eviction ... ok
+test device::tests::cpu_adapter_rejects_duplicate_ids_and_non_monotonic_ticks ... ok
+test device::tests::device_capabilities_are_reported_consistently_by_manager ... ok
+test device::tests::expert_allocations_must_use_vram ... ok
+test device::tests::expert_cache_max_is_enforced_by_cpu_device_manager ... ok
+test device::tests::failed_backend_release_keeps_buffer_and_accounting_for_retry ... ok
+test device::tests::in_flight_guard_prevents_release_and_eviction_until_horizon ... ok
+test device::tests::release_confirms_backend_release_before_removing_accounting ... ok
+test device::tests::zero_sized_allocation_is_rejected_without_accounting ... ok
+test executor::tests::executor_rejects_compute_queue_without_consuming_operation ... ok
+test executor::tests::failed_prerequisite_discards_cancelled_memory_payloads ... ok
+test executor::tests::memory_executor_reports_operation_counts_and_bytes ... ok
+test lifecycle::tests::monotonic_tick_accepts_equal_and_forward_transitions ... ok
+test executor::tests::scheduler_drives_cpu_memory_operations_in_dependency_order ... ok
+test lifecycle::tests::monotonic_tick_rejects_backward_transition ... ok
+test lifecycle::tests::release_horizon_is_inclusive_and_never_early ... ok
+test tests::adaptive_eviction_prefers_the_lower_reload_cost ... ok
+test tests::adaptive_eviction_prioritizes_coldness_before_reload_cost ... ok
+test tests::adaptive_eviction_treats_unknown_reload_cost_as_zero_only_after_heat_and_recency ... ok
+test tests::admission_succeeds_without_eviction_when_under_limit ... ok
+test tests::confirm_eviction_releases_accounted_capacity ... ok
+test tests::detects_duplicate_allocations ... ok
+test tests::expert_cache_admission_enforces_max_and_selects_only_idle_experts ... ok
+test tests::equal_priority_evictions_use_lexicographic_allocation_id ... ok
+test tests::in_flight_allocations_are_never_selected ... ok
+test tests::joint_expert_admission_prioritizes_expert_victim_over_older_general_allocation ... ok
+test tests::joint_expert_admission_uses_one_minimal_vram_victim_set ... ok
+test tests::lru_plan_selects_oldest_idle_allocation ... ok
+test tests::rejects_invalid_budget_relationships ... ok
+test tests::vram_soft_budget_triggers_proactive_eviction_before_hard_ceiling ... ok
+test tests::vram_soft_target_is_best_effort_but_hard_ceiling_is_mandatory ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_model_clover-4a71ad0a167233fb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_model_gemma-521f671f4f0c6ece)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_runtime-9f34018b9dba445f)
+
+running 29 tests
+test profile::tests::profile_rejects_expert_cache_outside_model_working_set ... ok
+test profile::tests::profile_rejects_host_working_set_plus_pinned_over_budget ... ok
+test profile::tests::profile_rejects_unsupported_stream_topology ... ok
+test profile::tests::profile_rejects_pinned_budget_that_overcommits_disjoint_host_envelopes ... ok
+test profile::tests::profile_rejects_working_set_over_soft_vram_budget ... ok
+test profile::tests::reference_rtx5090_profile_loads_and_converts_to_runtime_budgets ... ok
+test scheduled::tests::dependent_request_waits_for_predecessor_completion ... ok
+test scheduled::tests::failed_request_cancels_dependent_request ... ok
+test scheduled::tests::failed_transfer_discards_dependent_request_payload ... ok
+test scheduled::tests::hardware_profile_supplies_scheduler_configuration ... ok
+test scheduled::tests::pre_cancelled_request_cancels_scheduler_task ... ok
+test scheduled::tests::queued_cancellation_prevents_strategy_execution ... ok
+test scheduled::tests::request_submitted_after_cancelled_dependency_is_cancelled_and_payload_pruned ... ok
+test scheduled::tests::request_submitted_after_failed_dependency_is_cancelled_and_payload_pruned ... ok
+test scheduled::tests::scheduled_runtime_reserves_compute_queue_for_request_payloads ... ok
+test scheduled::tests::scheduled_runtime_collects_compute_request_metrics ... ok
+test scheduled::tests::strategy_panic_fails_request_and_cancels_dependent_work ... ok
+test scheduled::tests::transfer_task_and_compute_request_share_one_dependency_graph ... ok
+test tests::cancellation_during_strategy_discards_output ... ok
+test tests::cancellation_takes_precedence_over_a_simultaneous_strategy_error ... ok
+test tests::invalid_runtime_configuration_is_rejected ... ok
+test tests::oversized_input_is_rejected_before_request_id_is_consumed ... ok
+test tests::pre_cancelled_request_never_enters_strategy ... ok
+test tests::request_id_exhaustion_is_reported_without_wrapping ... ok
+test tests::request_ids_are_monotonic_and_runtime_state_is_reused ... ok
+test tests::runtime_executes_a_model_neutral_request_end_to_end ... ok
+test tests::strategy_failure_is_reported_as_failed_request ... ok
+test tests::strategy_panic_propagates_and_consumes_the_request_id ... ok
+test tests::strategy_receives_its_own_request_id_and_metadata ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_scheduler-4a032853b2b0c9a5)
+
+running 20 tests
+test executor::tests::each_runner_drives_only_its_own_queue ... ok
+test executor::tests::executor_failure_fails_task_and_cancels_dependents ... ok
+test executor::tests::queue_runner_metrics_are_scoped_to_its_logical_queue ... ok
+test executor::tests::runner_executes_on_caller_and_releases_dependents_only_after_success ... ok
+test executor::tests::runner_reports_idle_without_invoking_executor ... ok
+test tests::cancellation_cursor_returns_only_new_events ... ok
+test tests::cancellation_index_tracks_direct_and_transitive_cancellations ... ok
+test tests::cancelling_prefetch_releases_lookahead_capacity ... ok
+test tests::cancelling_running_prefetch_releases_concurrency_slot ... ok
+test tests::dependent_task_becomes_ready_only_after_completion ... ok
+test tests::dispatches_by_priority_then_fifo_within_each_queue ... ok
+test tests::duplicate_and_unknown_dependencies_are_rejected ... ok
+test tests::failed_dependency_cancels_descendants_but_not_unrelated_work ... ok
+test tests::invalid_configuration_is_rejected ... ok
+test tests::prefetch_concurrency_and_lookahead_are_bounded ... ok
+test tests::queues_are_independent ... ok
+test tests::running_tasks_cannot_be_cancelled_or_completed_twice ... ok
+test tests::submission_cancels_tasks_with_already_failed_or_cancelled_dependencies ... ok
+test tests::terminal_records_are_compacted_and_remain_inspectable_as_dependencies ... ok
+test tests::zero_prefetch_concurrency_disables_prefetch_admission ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_tensor-5786f0040597a12c)
+
+running 39 tests
+test bf16::tests::equality_compares_raw_bits_not_numeric_value ... ok
+test bf16::tests::exact_values_convert_in_both_directions ... ok
+test bf16::tests::round_to_nearest_even_ties_and_neighbours ... ok
+test bf16::tests::special_values_and_limits_are_defined ... ok
+test bf16::tests::subnormal_rounding_and_halfway_to_zero ... ok
+test bf16::tests::fp32_grid_rounds_monotonically ... ok
+test contracts::tests::contract_rejects_non_contiguous_and_mixed_devices ... ok
+test contracts::tests::cpu_capabilities_cover_both_dtypes_for_all_four_operations ... ok
+test contracts::tests::bf16_is_dispatched_and_executed_by_the_cpu_reference ... ok
+test contracts::tests::dispatch_executes_through_the_cpu_reference_backend ... ok
+test contracts::tests::fp16_is_not_claimed_as_supported ... ok
+test contracts::tests::cpu_dispatch_refuses_vram_inputs_without_implicit_transfer ... ok
+test contracts::tests::dispatch_explains_an_exact_match ... ok
+test contracts::tests::dispatch_rejects_unknown_and_unsupported_backends_without_fallback ... ok
+test bf16::tests::widening_is_monotonic_in_magnitude_for_all_non_nan_patterns ... ok
+test ops::tests::bf16_add_rounds_only_the_output ... ok
+test bf16::tests::nan_widening_quiets_and_from_f32_canonicalizes_for_every_pattern ... ok
+test bf16::tests::bitwise_roundtrip_is_exact_for_every_16_bit_pattern ... ok
+test ops::tests::bf16_ops_reject_mixed_dtype_and_unsupported_dtype ... ok
+test ops::tests::add_is_elementwise_and_rejects_implicit_broadcast ... ok
+test ops::tests::bf16_rms_norm_uses_bf16_scale_and_fp32_reduction ... ok
+test ops::tests::matmul_matches_reference_result ... ok
+test ops::tests::rms_norm_applies_explicit_scale ... ok
+test ops::tests::bf16_shape_scale_layout_and_epsilon_errors_are_typed ... ok
+test bf16::tests::widening_is_exactly_sign_symmetric_for_every_pattern ... ok
+test ops::tests::bf16_softmax_is_stable_and_normalized_after_rounding ... ok
+test bf16::tests::every_bf16_value_roundtrips_through_fp32 ... ok
+test contracts::tests::shape_signature_is_backend_neutral_and_checked_without_gpu ... ok
+test tests::bf16_storage_uses_two_bytes_per_element_and_releases_explicitly ... ok
+test ops::tests::softmax_is_stable_for_large_logits ... ok
+test tests::rejects_rank_mismatch_zero_dimensions_and_overflow ... ok
+test ops::tests::bf16_matmul_accumulates_in_fp32 ... ok
+test tests::storage_capacity_is_checked_including_offset ... ok
+test tests::contiguous_layout_uses_checked_element_strides ... ok
+test tests::tensor_accepts_aligned_nonzero_byte_offsets ... ok
+test tests::strided_view_checks_byte_span_and_borrows_storage ... ok
+test tests::non_contiguous_layout_is_not_misreported_as_contiguous ... ok
+test tests::tensor_rejects_misaligned_byte_offsets ... ok
+test tests::view_cannot_escape_parent_tensor_span ... ok
+
+test result: ok. 39 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[EXIT] rc=0 :: cargo +1.86 test --workspace --all-targets --locked
+================================================================================
+COMMAND: cargo +1.86 clippy --workspace --all-targets --locked -- -D warnings
+================================================================================
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+[EXIT] rc=0 :: cargo +1.86 clippy --workspace --all-targets --locked -- -D warnings
+================================================================================
+COMMAND: cargo check -p claymore-cuda --features cuda-driver --all-targets --locked
+================================================================================
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+warning: unused dependency `claymore-core`
+  --> crates/claymore-cuda/Cargo.toml:13:1
+   |
+13 | claymore-core = { path = "../claymore-core" }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-cuda` (manifest) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+[EXIT] rc=0 :: cargo check -p claymore-cuda --features cuda-driver --all-targets --locked
+================================================================================
+COMMAND: cargo check -p claymore-memory --features cuda-driver --all-targets --locked
+================================================================================
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+[EXIT] rc=0 :: cargo check -p claymore-memory --features cuda-driver --all-targets --locked
+================================================================================
+COMMAND: cargo check -p claymore-cli --features cuda-driver --locked
+================================================================================
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+[EXIT] rc=0 :: cargo check -p claymore-cli --features cuda-driver --locked
+================================================================================
+COMMAND: cargo clippy -p claymore-cuda -p claymore-memory -p claymore-cli --features cuda-driver --all-targets --locked -- -D warnings
+================================================================================
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+warning: unused dependency `claymore-core`
+  --> crates/claymore-cuda/Cargo.toml:13:1
+   |
+13 | claymore-core = { path = "../claymore-core" }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-cuda` (manifest) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+[EXIT] rc=0 :: cargo clippy -p claymore-cuda -p claymore-memory -p claymore-cli --features cuda-driver --all-targets --locked -- -D warnings
+================================================================================
+COMMAND: cargo +1.86 check -p claymore-cuda --features cuda-driver --all-targets --locked
+================================================================================
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+[EXIT] rc=0 :: cargo +1.86 check -p claymore-cuda --features cuda-driver --all-targets --locked
+================================================================================
+COMMAND: cc -shared -fPIC ci/cuda-driver-stub.c -o /tmp/claymore-cuda-stub/libcuda.so
+================================================================================
+[EXIT] rc=0 :: cc -shared -fPIC ci/cuda-driver-stub.c -o /tmp/claymore-cuda-stub/libcuda.so
+================================================================================
+COMMAND: env RUSTFLAGS=-L native=/tmp/claymore-cuda-stub LD_LIBRARY_PATH=/tmp/claymore-cuda-stub cargo test -p claymore-memory --features cuda-driver --lib --locked
+================================================================================
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (target/debug/build/claymore-memory/a327b417c51cb1fe/out/claymore_memory-a327b417c51cb1fe)
+
+running 59 tests
+test cuda::tests::cuda_manager_reports_device_memory ... ignored, requires a CUDA driver and a usable NVIDIA device
+test cuda::tests::hardware_poll_retires_completed_transfer_before_admission_without_wait ... ignored, requires a CUDA driver and a usable NVIDIA device
+test cuda::tests::injected_create_event_failure_leaves_every_allocation_releasable ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_event_record_failure_with_successful_sync_lifts_every_guard ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_event_record_failure_with_sync_error_preserves_gpu_guards ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_launch_failure_with_successful_sync_releases_every_allocation ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_launch_failure_with_sync_error_poisons_and_pins_all_allocations ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_partial_guard_failure_with_successful_sync_lifts_only_installed_guards ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_partial_guard_failure_with_sync_error_poisons_and_pins_all_allocations ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::failed_backend_release_retains_policy_ownership_until_retry_succeeds ... ok
+test cuda::tests::injected_event_synchronization_failure_preserves_pending_event_and_guards ... ok
+test cuda::tests::injected_query_failure_preserves_pending_event_and_every_guard ... ok
+test cuda::tests::injected_not_ready_event_keeps_event_and_allocation_guard ... ok
+test cuda::tests::injected_stream_synchronization_error_is_not_treated_as_success ... ok
+test cuda::tests::logical_ticks_must_be_monotonic ... ok
+test cuda::tests::manager_tracker_poll_and_admission_share_the_production_state ... ok
+test cuda::tests::manager_tracker_wait_and_shared_event_retirement_preserve_guards ... ok
+test cuda::tests::manager_tracker_wait_failure_keeps_event_and_every_guard ... ok
+test cuda::tests::release_guard_rejects_tick_before_safe_horizon ... ok
+test cuda::tests::successful_event_retirement_lifts_guards_only_after_last_shared_event ... ok
+test cuda::tests::transfer_token_clones_share_completion_state ... ok
+test cuda::tests::unrelated_event_query_error_fails_closed_before_admission_planning ... ok
+test cuda_executor::tests::taking_read_result_transfers_ownership_and_removes_retained_bytes ... ok
+test cuda_tensor::tests::cuda_backend_uses_the_dtype_neutral_name ... ok
+test cuda_tensor::tests::cuda_capabilities_declare_only_implemented_f32_and_bf16_vram_ops ... ok
+test device::tests::aliased_copy_is_rejected_without_mutating_the_buffer ... ok
+test device::tests::completion_horizon_cannot_be_moved_backwards ... ok
+test device::tests::cpu_adapter_allocates_copies_and_releases_buffers ... ok
+test device::tests::cpu_adapter_rejects_duplicate_ids_and_non_monotonic_ticks ... ok
+test device::tests::cpu_adapter_uses_memory_policy_for_deterministic_eviction ... ok
+test device::tests::device_capabilities_are_reported_consistently_by_manager ... ok
+test device::tests::expert_allocations_must_use_vram ... ok
+test device::tests::expert_cache_max_is_enforced_by_cpu_device_manager ... ok
+test device::tests::failed_backend_release_keeps_buffer_and_accounting_for_retry ... ok
+test device::tests::in_flight_guard_prevents_release_and_eviction_until_horizon ... ok
+test device::tests::release_confirms_backend_release_before_removing_accounting ... ok
+test device::tests::zero_sized_allocation_is_rejected_without_accounting ... ok
+test executor::tests::executor_rejects_compute_queue_without_consuming_operation ... ok
+test executor::tests::failed_prerequisite_discards_cancelled_memory_payloads ... ok
+test executor::tests::memory_executor_reports_operation_counts_and_bytes ... ok
+test lifecycle::tests::monotonic_tick_accepts_equal_and_forward_transitions ... ok
+test executor::tests::scheduler_drives_cpu_memory_operations_in_dependency_order ... ok
+test lifecycle::tests::monotonic_tick_rejects_backward_transition ... ok
+test lifecycle::tests::release_horizon_is_inclusive_and_never_early ... ok
+test tests::adaptive_eviction_prefers_the_lower_reload_cost ... ok
+test tests::adaptive_eviction_prioritizes_coldness_before_reload_cost ... ok
+test tests::adaptive_eviction_treats_unknown_reload_cost_as_zero_only_after_heat_and_recency ... ok
+test tests::admission_succeeds_without_eviction_when_under_limit ... ok
+test tests::confirm_eviction_releases_accounted_capacity ... ok
+test tests::detects_duplicate_allocations ... ok
+test tests::equal_priority_evictions_use_lexicographic_allocation_id ... ok
+test tests::expert_cache_admission_enforces_max_and_selects_only_idle_experts ... ok
+test tests::in_flight_allocations_are_never_selected ... ok
+test tests::joint_expert_admission_prioritizes_expert_victim_over_older_general_allocation ... ok
+test tests::joint_expert_admission_uses_one_minimal_vram_victim_set ... ok
+test tests::lru_plan_selects_oldest_idle_allocation ... ok
+test tests::rejects_invalid_budget_relationships ... ok
+test tests::vram_soft_budget_triggers_proactive_eviction_before_hard_ceiling ... ok
+test tests::vram_soft_target_is_best_effort_but_hard_ceiling_is_mandatory ... ok
+
+test result: ok. 50 passed; 0 failed; 9 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[EXIT] rc=0 :: env RUSTFLAGS=-L native=/tmp/claymore-cuda-stub LD_LIBRARY_PATH=/tmp/claymore-cuda-stub cargo test -p claymore-memory --features cuda-driver --lib --locked
+================================================================================
+COMMAND: env RUSTFLAGS=-L native=/tmp/claymore-cuda-stub LD_LIBRARY_PATH=/tmp/claymore-cuda-stub cargo test -p claymore-cuda --features cuda-driver --lib --locked
+================================================================================
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/build/claymore-cuda/eabcaf366fc02599/out/claymore_cuda-eabcaf366fc02599)
+
+running 11 tests
+test compute::tests::bf16_ptx_declares_round_to_nearest_even_and_fp32_accumulation ... ok
+test compute::tests::grid_rounding_and_limits_are_explicit ... ok
+test compute::tests::embedded_ptx_targets_blackwell_sm_120 ... ok
+test driver::tests::driver_error_conversion_preserves_operation_and_code ... ok
+test driver::tests::hardware_device_buffer_free_is_explicit_and_idempotent ... ignored, requires a CUDA driver and a usable NVIDIA device
+test driver::tests::hardware_stream_synchronize_completes_async_copy ... ignored, requires a CUDA driver and a usable NVIDIA device
+test driver::tests::hardware_streams_are_explicitly_non_blocking ... ignored, requires a CUDA driver and a usable NVIDIA device
+test driver::tests::event_query_status_conversion_distinguishes_complete_pending_and_driver_failure ... ok
+test driver::tests::resources_must_share_the_same_context ... ok
+test driver::tests::zero_sized_allocations_are_rejected_before_driver_calls ... ok
+test tests::disabled_backend_reports_actionable_error ... ok
+
+test result: ok. 8 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[EXIT] rc=0 :: env RUSTFLAGS=-L native=/tmp/claymore-cuda-stub LD_LIBRARY_PATH=/tmp/claymore-cuda-stub cargo test -p claymore-cuda --features cuda-driver --lib --locked
+=== SUMMARY ===
+[EXIT] rc=0 :: cargo fmt --all -- --check
+[EXIT] rc=0 :: cargo test --workspace --all-targets --locked
+[EXIT] rc=0 :: cargo clippy --workspace --all-targets --locked -- -D warnings
+[EXIT] rc=0 :: cargo +1.86 test --workspace --all-targets --locked
+[EXIT] rc=0 :: cargo +1.86 clippy --workspace --all-targets --locked -- -D warnings
+[EXIT] rc=0 :: cargo check -p claymore-cuda --features cuda-driver --all-targets --locked
+[EXIT] rc=0 :: cargo check -p claymore-memory --features cuda-driver --all-targets --locked
+[EXIT] rc=0 :: cargo check -p claymore-cli --features cuda-driver --locked
+[EXIT] rc=0 :: cargo clippy -p claymore-cuda -p claymore-memory -p claymore-cli --features cuda-driver --all-targets --locked -- -D warnings
+[EXIT] rc=0 :: cargo +1.86 check -p claymore-cuda --features cuda-driver --all-targets --locked
+[EXIT] rc=0 :: cc -shared -fPIC ci/cuda-driver-stub.c -o /tmp/claymore-cuda-stub/libcuda.so
+[EXIT] rc=0 :: env RUSTFLAGS=-L native=/tmp/claymore-cuda-stub LD_LIBRARY_PATH=/tmp/claymore-cuda-stub cargo test -p claymore-memory --features cuda-driver --lib --locked
+[EXIT] rc=0 :: env RUSTFLAGS=-L native=/tmp/claymore-cuda-stub LD_LIBRARY_PATH=/tmp/claymore-cuda-stub cargo test -p claymore-cuda --features cuda-driver --lib --locked
+DONE 2026-11-22T21:05:16+00:00

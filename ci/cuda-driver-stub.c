@@ -42,3 +42,7 @@ CUresult cuEventRecord(CUevent event, CUstream stream) { (void)event; (void)stre
 CUresult cuEventQuery(CUevent event) { (void)event; return CUDA_ERROR_NOT_INITIALIZED; }
 CUresult cuEventSynchronize(CUevent event) { (void)event; return CUDA_ERROR_NOT_INITIALIZED; }
 CUresult cuEventDestroy_v2(CUevent event) { (void)event; return CUDA_ERROR_NOT_INITIALIZED; }
+CUresult cuModuleLoadData(void **module, const void *image) { (void)module; (void)image; return CUDA_ERROR_NOT_INITIALIZED; }
+CUresult cuModuleGetFunction(void **function, void *module, const char *name) { (void)function; (void)module; (void)name; return CUDA_ERROR_NOT_INITIALIZED; }
+CUresult cuModuleUnload(void *module) { (void)module; return CUDA_ERROR_NOT_INITIALIZED; }
+CUresult cuLaunchKernel(void *function, unsigned int gx, unsigned int gy, unsigned int gz, unsigned int bx, unsigned int by, unsigned int bz, unsigned int shared, void *stream, void **params, void **extra) { (void)function; (void)gx; (void)gy; (void)gz; (void)bx; (void)by; (void)bz; (void)shared; (void)stream; (void)params; (void)extra; return CUDA_ERROR_NOT_INITIALIZED; }

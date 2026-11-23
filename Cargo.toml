@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "crates/claymore-core",
   "crates/claymore-device",
+  "crates/claymore-tensor",
   "crates/claymore-memory",
   "crates/claymore-scheduler",
   "crates/claymore-runtime",

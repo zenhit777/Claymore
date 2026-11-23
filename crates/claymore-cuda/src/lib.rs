@@ -32,6 +32,12 @@ pub enum CudaError {
     ZeroSizedAllocation,
     #[error("CUDA resources belong to different contexts")]
     ContextMismatch,
+    #[error("CUDA kernel module could not be loaded from embedded PTX")]
+    KernelModuleLoad { code: i32 },
+    #[error("CUDA kernel symbol {0} is missing from the embedded module")]
+    MissingKernel(&'static str),
+    #[error("invalid kernel launch configuration: {0}")]
+    InvalidLaunchConfiguration(String),
 }
 
 pub trait DeviceInventory {
@@ -52,9 +58,13 @@ impl CudaRuntime {
 mod driver;
 
 #[cfg(feature = "cuda-driver")]
+pub use compute::CudaComputeEngine;
+#[cfg(feature = "cuda-driver")]
 pub use driver::CudaRuntime;
 #[cfg(feature = "cuda-driver")]
 pub use driver::{CudaDeviceBuffer, CudaDriver, CudaEvent, CudaStream, PinnedHostBuffer};
+#[cfg(feature = "cuda-driver")]
+mod compute;
 
 #[cfg(test)]
 mod tests {

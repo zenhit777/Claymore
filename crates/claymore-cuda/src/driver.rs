@@ -19,8 +19,10 @@ type CuDevicePtr = u64;
 type CuContext = *mut c_void;
 type CuStreamRaw = *mut c_void;
 type CuEventRaw = *mut c_void;
+pub(crate) type CuModuleRaw = *mut c_void;
+pub(crate) type CuFunctionRaw = *mut c_void;
 
-const CUDA_SUCCESS: CuResult = 0;
+pub(crate) const CUDA_SUCCESS: CuResult = 0;
 const CUDA_ERROR_NOT_READY: CuResult = 600;
 // Do not implicitly synchronize with CUDA's legacy default stream.
 const CU_STREAM_NON_BLOCKING: c_uint = 1;
@@ -67,9 +69,30 @@ unsafe extern "C" {
     fn cuEventQuery(event: CuEventRaw) -> CuResult;
     fn cuEventSynchronize(event: CuEventRaw) -> CuResult;
     fn cuEventDestroy_v2(event: CuEventRaw) -> CuResult;
+    pub(crate) fn cuModuleLoadData(module: *mut CuModuleRaw, image: *const c_void) -> CuResult;
+    pub(crate) fn cuModuleGetFunction(
+        function: *mut CuFunctionRaw,
+        module: CuModuleRaw,
+        name: *const c_char,
+    ) -> CuResult;
+    pub(crate) fn cuModuleUnload(module: CuModuleRaw) -> CuResult;
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn cuLaunchKernel(
+        function: CuFunctionRaw,
+        grid_x: c_uint,
+        grid_y: c_uint,
+        grid_z: c_uint,
+        block_x: c_uint,
+        block_y: c_uint,
+        block_z: c_uint,
+        shared_bytes: c_uint,
+        stream: CuStreamRaw,
+        kernel_params: *const *const c_void,
+        extra: *mut *mut c_void,
+    ) -> CuResult;
 }
 
-fn check(code: CuResult, operation: &'static str) -> Result<(), CudaError> {
+pub(crate) fn check(code: CuResult, operation: &'static str) -> Result<(), CudaError> {
     if code == CUDA_SUCCESS {
         Ok(())
     } else {
@@ -97,7 +120,7 @@ fn event_query_result(result: CuResult) -> Result<bool, CudaError> {
     }
 }
 
-fn ensure_same_context(left: CuContext, right: CuContext) -> Result<(), CudaError> {
+pub(crate) fn ensure_same_context(left: CuContext, right: CuContext) -> Result<(), CudaError> {
     if left == right {
         Ok(())
     } else {
@@ -105,13 +128,13 @@ fn ensure_same_context(left: CuContext, right: CuContext) -> Result<(), CudaErro
     }
 }
 
-struct ContextInner {
-    raw: CuContext,
+pub(crate) struct ContextInner {
+    pub(crate) raw: CuContext,
     device: CuDevice,
 }
 
 impl ContextInner {
-    fn activate(&self) -> Result<(), CudaError> {
+    pub(crate) fn activate(&self) -> Result<(), CudaError> {
         // SAFETY: raw is retained for the lifetime of this shared owner.
         check(unsafe { cuCtxSetCurrent(self.raw) }, "cuCtxSetCurrent")
     }
@@ -281,6 +304,13 @@ impl CudaDriver {
         })
     }
 
+    /// Create a compute engine bound to this driver's primary context. The
+    /// embedded PTX is loaded eagerly so compilation/loading failures are
+    /// reported before any tensor work is scheduled.
+    pub fn create_compute_engine(&self) -> Result<crate::compute::CudaComputeEngine, CudaError> {
+        crate::compute::CudaComputeEngine::new(Rc::clone(&self.context))
+    }
+
     pub fn create_event(&self) -> Result<CudaEvent, CudaError> {
         self.context.activate()?;
         let mut raw = ptr::null_mut();
@@ -303,13 +333,20 @@ impl DeviceInventory for CudaDriver {
 }
 
 pub struct CudaDeviceBuffer {
-    context: Rc<ContextInner>,
-    pointer: CuDevicePtr,
+    pub(crate) context: Rc<ContextInner>,
+    pub(crate) pointer: CuDevicePtr,
     len: usize,
 }
 impl CudaDeviceBuffer {
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    /// Opaque CUDA device address. It is valid only while this buffer is live
+    /// and must never be dereferenced from host code. Kernel launch helpers use
+    /// it together with an explicit context/stream check.
+    pub fn device_ptr(&self) -> u64 {
+        self.pointer
     }
     pub fn is_empty(&self) -> bool {
         self.len == 0
@@ -454,8 +491,8 @@ impl Drop for PinnedHostBuffer {
 }
 
 pub struct CudaStream {
-    context: Rc<ContextInner>,
-    raw: CuStreamRaw,
+    pub(crate) context: Rc<ContextInner>,
+    pub(crate) raw: CuStreamRaw,
 }
 impl CudaStream {
     pub fn synchronize(&self) -> Result<(), CudaError> {

@@ -1,0 +1,179 @@
+SHA=f0b034fde0fd8ee11f82e70bdded7d5d8d7171e4
+=== stub: cargo test -p claymore-memory --features cuda-driver --lib --locked ===
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+   Compiling claymore-cuda v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cuda)
+   Compiling claymore-tensor v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-tensor)
+   Compiling claymore-memory v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-memory)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.52s
+     Running unittests src/lib.rs (target/debug/build/claymore-memory/a327b417c51cb1fe/out/claymore_memory-a327b417c51cb1fe)
+
+running 51 tests
+test cuda::tests::cuda_manager_reports_device_memory ... ignored, requires a CUDA driver and a usable NVIDIA device
+test cuda::tests::hardware_poll_retires_completed_transfer_before_admission_without_wait ... ignored, requires a CUDA driver and a usable NVIDIA device
+test cuda::tests::failed_backend_release_retains_policy_ownership_until_retry_succeeds ... ok
+test cuda::tests::injected_event_synchronization_failure_preserves_pending_event_and_guards ... ok
+test cuda::tests::injected_not_ready_event_keeps_event_and_allocation_guard ... ok
+test cuda::tests::injected_query_failure_preserves_pending_event_and_every_guard ... ok
+test cuda::tests::injected_stream_synchronization_error_is_not_treated_as_success ... ok
+test cuda::tests::logical_ticks_must_be_monotonic ... ok
+test cuda::tests::manager_tracker_poll_and_admission_share_the_production_state ... ok
+test cuda::tests::manager_tracker_wait_and_shared_event_retirement_preserve_guards ... ok
+test cuda::tests::manager_tracker_wait_failure_keeps_event_and_every_guard ... ok
+test cuda::tests::release_guard_rejects_tick_before_safe_horizon ... ok
+test cuda::tests::successful_event_retirement_lifts_guards_only_after_last_shared_event ... ok
+test cuda::tests::transfer_token_clones_share_completion_state ... ok
+test cuda::tests::unrelated_event_query_error_fails_closed_before_admission_planning ... ok
+test cuda_executor::tests::taking_read_result_transfers_ownership_and_removes_retained_bytes ... ok
+test cuda_tensor::tests::cuda_capabilities_declare_only_implemented_f32_vram_ops ... ok
+test device::tests::aliased_copy_is_rejected_without_mutating_the_buffer ... ok
+test device::tests::completion_horizon_cannot_be_moved_backwards ... ok
+test device::tests::cpu_adapter_allocates_copies_and_releases_buffers ... ok
+test device::tests::cpu_adapter_rejects_duplicate_ids_and_non_monotonic_ticks ... ok
+test device::tests::cpu_adapter_uses_memory_policy_for_deterministic_eviction ... ok
+test device::tests::device_capabilities_are_reported_consistently_by_manager ... ok
+test device::tests::expert_allocations_must_use_vram ... ok
+test device::tests::expert_cache_max_is_enforced_by_cpu_device_manager ... ok
+test device::tests::failed_backend_release_keeps_buffer_and_accounting_for_retry ... ok
+test device::tests::in_flight_guard_prevents_release_and_eviction_until_horizon ... ok
+test device::tests::release_confirms_backend_release_before_removing_accounting ... ok
+test device::tests::zero_sized_allocation_is_rejected_without_accounting ... ok
+test executor::tests::executor_rejects_compute_queue_without_consuming_operation ... ok
+test executor::tests::failed_prerequisite_discards_cancelled_memory_payloads ... ok
+test executor::tests::memory_executor_reports_operation_counts_and_bytes ... ok
+test executor::tests::scheduler_drives_cpu_memory_operations_in_dependency_order ... ok
+test lifecycle::tests::monotonic_tick_accepts_equal_and_forward_transitions ... ok
+test lifecycle::tests::monotonic_tick_rejects_backward_transition ... ok
+test lifecycle::tests::release_horizon_is_inclusive_and_never_early ... ok
+test tests::adaptive_eviction_prefers_the_lower_reload_cost ... ok
+test tests::adaptive_eviction_prioritizes_coldness_before_reload_cost ... ok
+test tests::adaptive_eviction_treats_unknown_reload_cost_as_zero_only_after_heat_and_recency ... ok
+test tests::admission_succeeds_without_eviction_when_under_limit ... ok
+test tests::confirm_eviction_releases_accounted_capacity ... ok
+test tests::detects_duplicate_allocations ... ok
+test tests::equal_priority_evictions_use_lexicographic_allocation_id ... ok
+test tests::expert_cache_admission_enforces_max_and_selects_only_idle_experts ... ok
+test tests::in_flight_allocations_are_never_selected ... ok
+test tests::joint_expert_admission_prioritizes_expert_victim_over_older_general_allocation ... ok
+test tests::joint_expert_admission_uses_one_minimal_vram_victim_set ... ok
+test tests::lru_plan_selects_oldest_idle_allocation ... ok
+test tests::rejects_invalid_budget_relationships ... ok
+test tests::vram_soft_budget_triggers_proactive_eviction_before_hard_ceiling ... ok
+test tests::vram_soft_target_is_best_effort_but_hard_ceiling_is_mandatory ... ok
+
+test result: ok. 49 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+=== stub: cargo test -p claymore-cuda --features cuda-driver --lib --locked ===
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+   Compiling claymore-cuda v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cuda)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running unittests src/lib.rs (target/debug/build/claymore-cuda/eabcaf366fc02599/out/claymore_cuda-eabcaf366fc02599)
+
+running 10 tests
+test compute::tests::embedded_ptx_targets_blackwell_sm_120 ... ok
+test compute::tests::grid_rounding_and_limits_are_explicit ... ok
+test driver::tests::hardware_device_buffer_free_is_explicit_and_idempotent ... ignored, requires a CUDA driver and a usable NVIDIA device
+test driver::tests::hardware_stream_synchronize_completes_async_copy ... ignored, requires a CUDA driver and a usable NVIDIA device
+test driver::tests::hardware_streams_are_explicitly_non_blocking ... ignored, requires a CUDA driver and a usable NVIDIA device
+test driver::tests::driver_error_conversion_preserves_operation_and_code ... ok
+test driver::tests::event_query_status_conversion_distinguishes_complete_pending_and_driver_failure ... ok
+test driver::tests::resources_must_share_the_same_context ... ok
+test driver::tests::zero_sized_allocations_are_rejected_before_driver_calls ... ok
+test tests::disabled_backend_reports_actionable_error ... ok
+
+test result: ok. 7 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+=== cargo check -p claymore-cuda --features cuda-driver --all-targets --locked ===
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Checking claymore-cuda v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cuda)
+warning: unused dependency `claymore-core`
+  --> crates/claymore-cuda/Cargo.toml:13:1
+   |
+13 | claymore-core = { path = "../claymore-core" }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-cuda` (manifest) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+=== cargo check -p claymore-memory --features cuda-driver --all-targets --locked ===
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Checking claymore-tensor v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-tensor)
+    Checking claymore-memory v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-memory)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.30s
+=== cargo check -p claymore-cli --features cuda-driver --locked ===
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Checking claymore-runtime v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-runtime)
+    Checking claymore-cli v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+=== cargo clippy cuda feature ===
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Checking claymore-tensor v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-tensor)
+    Checking claymore-memory v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-memory)
+    Checking claymore-runtime v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-runtime)
+    Checking claymore-cli v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cli)
+warning: unused dependency `claymore-core`
+  --> crates/claymore-cuda/Cargo.toml:13:1
+   |
+13 | claymore-core = { path = "../claymore-core" }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-cuda` (manifest) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.31s
+=== MSRV cuda feature check ===
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+    Checking claymore-tensor v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-tensor)
+    Checking claymore-memory v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-memory)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.19s
+    Checking claymore-runtime v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-runtime)
+    Checking claymore-cli v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s

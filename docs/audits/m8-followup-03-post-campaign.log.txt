@@ -1,0 +1,358 @@
+M8 FOLLOW-UP POST-CAMPAIGN VERIFICATION / PR #24 / RTX 5090
+START_LOCAL=2026-11-22T22:40:27+01:00
+START_UTC=2026-11-22T21:40:27+00:00
+
+[CODE SHA / REPOSITORY INTEGRITY]
+COMMAND: git rev-parse HEAD
+93522028066be1dda91940d648983e89008f5e7c
+COMMAND: git branch --show-current
+feat/m8-tensor-foundation
+COMMAND: git rev-parse refs/remotes/origin/feat/m8-tensor-foundation
+93522028066be1dda91940d648983e89008f5e7c
+COMMAND: git diff --exit-code -- crates .github Cargo.toml Cargo.lock
+PROTECTED_PATHS_DIFF_EXIT_CODE=0
+COMMAND: git diff --check
+DIFF_CHECK_EXIT_CODE=0
+SHA_BEFORE=93522028066be1dda91940d648983e89008f5e7c
+SHA_AFTER=93522028066be1dda91940d648983e89008f5e7c
+SHA_UNCHANGED=yes
+SHA_MATCH_REQUIRED=yes
+
+[CAMPAIGN SUMMARIES]
+COMMAND: grep test-result summaries in both campaign logs
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.60s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 50 filtered out; finished in 1.38s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 26.97s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.73s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-01-hardware-run1.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.59s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 50 filtered out; finished in 1.36s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 26.63s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.67s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+docs/audits/m8-followup-02-hardware-run2.log.txt:test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+COMMAND: grep exit codes in both campaign logs
+docs/audits/m8-followup-01-hardware-run1.log.txt:FINAL_CARGO_TEST_EXIT_CODE=0
+docs/audits/m8-followup-02-hardware-run2.log.txt:FINAL_CARGO_TEST_EXIT_CODE=0
+COMMAND: python3 inline verifier for group counts and numeric equality
+RUN1_GROUPS=[3, 5, 9, 17, 18]
+RUN1_TOTAL_PASSED=52
+RUN1_TOTAL_FAILED=0
+RUN1_EXIT_CODE=0
+RUN2_GROUPS=[3, 5, 9, 17, 18]
+RUN2_TOTAL_PASSED=52
+RUN2_TOTAL_FAILED=0
+RUN2_EXIT_CODE=0
+NUMERIC_METRICS_IDENTICAL=True
+RUN1_NUMERIC_METRICS:
+test hw_m8_01_add_matches_cpu_for_multiple_shapes_and_signs ... HW-M8 add shape=[1]: n=1 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 add shape=[7]: n=7 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 add shape=[2, 3]: n=6 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 add shape=[64, 257]: n=16448 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+test hw_m8_02_matmul_matches_cpu_for_rank2_shapes ... HW-M8 matmul 2x3x2: n=4 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 matmul 16x64x32: n=512 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 matmul 129x17x65: n=8385 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+test hw_m8_03_softmax_is_stable_for_large_logits ... HW-M8 softmax shape=[1, 3]: n=3 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 softmax shape=[8, 257]: n=2056 max_abs_diff=2.9802322e-8 worst_index=689 worst_diff=2.9802322e-8
+HW-M8 softmax shape=[1, 1024]: n=1024 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 softmax shape=[2, 3, 64]: n=384 max_abs_diff=4.440892e-16 worst_index=161 worst_diff=4.440892e-16
+test hw_m8_04_rms_norm_matches_cpu_with_explicit_scale ... HW-M8 rms_norm shape=[4]: n=4 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 rms_norm shape=[6, 64]: n=384 max_abs_diff=3.5762787e-7 worst_index=196 worst_diff=3.5762787e-7
+HW-M8 rms_norm shape=[2, 1, 129]: n=258 max_abs_diff=4.7683716e-7 worst_index=97 worst_diff=4.7683716e-7
+test hw_m8_06_allocation_accounting_lifetime_and_budget_guards ... HW-M8 accounting: before=0 peak=49152 after=0 vram_total=34162016256 vram_free=32429309952
+test hw_m8_07_kernel_event_guards_and_explicit_wait ... HW-M8 event-backed add: n=1024 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+test hw_m8_08_scheduler_driven_compute_keeps_tensors_out_of_scheduler ... HW-M8 scheduler-driven add: n=16384 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+test hw_m8_b1_input_offsets_are_honored_for_f32_and_bf16 ... HW-M8-B1 F32 offset=8 actual=[11.0, 22.0, 33.0, 44.0]
+HW-M8-B1 BF16 offset=2 actual=[Bf16(0x3fc0, 1.5), Bf16(0x4060, 3.5), Bf16(0x40b0, 5.5), Bf16(0x40f0, 7.5)]
+test hw_m8_bf16_01_add_matches_cpu_for_multiple_shapes_and_special_values ... HW-M8-BF16 add shape=[1]: n=1 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add shape=[7]: n=7 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add shape=[2, 3]: n=6 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add shape=[64, 257]: n=16448 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add shape=[3, 5, 7]: n=105 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add special values: n=8 max_steps=0 worst_index=0 limit=0
+test hw_m8_bf16_02_matmul_matches_cpu_for_rank2_shapes ... HW-M8-BF16 matmul 2x3x2: n=4 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 matmul 16x64x32: n=512 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 matmul 129x17x65: n=8385 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 matmul 7x9x5: n=35 max_steps=0 worst_index=0 limit=1
+test hw_m8_bf16_03_softmax_is_stable_for_large_logits ... HW-M8-BF16 softmax shape=[1, 3]: n=3 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 softmax shape=[8, 257]: n=2056 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 softmax shape=[1, 1024]: n=1024 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 softmax shape=[2, 3, 64]: n=384 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 softmax shape=[5, 7, 3]: n=105 max_steps=0 worst_index=0 limit=1
+test hw_m8_bf16_04_rms_norm_matches_cpu_with_explicit_bf16_scale ... HW-M8-BF16 rms_norm shape=[4]: n=4 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 rms_norm shape=[6, 64]: n=384 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 rms_norm shape=[2, 1, 129]: n=258 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 rms_norm shape=[3, 5, 7]: n=105 max_steps=0 worst_index=0 limit=1
+test hw_m8_bf16_06_allocation_transfer_lifetime_and_budget_guards ... HW-M8-BF16 accounting: before=0 after=0 vram_total=34162016256 vram_free=32429309952
+test hw_m8_bf16_07_kernel_event_guards_and_explicit_wait ... HW-M8-BF16 event-backed BF16 add: n=1024 max_steps=0 worst_index=0 limit=0
+test hw_m8_bf16_08_scheduler_driven_compute_keeps_tensors_out_of_scheduler ... HW-M8-BF16 scheduler-driven BF16 add: n=16384 max_steps=0 worst_index=0 limit=0
+RUN2_NUMERIC_METRICS:
+test hw_m8_01_add_matches_cpu_for_multiple_shapes_and_signs ... HW-M8 add shape=[1]: n=1 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 add shape=[7]: n=7 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 add shape=[2, 3]: n=6 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 add shape=[64, 257]: n=16448 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+test hw_m8_02_matmul_matches_cpu_for_rank2_shapes ... HW-M8 matmul 2x3x2: n=4 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 matmul 16x64x32: n=512 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 matmul 129x17x65: n=8385 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+test hw_m8_03_softmax_is_stable_for_large_logits ... HW-M8 softmax shape=[1, 3]: n=3 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 softmax shape=[8, 257]: n=2056 max_abs_diff=2.9802322e-8 worst_index=689 worst_diff=2.9802322e-8
+HW-M8 softmax shape=[1, 1024]: n=1024 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 softmax shape=[2, 3, 64]: n=384 max_abs_diff=4.440892e-16 worst_index=161 worst_diff=4.440892e-16
+test hw_m8_04_rms_norm_matches_cpu_with_explicit_scale ... HW-M8 rms_norm shape=[4]: n=4 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+HW-M8 rms_norm shape=[6, 64]: n=384 max_abs_diff=3.5762787e-7 worst_index=196 worst_diff=3.5762787e-7
+HW-M8 rms_norm shape=[2, 1, 129]: n=258 max_abs_diff=4.7683716e-7 worst_index=97 worst_diff=4.7683716e-7
+test hw_m8_06_allocation_accounting_lifetime_and_budget_guards ... HW-M8 accounting: before=0 peak=49152 after=0 vram_total=34162016256 vram_free=32429309952
+test hw_m8_07_kernel_event_guards_and_explicit_wait ... HW-M8 event-backed add: n=1024 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+test hw_m8_08_scheduler_driven_compute_keeps_tensors_out_of_scheduler ... HW-M8 scheduler-driven add: n=16384 max_abs_diff=0e0 worst_index=0 worst_diff=0e0
+test hw_m8_b1_input_offsets_are_honored_for_f32_and_bf16 ... HW-M8-B1 F32 offset=8 actual=[11.0, 22.0, 33.0, 44.0]
+HW-M8-B1 BF16 offset=2 actual=[Bf16(0x3fc0, 1.5), Bf16(0x4060, 3.5), Bf16(0x40b0, 5.5), Bf16(0x40f0, 7.5)]
+test hw_m8_bf16_01_add_matches_cpu_for_multiple_shapes_and_special_values ... HW-M8-BF16 add shape=[1]: n=1 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add shape=[7]: n=7 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add shape=[2, 3]: n=6 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add shape=[64, 257]: n=16448 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add shape=[3, 5, 7]: n=105 max_steps=0 worst_index=0 limit=0
+HW-M8-BF16 add special values: n=8 max_steps=0 worst_index=0 limit=0
+test hw_m8_bf16_02_matmul_matches_cpu_for_rank2_shapes ... HW-M8-BF16 matmul 2x3x2: n=4 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 matmul 16x64x32: n=512 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 matmul 129x17x65: n=8385 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 matmul 7x9x5: n=35 max_steps=0 worst_index=0 limit=1
+test hw_m8_bf16_03_softmax_is_stable_for_large_logits ... HW-M8-BF16 softmax shape=[1, 3]: n=3 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 softmax shape=[8, 257]: n=2056 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 softmax shape=[1, 1024]: n=1024 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 softmax shape=[2, 3, 64]: n=384 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 softmax shape=[5, 7, 3]: n=105 max_steps=0 worst_index=0 limit=1
+test hw_m8_bf16_04_rms_norm_matches_cpu_with_explicit_bf16_scale ... HW-M8-BF16 rms_norm shape=[4]: n=4 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 rms_norm shape=[6, 64]: n=384 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 rms_norm shape=[2, 1, 129]: n=258 max_steps=0 worst_index=0 limit=1
+HW-M8-BF16 rms_norm shape=[3, 5, 7]: n=105 max_steps=0 worst_index=0 limit=1
+test hw_m8_bf16_06_allocation_transfer_lifetime_and_budget_guards ... HW-M8-BF16 accounting: before=0 after=0 vram_total=34162016256 vram_free=32429309952
+test hw_m8_bf16_07_kernel_event_guards_and_explicit_wait ... HW-M8-BF16 event-backed BF16 add: n=1024 max_steps=0 worst_index=0 limit=0
+test hw_m8_bf16_08_scheduler_driven_compute_keeps_tensors_out_of_scheduler ... HW-M8-BF16 scheduler-driven BF16 add: n=16384 max_steps=0 worst_index=0 limit=0
+
+[CUDA LAUNCH-LIMIT CONTROLS (SOURCE INSPECTION)]
+COMMAND: grep -nE CUDA_GRID|cuda_grid_limit|LaunchLimit|grid_for|cuLaunchKernel in the two corrected Rust files
+crates/claymore-tensor/src/contracts.rs:260:const CUDA_GRID_X_MAX: usize = 2_147_483_647;
+crates/claymore-tensor/src/contracts.rs:261:const CUDA_GRID_Y_MAX: usize = 65_535;
+crates/claymore-tensor/src/contracts.rs:263:fn cuda_grid_limit(signature: ShapeSignature) -> Option<UnsupportedReason> {
+crates/claymore-tensor/src/contracts.rs:269:    if grid_x > CUDA_GRID_X_MAX {
+crates/claymore-tensor/src/contracts.rs:270:        return Some(UnsupportedReason::LaunchLimit {
+crates/claymore-tensor/src/contracts.rs:273:            maximum: CUDA_GRID_X_MAX,
+crates/claymore-tensor/src/contracts.rs:276:    if grid_y > CUDA_GRID_Y_MAX {
+crates/claymore-tensor/src/contracts.rs:277:        return Some(UnsupportedReason::LaunchLimit {
+crates/claymore-tensor/src/contracts.rs:280:            maximum: CUDA_GRID_Y_MAX,
+crates/claymore-tensor/src/contracts.rs:335:    LaunchLimit {
+crates/claymore-tensor/src/contracts.rs:364:            UnsupportedReason::LaunchLimit {
+crates/claymore-tensor/src/contracts.rs:563:            if let Some(reason) = cuda_grid_limit(op.shape_signature()) {
+crates/claymore-tensor/src/contracts.rs:623:            || cuda_grid_limit(op.shape_signature()).is_none())
+crates/claymore-tensor/src/contracts.rs:955:            cuda_grid_limit(ShapeSignature::MatMul {
+crates/claymore-tensor/src/contracts.rs:963:            cuda_grid_limit(ShapeSignature::MatMul {
+crates/claymore-tensor/src/contracts.rs:968:            Some(UnsupportedReason::LaunchLimit {
+crates/claymore-tensor/src/contracts.rs:971:                maximum: CUDA_GRID_Y_MAX,
+crates/claymore-tensor/src/contracts.rs:975:            cuda_grid_limit(ShapeSignature::LastDim {
+crates/claymore-tensor/src/contracts.rs:976:                rows: CUDA_GRID_X_MAX + 1,
+crates/claymore-tensor/src/contracts.rs:980:            Some(UnsupportedReason::LaunchLimit {
+crates/claymore-tensor/src/contracts.rs:982:                blocks: CUDA_GRID_X_MAX + 1,
+crates/claymore-tensor/src/contracts.rs:983:                maximum: CUDA_GRID_X_MAX,
+crates/claymore-cuda/src/compute.rs:37:const CUDA_GRID_X_MAX: u64 = 2_147_483_647;
+crates/claymore-cuda/src/compute.rs:38:const CUDA_GRID_Y_MAX: u64 = 65_535;
+crates/claymore-cuda/src/compute.rs:133:        let grid = grid_for(count, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX)?;
+crates/claymore-cuda/src/compute.rs:140:                crate::driver::cuLaunchKernel(
+crates/claymore-cuda/src/compute.rs:153:                "cuLaunchKernel(add)",
+crates/claymore-cuda/src/compute.rs:177:        let grid_x = grid_for(cols64, MATMUL_TILE, CUDA_GRID_X_MAX)?;
+crates/claymore-cuda/src/compute.rs:178:        let grid_y = grid_for(rows64, MATMUL_TILE, CUDA_GRID_Y_MAX)?;
+crates/claymore-cuda/src/compute.rs:190:                crate::driver::cuLaunchKernel(
+crates/claymore-cuda/src/compute.rs:203:                "cuLaunchKernel(matmul)",
+crates/claymore-cuda/src/compute.rs:224:        let grid = grid_for(rows64, 1, CUDA_GRID_X_MAX)?;
+crates/claymore-cuda/src/compute.rs:229:                crate::driver::cuLaunchKernel(
+crates/claymore-cuda/src/compute.rs:242:                "cuLaunchKernel(softmax_last_dim)",
+crates/claymore-cuda/src/compute.rs:266:        let grid = grid_for(rows64, 1, CUDA_GRID_X_MAX)?;
+crates/claymore-cuda/src/compute.rs:278:                crate::driver::cuLaunchKernel(
+crates/claymore-cuda/src/compute.rs:291:                "cuLaunchKernel(rms_norm)",
+crates/claymore-cuda/src/compute.rs:313:        let grid = grid_for(count, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX)?;
+crates/claymore-cuda/src/compute.rs:318:                crate::driver::cuLaunchKernel(
+crates/claymore-cuda/src/compute.rs:331:                "cuLaunchKernel(add_bf16)",
+crates/claymore-cuda/src/compute.rs:355:        let grid_x = grid_for(cols64, MATMUL_TILE, CUDA_GRID_X_MAX)?;
+crates/claymore-cuda/src/compute.rs:356:        let grid_y = grid_for(rows64, MATMUL_TILE, CUDA_GRID_Y_MAX)?;
+crates/claymore-cuda/src/compute.rs:368:                crate::driver::cuLaunchKernel(
+crates/claymore-cuda/src/compute.rs:381:                "cuLaunchKernel(matmul_bf16)",
+crates/claymore-cuda/src/compute.rs:402:        let grid = grid_for(rows64, 1, CUDA_GRID_X_MAX)?;
+crates/claymore-cuda/src/compute.rs:407:                crate::driver::cuLaunchKernel(
+crates/claymore-cuda/src/compute.rs:420:                "cuLaunchKernel(softmax_last_dim_bf16)",
+crates/claymore-cuda/src/compute.rs:444:        let grid = grid_for(rows64, 1, CUDA_GRID_X_MAX)?;
+crates/claymore-cuda/src/compute.rs:456:                crate::driver::cuLaunchKernel(
+crates/claymore-cuda/src/compute.rs:469:                "cuLaunchKernel(rms_norm_bf16)",
+crates/claymore-cuda/src/compute.rs:523:fn grid_for(total: u64, block: u32, maximum: u64) -> Result<c_uint, CudaError> {
+crates/claymore-cuda/src/compute.rs:589:        assert_eq!(grid_for(1, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX).unwrap(), 1);
+crates/claymore-cuda/src/compute.rs:591:            grid_for(257, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX).unwrap(),
+crates/claymore-cuda/src/compute.rs:595:            grid_for(4096, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX).unwrap(),
+crates/claymore-cuda/src/compute.rs:599:            grid_for(65_535 * 16, MATMUL_TILE, CUDA_GRID_Y_MAX).unwrap(),
+crates/claymore-cuda/src/compute.rs:603:            grid_for(65_536 * 16, MATMUL_TILE, CUDA_GRID_Y_MAX),
+crates/claymore-cuda/src/compute.rs:607:            grid_for(CUDA_GRID_X_MAX + 1, 1, CUDA_GRID_X_MAX),
+crates/claymore-cuda/src/compute.rs:611:            grid_for(u64::MAX, 1, CUDA_GRID_X_MAX),
+DISPATCHER_X_LIMIT=2147483647
+DISPATCHER_Y_LIMIT=65535
+TYPED_REFUSAL=UnsupportedReason::LaunchLimit { axis, blocks, maximum }
+COMPUTE_ENGINE_REFUSAL=CudaError::InvalidLaunchConfiguration
+NO_OUT_OF_LIMIT_LAUNCH_TRANSMITTED=verified_by_grid_for_before_each_cuLaunchKernel
+COMMAND: grep -nE recoverable-failure / IN_FLIGHT recovery implementation
+22:const IN_FLIGHT: u64 = crate::lifecycle::IN_FLIGHT_TICK;
+328:/// `IN_FLIGHT`, so nothing that the GPU may still be using can be released.
+329:fn recover_launch_failure<S: CudaStreamOps>(
+341:                if let Err(error) = policy.mark_in_flight_until(id, tick) {
+344:                    *poisoned = true;
+346:                        let _ = policy.mark_in_flight_until(id, IN_FLIGHT);
+354:            *poisoned = true;
+356:                let _ = policy.mark_in_flight_until(id, IN_FLIGHT);
+662:                self.poisoned = true;
+665:                    .mark_in_flight_until(pinned_id, IN_FLIGHT)?;
+668:                    .mark_in_flight_until(device_id, IN_FLIGHT)?;
+675:            .mark_in_flight_until(pinned_id, IN_FLIGHT)?;
+678:            .mark_in_flight_until(device_id, IN_FLIGHT)?;
+724:                self.poisoned = true;
+727:                    .mark_in_flight_until(device_id, IN_FLIGHT)?;
+730:                    .mark_in_flight_until(pinned_id, IN_FLIGHT)?;
+737:            .mark_in_flight_until(device_id, IN_FLIGHT)?;
+740:            .mark_in_flight_until(pinned_id, IN_FLIGHT)?;
+919:            return Err(recover_launch_failure(
+934:            if let Err(error) = mark_launch_guard(&mut self.transfers.policy, id, IN_FLIGHT, index)
+936:                return Err(recover_launch_failure(
+956:            return Err(recover_launch_failure(
+1264:                safe_after_tick: IN_FLIGHT,
+1350:            IN_FLIGHT
+1381:            IN_FLIGHT
+1412:            IN_FLIGHT
+1454:            IN_FLIGHT
+1495:            IN_FLIGHT
+1574:            IN_FLIGHT
+1595:            IN_FLIGHT
+1638:            IN_FLIGHT
+1681:            IN_FLIGHT
+1832:                assert_eq!(manager.allocation(id).unwrap().safe_after_tick, IN_FLIGHT);
+1908:                assert_eq!(manager.allocation(id).unwrap().safe_after_tick, IN_FLIGHT);
+1994:                assert_eq!(manager.allocation(id).unwrap().safe_after_tick, IN_FLIGHT);
+COMMAND: grep recoverable-fault test results in both campaign logs
+docs/audits/m8-followup-01-hardware-run1.log.txt:test cuda::tests::injected_create_event_failure_leaves_every_allocation_releasable ... ok
+docs/audits/m8-followup-01-hardware-run1.log.txt:test cuda::tests::injected_event_record_failure_with_successful_sync_lifts_every_guard ... ok
+docs/audits/m8-followup-01-hardware-run1.log.txt:test cuda::tests::injected_event_record_failure_with_sync_error_preserves_gpu_guards ... ok
+docs/audits/m8-followup-01-hardware-run1.log.txt:test cuda::tests::injected_launch_failure_with_successful_sync_releases_every_allocation ... ok
+docs/audits/m8-followup-01-hardware-run1.log.txt:test cuda::tests::injected_launch_failure_with_sync_error_poisons_and_pins_all_allocations ... ok
+docs/audits/m8-followup-01-hardware-run1.log.txt:test cuda::tests::injected_partial_guard_failure_with_successful_sync_lifts_only_installed_guards ... ok
+docs/audits/m8-followup-01-hardware-run1.log.txt:test cuda::tests::injected_partial_guard_failure_with_sync_error_poisons_and_pins_all_allocations ... ok
+docs/audits/m8-followup-02-hardware-run2.log.txt:test cuda::tests::injected_create_event_failure_leaves_every_allocation_releasable ... ok
+docs/audits/m8-followup-02-hardware-run2.log.txt:test cuda::tests::injected_event_record_failure_with_successful_sync_lifts_every_guard ... ok
+docs/audits/m8-followup-02-hardware-run2.log.txt:test cuda::tests::injected_event_record_failure_with_sync_error_preserves_gpu_guards ... ok
+docs/audits/m8-followup-02-hardware-run2.log.txt:test cuda::tests::injected_launch_failure_with_successful_sync_releases_every_allocation ... ok
+docs/audits/m8-followup-02-hardware-run2.log.txt:test cuda::tests::injected_launch_failure_with_sync_error_poisons_and_pins_all_allocations ... ok
+docs/audits/m8-followup-02-hardware-run2.log.txt:test cuda::tests::injected_partial_guard_failure_with_successful_sync_lifts_only_installed_guards ... ok
+docs/audits/m8-followup-02-hardware-run2.log.txt:test cuda::tests::injected_partial_guard_failure_with_sync_error_poisons_and_pins_all_allocations ... ok
+RECOVERABLE_FAILURE_GUARDS_LIFTED=verified_by_passing_launch_event_record_and_partial_guard_tests
+COMMAND: grep CI workspace test coverage
+31:        run: cargo test --workspace --all-targets --locked
+64:        run: cargo test --workspace --all-targets --locked
+
+[PTX / KERNEL IMMUTABILITY]
+COMMAND: grep -nE ^\s*\.(version|target) in embedded PTX
+crates/claymore-cuda/src/kernels/m8_f32.ptx:9:.version 9.0
+crates/claymore-cuda/src/kernels/m8_f32.ptx:10:.target sm_120
+crates/claymore-cuda/src/kernels/m8_bf16.ptx:9:.version 9.0
+crates/claymore-cuda/src/kernels/m8_bf16.ptx:10:.target sm_120
+COMMAND: sha256sum protected kernel and corrected Rust artifacts
+5d20ae0ed15affb35ef1c63ef33fc391b094490d6e3d1d499f6891eabbfb33fc  crates/claymore-cuda/kernels/m8_f32.cu
+a276fe54e34b54903591f18f2a777fdf7cae1f11bd64498b47df54a96273dc41  crates/claymore-cuda/kernels/m8_bf16.cu
+e2cf50f5edf18b0f5b64086a077c9aa53aa405b1adab28249e8b79f9594a6dde  crates/claymore-cuda/src/kernels/m8_f32.ptx
+886ede72b76b6bdbd64e03588cdda3011f2e1e1a08534fd24ee52c576dfa4153  crates/claymore-cuda/src/kernels/m8_bf16.ptx
+cd017f6d599fa3fd31f96a64253654883da7050cac417d2cbb5fbef8b1f10e57  crates/claymore-tensor/src/contracts.rs
+b9d1435e98fbf3666bf2d61a158efd79254d092834a77eda007d3d29642dda97  crates/claymore-cuda/src/compute.rs
+
+[GPU / VRAM ACCOUNTING]
+COMMAND: nvidia-smi --query-gpu=timestamp,name,uuid,driver_version,memory.total,memory.used,memory.free,utilization.gpu --format=csv,noheader
+2026/11/22 22:40:27.879, NVIDIA GeForce RTX 5090, GPU-7556cae7-89a8-6267-b8b4-4e2edb9981d6, 616.64, 32607 MiB, 1374 MiB, 30814 MiB, 6 %
+COMMAND: nvidia-smi
+Sun Nov 22 22:40:27 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+|  0%   48C    P8             47W /  575W |    1374MiB /  32607MiB |      6%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A          540639      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+
+VRAM_BEFORE_CAMPAIGN_1=1387 MiB used / 30801 MiB free / 32607 MiB total
+VRAM_AFTER_CAMPAIGN_1_AND_BEFORE_CAMPAIGN_2=1387 MiB used / 30801 MiB free / 32607 MiB total
+VRAM_AFTER_CAMPAIGN_2=1387 MiB used / 30801 MiB free / 32607 MiB total
+VRAM_DELTA_OBSERVED=0 MiB used (nvidia-smi snapshots; Xwayland baseline included)
+DRIVER_REPORTED_DURING_TESTS=34162016256 bytes total / 32429309952 bytes free
+
+[AUTHORIZED DOCUMENTARY CHANGES ONLY]
+COMMAND: git status --short --branch
+## feat/m8-tensor-foundation...origin/feat/m8-tensor-foundation
+?? docs/audits/m8-followup-00-environment.log.txt
+?? docs/audits/m8-followup-01-hardware-run1.log.txt
+?? docs/audits/m8-followup-02-hardware-run2.log.txt
+?? docs/audits/m8-followup-03-post-campaign.log.txt
+COMMAND: git ls-files --others --exclude-standard
+docs/audits/m8-followup-00-environment.log.txt
+docs/audits/m8-followup-01-hardware-run1.log.txt
+docs/audits/m8-followup-02-hardware-run2.log.txt
+docs/audits/m8-followup-03-post-campaign.log.txt
+UNTRACKED_AUDIT_FILES_AT_POST_CAMPAIGN_CAPTURE=4
+SOURCE_AND_CONFIGURATION_CHANGES=0
+
+[SHA-256 OF FINALIZED LOGS 00-02]
+COMMAND: sha256sum docs/audits/m8-followup-00-environment.log.txt docs/audits/m8-followup-01-hardware-run1.log.txt docs/audits/m8-followup-02-hardware-run2.log.txt
+01fadd844fb9e74a355b1eacc9b8a4fd1e185a068fb91a022a33dcd38f03746d  docs/audits/m8-followup-00-environment.log.txt
+ada5451d80c082c291e91411bbe89be4b667936a66185b96f2751b4887112200  docs/audits/m8-followup-01-hardware-run1.log.txt
+ec8def5b8f26805ad81d588bcf57b7ab9e20db3190026878f52bf07b3a1fc243  docs/audits/m8-followup-02-hardware-run2.log.txt
+
+FINAL_RESULT=52/52 passed and 0 failed in each of 2 campaigns; 104/104 total executions
+FINAL_CAMPAIGN_1_EXIT_CODE=0
+FINAL_CAMPAIGN_2_EXIT_CODE=0
+FINAL_SHA=93522028066be1dda91940d648983e89008f5e7c
+END_LOCAL=2026-11-22T22:40:27+01:00
+END_UTC=2026-11-22T21:40:27+00:00
+END_OF_POST_CAMPAIGN_LOG

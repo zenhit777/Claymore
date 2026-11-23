@@ -1,4 +1,4 @@
-//! Backend-neutral device, buffer, transfer, and tensor contracts.
+//! Backend-neutral device, buffer, and transfer contracts.
 //!
 //! No Send/Sync bounds are imposed: a concrete backend may be thread-affine
 //! (as the current CUDA primary-context owner is). Callers must respect the
@@ -21,6 +21,13 @@ static NEXT_DEVICE_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 pub struct DeviceInstanceId(u64);
 
 impl DeviceInstanceId {
+    /// Allocate a fresh process-local identity. Used by backend adapters that
+    /// own resources outside a `Device` implementation but still need to
+    /// attest buffer/device ownership through the shared contract.
+    pub fn new() -> Self {
+        Self::next()
+    }
+
     fn next() -> Self {
         let mut current = NEXT_DEVICE_INSTANCE_ID.load(Ordering::Relaxed);
         loop {
@@ -37,6 +44,12 @@ impl DeviceInstanceId {
                 Err(observed) => current = observed,
             }
         }
+    }
+}
+
+impl Default for DeviceInstanceId {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -167,17 +180,6 @@ pub enum DeviceError {
     },
     #[error("copy size {requested} exceeds source or destination capacity")]
     BufferTooSmall { requested: usize },
-    #[error("tensor shape contains a zero-sized dimension")]
-    EmptyTensorDimension,
-    #[error("tensor shape or byte size overflows usize")]
-    TensorSizeOverflow,
-    #[error("tensor requires {required} bytes but its buffer has {capacity}")]
-    TensorBufferTooSmall { required: usize, capacity: usize },
-    #[error("tensor shape rank {shape_rank} differs from stride rank {stride_rank}")]
-    TensorStrideRankMismatch {
-        shape_rank: usize,
-        stride_rank: usize,
-    },
 }
 
 fn checked_allocation_len(bytes: u64, platform_max: usize) -> Result<usize, DeviceError> {
@@ -420,190 +422,6 @@ impl DType {
     }
 }
 
-/// Owned contiguous tensor metadata and storage. No operators, autograd, or kernels.
-pub struct Tensor {
-    buffer: Box<dyn DeviceBuffer>,
-    shape: Vec<usize>,
-    strides: Vec<usize>,
-    dtype: DType,
-    numel: usize,
-}
-
-impl Tensor {
-    pub fn new(
-        buffer: Box<dyn DeviceBuffer>,
-        shape: impl Into<Vec<usize>>,
-        dtype: DType,
-    ) -> Result<Self, DeviceError> {
-        let shape = shape.into();
-        let mut numel = 1_usize;
-        for dimension in &shape {
-            if *dimension == 0 {
-                return Err(DeviceError::EmptyTensorDimension);
-            }
-            numel = numel
-                .checked_mul(*dimension)
-                .ok_or(DeviceError::TensorSizeOverflow)?;
-        }
-        let required = numel
-            .checked_mul(dtype.element_size_bytes())
-            .ok_or(DeviceError::TensorSizeOverflow)?;
-        if required > buffer.len() {
-            return Err(DeviceError::TensorBufferTooSmall {
-                required,
-                capacity: buffer.len(),
-            });
-        }
-        let mut strides = vec![1; shape.len()];
-        let mut stride = 1_usize;
-        for index in (0..shape.len()).rev() {
-            strides[index] = stride;
-            stride = stride
-                .checked_mul(shape[index])
-                .ok_or(DeviceError::TensorSizeOverflow)?;
-        }
-        Ok(Self {
-            buffer,
-            shape,
-            strides,
-            dtype,
-            numel,
-        })
-    }
-
-    pub fn shape(&self) -> &[usize] {
-        &self.shape
-    }
-    pub fn strides(&self) -> &[usize] {
-        &self.strides
-    }
-    pub fn dtype(&self) -> DType {
-        self.dtype
-    }
-    pub fn numel(&self) -> usize {
-        self.numel
-    }
-    pub fn required_bytes(&self) -> usize {
-        self.numel * self.dtype.element_size_bytes()
-    }
-    pub fn buffer(&self) -> &dyn DeviceBuffer {
-        self.buffer.as_ref()
-    }
-    pub fn buffer_mut(&mut self) -> &mut dyn DeviceBuffer {
-        self.buffer.as_mut()
-    }
-    pub fn into_buffer(self) -> Box<dyn DeviceBuffer> {
-        self.buffer
-    }
-
-    /// Create a borrowed strided view over this tensor's storage.
-    pub fn view<'a>(
-        &'a self,
-        shape: impl Into<Vec<usize>>,
-        strides: impl Into<Vec<usize>>,
-        offset_bytes: usize,
-    ) -> Result<TensorView<'a>, DeviceError> {
-        TensorView::new(
-            self.buffer.as_ref(),
-            shape,
-            strides,
-            self.dtype,
-            offset_bytes,
-        )
-    }
-}
-
-/// Borrowed tensor metadata over an existing allocation. Strides are measured
-/// in elements; offset_bytes is measured in bytes. No storage is allocated.
-pub struct TensorView<'a> {
-    buffer: &'a dyn DeviceBuffer,
-    shape: Vec<usize>,
-    strides: Vec<usize>,
-    dtype: DType,
-    numel: usize,
-    offset_bytes: usize,
-    span_bytes: usize,
-}
-
-impl<'a> TensorView<'a> {
-    pub fn new(
-        buffer: &'a dyn DeviceBuffer,
-        shape: impl Into<Vec<usize>>,
-        strides: impl Into<Vec<usize>>,
-        dtype: DType,
-        offset_bytes: usize,
-    ) -> Result<Self, DeviceError> {
-        let shape = shape.into();
-        let strides = strides.into();
-        if shape.len() != strides.len() {
-            return Err(DeviceError::TensorStrideRankMismatch {
-                shape_rank: shape.len(),
-                stride_rank: strides.len(),
-            });
-        }
-        let mut numel = 1_usize;
-        let mut max_element_offset = 0_usize;
-        for (&dimension, &stride) in shape.iter().zip(&strides) {
-            if dimension == 0 {
-                return Err(DeviceError::EmptyTensorDimension);
-            }
-            numel = numel
-                .checked_mul(dimension)
-                .ok_or(DeviceError::TensorSizeOverflow)?;
-            let axis_span = (dimension - 1)
-                .checked_mul(stride)
-                .ok_or(DeviceError::TensorSizeOverflow)?;
-            max_element_offset = max_element_offset
-                .checked_add(axis_span)
-                .ok_or(DeviceError::TensorSizeOverflow)?;
-        }
-        let span_bytes = max_element_offset
-            .checked_add(1)
-            .and_then(|elements| elements.checked_mul(dtype.element_size_bytes()))
-            .ok_or(DeviceError::TensorSizeOverflow)?;
-        let end = offset_bytes
-            .checked_add(span_bytes)
-            .ok_or(DeviceError::TensorSizeOverflow)?;
-        if end > buffer.len() {
-            return Err(DeviceError::TensorBufferTooSmall {
-                required: end,
-                capacity: buffer.len(),
-            });
-        }
-        Ok(Self {
-            buffer,
-            shape,
-            strides,
-            dtype,
-            numel,
-            offset_bytes,
-            span_bytes,
-        })
-    }
-
-    pub fn shape(&self) -> &[usize] {
-        &self.shape
-    }
-    pub fn strides(&self) -> &[usize] {
-        &self.strides
-    }
-    pub fn dtype(&self) -> DType {
-        self.dtype
-    }
-    pub fn numel(&self) -> usize {
-        self.numel
-    }
-    pub fn offset_bytes(&self) -> usize {
-        self.offset_bytes
-    }
-    pub fn span_bytes(&self) -> usize {
-        self.span_bytes
-    }
-    pub fn buffer(&self) -> &'a dyn DeviceBuffer {
-        self.buffer
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -826,57 +644,6 @@ mod tests {
         assert_eq!(
             device.read(buffer.as_ref(), 0, 1),
             Err(DeviceError::BufferReleased)
-        );
-    }
-
-    #[test]
-    fn tensor_view_supports_non_contiguous_layouts() {
-        let device = CpuDevice::new();
-        let buffer = device.allocate(MemoryTier::Host, 64).unwrap();
-        let view = TensorView::new(&*buffer, vec![2, 3], vec![5, 1], DType::F32, 4).unwrap();
-        assert_eq!(view.shape(), [2, 3]);
-        assert_eq!(view.strides(), [5, 1]);
-        assert_eq!(view.offset_bytes(), 4);
-        assert_eq!(view.span_bytes(), 32);
-    }
-
-    #[test]
-    fn tensor_view_rejects_rank_mismatch_and_out_of_bounds_span() {
-        let device = CpuDevice::new();
-        let buffer = device.allocate(MemoryTier::Host, 16).unwrap();
-        assert!(matches!(
-            TensorView::new(&*buffer, vec![2, 3], vec![3], DType::F32, 0),
-            Err(DeviceError::TensorStrideRankMismatch { .. })
-        ));
-        assert!(matches!(
-            TensorView::new(&*buffer, vec![2, 3], vec![5, 1], DType::F32, 0),
-            Err(DeviceError::TensorBufferTooSmall { .. })
-        ));
-    }
-
-    #[test]
-    fn tensor_computes_contiguous_shape_and_strides() {
-        let device = CpuDevice::new();
-        let buffer = device.allocate(MemoryTier::Host, 24).unwrap();
-        let tensor = Tensor::new(buffer, vec![2, 3], DType::F32).unwrap();
-        assert_eq!(tensor.shape(), [2, 3]);
-        assert_eq!(tensor.strides(), [3, 1]);
-        assert_eq!(tensor.numel(), 6);
-        assert_eq!(tensor.required_bytes(), 24);
-    }
-
-    #[test]
-    fn tensor_rejects_insufficient_storage_and_empty_dimensions() {
-        let device = CpuDevice::new();
-        let small = device.allocate(MemoryTier::Host, 8).unwrap();
-        assert!(matches!(
-            Tensor::new(small, vec![3], DType::F32),
-            Err(DeviceError::TensorBufferTooSmall { .. })
-        ));
-        let buffer = device.allocate(MemoryTier::Host, 4).unwrap();
-        assert_eq!(
-            Tensor::new(buffer, vec![0], DType::F32).err(),
-            Some(DeviceError::EmptyTensorDimension)
         );
     }
 }

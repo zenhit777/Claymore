@@ -27,9 +27,18 @@ The feature links against the NVIDIA driver library (`libcuda.so.1`). It require
 
 Async copy methods are unsafe by design. Callers must keep both allocations alive and prevent conflicting access until the stream completes. The memory crate's logical event horizon is not automatically wired to CUDA events yet; that adapter is future work. A buffer must not be dropped until all work using it has completed.
 
-## Known limitations
+## M8 addition: native F32 kernels
 
-- Compute capability is not queried yet.
+`claymore-cuda` now also provides `CudaComputeEngine`, which loads the checked-in
+`sm_120` PTX (`src/kernels/m8_f32.ptx`, generated from `kernels/m8_f32.cu`) and
+launches add, rank-2 matmul, stable softmax and RMSNorm through
+`cuModuleLoadData` / `cuModuleGetFunction` / `cuLaunchKernel`. The default build
+still needs neither CUDA nor a GPU. See [m8-architecture.md](m8-architecture.md)
+for the generation command, context checks, tolerances and memory integration.
+
+## Known limitations (historical v0.4 scope)
+
+- Compute capability is now queried by `CudaDriver::new` (this older note is kept only for traceability).
 - Device selection is ordinal-based.
 - No allocator pool, defragmentation, telemetry, or automatic eviction integration yet.
 - No WSL2 runtime test has been performed from this development environment.

@@ -46,6 +46,7 @@ dependencies = [
  "claymore-cuda",
  "claymore-device",
  "claymore-scheduler",
+ "claymore-tensor",
  "thiserror",
 ]
 
@@ -78,6 +79,15 @@ dependencies = [
 name = "claymore-scheduler"
 version = "0.5.0"
 dependencies = [
+ "thiserror",
+]
+
+[[package]]
+name = "claymore-tensor"
+version = "0.5.0"
+dependencies = [
+ "claymore-core",
+ "claymore-device",
  "thiserror",
 ]
 

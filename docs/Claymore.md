@@ -6,7 +6,7 @@
 > **Dépôt :** https://github.com/zenhit777/Claymore  
 > **Version de référence du workspace :** 0.5.0  
 > **État du document :** référence vivante, à mettre à jour à chaque jalon  
-> **Dernière mise à jour :** 21 novembre 2026
+> **Dernière mise à jour :** 22 novembre 2026
 
 ---
 
@@ -92,7 +92,7 @@ Ne sont pas des objectifs des premières versions :
 
 ## 3. Périmètre modèles
 
-Les deux cibles fonctionnelles initiales sont indépendantes et doivent disposer chacune de leur propre moteur/adaptateur.
+Les deux cibles fonctionnelles initiales sont indépendantes et disposent chacune d'un adaptateur spécialisé, construit au-dessus d'un runtime, d'un socle tensoriel et de services transverses communs. L'orchestration de diffusion est modulaire : les invariants communs sont factorisés, tandis que les stratégies préservent les différences réelles entre modèles.
 
 ### 3.1 DiffusionGemma
 
@@ -128,7 +128,7 @@ Le cache d'experts est une politique de résidence sous contrainte mémoire. Il 
 
 ### 3.3 Principe d'isolation
 
-Les moteurs DiffusionGemma et Clover peuvent partager le runtime, les abstractions de mémoire, le scheduler, le backend CUDA et les utilitaires de tenseurs. Ils ne doivent pas être forcés dans une abstraction commune qui masquerait des différences fondamentales de calcul ou de cycle de vie.
+DiffusionGemma et Clover partagent un seul runtime, le socle tensoriel natif, les abstractions de mémoire, le scheduler, le backend CUDA et une orchestration de diffusion modulaire. Les adaptateurs spécialisés conservent les différences fondamentales de graphe, de calcul et de cycle de vie ; ils ne deviennent pas des runtimes ou moteurs tensoriels indépendants.
 
 ---
 
@@ -144,8 +144,8 @@ La première cible de développement et de validation est la machine suivante :
 | RAM système | 128 Gio |
 | Environnement | WSL2 sous Windows |
 | Langage | Rust, édition 2021 |
-| Backend de tenseurs visé | Moteur tensoriel natif Claymore (à construire) |
-| Politique numérique | précision mixte, BF16 privilégié lorsque supporté |
+| Backend de tenseurs visé | Moteur tensoriel natif Claymore (socle implémenté en M8 dans la PR #24 non fusionnée, extensions M9-M12) |
+| Politique numérique | précision mixte, BF16 et FP32 supportés dans les primitives M8 ; FP16 non implémenté |
 
 Cette configuration est le profil de référence, pas une limite architecturale du projet. Les paramètres matériels doivent rester configurables.
 
@@ -155,7 +155,7 @@ Décision initiale :
 
 - **BF16** comme précision préférée lorsque le matériel, le modèle et les kernels la supportent correctement ;
 - **FP32** pour les accumulations ou opérations sensibles qui le nécessitent ;
-- **FP16** comme solution de repli lorsque BF16 n'est pas disponible ou approprié ;
+- **FP16** comme solution de repli *envisagée* lorsque BF16 n'est pas disponible ou approprié : le type existe dans `DType`, mais aucun chemin FP16 n'est implémenté ni validé ; aucun repli implicite n'est autorisé ;
 - **INT8 / INT4** comme axes ultérieurs d'optimisation, après mesures de qualité et de performance.
 
 Aucune quantification ne doit être activée par défaut sans validation de la qualité de génération, de la stabilité numérique et du gain réel.
@@ -243,10 +243,10 @@ L'architecture est organisée en couches avec des frontières explicites.
    - diagnostics et CLI ;
    - orchestration de haut niveau.
 
-2. **Moteurs de modèles**
-   - adaptateur DiffusionGemma ;
-   - adaptateur Clover ;
-   - préparation des tenseurs, exécution et états propres à chaque modèle.
+2. **Orchestration de diffusion et adaptateurs**
+   - orchestration commune, modulaire et extensible ;
+   - adaptateur DiffusionGemma et stratégie de denoising propres au modèle ;
+   - adaptateur Clover et stratégie block-diffusion/GDN/MoE propres au modèle.
 
 3. **Cœur d'optimisation**
    - memory orchestrator ;
@@ -268,7 +268,8 @@ L'architecture est organisée en couches avec des frontières explicites.
 | Crate | Responsabilité |
 |---|---|
 | `claymore-core` | Types partagés, configuration et contrats transverses |
-| `claymore-device` | Contrats Device/Buffer/Tensor indépendants du backend et simulateur CPU |
+| `claymore-device` | Contrats Device/Buffer indépendants du backend et simulateur CPU |
+| `claymore-tensor` | Modèle Tensor canonique, layouts, vues et opérations natives |
 | `claymore-memory` | Budgets, comptabilité, admission et politiques d'éviction |
 | `claymore-scheduler` | Graphe de tâches, files compute/transfer/prefetch, priorités et limites de préchargement |
 | `claymore-runtime` | Cycle de vie des requêtes, contexte d'exécution et orchestration synchrone indépendante des modèles |
@@ -304,6 +305,20 @@ Sont autorisés après revue de leur pertinence, de leur licence et de leur coû
 - les crates Rust utilitaires ciblées (par exemple `half` pour les types BF16/FP16, sérialisation, vérification ou instrumentation).
 
 Ces composants peuvent fournir des primitives spécialisées, mais l'API tensorielle, les règles d'ownership, la synchronisation, la gestion des allocations et les choix d'exécution restent définis par Claymore. Toute nouvelle dépendance doit être justifiée et validée ; aucune bibliothèque externe ne devient automatiquement une dépendance structurante du runtime.
+
+### 6.5 M8 — limites de lancement CUDA et contrat de dispatch
+
+`CudaComputeEngine` (`crates/claymore-cuda/src/compute.rs`) charge deux modules PTX (`m8_f32.ptx`, `m8_bf16.ptx`), résout huit symboles et lance chaque opération explicitement sur un stream fourni par l'appelant. Chaque lancement vérifie l'appartenance au même contexte (engine, modules, stream) ; il n'y a ni copie implicite, ni repli CPU, ni `cuCtxSynchronize` global dans cette couche. `CudaMemoryManager::launch_tensor_op` sélectionne le kernel de façon exacte sur le couple `(dtype, ShapeSignature)` : **aucun kernel ne traite les deux dtypes** et aucune combinaison non déclarée ne descend sur le device.
+
+| Opération (F32 et BF16) | Bloc (`cuLaunchKernel`) | Grille | Mémoire partagée dynamique |
+|---|---|---|---|
+| `add` | `ELEMENTWISE_BLOCK = 256`, `(256, 1, 1)` | `(ceil(numel / 256), 1, 1)`, boucle grid-stride de pas `blockDim.x * gridDim.x` | 0 |
+| `matmul` | `MATMUL_TILE = 16`, `(16, 16, 1)` = 256 threads | `(ceil(cols / 16), ceil(rows / 16), 1)` ; un thread par élément de sortie, boucle sur `K` | 0 |
+| `softmax_last_dim`, `rms_norm` | `(256, 1, 1)` | `(rows, 1, 1)`, un bloc par ligne | `ELEMENTWISE_BLOCK * 4 = 1024` octets (un `f32` par thread) |
+
+`grid_for` calcule `total.div_ceil(block)` et convertit le résultat en `c_uint` : au-delà de la plage `u32`, le lancement est refusé par `InvalidLaunchConfiguration("grid dimension exceeds CUDA limit")`. Aucune interrogation des limites réelles du device n'est effectuée. Les dimensions nulles sont rejetées en amont (`checked_count`, `checked_matmul`, `checked_last_dim`). Le matmul est une implémentation simple, sans tuilage en mémoire partagée ni Tensor Core ; la performance relève de M12.
+
+Le profil matériel impose exactement **un stream compute et un stream transfer** (`HardwareProfile::validate`) ; `CudaMemoryManager` les crée tous deux avec `CU_STREAM_NON_BLOCKING`. Toutes les opérations tensorielles d'un même manager sont sérialisées sur ce stream compute unique, chacune avec son propre event CUDA : les gardes `IN_FLIGHT` sont installés avant le retour de `launch_tensor_op` (la soumission a lieu sous emprunt exclusif de `&mut self`) et levés seulement après `wait_for_transfer`. Aucun recouvrement transfert/calcul ni préchargement concurrent n'est revendiqué ; l'expression explicite des dépendances compute ↔ transfert reste une limite suivie (§7.3). Les écarts numériques CPU/CUDA et la provenance des PTX sont documentés dans [audits/m8-cpu-cuda-numerics.md](audits/m8-cpu-cuda-numerics.md) et [audits/m8-ptx-provenance.md](audits/m8-ptx-provenance.md).
 
 
 ---
@@ -381,7 +396,7 @@ Le build par défaut reste indépendant du matériel. La feature CUDA requiert u
 
 #### M2 — Device / Tensor (backend CPU)
 
-**État :** livré sur `main` par la PR #6. Le crate `claymore-device` fournit les contrats `Device`, `DeviceBuffer`, `DeviceCapabilities`, le type `Tensor` et le simulateur `CpuDevice`. `claymore-memory` fournit `DeviceMemoryManager<D>` pour appliquer les politiques d'admission et d'éviction sur ces contrats.
+**État :** livré sur `main` par la PR #6. Le crate `claymore-device` fournit les contrats `Device`, `DeviceBuffer`, `DeviceCapabilities` et le simulateur `CpuDevice`. Le type `Tensor` canonique vit dans `claymore-tensor` : les anciennes définitions `Tensor` / `TensorView` de `claymore-device` ont été retirées pendant M8 (§6.2 et §10). `claymore-memory` fournit `DeviceMemoryManager<D>` pour appliquer les politiques d'admission et d'éviction sur ces contrats.
 
 Ce jalon livre des abstractions backend-neutres et leur validation CPU ; il ne livre aucun calcul tensoriel ni opérateur. Le backend CUDA existant n'implémente pas encore `Device` et son raccordement reste conditionné à un contrat de libération faillible et de protection des allocations en vol (voir §7.3 et l'audit M2).
 
@@ -548,10 +563,11 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
 | M7 | Scheduler et orchestration mémoire | **Livré sur `main` par la PR #21** |
 | M7.1 | Durcissement scheduler/runtime et préparation M8 | **Livré sur `main` par la PR #22** ; CI verte ; revalidation RTX 5090 réussie au SHA de code `c16e925` (17/17 requis par campagne, deux campagnes ; 27/27 tests workspace par campagne) ; limites restantes suivies dans l'issue #23 |
-| M8 | Moteur tensoriel Claymore et premier chemin modèle | Planifié |
-| M9 | Stratégie autoregressive | Planifié |
-| M10 | Stratégie diffusion (DiffusionGemma / Clover) | Planifié |
-| M11 | Optimisation et validation de performance | Planifié |
+| M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **Implémenté dans la PR #24, finalisation BF16 incluse ; PR ouverte, non fusionnée dans `main`** (branche `feat/m8-tensor-foundation`) — Tensor canonique, contrats, dispatch, kernels CUDA F32 et BF16, intégration mémoire/scheduler ; preuves matérielles RTX 5090 versionnées |
+| M9 | Orchestration de diffusion modulaire commune | Planifié |
+| M10 | Adaptateur et intégration DiffusionGemma | Planifié |
+| M11 | Adaptateur et intégration Clover | Planifié |
+| M12 | Optimisation et validation de performance | Planifié |
 
 ### M0 — Scaffold et configuration
 
@@ -586,7 +602,7 @@ Critères d'acceptation :
 
 **Objectif :** définir des interfaces communes et explicites pour les devices, buffers, transferts et tenseurs, sans exposer les détails CUDA aux couches supérieures.
 
-**État :** livré pour le contrat backend-neutre et le backend CPU. `claymore-device` expose `Device`, `DeviceBuffer`, `DeviceCapabilities`, `Tensor` et `CpuDevice`. `claymore-memory` fournit `DeviceMemoryManager<D>` qui applique les politiques d'admission et d'éviction sur ces contrats.
+**État :** livré pour le contrat backend-neutre et le backend CPU. `claymore-device` expose `Device`, `DeviceBuffer`, `DeviceCapabilities` et `CpuDevice` ; `claymore-tensor` porte les types `Tensor`, `TensorLayout` et `TensorView`. `claymore-memory` fournit `DeviceMemoryManager<D>` qui applique les politiques d'admission et d'éviction sur ces contrats.
 
 Critères d'acceptation :
 - backend simulé CPU pour les contrats Device/Tensor et l'adaptateur mémoire : livré et testé sans GPU ;
@@ -605,7 +621,7 @@ Travaux :
 - séparer les erreurs de capacité/overflow des échecs d'allocation ;
 - couvrir les cas limites du backend CPU et de l'adaptateur mémoire.
 
-**État :** implémentation regroupée dans la PR M3 ; les changements ne sont livrés qu'après fusion.
+**État :** livré sur `main` par la PR **#15** (fusionnée le 20 novembre 2026) ; voir §7.0.
 
 Critères d'acceptation : les issues #7 à #10 sont couvertes, les tests CPU sont déterministes, la CI passe sur MSRV et stable, et la revue architecturale valide les contrats.
 
@@ -697,44 +713,68 @@ Critères d'acceptation :
 - tests démontrant la conservation des gardes et de la comptabilité en cas d'erreur backend ;
 - conception M8 relue, sans commencer l'implémentation du moteur tensoriel dans cette PR.
 
-### M8 — Moteur tensoriel Claymore et premier chemin modèle
+### M8 — Socle tensoriel natif Claymore
 
-**Objectif :** construire le premier chemin tensoriel natif de Claymore et exécuter une étape représentative et reproductible d'un modèle de référence selon son véritable paradigme d'exécution. Le jalon ne présuppose pas un forward pass autoregressif ni une boucle unique commune aux modèles.
+**Objectif :** livrer un seul modèle Tensor natif, les opérations de référence, le dispatch explicite et les backends CPU/CUDA qui serviront à l'orchestration de diffusion et aux deux adaptateurs. M8 ne développe aucune stratégie autoregressive ni boucle de génération de modèle.
+
+**État :** implémenté dans la **PR #24 ouverte, non fusionnée dans `main`** (branche `feat/m8-tensor-foundation`), y compris la finalisation BF16 et la validation matérielle documentée séparément. Le crate claymore-tensor porte le Tensor canonique, les layouts validés, les vues empruntées, les opérations CPU F32 **et BF16** de référence (add, matmul, softmax, RMSNorm), les contrats typés (`contracts.rs`) et le dispatch déterministe avec explication de chaque refus. Les définitions Tensor concurrentes ont été retirées de claymore-device. Les huit kernels CUDA (quatre F32, quatre BF16) sont intégrés via une feature optionnelle, avec deux PTX `sm_120` versionnés, chargement par la Driver API, event de complétion réel et intégration aux budgets/gardes de claymore-memory et aux files du scheduler. BF16 utilise une représentation 16 bits exacte, une conversion FP32 explicite avec arrondi round-to-nearest-even et une accumulation FP32 pour matmul et réductions. FP16 reste non supporté. Le détail figure dans [m8-architecture.md](m8-architecture.md), dans le [rapport F32](audits/m8-rtx5090-hardware-validation.md), dans le [rapport BF16](audits/m8-bf16-rtx5090-hardware-validation.md), dans l'[audit des exigences de graphe](audits/m8-model-graph-requirements.md), dans l'[audit des différences numériques CPU/CUDA](audits/m8-cpu-cuda-numerics.md) et dans le [manifeste de provenance des PTX](audits/m8-ptx-provenance.md). Les opérations spécifiques aux modèles relèvent des adaptateurs M10/M11.
 
 Travaux :
-- définir et stabiliser les primitives de calcul tensoriel natives de Claymore ;
-- définir le chargement et la représentation des poids ;
-- connecter les opérations tensorielles aux contrats Device / Tensor / Memory et au backend d'exécution Claymore ;
-- valider formes, précision, sorties et durée de vie des buffers.
+- finaliser les contrats Tensor, layouts, vues, aliasing et durée de vie ;
+- formaliser les opérations, contraintes de shape/dtype/layout, erreurs et tolérances numériques ;
+- fournir les kernels CPU de référence F32 et BF16 et un dispatch explicite par capacités ;
+- raccorder les allocations et opérations aux services memory/scheduler, sans contourner les gardes ;
+- implémenter les kernels CUDA F32 et BF16 derrière la feature optionnelle ;
+- traiter le prérequis BF16 identifié pour les checkpoints DiffusionGemma et Clover ; la sélection des primitives supplémentaires appartient aux phases M9/M10/M11.
 
 Critères d'acceptation :
-- étape d'exécution représentative reproductible sur CPU ou GPU, avec les contrôles numériques propres au paradigme du modèle ;
-- test d'interopérabilité avec le contexte CUDA partagé ;
-- mesure du pic RAM/VRAM et libération propre des ressources.
+- un seul type Tensor canonique dans claymore-tensor ;
+- opérations de référence testées sur CPU, sans cast, broadcasting ou fallback implicite ;
+- dispatch déterministe et erreurs explicites pour les combinaisons non supportées ;
+- intégration des durées de vie et de l'admission mémoire avec les contrats M7/M7.1 ;
+- CI workspace, Clippy, format, MSRV et compilation CUDA sans GPU ;
+- tests différentiels RTX 5090 F32 et BF16 documentés au SHA de code réellement exécuté, en deux campagnes consécutives.
 
-### M9 — Stratégie autoregressive
+### M9 — Orchestration de diffusion modulaire commune
 
-**Objectif :** fournir une stratégie de génération autoregressive réutilisant le runtime unifié.
+**Objectif :** construire le moteur d'orchestration de diffusion commun de Claymore, modulaire et extensible, au-dessus du runtime et du socle tensoriel M8.
 
-Travaux : prefill, décodage token par token, KV cache, sampling, arrêt et gestion de plusieurs requêtes.
+Travaux :
+- définir le cycle de génération, les états et les contrats de progression communs ;
+- factoriser les invariants partagés sans imposer une boucle ou un graphe unique ;
+- définir les interfaces de stratégies et points d'extension pour canvas/state, denoising, attention, block diffusion, GDN et routage expert ;
+- intégrer scheduler, mémoire, transferts, annulation et télémétrie ;
+- valider les transitions et erreurs par des stratégies simulées CPU.
 
-Critères d'acceptation : génération de référence reproductible, tests du cache et mesure de latence/débit.
+Critères d'acceptation :
+- un seul moteur d'orchestration de diffusion et des stratégies composables ;
+- aucune dépendance aux détails d'un modèle dans le cœur commun ;
+- tests démontrant l'extensibilité sans imposer de fausse abstraction commune ;
+- sûreté des ressources et annulation vérifiées de bout en bout.
 
-### M10 — Stratégie diffusion (DiffusionGemma / Clover)
+### M10 — Adaptateur DiffusionGemma
 
-**Objectif :** ajouter la génération itérative par canvas et les besoins propres aux architectures ciblées.
+**Objectif :** intégrer google/diffusiongemma-26B-A4B-it au moteur de diffusion commun, en conservant les exigences propres à son architecture.
 
-Travaux : états de canvas, denoising, politiques de confiance, commit, replay causal si requis, self-conditioning, GDN et routage MoE selon le modèle.
+Travaux : lecture du checkpoint et de sa configuration, représentation canvas/état, progression de denoising, attention bidirectionnelle, choix de précision et validation numérique, chargement des poids et gestion des tenseurs intermédiaires.
 
-Critères d'acceptation : cas de génération reproductible, cohérence des états, qualité comparée à une référence et mesures mémoire.
+Critères d'acceptation : étape réelle et reproductible du graphe du modèle, comparaison numérique à une référence fiable, gestion mémoire et campagne RTX 5090 versionnée.
 
-### M11 — Optimisation et validation de performance
+### M11 — Adaptateur Clover
 
-**Objectif :** optimiser les chemins réellement identifiés comme limitants.
+**Objectif :** intégrer Clover-35B-A3B-preview au même moteur de diffusion et aux services Claymore, sans effacer ses spécificités GDN, block diffusion et MoE.
 
-Travaux : profiling, expert cache, offloading, transferts groupés, kernels spécialisés si justifiés, quantification et tuning des streams/workers.
+Travaux : lecture du checkpoint/configuration, stratégies GDN et block diffusion, routage expert, cache/résidence/préchargement, synchronisation des transferts et états spécifiques.
 
-Critères d'acceptation : benchmarks reproductibles, gains mesurés, absence de régression de qualité non acceptée et respect des budgets mémoire.
+Critères d'acceptation : chemin représentatif réel, cohérence du routage et des états, validation numérique, mesures mémoire et campagne RTX 5090 versionnée.
+
+### M12 — Optimisation et validation de performance
+
+**Objectif :** optimiser les chemins réellement identifiés comme limitants sur les deux modèles.
+
+Travaux : profiling, kernels spécialisés, politiques de précision, quantification après validation qualité, offloading, transferts groupés et tuning scheduler/streams.
+
+Critères d'acceptation : benchmarks reproductibles, gains mesurés, respect des budgets et absence de régression de qualité non acceptée.
 
 ---
 
@@ -769,7 +809,7 @@ RUSTFLAGS="-L native=/usr/lib/wsl/lib" cargo check -p claymore-cuda --features c
 RUSTFLAGS="-L native=/usr/lib/wsl/lib" cargo run -p claymore-cli --features cuda-driver -- device
 ```
 
-La disponibilité de `nvcc` dépend de l'installation du toolkit ; le backend Driver API a surtout besoin de la bibliothèque driver et de l'environnement de linkage approprié.
+La disponibilité de `nvcc` dépend de l'installation du toolkit ; le backend Driver API a surtout besoin de la bibliothèque driver et de l'environnement de linkage approprié. La version de nvcc réellement observée ici (release 13.0, V13.0.48), les commandes de régénération `sm_120` et les empreintes SHA-256 des deux PTX sont consignées dans [audits/m8-ptx-provenance.md](audits/m8-ptx-provenance.md).
 
 ### 11.3 Diagnostics système
 
@@ -803,7 +843,7 @@ Historique de référence :
 - **v0.3** : memory orchestrator host-side ;
 - **v0.4** : backend CUDA Driver API optionnel.
 
-Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in). La PR #6 a livré M2 (`Device` / `Tensor` et simulateur CPU). Les PR #15 et #16 ont livré M3 et M4 ; les PR #17 et #18 ont livré M5, dont le chemin nominal a été validé sur RTX 5090. La PR #20 a livré la première tranche M6. L'injection de fautes reste suivie séparément dans l'issue #19.
+Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in). La PR #6 a livré M2 (`Device` / `Tensor` et simulateur CPU ; le type `Tensor` a ensuite été recentré dans `claymore-tensor` pendant M8). Les PR #15 et #16 ont livré M3 et M4 ; les PR #17 et #18 ont livré M5, dont le chemin nominal a été validé sur RTX 5090. La PR #20 a livré la première tranche M6. L'injection de fautes reste suivie séparément dans l'issue #19.
 
 Une PR ne doit pas être déclarée prête uniquement parce que le code existe : elle doit préciser si les tests couvrent le build par défaut, la feature CUDA, le matériel réel ou seulement un backend simulé.
 
@@ -863,6 +903,12 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 - `docs/audits/m2-device-tensor-design.md` — contrats Device/Tensor et validation CPU.
 - `docs/audits/m3-device-foundations.md` — audit et durcissement des fondations Device.
 - `docs/audits/m4-device-lifecycle-contracts.md` — audit des contrats de libération, complétion asynchrone et vues tensor.
+- `docs/m8-architecture.md` — socle tensoriel natif, politique numérique F32/BF16 et tolérances.
+- `docs/audits/m8-model-graph-requirements.md` — exigences de graphe et frontières M8/M9/M10/M11.
+- `docs/audits/m8-rtx5090-hardware-validation.md` — campagne matérielle F32.
+- `docs/audits/m8-bf16-rtx5090-hardware-validation.md` — campagne matérielle BF16.
+- `docs/audits/m8-cpu-cuda-numerics.md` — différences numériques réelles CPU/CUDA (sous-normaux, réductions, `exp`, BF16/RNE).
+- `docs/audits/m8-ptx-provenance.md` — provenance, versions d'outils et empreintes SHA-256 des PTX intégrés.
 - `config/rtx5090-7950x3d.json` — profil machine versionné.
 
 ---
@@ -894,6 +940,8 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-22 | VRAM M7 : le soft-budget de 26 Gio est une cible d'éviction proactive, le hard-ceiling de 28 Gio est la limite stricte d'admission ; le cache experts (cible 14 Gio, maximum 16 Gio) est inclus dans le working set VRAM. |
 | 2026-11-22 | M7 : scheduler, `QueueRunner` et exécuteur CUDA sont synchrones et mono-propriétaires ; H2D/D2H ne complètent une tâche qu'après attente de l'event. Aucun overlap transfert/calcul ou prefetch concurrent n'est revendiqué. |
 | 2026-11-22 | Éviction Adaptive : comparer d'abord la chaleur (hit count), puis la récence (tick), et utiliser le coût de rechargement en nanosecondes uniquement comme départage ; un coût inconnu vaut zéro pour ce seul départage. Aucun chargeur ne l'alimente automatiquement à ce stade. |
+| 2026-11-22 | Finalisation M8 : BF16 est implémenté en 16 bits exacts avec conversion FP32 explicite et arrondi round-to-nearest-even. Matmul et réductions accumulent en FP32 ; la sortie BF16 est arrondie une seule fois. FP16 reste non supporté et aucun cast/fallback implicite n'est autorisé. |
+| 2026-11-22 | Les deux modules PTX (`m8_f32.ptx` et `m8_bf16.ptx`) ciblent `sm_120` ; les kernels BF16 utilisent `cvt.rn.bf16.f32` et `fma.rn.f32`. La tolérance matérielle BF16 est exprimée en pas représentables (0 pour add, 1 pour matmul/softmax/RMSNorm), fixée avant la campagne. |
 
 ### Correspondance de la feuille de route historique
 
