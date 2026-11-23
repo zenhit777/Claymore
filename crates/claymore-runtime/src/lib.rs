@@ -610,3 +610,11 @@ pub use profile::{
     HardwareInfo, HardwareProfile, HardwareProfileError, HostMemoryProfile, PrecisionPolicy,
     SchedulerProfile, VramProfile,
 };
+
+/// Shared block-based diffusion generation orchestration.
+pub mod diffusion;
+pub use diffusion::{
+    BlockId, DiffusionError, DiffusionExecutor, DiffusionMetrics, DiffusionOrchestrator,
+    DiffusionPlan, DiffusionRunOutcome, DiffusionSessionId, DiffusionSessionSnapshot,
+    DiffusionSessionState, DiffusionStep,
+};
