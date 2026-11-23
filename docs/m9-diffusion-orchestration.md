@@ -50,7 +50,7 @@ L'annulation est coopérative : avant une étape, elle empêche son exécution ;
 
 ## Télémétrie CPU
 
-Les compteurs sont déterministes pour une séquence donnée : sessions soumises/terminées/échouées/annulées, étapes commencées/terminées/échouées/annulées, blocs soumis et committés. `blocks_pending` est une jauge calculée à la lecture : blocs non committés appartenant aux sessions non terminales ; les blocs d'une session échouée ou annulée ne restent pas « en attente ».
+Les compteurs sont déterministes pour une séquence donnée : sessions soumises/terminées/échouées/annulées, étapes commencées/terminées/échouées/annulées, blocs soumis et committés. Une étape en attente annulée par l'annulation d'une session est comptée dans `steps_cancelled` ; les étapes dépendantes annulées à la suite d'un échec sont également comptées. Une étape qui a réussi avant l'observation de l'annulation reste comptée comme terminée. `blocks_pending` est une jauge calculée à la lecture : blocs non committés appartenant aux sessions non terminales ; les blocs d'une session échouée ou annulée ne restent pas « en attente ».
 
 Les durées `*_duration_ns` sont des mesures monotones du seul appel `DiffusionExecutor::execute_step`, classées par phase. `execution_duration_ns` est leur somme. Elles excluent l'attente dans le scheduler et le temps de préparation du scheduler ; elles sont diagnostiques, non déterministes entre exécutions et ne pilotent ni l'ordre des tâches ni les transitions. Aucun compteur VRAM, CUDA ou GPU n'est synthétisé par ce module.
 
