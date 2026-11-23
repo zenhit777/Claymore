@@ -17,7 +17,8 @@ Claymore is an experimental Rust inference runtime with its own device, memory, 
 The workspace is split into ten crates:
 
 - `claymore-core`: shared runtime types and configuration
-- `claymore-device`: backend-neutral Device/Buffer contracts and CPU simulator\n- `claymore-tensor`: canonical Tensor/Layout/View types and native tensor operations
+- `claymore-device`: backend-neutral Device/Buffer contracts and CPU simulator
+- `claymore-tensor`: canonical Tensor/Layout/View types and native tensor operations
 - `claymore-memory`: memory budgets, placement policies, and expert-cache policy
 - `claymore-scheduler`: work scheduling and prefetch policy
 - `claymore-runtime`: model-agnostic request lifecycle, execution context, and cancellation
