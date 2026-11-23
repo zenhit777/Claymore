@@ -8,8 +8,7 @@
 use std::collections::BTreeMap;
 
 use claymore_scheduler::{
-    Scheduler, SchedulerConfig, SchedulerError, TaskId, TaskKind, TaskPriority, TaskSpec,
-    TaskState,
+    Scheduler, SchedulerConfig, SchedulerError, TaskId, TaskKind, TaskPriority, TaskSpec, TaskState,
 };
 use thiserror::Error;
 
@@ -48,7 +47,9 @@ pub struct DiffusionPlan {
 impl DiffusionPlan {
     pub fn new(steps: Vec<DiffusionStep>) -> Result<Self, DiffusionError> {
         if steps.is_empty() {
-            return Err(DiffusionError::InvalidPlan("plan must contain at least one step"));
+            return Err(DiffusionError::InvalidPlan(
+                "plan must contain at least one step",
+            ));
         }
 
         let mut expected_block = 0_u32;
@@ -408,7 +409,10 @@ impl DiffusionOrchestrator {
     /// Cancel a queued session. Running work is cancelled cooperatively through
     /// its token and is observed at the next safe step boundary.
     pub fn cancel(&mut self, id: DiffusionSessionId) -> Result<(), DiffusionError> {
-        let session = self.sessions.get_mut(&id).ok_or(DiffusionError::UnknownSession(id))?;
+        let session = self
+            .sessions
+            .get_mut(&id)
+            .ok_or(DiffusionError::UnknownSession(id))?;
         if session.snapshot.state.is_terminal() {
             return Err(DiffusionError::SessionTerminal(id));
         }
@@ -477,29 +481,45 @@ mod tests {
     fn plan() -> DiffusionPlan {
         DiffusionPlan::new(vec![
             DiffusionStep::PrepareBlock { block: BlockId(0) },
-            DiffusionStep::Denoise { block: BlockId(0), iteration: 0 },
-            DiffusionStep::Denoise { block: BlockId(0), iteration: 1 },
+            DiffusionStep::Denoise {
+                block: BlockId(0),
+                iteration: 0,
+            },
+            DiffusionStep::Denoise {
+                block: BlockId(0),
+                iteration: 1,
+            },
             DiffusionStep::ValidateBlock { block: BlockId(0) },
             DiffusionStep::CommitBlock { block: BlockId(0) },
             DiffusionStep::PrepareBlock { block: BlockId(1) },
-            DiffusionStep::Denoise { block: BlockId(1), iteration: 0 },
+            DiffusionStep::Denoise {
+                block: BlockId(1),
+                iteration: 0,
+            },
             DiffusionStep::ValidateBlock { block: BlockId(1) },
             DiffusionStep::CommitBlock { block: BlockId(1) },
-        ]).unwrap()
+        ])
+        .unwrap()
     }
 
     #[test]
     fn plan_rejects_missing_validation_and_non_contiguous_denoising() {
         assert!(DiffusionPlan::new(vec![
             DiffusionStep::PrepareBlock { block: BlockId(0) },
-            DiffusionStep::Denoise { block: BlockId(0), iteration: 1 },
-        ]).is_err());
+            DiffusionStep::Denoise {
+                block: BlockId(0),
+                iteration: 1
+            },
+        ])
+        .is_err());
     }
 
     #[test]
     fn executes_multiple_blocks_in_deterministic_order() {
         let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
-        let id = orchestrator.submit(plan(), CancellationToken::new(), TaskPriority::Normal).unwrap();
+        let id = orchestrator
+            .submit(plan(), CancellationToken::new(), TaskPriority::Normal)
+            .unwrap();
         let mut recorder = Recorder(RefCell::new(Vec::new()));
         loop {
             match orchestrator.run_one(&mut recorder).unwrap() {
@@ -508,7 +528,10 @@ mod tests {
                 other => panic!("unexpected outcome: {other:?}"),
             }
         }
-        assert_eq!(orchestrator.session(id).unwrap().state, DiffusionSessionState::Completed);
+        assert_eq!(
+            orchestrator.session(id).unwrap().state,
+            DiffusionSessionState::Completed
+        );
         assert_eq!(recorder.0.borrow().len(), 9);
         assert_eq!(orchestrator.metrics().steps_completed, 9);
     }
@@ -532,7 +555,10 @@ mod tests {
             orchestrator.run_one(&mut FailOnce(false)).unwrap(),
             DiffusionRunOutcome::StepFailed { .. }
         ));
-        assert_eq!(orchestrator.session(id).unwrap().state, DiffusionSessionState::Failed);
+        assert_eq!(
+            orchestrator.session(id).unwrap().state,
+            DiffusionSessionState::Failed
+        );
         assert!(matches!(
             orchestrator.run_one(&mut FailOnce(true)).unwrap(),
             DiffusionRunOutcome::Idle
@@ -543,7 +569,9 @@ mod tests {
     fn cancellation_is_observed_at_step_boundary() {
         let token = CancellationToken::new();
         let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
-        let id = orchestrator.submit(plan(), token.clone(), TaskPriority::Normal).unwrap();
+        let id = orchestrator
+            .submit(plan(), token.clone(), TaskPriority::Normal)
+            .unwrap();
         struct CancelAfterStep(CancellationToken);
         impl DiffusionExecutor for CancelAfterStep {
             fn execute_step(&mut self, _step: DiffusionStep) -> Result<(), String> {
@@ -555,7 +583,9 @@ mod tests {
             orchestrator.run_one(&mut CancelAfterStep(token)).unwrap(),
             DiffusionRunOutcome::SessionCancelled { .. }
         ));
-        assert_eq!(orchestrator.session(id).unwrap().state, DiffusionSessionState::Cancelled);
+        assert_eq!(
+            orchestrator.session(id).unwrap().state,
+            DiffusionSessionState::Cancelled
+        );
     }
 }
-
