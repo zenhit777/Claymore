@@ -222,6 +222,7 @@ struct SessionRecord {
 pub struct DiffusionOrchestrator {
     scheduler: Scheduler,
     sessions: BTreeMap<DiffusionSessionId, SessionRecord>,
+    plans: BTreeMap<DiffusionSessionId, DiffusionPlan>,
     task_index: BTreeMap<TaskId, (DiffusionSessionId, usize)>,
     next_session_id: u64,
     metrics: DiffusionMetrics,
@@ -232,6 +233,7 @@ impl DiffusionOrchestrator {
         Ok(Self {
             scheduler: Scheduler::new(config)?,
             sessions: BTreeMap::new(),
+            plans: BTreeMap::new(),
             task_index: BTreeMap::new(),
             next_session_id: 1,
             metrics: DiffusionMetrics::default(),
@@ -330,12 +332,15 @@ impl DiffusionOrchestrator {
             .get(&task_id)
             .expect("every diffusion compute task has an owner");
         let step = self.plans[&session_id].steps[index];
-        let session = self.sessions.get_mut(&session_id).expect("session exists");
-        session.snapshot.state = DiffusionSessionState::Running;
-        session.snapshot.current_step = Some(step);
+        let cancelled_before_step = self.sessions[&session_id].cancellation.is_cancelled();
+        {
+            let session = self.sessions.get_mut(&session_id).expect("session exists");
+            session.snapshot.state = DiffusionSessionState::Running;
+            session.snapshot.current_step = Some(step);
+        }
         self.metrics.steps_started = self.metrics.steps_started.saturating_add(1);
 
-        if session.cancellation.is_cancelled() {
+        if cancelled_before_step {
             self.scheduler.cancel_running(task_id)?;
             self.finish_cancelled(session_id);
             return Ok(DiffusionRunOutcome::SessionCancelled {
@@ -345,8 +350,10 @@ impl DiffusionOrchestrator {
             });
         }
 
-        match executor.execute_step(step) {
-            Ok(()) if session.cancellation.is_cancelled() => {
+        let execution = executor.execute_step(step);
+        let cancelled_after_step = self.sessions[&session_id].cancellation.is_cancelled();
+        match execution {
+            Ok(()) if cancelled_after_step => {
                 self.scheduler.cancel_running(task_id)?;
                 self.metrics.steps_cancelled = self.metrics.steps_cancelled.saturating_add(1);
                 self.finish_cancelled(session_id);
@@ -550,5 +557,3 @@ mod tests {
     }
 }
 
-// Kept as a separate map to make the scheduler's payload-free task graph
-// explicit: only the orchestration layer stores model-specific step metadata.
