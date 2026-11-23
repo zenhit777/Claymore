@@ -7,15 +7,15 @@ use claymore_scheduler::{SchedulerConfig, TaskPriority};
 fn plan(blocks: u32, denoise_steps: u32) -> DiffusionPlan {
     let mut steps = Vec::new();
     for block in 0..blocks {
-        steps.push(DiffusionStep::PrepareBlock { block: BlockId(block) });
+        steps.push(DiffusionStep::PrepareBlock {\n            block: BlockId(block),\n        });
         for iteration in 0..denoise_steps {
             steps.push(DiffusionStep::Denoise {
                 block: BlockId(block),
                 iteration,
             });
         }
-        steps.push(DiffusionStep::ValidateBlock { block: BlockId(block) });
-        steps.push(DiffusionStep::CommitBlock { block: BlockId(block) });
+        steps.push(DiffusionStep::ValidateBlock {\n            block: BlockId(block),\n        });
+        steps.push(DiffusionStep::CommitBlock {\n            block: BlockId(block),\n        });
     }
     DiffusionPlan::new(steps).expect("synthetic plan is valid")
 }
@@ -67,7 +67,7 @@ fn synthetic_multiblock_session_reports_progress_and_phase_metrics() {
     }
 
     let final_metrics = orchestrator.metrics();
-    assert_eq!(orchestrator.session(id).unwrap().state, DiffusionSessionState::Completed);
+    assert_eq!(\n        orchestrator.session(id).unwrap().state,\n        DiffusionSessionState::Completed\n    );
     assert_eq!(final_metrics.blocks_completed, 3);
     assert_eq!(final_metrics.blocks_pending, 0);
     assert_eq!(final_metrics.steps_started, 15);
@@ -105,7 +105,7 @@ fn synthetic_failure_isolated_and_reported_without_gpu() {
         orchestrator.run_one(&mut FailOnFirst).unwrap(),
         DiffusionRunOutcome::StepFailed { .. }
     ));
-    assert_eq!(orchestrator.session(failed).unwrap().state, DiffusionSessionState::Failed);
+    assert_eq!(\n        orchestrator.session(failed).unwrap().state,\n        DiffusionSessionState::Failed\n    );
     assert_eq!(orchestrator.metrics().sessions_failed, 1);
     assert_eq!(orchestrator.metrics().steps_failed, 1);
     assert_eq!(orchestrator.metrics().blocks_pending, 1);
@@ -118,7 +118,7 @@ fn synthetic_failure_isolated_and_reported_without_gpu() {
             other => panic!("unexpected independent-session outcome: {other:?}"),
         }
     }
-    assert_eq!(orchestrator.session(independent).unwrap().state, DiffusionSessionState::Completed);
+    assert_eq!(\n        orchestrator.session(independent).unwrap().state,\n        DiffusionSessionState::Completed\n    );
     assert_eq!(orchestrator.metrics().sessions_completed, 1);
 }
 
@@ -143,7 +143,7 @@ fn synthetic_cancellation_is_observed_at_a_safe_boundary() {
         DiffusionRunOutcome::SessionCancelled { .. }
     ));
     let metrics = orchestrator.metrics();
-    assert_eq!(orchestrator.session(id).unwrap().state, DiffusionSessionState::Cancelled);
+    assert_eq!(\n        orchestrator.session(id).unwrap().state,\n        DiffusionSessionState::Cancelled\n    );
     assert_eq!(metrics.steps_completed, 1);
     assert_eq!(metrics.steps_cancelled, 7);
     assert_eq!(metrics.sessions_cancelled, 1);
@@ -155,14 +155,14 @@ fn pre_cancelled_plan_is_visible_but_never_scheduled() {
     let token = CancellationToken::new();
     token.cancel();
     let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
-    let id = orchestrator.submit(plan(2, 1), token, TaskPriority::Normal).unwrap();
+    let id = orchestrator\n        .submit(plan(2, 1), token, TaskPriority::Normal)\n        .unwrap();
 
     assert_eq!(orchestrator.session(id).unwrap().state, DiffusionSessionState::Cancelled);
     assert_eq!(orchestrator.metrics().blocks_submitted, 2);
     assert_eq!(orchestrator.metrics().blocks_pending, 0);
     assert_eq!(orchestrator.metrics().steps_started, 0);
     assert!(matches!(
-        orchestrator.run_one(&mut RecordingExecutor::default()).unwrap(),
+        orchestrator\n            .run_one(&mut RecordingExecutor::default())\n            .unwrap(),
         DiffusionRunOutcome::Idle
     ));
 }
@@ -187,7 +187,7 @@ fn retry_uses_a_new_session_instead_of_resuming_terminal_state() {
     let mut executor = RecordingExecutor::default();
     loop {
         match orchestrator.run_one(&mut executor).unwrap() {
-            DiffusionRunOutcome::SessionCompleted { session_id, .. } if session_id == retry => break,
+            DiffusionRunOutcome::SessionCompleted { session_id, .. } if session_id == retry => {\n                break\n            }
             DiffusionRunOutcome::StepCompleted { .. } => {}
             other => panic!("unexpected retry outcome: {other:?}"),
         }
