@@ -25,7 +25,7 @@ Les adaptateurs ne constituent pas des moteurs tensoriels ou runtimes autonomes 
 - claymore-scheduler : dépendances et ordonnancement des tâches.
 - claymore-runtime : cycle de vie et orchestration des requêtes.
 - claymore-model-gemma / claymore-model-clover : adaptateurs spécialisés.
-- claymore-cuda : backend CUDA optionnel, sans propriété des sémantiques Tensor ; il charge et lance les kernels F32/BF16 M8 et les 10 kernels M10 (`Linear`, `RotaryEmbed`, `Attention`, `SoftCap`, `Scale`) via la Driver API dans le contexte primaire. Les PTX `sm_120` sont versionnés et le build n'appelle jamais `nvcc`.
+- claymore-cuda : backend CUDA optionnel, sans propriété des sémantiques Tensor ; il charge et lance les kernels F32/BF16 M8 et les **26 entrées PTX `sm_120`** de M10 (`Linear`, `RotaryEmbed`, `Attention`, `SoftCap`, `Scale`, `ScaleScalar`, `ScaleBias`, `GeluMulUp`, `GatherRows`, `ScatterAdd`, `EmbedGather`, `RowMask`, `Widen`, `RouterTopK`) via la Driver API dans le contexte primaire. Les PTX `sm_120` sont versionnés et le build n'appelle jamais `nvcc`.
 - Le dispatch tensoriel est déterministe et backend-neutre : chaque refus est typé et expliqué ; aucun fallback CPU, cast ou transfert Host implicite n'est autorisé. Les sorties CUDA passent par le memory orchestrator et des events réels, le scheduler ne possédant que des identifiants de tâches.
 
 ## Invariants de sûreté
@@ -42,7 +42,7 @@ Les adaptateurs ne constituent pas des moteurs tensoriels ou runtimes autonomes 
 
 - M8 : socle tensoriel natif, opérations de référence, dispatch et backends.
 - M9 : **livré sur `main`** par la PR #32 — orchestration de diffusion modulaire commune (plans par blocs, dépendances scheduler, annulation coopérative et propagation d'échec ; voir [m9-diffusion-orchestration.md](m9-diffusion-orchestration.md)).
-- M10 : **en cours** — intégration DiffusionGemma. Ingestion épinglée du checkpoint réel, primitives M10 (`Linear`, `RotaryEmbed`, `Attention`, `SoftCap`, `Scale`) en référence CPU et 10 kernels `sm_120`, adaptateur `DiffusionExecutor` branché sur M9, campagne RTX 5090 livrée (66 tests matériels). Le graphe complet (MoE, tour de vision, auto-conditionnement, cache KV encodeur, exécuteur de streaming borné) et la génération réelle restent en **gate ouvert** : voir [m10-diffusiongemma.md](m10-diffusiongemma.md) et [m10-rtx5090-hardware-validation.md](audits/m10-rtx5090-hardware-validation.md).
+- M10 : **graphhe complet implémenté et validé sur la RTX 5090** — ingestion épinglée du checkpoint réel, primitives M10 (`Linear`, `RotaryEmbed`, `Attention`, `SoftCap`, `Scale`, `ScaleScalar`, `ScaleBias`, `GeluMulUp`, `GatherRows`, `ScatterAdd`, `EmbedGather`, `RowMask`, `Widen`, `RouterTopK`) en référence CPU et **26 entrées PTX `sm_120`**, adaptateur `DiffusionExecutor` branché sur M9, **graphe complet** (MoE top-8, tour de vision, auto-conditionnement, cache KV encodeur, exécuteur de streaming borné, résidence LRU bornée) et **génération réelle exécutée sur la carte** (canvas 256, 48 étapes, pic VRAM 24,25 Gio). Le **différentiel de chaîne** contre la référence eager reste **rouge et documenté** (tolérances conservées) ; la **sémantique** est validée par étape (indices du routeur 56/56 identiques CPU ↔ CUDA). Voir [m10-diffusiongemma.md](m10-diffusiongemma.md) et [m10-rtx5090-hardware-validation.md](audits/m10-rtx5090-hardware-validation.md).
 - M11 : intégration Clover.
 - M12 : optimisation et validation de performance.
 

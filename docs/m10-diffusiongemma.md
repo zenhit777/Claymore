@@ -6,9 +6,12 @@ Intégrer le checkpoint exact `google/diffusiongemma-26B-A4B-it` au runtime de d
 
 Référence d'architecture : `docs/audits/m8-model-graph-requirements.md`. La révision exacte du dépôt modèle, de `config.json`, de l'index Safetensors et des fichiers de code upstream est épinglée (`CHECKPOINT_REVISION = cd40195554d3cfcb56f34b9adfb66efc790ed5b6`, code de référence transformers `671aa77576266f41f33f9c28e2d824bfd1b1b63c`).
 
-## État après la campagne du 23 novembre 2026
+## État après les campagnes des 23 et 24 novembre 2026
 
-Validation matérielle complète et journaux bruts : [m10-rtx5090-hardware-validation.md](audits/m10-rtx5090-hardware-validation.md), au SHA de code `ea115ab337d492d81ac50f69c09cd79e050b79a6`.
+Validation matérielle complète et journaux bruts : [m10-rtx5090-hardware-validation.md](audits/m10-rtx5090-hardware-validation.md).
+
+- Campagne du 23 novembre 2026 (sous-graphe audité) : SHA de code `ea115ab337d492d81ac50f69c09cd79e050b79a6`.
+- **Campagne GPU finale du 24 novembre 2026** (créneau GPU final, 3/3 tâches exécutées) : SHA de code **`77e7665`** (« Fix the M10 CUDA graph against the pinned upstream semantics »). Détail : §16.3 du rapport hardware.
 
 PR de la campagne : #40 (`feat/m10-diffusiongemma`, base `main`, non fusionné). PR de suivi M10.2 — M10.6 : #44 (`feat/m10-campaign-followup`, base `main`, lié à #40 et #42, non fusionné).
 
@@ -16,12 +19,14 @@ PR de la campagne : #40 (`feat/m10-diffusiongemma`, base `main`, non fusionné).
 
 - **Ingestion stricte et traçable** : lecteur JSON strict, SHA-256, lecteur Safetensors/ShardIndex borné avec validation de clés dupliquées, offsets, shapes, dtypes, couverture, shards ; ouverture `Checkpoint::open_pinned` qui refuse toute empreinte différente de la révision épinglée. Vérifié sur le checkpoint réel : 1047 tenseurs, 51 647 562 456 octets, 11 shards, couverture complète et contiguë.
 - **Configuration complète validée** : 30 couches (6 globales), cachée 2816, 16 têtes / 8 KV (2 KV globaux), head_dim 256/512, 128 experts top-8, vocabulaire 262 144, canvas 256, soft-cap 30, RMS eps 1e-6, RoPE glissant theta 10 000 et global `proportional` theta 1e6 avec `partial_rotary_factor` 0.25, `tie_word_embeddings`, `use_bidirectional_attention = "vision"`, tour de vision 27 couches.
-- **Primitives M10** (`claymore-tensor::diffusion` + kernels CUDA) : `Linear`, `RotaryEmbed`, `Attention`, `SoftCap`, `Scale` — référence CPU déterministe et 10 kernels F32/BF16 `sm_120`, dispatch exact sur couple (dtype, signature), 18 entrées de capacité.
+- **Primitives M10** (`claymore-tensor::diffusion` + kernels CUDA) : `Linear`, `RotaryEmbed`, `Attention`, `SoftCap`, `Scale`, `ScaleScalar`, `ScaleBias`, `GeluMulUp`, `GatherRows`, `ScatterAdd`, `EmbedGather`, `RowMask`, `Widen`, `RouterTopK` — référence CPU déterministe et **26 entrées PTX `sm_120`** (F32/BF16), dispatch exact sur couple (dtype, signature), **34 entrées** de capacité CUDA.
 - **Découverte de campagne** : `layer_scalar` est une valeur apprise par couche (`0,068847656` en couche 0, bits `0x3d8d`), pas `1.0` ; la primitive `Scale` a été ajoutée pour l'appliquer explicitement comme dernière opération de couche, comme dans la référence épinglée.
 - **Sous-graphe décodeur à poids réels exécuté sur la carte** : embedding réel → `input_layernorm` → `q_proj`/`k_proj`/`v_proj` → `q_norm`/`k_norm`/`v_norm` → RoPE → attention multi-tête GQA → `o_proj` → `post_attention_layernorm` → résiduel → `layer_scale` apprise, comparé à la référence CPU **étape par étape avec les mêmes bits d'entrée**.
+- **Graphe complet en CPU et en CUDA** : encodeur 30 couches avec cache KV, tour de vision 27 couches (RoPE axial 2D, pooling, standardisation), décodeur canvas bidirectionnel, auto-conditionnement, MoE top-8 (routeur compatible ATen, gather, gate/up/gelu/down par expert, scatter-add), tête LM liée avec soft-cap final, **résidence bornée** (arène à emplacements stables, libération par portée, éviction LRU sous la marque haute VRAM).
 - **Politique de génération** : `EntropyBoundSampler` (borne d'entropie 0,1, schedule linéaire `t_min 0,4` → `t_max 0,8`, arrêt stable/confident), canvas 256 positions, acceptation masquée par seuil de confiance, re-noising des positions non validées.
 - **Adaptateur `DiffusionExecutor`** : `PrepareBlock`, `Denoise`, `ValidateBlock`, `CommitBlock` sur l'orchestrateur M9, erreurs typées, annulation aux frontières sûres, aucune ressource tensorielle ni poids dans les payloads scheduler, retour d'étape après complétion réelle.
 - **Sûreté mémoire** : admission bornée par plafond dur avec refus pré-allocation, gardes `IN_FLIGHT` sur les lancements M10 (défaut trouvé et corrigé en campagne), quiescence de flux prouvée sur échec de lancement, verrouillé par 4 tests d'injection de fautes sur la branche M10.
+- **Campagne GPU finale (24 novembre 2026)** : `hardware_m10_primitives` **21/21 verts**, `hardware_m10_streaming` **2/2 verts**, `hardware_m10_generation` — **génération réelle verte** (canvas 256, politique épinglée, **48 étapes** de débruitage, **256/256 positions** acceptées, pic VRAM **24 831 Mio**, **909 Gio** de poids uploadés, **605 669** lancements de kernel, 3 296 s) et **sémantique validée par étape** (couche 0 rejouée CUDA ↔ CPU : chaque étape à l'échelle de l'ULP BF16, **56/56 indices d'experts identiques**).
 
 ### Tolérances fixées avant campagne
 
@@ -35,17 +40,17 @@ Le critère d'attention est **dérivé**, pas ajusté : une probabilité de soft
 
 La **dérive de bout en bout** de la chaîne device contre la chaîne de référence est mesurée et publiée séparément (jusqu'à `max_abs 2e0`, RMS `4,8e-3`, relatif `7,2e-3`) : un budget par opération n'est pas un budget de chaîne. Cette dérive est la raison pour laquelle la politique numérique de la chaîne complète (BF16 de bout en bout contre activations maîtresses FP32) reste une **décision ouverte**.
 
-### Gates ouvertes (explicitement non revendiquées)
+### Gates : état après le créneau GPU final du 24 novembre 2026
 
-Ce sont des **portes de code**, pas des limites de capacité mémoire : le plafond dur de 28 Gio est un **seuil d'admission**, les poids vivent en VRAM **et** RAM et sont streamés couche par couche.
+Les portes 1 à 6 sont **fermées** (code livré **et** exercé sur la carte). La porte 7 — **équivalence de chaîne** — reste **ouverte** et documentée.
 
-1. exécuteur de streaming borné par couche (résidence/expert-cache sur 51,6 Go de charge utile) : **code livré** (`stream.rs`), admissions par `CudaMemoryManager`, instrumenté, non encore exercé sur carte ;
-2. primitives MoE : routeur top-8, gather/scatter d'experts : **livrées** (contrats, CPU de référence, 12 kernels CUDA F32/BF16) ;
-3. tour de vision (27 couches, 356 tenseurs, RoPE axial 2D) : **livrée côté CPU de référence**, kernels CUDA des primitives shared ;
-4. auto-conditionnement : **livré** (embeddings souples → MLP gated → ajout résiduel, norme sans échelle) ;
-5. cache KV encodeur et cross-attention décodeur → encodeur sur données réelles : **livré côté CPU de référence** (validation golden en cours), chemin CUDA à exercer sur carte ;
-6. politique numérique de la chaîne complète : **décision documentée** (voir « Politique numérique de la chaîne ») ;
-7. **chargement complet et génération réelle du checkpoint 26B sur RTX 5090 : le gate de génération reste OUVERT, aucune génération réelle n'est revendiquée.**
+1. exécuteur de streaming borné par couche (résidence/expert-cache sur 51,6 Go de charge utile) : **livré et exercé sur carte** (`stream.rs`, admissions par `CudaMemoryManager`, instrumenté ; `hardware_m10_streaming` **2/2 verts**) ;
+2. primitives MoE : routeur top-8, gather/scatter d'experts : **livrées et exercées** (contrats, CPU de référence, kernels CUDA F32/BF16 ; routeur compatible ATen validé **210/210** contre `torch.topk`) ;
+3. tour de vision (27 couches, 356 tenseurs, RoPE axial 2D) : **livrée et exercée** sur CPU (dorées eager) et sur carte (graphe CUDA complet) ;
+4. auto-conditionnement : **livré et exercé** (embeddings souples → MLP gated → ajout résiduel, norme sans échelle) ;
+5. cache KV encodeur et cross-attention décodeur → encodeur sur données réelles : **livré et exercé** (pré-remplissage du cache KV sur les `prompt_ids` dorés, puis décodage canvas sur ce contexte) ;
+6. politique numérique de la chaîne complète : **décision documentée** (voir « Politique numérique de la chaîne ») ; le **différentiel de chaîne** est **rouge et documenté**, tolérances **conservées** ;
+7. **génération réelle du checkpoint 26B sur RTX 5090 : EXÉCUTÉE et VERTE** — canvas 256, politique épinglée, **48 étapes** de débruitage, **256/256 positions** acceptées, pic VRAM **24 831 Mio** (< 26 Gio souple), **909 Gio** de poids uploadés, **605 669** lancements de kernel, 3 296 s. Le checkpoint de 51,6 Go n'est **jamais** chargé intégralement : les poids sont streamés couche par couche. Ce qui n'est **pas** revendiqué est l'**équivalence numérique de la chaîne** (point 6), pas la réalité de la génération.
 
 ## Sous-phases
 
@@ -58,32 +63,32 @@ Ce sont des **portes de code**, pas des limites de capacité mémoire : le plafo
 - Canvas 256 positions, états masked/provisional/committed et transitions atomiques de confiance. ✅
 - Tests de propriété des invariants, d'entrée malformée et de batch partiellement invalide. ✅ (corruption, troncature, overflow, index mal formé, shard manquant, poids inattendu)
 
-### M10.2 — Primitives du graphe — livré pour le sous-graphe audité
+### M10.2 — Primitives du graphe — livré
 
-- Projections linéaires, RoPE/positions, masques, attention multi-tête bidirectionnelle, soft-capping, `Scale` (valeur apprise par couche). ✅
-- Cross-attention et gestion du KV cache : **non livrés**.
+- Projections linéaires, RoPE/positions, masques, attention multi-tête bidirectionnelle, soft-capping, `Scale` (valeur apprise par couche), `ScaleScalar` (scalaire F32 du routeur), `ScaleBias`, MoE (`GeluMulUp`, `GatherRows`, `ScatterAdd`, `RouterTopK`), `EmbedGather`, `RowMask`, `Widen`. ✅
+- Cross-attention et gestion du KV cache : **livrés**.
 - Opérations de sélection/confiance, sampling et re-noising appartenant à l'adaptateur. ✅
 - CPU reference déterministe pour les petites shapes ; contrats shape/layout/dtype explicites. ✅
-- Aucune primitive n'est déclarée prête sans tests différentiels et tolérances documentées. ✅ (12 tests matériels, tolérances fixées avant campagne)
+- Aucune primitive n'est déclarée prête sans tests différentiels et tolérances documentées. ✅ (**21 tests matériels**, tolérances fixées avant campagne)
 
-### M10.3 — Exécution et mémoire — partiel
+### M10.3 — Exécution et mémoire — livré
 
-- Chargement BF16 shard par shard via le chemin mémoire Claymore : lectures bornées de charge utile validées ; **chargement résident streamé par couche non livré**.
-- Durée de vie explicite des poids, KV cache, canvas et activations : poids et activations du sous-graphe audité ✅ ; **KV cache non livré**.
+- Chargement BF16 shard par shard via le chemin mémoire Claymore : lectures bornées de charge utile validées ; **chargement résident streamé par couche livré et exercé sur carte**. ✅
+- Durée de vie explicite des poids, KV cache, canvas et activations : **livrée** — arène à emplacements stables, libération par portée (couche, étape de débruitage), éviction LRU des poids residents sous la marque haute VRAM, cache KV encodeur porté côté hôte. ✅
 - Exécution des étapes M9 par un exécuteur Gemma ; retour d'une étape uniquement après complétion sûre. ✅
 - Propagation des erreurs et annulation aux frontières sûres. ✅
 
 ### M10.4 — Validation de cible — livré, avec limites explicites
 
-- Tests CPU/CI, compilation CUDA optionnelle, puis exécution sur RTX 5090 : ✅ 66 tests matériels verts.
-- Vérification des budgets : VRAM souple 26 Gio, plafond 28 Gio, réserve 4 Gio ; tous les poids/tampons passent par MemoryOrchestrator. ✅ (pic mesuré 25,4 Mio sur le sous-graphe réel)
+- Tests CPU/CI, compilation CUDA optionnelle, puis exécution sur RTX 5090 : ✅ **campagne GPU finale du 24 novembre 2026** — `hardware_m10_primitives` **21/21 verts**, `hardware_m10_streaming` **2/2 verts**, `hardware_m10_generation` **génération réelle verte** + **sémantique de la couche 0 verte**, **différentiel de chaîne rouge et documenté** (tolérances conservées).
+- Vérification des budgets : VRAM souple 26 Gio, plafond 28 Gio, réserve 4 Gio ; tous les poids/tampons passent par MemoryOrchestrator. ✅ (pic mesuré **24 831 Mio** pendant la génération complète, 25,4 Mio sur le sous-graphe réel)
 - Comparaison numérique à une référence fiable et traçabilité du checkpoint, de la révision du code, du SHA Claymore, driver et versions outils. ✅
 - Rapport matériel reproductible sous `docs/audits/`. ✅
 
 ## Critères de sortie
 
 - Checkpoint/révisions explicitement épinglés et index validé. ✅
-- Chemin encoder → KV cache → decoder bidirectionnel/cross-attention → confidence/refine exercé sur des données de test déterministes : **CPU de référence complet exercé sur le checkpoint réel** (golden venv épinglé) ; chemin CUDA sur carte : **à exercer dans le créneau GPU final**.
+- Chemin encoder → KV cache → decoder bidirectionnel/cross-attention → confidence/refine exercé sur des données de test déterministes : **CPU de référence complet exercé sur le checkpoint réel** (golden venv épinglé) **et chemin CUDA exercé sur la carte** (`hardware_m10_generation` : génération complète de 48 étapes, 256/256 positions acceptées). ✅
 - Adaptateur branché au DiffusionExecutor M9 sans runtime concurrent. ✅
 - Précision BF16 explicite, aucune conversion/fallback silencieux. ✅
 - Gestion mémoire bornée et erreurs fail-closed. ✅
@@ -94,14 +99,25 @@ Ce sont des **portes de code**, pas des limites de capacité mémoire : le plafo
 
 ### Contrats étendus (M10.2)
 
-8 nouvelles opérations typées dans `claymore-tensor::contracts` : `Widen`
+9 nouvelles opérations typées dans `claymore-tensor::contracts` : `Widen`
 (BF16 → F32, mono-dtype), `RouterTopK` (F32 uniquement), `GeluMulUp`,
-`GatherRows`, `ScatterAdd`, `EmbedGather`, `RowMask`, `ScaleBias`. Les
+`GatherRows`, `ScatterAdd`, `EmbedGather`, `RowMask`, `ScaleBias` et
+`ScaleScalar` (scalaire **F32**, un seul arrondi, sortie dans le dtype de
+l'entrée). Les
 slots d'indices sont validés par `validate()` (`F32`-encodés), chaque op
-déclare sa `output_dtype`, 32 entrées de capacité CPU, référence CPU
-déterministe dans `diffusion.rs`, 12 kernels CUDA F32/BF16 (`sm_120`,
+déclare sa `output_dtype`, **34 entrées** de capacité CPU, référence CPU
+déterministe dans `diffusion.rs`, **26 entrées PTX** CUDA F32/BF16 (`sm_120`,
 PTX régénéré), dispatch complet dans `launch_m10_op` et la table
-`CUDA_OPS` (32 entrées, y compris les deux exceptions mono-dtype).
+`CUDA_OPS` (**34 entrées**, y compris les deux exceptions mono-dtype).
+
+Le routeur reproduit l'algorithme d'ATen (`std::nth_element` introselect puis
+`std::sort` sur les `k − 1` premiers, comparateur « valeur seule ») dans
+`claymore-tensor/src/aten_topk.rs` **et** dans le kernel CUDA
+`claymore_router_top_k_f32` : l'émulation est validée **210/210** contre
+`torch.topk` sur les 210 lignes de routeur des 30 couches dorées, et le test
+matériel `hw_m10_11` vérifie que CPU, CUDA et upstream choisissent **le même
+ensemble et le même ordre** sur la ligne épinglée (égalités BF16 exactes experts
+68/33 et 22/126, dont un groupe à cheval sur la frontière `k = 8`).
 
 Le masque additif d'attention est un slot **F32 typé** (les clés bloquées
 valent `-inf` en FP32, indépendamment du dtype d'activations) ; le kernel
@@ -172,6 +188,35 @@ chaque stage Rust aux golden F32 avec tolérances dérivées documentées
 (encodeur `max_abs ≤ 0,03`/RMS `2e-3`, vision `0,06`/`2e-3`, embed
 `0,1`/`4e-3`, décodeur `0,12`/`4e-3`, logits `2,0`/`0,1`).
 
+### Campagne GPU finale (24 novembre 2026)
+
+Créneau GPU final autorisé explicitement, **une tâche à la fois**, VRAM estimée annoncée
+avant chaque lancement, libération vérifiée après chaque tâche (relevé : `913 Mio`
+occupés, aucun processus de calcul résiduel). Rejoué en entier sur le SHA `77e7665`.
+
+| Tâche | Estimation VRAM | Résultat |
+|---|---|---|
+| `hardware_m10_primitives` | ≤ 2 Gio | **21/21 verts** |
+| `hardware_m10_streaming` | ≤ 4 Gio | **2/2 verts** |
+| `hardware_m10_generation` | ≤ 26 Gio (pic **24,25 Gio**) | **2 verts, 1 rouge documenté** |
+- **Génération réelle : VERT** — canvas 256, politique épinglée, **48 étapes** de
+  débruitage, **256/256 positions** acceptées, pic VRAM **24 831 Mio**, **909 Gio** de
+  poids uploadés, **605 669** lancements de kernel, 3 296 s. Le checkpoint de 51,6 Go
+  n'est jamais chargé intégralement. Les métriques sont **bit-identiques** au rejeu
+  intermédiaire : la génération est déterministe.
+- **Sémantique de la couche 0 : VERT exact** — couche 0 rejouée CUDA ↔ CPU : chaque
+  étape à l'échelle de l'ULP BF16 et **56/56 indices d'experts identiques**.
+- **Différentiel de chaîne : ROUGE, tolérances conservées** — `encoder_last_hidden`
+  5,835938 / 0,711149 (CUDA ↔ CPU) contre 5,539062 / 0,763049 (CPU ↔ dorée eager) : la
+  dérive CUDA ↔ CPU est du **même ordre** que la dérive CPU ↔ dorée, cause commune
+  (ordre d'accumulation du GEMM BF16 tierce) et non défaut d'opération.
+
+Sept défauts produit ont été trouvés par cette campagne et corrigés (offset de shard
+relatif utilisé comme absolu, `intermediate_size` confondu avec
+`moe_intermediate_size`, disposition de la sortie du routeur, entrée du routeur, table
+d'embedding transposée dans l'auto-conditionnement, forme de la table transposée de la
+tête LM liée, résidence non bornée). Détail : §16.3 du rapport hardware.
+
 ### Politique numérique de la chaîne
 
 - Activations maîtresses BF16, accumulation en F32 dans les kernels et la
@@ -193,12 +238,15 @@ chaque stage Rust aux golden F32 avec tolérances dérivées documentées
 Le crate `claymore-model-gemma` contient l'ingestion épinglée, la configuration
 validée, la politique de génération, l'état canvas, l'adaptateur
 `DiffusionExecutor`, l'exécuteur de streaming, le graphe CPU complet
-(encodeur, KV, décodeur, MoE, vision, auto-conditionnement, lm head) et la
-boucle de diffusion. Les primitives M10 couvrent le graphe complet. **Aucune
-génération de texte réelle sur carte n'est revendiquée tant que le créneau
-GPU final n'a pas été exécuté.**
+(encodeur, KV, décodeur, MoE, vision, auto-conditionnement, lm head), le graphe
+CUDA complet et la boucle de diffusion. Les primitives M10 couvrent le graphe
+complet. **La génération réelle sur carte a été exécutée le 24 novembre 2026**
+(canvas 256, 48 étapes, 256/256 positions acceptées, pic VRAM 24 831 Mio) ; ce qui
+n'est **pas** revendiqué est l'**équivalence numérique de la chaîne** contre la
+référence eager (différentiel de chaîne rouge, tolérances conservées) et toute
+performance ou tout débit.
 
-Le matmul CUDA M8 est naïf (tuiles 16×16) et le kernel d'attention M10 limite la mémoire partagée dynamique à 48 KiB : **aucune performance ni débit n'est revendiqué**.
+Le matmul CUDA M8 est naïf (tuiles 16×16) et le kernel d'attention M10 limite la mémoire partagée dynamique à 48 KiB : **aucune performance ni débit n'est revendiqué**. Le re-streaming des slices d'experts à chaque passe de débruitage (909 Gio de trafic H2D pour la génération complète) est la conséquence du budget VRAM, pas une optimisation.
 
 ## Guide de reproduction
 
@@ -220,6 +268,14 @@ cargo test -p claymore-memory --features cuda-driver --test hardware_cuda_memory
 cargo test -p claymore-memory --features cuda-driver --test hardware_cuda_tensor --locked -- --ignored --test-threads=1 --nocapture
 CLAYMORE_M10_CHECKPOINT=/tmp/opencode/m10/checkpoint \
   cargo test --release -p claymore-memory --features cuda-driver --test hardware_m10_primitives --locked -- \
+  --ignored --test-threads=1 --nocapture
+
+# Créneau GPU final : streaming borné, puis génération complète sur canvas 256
+CLAYMORE_M10_CHECKPOINT=/tmp/opencode/m10/checkpoint \
+  cargo test --release -p claymore-model-gemma --features cuda-streaming --test hardware_m10_streaming --locked -- \
+  --ignored --test-threads=1 --nocapture
+CLAYMORE_M10_CHECKPOINT=/tmp/opencode/m10/checkpoint \
+  cargo test --release -p claymore-model-gemma --features cuda-streaming --test hardware_m10_generation --locked -- \
   --ignored --test-threads=1 --nocapture
 
 # Vérification complète du checkpoint réel (CPU, flux borné 8 Mio)

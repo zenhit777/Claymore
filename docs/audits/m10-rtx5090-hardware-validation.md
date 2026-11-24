@@ -1,19 +1,26 @@
 # Validation matérielle M10 — DiffusionGemma 26B-A4B-it sur NVIDIA RTX 5090
 
 - **Branche :** `feat/m10-diffusiongemma`
+- **SHA de code validé (campagne GPU finale du 24/11) :** `77e7665` (« Fix the M10 CUDA graph against the pinned upstream semantics »)
 - **SHA de code validé (campagne hardware du 23/11) :** `ea115ab337d492d81ac50f69c09cd79e050b79a6`
-- **Date de campagne :** 23 novembre 2026, 16:10–16:12 UTC (campagne finale sur le SHA ci-dessus)
+- **Date de campagne :** 23 novembre 2026, 16:10–16:12 UTC (campagne du SHA `ea115ab`) ; **24 novembre 2026, créneau GPU final du §16** (campagne du SHA `77e7665`)
 - **PR :** [#40](https://github.com/zenhit777/Claymore/pull/40), cible `main`, **ouverte et non fusionnée** (voir §15)
-- **Statut :** **PASS PARTIEL** — 66/66 tests matériels verts, CI et MSRV verts, **gate de génération réelle du graphe complet laissé OUVERT** (§11)
+- **Statut :** **PASS PARTIEL** — 66/66 tests matériels verts (campagne du 23/11), CI et MSRV verts, **gate de génération réelle du graphe complet laissé OUVERT** (§11) ; **§16 : le créneau GPU final du 24/11 est exécuté, la génération réelle est VERTE, le différentiel de chaîne reste ROUGE et documenté**
 
 > **Mise à jour M10.3 (24 novembre 2026) — à lire avant toute lecture de §11.** L'incrément
 > M10.3 implémente **le graphe complet** (tour de vision, routage MoE, experts,
 > auto-conditionnement, cache KV encodeur, cross-attention décodéur, lm-head tied,
 > exécuteur de streaming borné, kernels CUDA élargis). Les §1 à §15 décrivent la
 > campagne hardware **du 23/11 sur le SHA `ea115ab`** : ils ne décrivent **pas** le
-> code de M10.3. L'état du code M10.3, les mesures CPU complètes et le **gate GPU
-> non exécuté** sont consignés au **§16**. Aucune mesure hardware de M10.3 n'est
-> revendiquée.
+> code de M10.3. L'état du code M10.3, les mesures CPU complètes et les **résultats du
+> créneau GPU final du 24/11** sont consignés au **§16**.
+>
+> **Mise à jour M10.4 (24 novembre 2026) :** le §16.3 est désormais complet. Le créneau
+> GPU final a été **exécuté** sur le SHA `77e7665` : 21/21 primitives, 2/2 streaming,
+> **génération réelle verte** (canvas 256, 48 étapes, 256/256 positions, pic VRAM
+> 24 831 Mio) et **sémantique de la couche 0 verte** (56/56 indices de routeur
+> identiques CPU ↔ CUDA). Le **différentiel de chaîne** reste **rouge** et **les
+> tolérances n'ont pas été assouplies**.
 
 > **Ce que ce rapport prouve.** Le chemin M10 de Claymore — chargement strict du checkpoint épinglé, primitives tensorielles CPU de référence, kernels CUDA M10, admission mémoire bornée et garde des buffers en vol — est réellement exécuté sur une RTX 5090 et validé contre une référence CPU déterministe, y compris sur un **sous-graphe de couche décodeur construit à partir des poids réels** du checkpoint épinglé.
 >
@@ -550,7 +557,7 @@ La PR [#40](https://github.com/zenhit777/Claymore/pull/40) est ouverte sur `main
 
 ## 16. Incrément M10.3 — intégration réelle du graphe complet (24 novembre 2026)
 
-### 16.1 Ce qui est livré en code (non validé sur la carte)
+### 16.1 Ce qui est livré en code (validé sur la carte au §16.3)
 
 | Module | Contenu livré |
 |---|---|
@@ -558,15 +565,15 @@ La PR [#40](https://github.com/zenhit777/Claymore/pull/40) est ouverte sur `main
 | `crates/claymore-model-gemma/src/cuda_graph.rs` | Graphe CUDA du même graphe : chaque primitive passe par `TensorDispatcher`, chaque poids est admis par `CudaTensorMemory` (propriétaire du `CudaMemoryManager`), chaque activation traverse la frontière de staging **pinnée** explicitement, matrices d'experts lues à l'offset d'éléments exact et uploadées comme tenseurs résidents propres |
 | `crates/claymore-model-gemma/src/stream.rs` | Exécuteur de streaming borné par couche : plans de noms par couche/prefixe, admission via le gestionnaire, résidence, cache experts, éviction LRU sous pression, sécurité de libération après complétion, instrumentation RAM/VRAM |
 | `crates/claymore-tensor/src/diffusion.rs` + `contracts.rs` | Sémantique eager épinglée : scores d'attention arrondis BF16 **avant** softmax, probabilités re-arrondies BF16 **avant** la réduction de valeurs, GELU à deux arrondis, `index_add_` en ordre croissant d'expert avec arrondi BF16 par addition, exceptions typées mono-dtype (`Widen` BF16-only, `RouterTopK` F32-only), slots d'indices/poids/masque explicitement F32 |
-| `crates/claymore-cuda/kernels/m10.cu` → `m10.ptx` | **24 entrées PTX** (`sm_120`) : linear, rotary, attention, soft-cap, scale, scale_bias, gelu_mul_up, gather_rows, scatter_add, embed_gather, row_mask, widen, router_top_k (F32), en F32 et BF16 |
-| Tests | `hardware_m10_primitives` (20 tests), `hardware_m10_streaming` (2 tests), `hardware_m10_generation` (2 tests), `golden_cpu` (6 tests golden CPU avec traçage par étape) |
+| `crates/claymore-cuda/kernels/m10.cu` → `m10.ptx` | **26 entrées PTX** (`sm_120`) : linear, rotary, attention, soft-cap, scale, **scale_scalar** (scalaire F32), scale_bias, gelu_mul_up, gather_rows, scatter_add, embed_gather, row_mask, widen, router_top_k (F32), en F32 et BF16 |
+| Tests | `hardware_m10_primitives` (21 tests), `hardware_m10_streaming` (2 tests), `hardware_m10_generation` (3 tests), `golden_cpu` (7 tests golden CPU avec traçage par étape) |
 
 Empreintes actuelles des sources CUDA :
 
 | Fichier | SHA-256 |
 |---|---|
-| `crates/claymore-cuda/kernels/m10.cu` | `32ae4caf6303722b9c34d706938b0b7f73f1e804f16dbb31bad9183c02825713` |
-| `crates/claymore-cuda/src/kernels/m10.ptx` | `6281667064f7c835eb55799ed752bad14c4c2ef82f7b8fb2c0943fb40c465057` |
+| `crates/claymore-cuda/kernels/m10.cu` | `87750139e89d3b0f194b086bba0abb4b174981f13057af5e3e1ff28e170a85e0` |
+| `crates/claymore-cuda/src/kernels/m10.ptx` | `f30f62d9d407d703274597dae56d1ada58ac47aaf7a667e22a50250c417b045e` |
 
 ### 16.2 Campagne CPU : verdict rouge, mesuré et expliqué
 
@@ -577,11 +584,13 @@ tolérances sont **celles déclarées avant campagne** ; elles n'ont pas été a
 
 | Stage | max_abs | rms | Tolérance | Verdict |
 |---|---|---|---|---|
-| `encoder_last_hidden` | 3,5 | 0,083 | 0,03 / 2e-3 | **ROUGE** |
+| `encoder_last_hidden` | 5,539062 | 0,763049 | 0,03 / 2e-3 | **ROUGE** |
 | `vision_last_hidden` | 0,189453 | 0,054739 | 0,06 / 2e-3 | **ROUGE** |
 | `embed_vision` | 0,242188 | 0,060047 | 0,1 / 4e-3 | **ROUGE** |
-| `decoder_last_hidden0` | 17,03125 | 1,923966 | 0,12 / 4e-3 | **ROUGE** |
-| `moe0_topk_indices` | 1 flip (token 0, experts 33/68 à 1 ULP) | — | égalité exacte | **ROUGE** |
+| `decoder_last_hidden0` | 15,531250 | 1,964803 | 0,12 / 4e-3 | **ROUGE** |
+| `decoder_logits0` | 18,893417 | 3,339343 | 2,0 / 0,1 | **ROUGE** |
+| `moe0_topk_indices` | 8 flips / 128, **ensemble d'experts identique** (ordre dans un groupe d'égalité) | — | égalité exacte | **ROUGE** |
+| `encoder_router_indices` (30 couches) | **30 couches exactes sur 30** | — | égalité exacte | **VERT** |
 | `text_embedding` | **0** | **0** | bit-exact | **VERT** |
 
 Journal complet, traçage par couche, traçage par étape et replay :
@@ -600,29 +609,262 @@ les bits du GEMM BF16 de PyTorch CPU (écart minimal mesuré 0,0077 en F32 **ava
 arrondi, sur toutes les accumulations testées). L'amplification est exponentielle
 dans les couches dont l'attention n'a **pas de scaling** (`self.scaling = 1.0`) : 8e-5
 de rms relatif à la couche 0 vision → 4,6 % à la couche 26 ; décodéur rouge dès la
-couche 0. Le gate de génération réelle reste **ouvert** : aucune équivalence de chaîne
-complète n'est revendiquée.
+couche 0. Aucune équivalence de chaîne complète n'est revendiquée — **le gate de
+génération réelle a néanmoins été exécuté sur la carte (§16.3) : c'est la génération
+qui est vérifiée, pas l'équivalence numérique de la chaîne.**
 
-### 16.3 Gate GPU de M10.3 : **NON EXÉCUTÉ**
+### 16.3 Gate GPU de M10.3 : **3/3 tâches exécutées** (24 novembre 2026)
 
-Aucune allocation CUDA, aucun lancement kernel n'a été effectué pour M10.3. Le créneau
-GPU est **réservé et planifié**, pas exécuté :
+Le créneau GPU final a été autorisé explicitement par l'utilisateur le 24/11/2026
+(« Oui, dès que la carte est libre ») et exécuté **en séquence**, **une tâche GPU à la
+fois**, avec **VRAM estimée annoncée avant** chaque tâche et **libération vérifiée
+après** chaque tâche.
 
-- état relevé le 24/11/2026 : `32 607 MiB` total, **30 795 MiB occupés**, **1 393 MiB libres**, processus de calcul externes actifs sur la carte ;
+Cadre de la campagne :
+
 - plafond d'admission : **26 Gio souple / 28 Gio dur**, réserve ≥ 4 Gio ;
 - toutes les allocations passent par `MemoryOrchestrator` ; aucun swap, aucun écrasement de checkpoint, aucun usage GPU caché ;
-- la campagne sera lancée **en séquence**, **une tâche GPU à la fois**, avec **VRAM estimée annoncée avant** chaque tâche et **libération vérifiée après** chaque tâche :
-  1. `hardware_m10_primitives` — estimation **≤ 2 Gio** (le sous-graphe à poids réels a mesuré un pic de **25,4 Mio** en campagne `ea115ab`) ;
-  2. `hardware_m10_streaming` — estimation **≤ 4 Gio** (résidence d'une couche : experts `gate/up` 100,7 Mio + `down` 50,3 Mio + projections, streamées une couche à la fois sous le budget souple de 26 Gio) ;
-  3. `hardware_m10_generation` — estimation **≤ 6 Gio** (canvas 256, logits `256 × 262 144` F32 = 268 Mio, lm-head streamé, poids jamais chargés intégralement en VRAM : le checkpoint de 51,6 Go **ne tient pas** dans 32 Gio et **ne sera pas** chargé intégralement).
+- état de la carte **avant** la tâche 1 du créneau final : `32 192 MiB` total, **913 Mio occupés**, **31 275 Mio libres**, aucun processus de calcul tiers actif ;
+- aucune performance n'est revendiquée : les kernels sont naïfs.
 
-Le créneau ne sera pas lancé sans **autorisation explicite** et sans que la VRAM soit
-libérée. **Aucune mesure hardware de M10.3 n'est revendiquée dans ce rapport.**
+Le **créneau final de validation** a été rejoué **en entier** sur le SHA de code
+`77e7665` (« Fix the M10 CUDA graph against the pinned upstream semantics »), après
+que les sept défauts produit ci-dessous eussent été corrigés. Les journaux du
+créneau final sont `gpu_final_task1.log`, `gpu_final_task2.log` et
+`gpu_final_task3.log` ; les journaux `gpu_task1_run5.log`, `gpu_task2_run3.log` et
+`gpu_task3_run2.log` … `gpu_task3_run5.log` sont les rejeux **intermédiaires** qui ont
+isolé chaque défaut.
+
+#### 16.3.1 Tâche 1/3 — `hardware_m10_primitives` : **21/21 verts**
+
+**Estimation VRAM annoncée avant lancement : ≤ 2 Gio** (contexte CUDA ≈ 1,3–1,7 Gio,
+plus les tenseurs de test ; le sous-graphe à poids réels avait mesuré un pic de
+**25,4 Mio** en campagne `ea115ab`).
+
+```bash
+CLAYMORE_M10_CHECKPOINT=/tmp/opencode/m10/checkpoint \
+RUSTFLAGS="-L native=/usr/lib/wsl/lib" LD_LIBRARY_PATH=/usr/lib/wsl/lib \
+cargo test -p claymore-memory --features cuda-driver --test hardware_m10_primitives \
+  --locked -- --ignored --test-threads=1 --nocapture
+```
+
+Journal brut du **créneau final** : `/tmp/opencode/m10/gpu_final_task1.log` (durée
+40,97 s, `EXIT=0`, **21/21 verts**). Journal du rejeu intermédiaire :
+`/tmp/opencode/m10/gpu_task1_run5.log` (313,71 s, `EXIT=0`).
+
+| Test matériel | Mesure CUDA | Verdict |
+|---|---|---|
+| `hw_m10_01_linear_f32_matches_cpu` | `n=91 max_abs=0e0` | ✅ |
+| `hw_m10_02_linear_bf16_matches_cpu_within_one_ulp` | `n=45 max_ulp=0` | ✅ |
+| `hw_m10_03_rotary_f32_and_bf16_match_cpu` | `n=320 max_abs=5,96e-8` | ✅ |
+| `hw_m10_04_attention_f32_masked_and_unmasked_match_cpu` | `n=192 max_abs=5,59e-9` | ✅ |
+| `hw_m10_05_attention_bf16_within_two_ulp` | `n=128 max_ulp=0` | ✅ |
+| `hw_m10_06_soft_cap_f32_and_bf16_match_cpu` | `n=72 max_abs=9,54e-7` | ✅ |
+| `hw_m10_07_dispatch_is_exact_on_dtype_and_signature` | contrat exact | ✅ |
+| `hw_m10_08_scale_f32_and_bf16_match_cpu` | `n=24 max_abs=0e0` | ✅ |
+| `hw_m10_09_real_weight_decoder_layer_subgraph_matches_cpu` | canvas réel `[:8] = [150414, 153231, 8113, 9945, 151975, 19512, 119831, 54109]` | ✅ |
+| `hw_m10_10_hard_budget_is_enforced_before_device_allocation` | sur-plafond refusé **avant** allocation | ✅ |
+| `hw_m10_10_widen_bf16_is_bit_exact` | `n=45 exact` | ✅ |
+| `hw_m10_11_in_flight_m10_launch_protects_its_allocations` | 4 allocations gardées, éviction bloquée puis autorisée | ✅ |
+| `hw_m10_11_router_top_k_matches_cpu` | synthétique `n=32 max_abs=0e0` ; **ligne épinglée** `n=16 max_abs=1,19e-7` | ✅ |
+| `hw_m10_12_gelu_mul_up_f32_and_bf16_match_cpu` | `n=120 max_abs=2,98e-8`, BF16 `max_ulp=0` | ✅ |
+| `hw_m10_12_repeated_m10_launches_are_bit_exact` | 5 lancements identiques, pic 1 572 864 o | ✅ |
+| `hw_m10_13_gather_rows_f32_and_bf16_are_exact` | exact F32 et BF16 | ✅ |
+| `hw_m10_14_scatter_add_f32_and_bf16_match_cpu_within_derived_bounds` | `n=30 max_abs=5,96e-8`, BF16 `max_ulp=1` | ✅ |
+| `hw_m10_15_embed_gather_f32_and_bf16_match_cpu` | `n=32 max_abs=0e0`, BF16 `max_ulp=0` | ✅ |
+| `hw_m10_16_row_mask_f32_and_bf16_are_exact` | exact, lignes masquées à zéro | ✅ |
+| `hw_m10_17_scale_bias_f32_and_bf16_match_cpu` | `n=35 max_abs=0e0`, BF16 `max_ulp=0` | ✅ |
+| `hw_m10_18_scale_scalar_f32_and_bf16_match_cpu` | `n=35 max_abs=0e0`, BF16 `max_ulp=0` | ✅ |
+
+Points notables de cette tâche :
+
+- **`hw_m10_11` (routeur)** : le test compare maintenant le CUDA au CPU sur un cas
+  synthétique **et** sur la **ligne réelle épinglée** (`encoder0_router_raw_scores`,
+  128 experts, égalités BF16 exactes experts 68/33 et 22/126, dont un groupe à cheval
+  sur la frontière `k = 8`). Les **indices** sont identiques CPU ↔ CUDA ↔ upstream
+  (`[90, 113, 68, 33, 55, 22, 126, 105]`) : l'algorithme d'ATen (`nth_element` puis
+  `sort` sur les `k − 1` premiers, comparateur « valeur seule ») est reproduit à
+  l'identique par le kernel CUDA. L'écart résiduel `1,19e-7` porte sur les **poids**
+  pondérés, pas sur la sélection.
+- **`hw_m10_18` (`ScaleScalar`)** : nouvelle opération du contrat, scalaire **F32**
+  (jamais arrondi en BF16), produit évalué en F32 puis arrondi **une seule fois** dans
+  le dtype de l'entrée. C'est l'opération qui porte le facteur `scalar_root_size` du
+  routeur CUDA, dont l'arrondi BF16 du scalaire était la cause racine du décalage des
+  logits routeur. Le test vérifie l'égalité **bit à bit** des bits BF16 produits.
+- **`hw_m10_12`** (répétabilité) : 5 lancements d'attention successifs produisent des
+  résultats **bit-identiques**, avec retour de l'inventaire à la ligne de base après
+  chaque cycle (pic 1 572 864 o) — la libération des tampons en vol est effective.
+
+**Libération vérifiée après la tâche 1** : `913 Mio` occupés, **aucun processus de
+calcul** listé par `nvidia-smi --query-compute-apps`.
+
+#### 16.3.2 Tâche 2/3 — `hardware_m10_streaming` : **2/2 verts**
+
+**Estimation VRAM annoncée avant lancement : ≤ 4 Gio** (résidence d'une couche : experts
+`gate/up` 100,7 Mio + `down` 50,3 Mio + projections, streamées une couche à la fois).
+
+```bash
+CLAYMORE_M10_CHECKPOINT=/tmp/opencode/m10/checkpoint \
+RUSTFLAGS="-L native=/usr/lib/wsl/lib" LD_LIBRARY_PATH=/usr/lib/wsl/lib \
+cargo test --release -p claymore-model-gemma --features cuda-streaming \
+  --test hardware_m10_streaming --locked -- --ignored --test-threads=1 --nocapture
+```
+
+Journal brut du **créneau final** : `/tmp/opencode/m10/gpu_final_task2.log` (durée
+3,42 s, `EXIT=0`, **2/2 verts**). Journal du rejeu intermédiaire :
+`/tmp/opencode/m10/gpu_task2_run3.log` (3,52 s, `EXIT=0`).
+
+| Test matériel | Ce qui est vérifié | Verdict |
+|---|---|---|
+| `streaming_layer_plan_streams_through_the_manager` | plan de noms d'une couche (encodeur + décodeur + vision), admission de chaque tenseur via `MemoryOrchestrator`, tenue du budget | ✅ |
+| `streaming_evicts_lru_residents_before_admission` | éviction LRU effective **avant** admission, headroom de 8 Mio, exclusion du résident courant, disparition du résident évincé | ✅ |
+
+Deux défauts ont été trouvés par cette tâche :
+
+- **défaut de test** : le tenseur « gros » du scénario retombait sur une entrée
+  **résidente** (cache hit) et n'exerçait donc jamais l'éviction LRU. Le scénario
+  charge maintenant un tenseur **distinct** du résident, avec un headroom de 8 Mio,
+  et **assert** que le résident évincé a disparu de la table de résidence ;
+- **défaut produit** : `RefCell already borrowed` dans `stream.rs::evict_for` — le
+  `RefMut` temporaire du scrutinee du `match` vivait jusqu'à la fin du `match` et
+  était encore emprunté quand le résultat de `release` était lié. Corrigé en
+  evaluatesant le `release` **avant** le `match`.
+
+**Libération vérifiée après la tâche 2** : `913 Mio` occupés, aucun processus de calcul
+listé par `nvidia-smi --query-compute-apps`.
+
+#### 16.3.3 Tâche 3/3 — `hardware_m10_generation` : **exécutée, 7 défauts produit trouvés et corrigés**
+
+**Estimation VRAM annoncée avant lancement : ≤ 26 Gio** (budget souple du campagne),
+**pic mesuré 24,25 Gio**. Le canvas de 256 positions produit des logits
+`256 × 262 144` F32 = 268 Mio, la table d'embedding liée transposée occupe 1,375 Gio
+résidents, et les poids de 51,6 Go **ne tiennent pas** dans 32 Gio : ils sont
+**streamés couche par couche**, jamais chargés intégralement.
+
+```bash
+CLAYMORE_M10_CHECKPOINT=/tmp/opencode/m10/checkpoint \
+RUSTFLAGS="-L native=/usr/lib/wsl/lib" LD_LIBRARY_PATH=/usr/lib/wsl/lib \
+cargo test --release -p claymore-model-gemma --features cuda-streaming \
+  --test hardware_m10_generation --locked -- --ignored --test-threads=1 --nocapture
+```
+
+Cette tâche a été rejouée **six fois** (`gpu_task3_run2.log` … `gpu_task3_run5.log`) : chaque
+échec a isolé un défaut **distinct** du graphe CUDA, jamais une tolérance à relâcher. Les
+journalux sont conservés ; le verdict final est celui du **créneau final**
+(`gpu_final_task3.log`, sur le SHA `77e7665`).
+
+##### 16.3.3.1 Les sept défauts produit trouvés par la tâche 3/3
+
+| # | Défaut | Symptôme observé | Correctif |
+|---|---|---|---|
+| 1 | **Offset de shard faux** : `TensorEntry::data_start` est relatif à la **région data** du shard, mais deux appel sites l'utilisaient comme offset **absolu** dans le fichier | tous les poids CUDA lus **désalignés** de `8 + header_len` octets → `inf` dans les experts (couche 2), `NaN` dans la suite de la chaîne | `SafetensorsFile::read_tensor_range` (applique l'offset d'en-tête, lit par plages bornées de 8 Mio) ; `CudaGraph::read_payload_range` et `WeightStream::ensure_tensor` passent par lui ; test unitaire ajouté |
+| 2 | **`intermediate_size` (2112) confondu avec `moe_intermediate_size` (704)** dans le graphe CUDA | `SliceOutOfBounds` sur `experts.gate_up_proj` (le tenseur est `[128, 1408, 2816]`) | lecture de `moe_intermediate_size` dans l'encodeur et le décodeur |
+| 3 | **Sortie du routeur mal décodée** : la disposition réelle est `[tokens, 2·top_k]` (poids **puis** indices, **par token**) ; le graphe lisait `[tous les poids][tous les indices]` | experts sélectionnés **erronés** (bruit) | de-entrelacement token par token avant le regroupement par expert |
+| 4 | **Entrée du routeur** : l'upstream route sur le **résidu** normalisé *sans* poids, pas sur `pre_feedforward_layernorm_2(pre2)` | **42/56 indices** d'experts différents de la référence CPU | `router_layer` reçoit le résidu ; `pre2` reste l'entrée des experts |
+| 5 | **Auto-conditionnement** : le matmul doit utiliser la table d'embedding **telle quelle** (`[vocab, hidden]`) ; le CPU la transposait (dimension invalide) et le CUDA transposait les données en déclarant `[vocab, hidden]` (résultat faux) | auto-conditionnement inexploitable | CPU et CUDA multiplient par la table stockée, comme l'upstream épinglé |
+| 6 | **Tête LM liée** : la table transposée était déclarée `[vocab, hidden]` au lieu de `[hidden, vocab]` | matmul invalide (`k` ≠ `rows`) | forme `[hidden, vocab]`, table transposée **résidente** et réutilisée |
+| 7 | **Résidence non bornée** : le graphe conservait **tous** les tenseurs (activations **et** slices d'experts, ~45 Go par passe) | dépassement du budget VRAM, éviction par le gestionnaire, puis `allocation m8-vram-… does not exist` | arena à **emplacements stables** (`Option<Tensor>`), libération par **portée** (couche, étape de débruitage), **éviction LRU** des poids residents sous la marque haute, table d'embedding transposée mise en cache |
+
+Les défauts 1, 3 et 4 n'étaient pas visibles par les tests existants : ils sont apparus
+uniquement à l'exécution du **graphe complet** sur poids réels.
+
+##### 16.3.3.2 Différentiel CUDA ↔ CPU de l'encodeur : **ROUGE de chaîne, VERT de sémantique**
+
+| Grandeur | CUDA ↔ CPU | CUDA ↔ dorée eager | CPU ↔ dorée eager |
+|---|---|---|---|
+| `encoder_last_hidden` max_abs | **5,835938** | 4,875000 | 5,539062 |
+| `encoder_last_hidden` rms | **0,711149** | 0,752871 | 0,763049 |
+
+Les tolérances de chaîne du test matériel (`max_abs ≤ 0,03`, `rms ≤ 2e-3`) **ne sont pas
+atteintes et n'ont pas été assouplies**. Le fait mesurant est que la dérive **CUDA ↔ CPU**
+(rms 0,711) est du **même ordre** que la dérive **CPU ↔ dorée eager** (rms 0,763) : les deux
+implémentations Claymore s'écartent de la référence par la **même** cause (ordre
+d'accumulation d'un GEMM BF16 tiers), et l'amplification exponentielle des couches dont
+l'attention n'a pas de scaling s'applique aux deux.
+
+Le test `encoder_first_layer_matches_cpu_step_by_step` isole la **sémantique** de la chaîne
+et **détaille chaque étape** au §16.3.3.4.
+
+##### 16.3.3.3 Génération réelle sur la carte : **VERT**
+
+Le test `real_generation_runs_one_canvas_block_on_the_card` exécute la **génération
+complète** : encodeur (pré-remplissage du cache KV sur les `prompt_ids` dorés), puis
+`generate_block` avec la politique **épinglée** (`canvas 256`, `vocab 262 144`, borne
+d'entropie 0,1, confiance 0,005, stabilité 1, **48 étapes de débruitage**), c'est-à-dire
+les 48 passes de décodage avec auto-conditionnement, acceptation par entropie et
+re-noising des positions non validées.
+
+| Grandeur | Mesure |
+|---|---|
+| Positions acceptées | **256 / 256** |
+| Pic VRAM suivi par le gestionnaire | **24 831 Mio (24,25 Gio)** < 26 Gio (souple) < 28 Gio (dur) |
+| Pic observé par `nvidia-smi` pendant le rejeu | 27 267 Mio (contexte CUDA etBuffers épinglés hôte inclus) |
+| Poids uploadés (H2D) | **930 494 Mio (909 GiB)** |
+| Activations téléchargées (D2H) | 24 197 Mio (23,6 GiB) |
+| Lancements de kernel | **605 669** |
+| Durée | 3 296 s (55 min) |
+
+Journal du **créneau final** : `/tmp/opencode/m10/gpu_final_task3.log` (3 295,94 s,
+`EXIT=101` — le code de sortie non nul vient du **seul** test rouge, le différentiel de
+chaîne ; `2 passed, 1 failed`). Les métriques sont **bit-identiques** au rejeu
+intermédiaire `gpu_task3_run5.log` (pic 24 831 Mio, 930 494 Mio uploadés, 24 197 Mio
+téléchargés, 605 669 lancements) : la génération est **déterministe**.
+
+Le checkpoint de **51,6 Go** n'est **jamais** chargé intégralement : la génération
+consomme 909 Gio de trafic H2D, soit le re-streaming des slices d'experts à chaque
+passe (les 30 tours ne tiennent pas ensemble dans 24 Gi de VRAM utile). C'est le
+comportement attendu du streaming par couche, et la preuve que le budget VRAM est
+**respecté** pendant toute la génération, pas seulement au pic d'une opération isolée.
+
+**Le checkpoint 26B n'a pas été téléchargé ni chargé en VRAM en une fois, le canvas
+complet de 256 positions a été débruité, et aucune génération n'est simulée.**
+
+##### 16.3.3.4 Preuve sémantique de la couche 0 : **VERT exact**
+
+Le test `encoder_first_layer_matches_cpu_step_by_step` rejoue la **couche 0** de
+l'encodeur, étape par étape, sur la carte et sur le graphe CPU de référence (même
+checkpoint, mêmes `ids`), et compare :
+
+| Étape de la couche 0 | CUDA ↔ CPU max_abs | rms | absmax CPU |
+|---|---|---|---|
+| `input_norm` | 0,031250 | 0,000417 | 178,0 |
+| `attention` | 0,062500 | 0,004747 | 66,0 |
+| `residual` | 0,500000 | 0,011565 | 392,0 |
+| `mlp` | 1,000000 | 0,035987 | 149,0 |
+| `expert_input` (`pre2`) | 0,007812 | 0,000481 | 3,08 |
+| `experts` | 0,031250 | 0,000897 | 2,72 |
+| `layer_out` | 0,500000 | 0,006686 | 74,5 |
+| **indices du routeur (56)** | **identiques (0 écart sur 56)** | — | — |
+| poids du routeur (56) | 0,005122 | — | — |
+
+Chaque étape est à l'échelle de l'**ULP BF16** de la valeur comparée, et la **décision**
+du routeur (les experts sélectionnés) est **exactement** la même qu'en CPU : le graphe
+CUDA compose la sémantique MoE épinglée comme la référence CPU. Le rouge est donc une
+**limite de reproductibilité de la chaîne BF16**, pas un défaut d'opération.
+
+##### 16.3.3.5 Verdict de la tâche 3/3
+
+| Test | Verdict | Nature |
+|---|---|---|
+| `real_generation_runs_one_canvas_block_on_the_card` | **VERT** | génération complète de 48 étapes sur la carte, 256/256 positions acceptées, pic 24,25 Gio |
+| `encoder_first_layer_matches_cpu_step_by_step` | **VERT** | sémantique de la couche 0 alignée, indices du routeur **56/56 identiques** |
+| `cuda_graph_matches_golden_first_step` | **ROUGE (documenté)** | les tolérances de **chaîne** (`max_abs ≤ 0,03`, `rms ≤ 2e-3` sur l'encodeur) ne sont **pas** atteintes : `5,835938` / `0,711149` |
+
+Le test rouge est **conservé tel quel** : aucune tolérance n'a été assouplie, aucun
+résultat n'a été simulé. Sa cause est établie et ne dépend pas de la carte : la dérive
+CUDA ↔ CPU de la chaîne (`rms 0,711`) est du **même ordre** que la dérive CPU ↔ dorée
+eager (`rms 0,763`) mesurée sur le même checkpoint ; les deux implémentations Claymore
+s'écartent de la référence par la **même** cause (ordre d'accumulation d'un GEMM BF16
+tierce, amplifié par les couches d'attention **sans scaling**).
 
 ### 16.4 Verdict de l'incrément M10.3
 
-- CI CPU complète, clippy `-D warnings`, checks `cuda-driver` / `cuda-streaming` et **MSRV 1.86** : ✅ (0 erreur, 13 suites vertes, avertissements `unused` du chemin CUDA supprimés) ;
-- graphe complet **implémenté** en CPU et en CUDA, kernels élargis à 24 entrées, PTX régénéré ;
+- CI CPU complète, clippy `-D warnings`, checks `cuda-driver` / `cuda-streaming` et **MSRV 1.86** : ✅ (0 erreur, 13 suites vertes) ;
+- graphe complet **implémenté** en CPU et en CUDA, **26 entrées PTX `sm_120`** (table de support CUDA à 34 entrées), PTX régénéré ;
 - différentiels CPU contre la référence eager épinglée : **ROUGE** sur encodeur, vision, décodéur et indices top-k — cause établie (non-reproductibilité du GEMM BF16 tierce + amplification de l'attention sans scaling), tolérances **conservées**, échec **documenté** ;
-- **gate de génération réelle et de streaming sur la RTX 5090 : OUVERT** (non exécuté, en attente de la libération de la VRAM et de l'autorisation) ;
+- **créneau GPU final exécuté le 24 novembre 2026** (autorisation explicite, une tâche à la fois, VRAM estimée annoncée avant, libération vérifiée après) :
+  - tâche 1/3 `hardware_m10_primitives` : **21/21 verts** (pic 25,4 Mio sur le sous-graphe réel) ;
+  - tâche 2/3 `hardware_m10_streaming` : **2/2 verts** ;
+  - tâche 3/3 `hardware_m10_generation` : **2 verts, 1 rouge documenté** — **génération réelle VERTE** (256/256 positions, pic **24,25 Gio**, 909 Gio uploadés, 605 669 lancements), **sémantique de la couche 0 VERTE** (indices du routeur 56/56 identiques), **différentiel de chaîne ROUGE** (`5,835938` / `0,711149`, tolérances conservées) ;
+- VRAM libérée après chaque tâche : **913 Mio** occupés, **aucun processus de calcul résiduel** ;
 - PR #40 et #44 : ouvertes sur `main`, **non fusionnées**.
