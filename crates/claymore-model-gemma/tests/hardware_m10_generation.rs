@@ -1,9 +1,13 @@
-//! Hardware campaign: CUDA graph against the venv-pinned golden references.
+//! Hardware campaign: CUDA graph against the CPU reference graph and the
+//! venv-pinned eager golden references.
 //!
 //! Requires a real CUDA driver, the pinned checkpoint and the golden files.
 //! The first encoder prefill, the first decoder canvas step and the tied lm
-//! head run on the card through `CudaGraph`; the results are compared
-//! against the golden tensors captured with the venv-pinned upstream code.
+//! head run on the card through `CudaGraph`. Every stage is reported as a
+//! triple: CUDA against the CPU reference graph on the same checkpoint (the
+//! differential the hardware campaign can defend), CUDA against the eager
+//! golden, and the CPU reference against the same golden (the drift measured
+//! in the CPU campaign, recorded so the golden comparison is never hidden).
 //!
 //! ```text
 //! RUSTFLAGS="-L native=/usr/lib/wsl/lib" \
@@ -20,7 +24,7 @@ use claymore_model_gemma::checkpoint::Checkpoint;
 use claymore_model_gemma::cuda_graph::CudaGraph;
 
 const ROOT: &str = "/tmp/opencode/m10/checkpoint";
-const GOLDEN: &str = "/tmp/opencode/m10/golden";
+const GOLDEN: &str = "/tmp/opencode/m10/golden_eager";
 
 fn load(name: &str, shape: &[usize]) -> Vec<f32> {
     let path = format!("{GOLDEN}/{name}.bin");
@@ -85,9 +89,30 @@ fn cuda_graph_matches_golden_first_step() {
             .expect("download encoder hidden");
         bits.iter().map(|b| b.to_f32()).collect::<Vec<f32>>()
     };
+
+    // CPU reference graph on the same checkpoint and the same inputs.
+    let host = claymore_model_gemma::graph::Host::new();
+    let cpu_ckpt = Checkpoint::open_pinned(ROOT).expect("pinned checkpoint for the CPU graph");
+    let cfg = cpu_ckpt.config().clone();
+    let mut cpu_cache = claymore_model_gemma::graph::KvCache::new(30);
+    let cpu_hidden = claymore_model_gemma::fullgraph::encoder_forward(
+        &host,
+        &cpu_ckpt,
+        &cfg,
+        &ids,
+        &mut cpu_cache,
+    );
+    let cpu_hidden_values = host.to_f32(&cpu_hidden);
+
     let golden = load("encoder_last_hidden_direct", &[1, 7, 2816]);
     let (emax, erms) = stats(&rust_hidden, &golden);
-    println!("CUDA encoder_last_hidden: max_abs={emax:.6} rms={erms:.6}");
+    let (cmax, crms) = stats(&rust_hidden, &cpu_hidden_values);
+    let (gmax, grms) = stats(&cpu_hidden_values, &golden);
+    println!("encoder_last_hidden CUDA vs CPU: max_abs={cmax:.6} rms={crms:.6}");
+    println!("encoder_last_hidden CUDA vs golden: max_abs={emax:.6} rms={erms:.6}");
+    println!("encoder_last_hidden CPU vs golden: max_abs={gmax:.6} rms={grms:.6}");
+    assert!(cmax <= 0.03, "encoder CUDA/CPU drift {cmax}");
+    assert!(crms <= 2e-3, "encoder CUDA/CPU rms {crms}");
     assert!(emax <= 0.06, "encoder CUDA drift {emax}");
     assert!(erms <= 4e-3, "encoder CUDA rms {erms}");
 
@@ -100,17 +125,42 @@ fn cuda_graph_matches_golden_first_step() {
         .expect("decoder first step");
     let dec_bits = graph.download_bf16(dec).expect("download decoder hidden");
     let dec_values: Vec<f32> = dec_bits.iter().map(|b| b.to_f32()).collect();
+    let mut cpu_trace = Vec::new();
+    let cpu_dec = claymore_model_gemma::fullgraph::decoder_forward(
+        &host,
+        &cpu_ckpt,
+        &cfg,
+        &canvas,
+        &mut cpu_cache,
+        None,
+        &mut cpu_trace,
+    );
+    let cpu_dec_values = host.to_f32(&cpu_dec);
     let golden_dec = load("decoder_last_hidden0_direct", &[1, 16, 2816]);
     let (dmax, drms) = stats(&dec_values, &golden_dec);
-    println!("CUDA decoder_last_hidden0: max_abs={dmax:.6} rms={drms:.6}");
+    let (cdmax, cdrms) = stats(&dec_values, &cpu_dec_values);
+    let (gdmax, grms2) = stats(&cpu_dec_values, &golden_dec);
+    println!("decoder_last_hidden0 CUDA vs CPU: max_abs={cdmax:.6} rms={cdrms:.6}");
+    println!("decoder_last_hidden0 CUDA vs golden: max_abs={dmax:.6} rms={drms:.6}");
+    println!("decoder_last_hidden0 CPU vs golden: max_abs={gdmax:.6} rms={grms2:.6}");
+    assert!(cdmax <= 0.12, "decoder CUDA/CPU drift {cdmax}");
+    assert!(cdrms <= 4e-3, "decoder CUDA/CPU rms {cdrms}");
     assert!(dmax <= 0.3, "decoder CUDA drift {dmax}");
     assert!(drms <= 0.01, "decoder CUDA rms {drms}");
 
     let logits = graph.lm_logits(dec).expect("lm head");
     let logits_values = graph.download_f32(logits).expect("download logits");
+    let cpu_logits = claymore_model_gemma::fullgraph::lm_logits(&host, &cpu_ckpt, &cfg, &cpu_dec);
+    let cpu_logits_values = host.to_f32(&cpu_logits);
     let golden_logits = load("decoder_logits0_direct", &[1, 16, 262144]);
     let (lmax, lrms) = stats(&logits_values, &golden_logits);
-    println!("CUDA decoder_logits0: max_abs={lmax:.6} rms={lrms:.6}");
+    let (clmax, clrms) = stats(&logits_values, &cpu_logits_values);
+    let (glmax, glrms) = stats(&cpu_logits_values, &golden_logits);
+    println!("decoder_logits0 CUDA vs CPU: max_abs={clmax:.6} rms={clrms:.6}");
+    println!("decoder_logits0 CUDA vs golden: max_abs={lmax:.6} rms={lrms:.6}");
+    println!("decoder_logits0 CPU vs golden: max_abs={glmax:.6} rms={glrms:.6}");
+    assert!(clmax <= 2.0, "logits CUDA/CPU drift {clmax}");
+    assert!(clrms <= 0.1, "logits CUDA/CPU rms {clrms}");
     assert!(lmax <= 4.0, "logits CUDA drift {lmax}");
     assert!(lrms <= 0.2, "logits CUDA rms {lrms}");
 
