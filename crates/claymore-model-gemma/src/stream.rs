@@ -83,6 +83,9 @@ pub fn decoder_layer_names(config: &GemmaModelConfig, layer: usize) -> Vec<Strin
         p("experts.gate_up_proj"),
         p("experts.down_proj"),
         p("layer_scalar"),
+        // The text weights are tied, but each tower learns its own scalar: the
+        // encoder scalar is a separate tensor of the pinned checkpoint.
+        format!("model.encoder.language_model.layers.{layer}.layer_scalar"),
     ]);
     names
 }

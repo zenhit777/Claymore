@@ -820,8 +820,8 @@ impl CudaGraph {
         let mut out_rows = Vec::new();
         // Group pairs by expert to launch one linear chain per expert.
         let mut by_expert: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
-        for p in 0..pairs {
-            by_expert.entry(indices[p] as usize).or_default().push(p);
+        for (p, expert) in indices.iter().enumerate().take(pairs) {
+            by_expert.entry(*expert as usize).or_default().push(p);
         }
         // Launch per expert on the gathered rows, then scatter the results.
         for (e, pair_list) in by_expert {
@@ -858,7 +858,6 @@ impl CudaGraph {
             let scattered = self.scatter_add(o, sub_weights, rows, tokens)?;
             out_rows.push(scattered);
         }
-        let _ = experts;
         // Sum the per-expert scatter results into one tensor.
         let mut acc = out_rows
             .first()
@@ -873,11 +872,15 @@ impl CudaGraph {
     /// One full text layer (encoder or decoder), mirroring the pinned
     /// composition: input norm, attention, post-attention norm, residual,
     /// dense MLP + MoE with router, post norms, residual, layer scalar.
+    /// The text weights are tied between the encoder and the decoder
+    /// (`norm_prefix`), but each tower learns its **own** `layer_scalar`, so the
+    /// scalar source is passed separately (`scalar_prefix`).
     #[allow(clippy::too_many_arguments)]
     pub fn text_layer(
         &mut self,
         prefix: &str,
         layer: usize,
+        scalar_prefix: &str,
         x: usize,
         cache: &mut Vec<KvLayerEntry>,
         positions: &[usize],
@@ -940,8 +943,9 @@ impl CudaGraph {
         let pff_w = self.weight(&format!("{norm_prefix}.post_feedforward_layernorm.weight"))?;
         let pff = self.rms_norm(comb, pff_w, eps)?;
         let y = self.add(x, pff)?;
-        // Learned layer scalar as a constant scale on the last dimension.
-        let scalar_w = self.weight(&format!("{norm_prefix}.layer_scalar"))?;
+        // Learned layer scalar as a constant scale on the last dimension. The
+        // encoder and the decoder each learn their own scalar.
+        let scalar_w = self.weight(&format!("{scalar_prefix}.layer_scalar"))?;
         let scalar_bits = self.host_bits(scalar_w)?;
         let scalar = Self::f32_of(&scalar_bits)[0];
         let scale_vec = self.upload_bits(vec![hidden], vec![Bf16::from_f32(scalar); hidden])?;
@@ -985,8 +989,25 @@ impl CudaGraph {
                 Some(text.sliding_window.unwrap_or(1024))
             };
             x = self.text_layer(
-                "decoder", layer, x, cache, &positions, head_dim, heads, kv_heads, rope, partial,
-                sliding, true, eps, true, hidden, inter, experts, top_k,
+                "decoder",
+                layer,
+                &format!("model.encoder.language_model.layers.{layer}"),
+                x,
+                cache,
+                &positions,
+                head_dim,
+                heads,
+                kv_heads,
+                rope,
+                partial,
+                sliding,
+                true,
+                eps,
+                true,
+                hidden,
+                inter,
+                experts,
+                top_k,
             )?;
         }
         let final_norm = self.weight("model.decoder.norm.weight")?;
@@ -1083,8 +1104,25 @@ impl CudaGraph {
                 Some(text.sliding_window.unwrap_or(1024))
             };
             inputs = self.text_layer(
-                "decoder", layer, inputs, cache, &positions, head_dim, heads, kv_heads, rope,
-                partial, sliding, false, eps, false, hidden, inter, experts, top_k,
+                "decoder",
+                layer,
+                &format!("model.decoder.layers.{layer}"),
+                inputs,
+                cache,
+                &positions,
+                head_dim,
+                heads,
+                kv_heads,
+                rope,
+                partial,
+                sliding,
+                false,
+                eps,
+                false,
+                hidden,
+                inter,
+                experts,
+                top_k,
             )?;
         }
         let final_norm = self.weight("model.decoder.norm.weight")?;
@@ -1321,6 +1359,8 @@ mod tests {
     use super::*;
 
     #[test]
+    // A `const { assert!.. }` block needs Rust 1.87; the MSRV is 1.86.
+    #[allow(clippy::assertions_on_constants)]
     fn read_chunk_bound_is_positive() {
         assert!(READ_CHUNK_BYTES >= 1024 * 1024);
     }
