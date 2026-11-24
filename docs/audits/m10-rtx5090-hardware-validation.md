@@ -1,14 +1,23 @@
 # Validation matérielle M10 — DiffusionGemma 26B-A4B-it sur NVIDIA RTX 5090
 
 - **Branche :** `feat/m10-diffusiongemma`
-- **SHA de code validé :** `ea115ab337d492d81ac50f69c09cd79e050b79a6`
+- **SHA de code validé (campagne hardware du 23/11) :** `ea115ab337d492d81ac50f69c09cd79e050b79a6`
 - **Date de campagne :** 23 novembre 2026, 16:10–16:12 UTC (campagne finale sur le SHA ci-dessus)
 - **PR :** [#40](https://github.com/zenhit777/Claymore/pull/40), cible `main`, **ouverte et non fusionnée** (voir §15)
 - **Statut :** **PASS PARTIEL** — 66/66 tests matériels verts, CI et MSRV verts, **gate de génération réelle du graphe complet laissé OUVERT** (§11)
 
+> **Mise à jour M10.3 (24 novembre 2026) — à lire avant toute lecture de §11.** L'incrément
+> M10.3 implémente **le graphe complet** (tour de vision, routage MoE, experts,
+> auto-conditionnement, cache KV encodeur, cross-attention décodéur, lm-head tied,
+> exécuteur de streaming borné, kernels CUDA élargis). Les §1 à §15 décrivent la
+> campagne hardware **du 23/11 sur le SHA `ea115ab`** : ils ne décrivent **pas** le
+> code de M10.3. L'état du code M10.3, les mesures CPU complètes et le **gate GPU
+> non exécuté** sont consignés au **§16**. Aucune mesure hardware de M10.3 n'est
+> revendiquée.
+
 > **Ce que ce rapport prouve.** Le chemin M10 de Claymore — chargement strict du checkpoint épinglé, primitives tensorielles CPU de référence, kernels CUDA M10, admission mémoire bornée et garde des buffers en vol — est réellement exécuté sur une RTX 5090 et validé contre une référence CPU déterministe, y compris sur un **sous-graphe de couche décodeur construit à partir des poids réels** du checkpoint épinglé.
 >
-> **Ce que ce rapport ne prouve pas.** L'exécution du **graphe complet** de 26 milliards de paramètres : routage MoE, tour de vision, auto-conditionnement, cache KV encodeur et exécuteur de streaming borné par couche ne sont pas implémentés (§11). Aucune génération de texte réelle n'est revendiquée. Les portes ouvertes sont des **portes de code**, pas une limite de capacité mémoire : le plafond de 28 Gio est un seuil d'admission, les poids vivent en VRAM + RAM et sont streamés couche par couche.
+> **Ce que ce rapport ne prouve pas.** L'exécution du **graphe complet** de 26 milliards de paramètres. Les portes listées au §11 sont **livrées en code** dans l'incrément M10.3 (§16) mais **non validées sur la carte** : le créneau GPU final n'a pas été exécuté. Aucune génération de texte réelle n'est revendiquée. Les portes ouvertes sont des **portes de code**, pas une limite de capacité mémoire : le plafond de 28 Gio est un seuil d'admission, les poids vivent en VRAM + RAM et sont streamés couche par couche.
 
 ---
 
@@ -536,3 +545,84 @@ Les copies de référence épinglées sont également versionnées : `docs/audit
 - **aucune génération réelle du modèle 26B n'est revendiquée** : les portes listées au §11 sont des portes de code, à livrer dans un incrément ultérieur.
 
 La PR [#40](https://github.com/zenhit777/Claymore/pull/40) est ouverte sur `main` et **n'est pas fusionnée** ; sa tête est `a80303260c2990971c3bcdd951697421f4db8b8a` (commit documentaire), dont le SHA de code validé `ea115ab337d492d81ac50f69c09cd79e050b79a6` est l'ancêtre. La décision de merge reste à l'architecte.
+
+---
+
+## 16. Incrément M10.3 — intégration réelle du graphe complet (24 novembre 2026)
+
+### 16.1 Ce qui est livré en code (non validé sur la carte)
+
+| Module | Contenu livré |
+|---|---|
+| `crates/claymore-model-gemma/src/fullgraph.rs` | Graphe CPU de référence **complet** : embeddings scalés, tour de vision (27 couches, RoPE axial 2D, pooling + standardisation), encodeur 30 couches avec `layer_scalar`, cache KV explicite, décodéur bidirectionnel sur préfixe encodeur + canvas, auto-conditionnement, routeur MoE top-8, experts 128 × 704, lm-head tied avec soft-capping final |
+| `crates/claymore-model-gemma/src/cuda_graph.rs` | Graphe CUDA du même graphe : chaque primitive passe par `TensorDispatcher`, chaque poids est admis par `CudaTensorMemory` (propriétaire du `CudaMemoryManager`), chaque activation traverse la frontière de staging **pinnée** explicitement, matrices d'experts lues à l'offset d'éléments exact et uploadées comme tenseurs résidents propres |
+| `crates/claymore-model-gemma/src/stream.rs` | Exécuteur de streaming borné par couche : plans de noms par couche/prefixe, admission via le gestionnaire, résidence, cache experts, éviction LRU sous pression, sécurité de libération après complétion, instrumentation RAM/VRAM |
+| `crates/claymore-tensor/src/diffusion.rs` + `contracts.rs` | Sémantique eager épinglée : scores d'attention arrondis BF16 **avant** softmax, probabilités re-arrondies BF16 **avant** la réduction de valeurs, GELU à deux arrondis, `index_add_` en ordre croissant d'expert avec arrondi BF16 par addition, exceptions typées mono-dtype (`Widen` BF16-only, `RouterTopK` F32-only), slots d'indices/poids/masque explicitement F32 |
+| `crates/claymore-cuda/kernels/m10.cu` → `m10.ptx` | **24 entrées PTX** (`sm_120`) : linear, rotary, attention, soft-cap, scale, scale_bias, gelu_mul_up, gather_rows, scatter_add, embed_gather, row_mask, widen, router_top_k (F32), en F32 et BF16 |
+| Tests | `hardware_m10_primitives` (20 tests), `hardware_m10_streaming` (2 tests), `hardware_m10_generation` (2 tests), `golden_cpu` (6 tests golden CPU avec traçage par étape) |
+
+Empreintes actuelles des sources CUDA :
+
+| Fichier | SHA-256 |
+|---|---|
+| `crates/claymore-cuda/kernels/m10.cu` | `32ae4caf6303722b9c34d706938b0b7f73f1e804f16dbb31bad9183c02825713` |
+| `crates/claymore-cuda/src/kernels/m10.ptx` | `6281667064f7c835eb55799ed752bad14c4c2ef82f7b8fb2c0943fb40c465057` |
+
+### 16.2 Campagne CPU : verdict rouge, mesuré et expliqué
+
+Le graphe CPU complet a été mesuré contre des **références dorées régénérées en mode
+eager** (`attn_implementation="eager"`, `experts_implementation="eager"`, venv
+épinglé `transformers 5.24.0.dev0 @ 671aa77…`, `torch 2.15.0+cpu`, CPU-only). Les
+tolérances sont **celles déclarées avant campagne** ; elles n'ont pas été assouplies.
+
+| Stage | max_abs | rms | Tolérance | Verdict |
+|---|---|---|---|---|
+| `encoder_last_hidden` | 3,5 | 0,083 | 0,03 / 2e-3 | **ROUGE** |
+| `vision_last_hidden` | 0,189453 | 0,054739 | 0,06 / 2e-3 | **ROUGE** |
+| `embed_vision` | 0,242188 | 0,060047 | 0,1 / 4e-3 | **ROUGE** |
+| `decoder_last_hidden0` | 17,03125 | 1,923966 | 0,12 / 4e-3 | **ROUGE** |
+| `moe0_topk_indices` | 1 flip (token 0, experts 33/68 à 1 ULP) | — | égalité exacte | **ROUGE** |
+| `text_embedding` | **0** | **0** | bit-exact | **VERT** |
+
+Journal complet, traçage par couche, traçage par étape et replay :
+`docs/audits/m10-cpu-campaign-2026-11-23.md`.
+
+**Ce que les mesures prouvent.** Le replay « PyTorch nourri par nos bits » montre
+que la couche Rust est reproduite par la couche PyTorch à l'échelle de l'arrondi BF16
+(étapes `attn_out` et `pre_ff_norm` de la couche 1 vision **bit-exacts**), alors que
+la même couche PyTorch, nourrie par la **même** entrée, diffère de la dorée de 10 à
+30 fois plus. Les opérations sont donc sémantiquement alignées ; la divergence vient
+de la dérive de l'entrée accumulée sur 27/30 couches.
+
+**Ce que les mesures ne permettent pas de revendiquer.** Une chaîne BF16 de bout en
+bout exécutée avec un ordre d'accumulation tierce **n'est pas reproductible** contre
+les bits du GEMM BF16 de PyTorch CPU (écart minimal mesuré 0,0077 en F32 **avant**
+arrondi, sur toutes les accumulations testées). L'amplification est exponentielle
+dans les couches dont l'attention n'a **pas de scaling** (`self.scaling = 1.0`) : 8e-5
+de rms relatif à la couche 0 vision → 4,6 % à la couche 26 ; décodéur rouge dès la
+couche 0. Le gate de génération réelle reste **ouvert** : aucune équivalence de chaîne
+complète n'est revendiquée.
+
+### 16.3 Gate GPU de M10.3 : **NON EXÉCUTÉ**
+
+Aucune allocation CUDA, aucun lancement kernel n'a été effectué pour M10.3. Le créneau
+GPU est **réservé et planifié**, pas exécuté :
+
+- état relevé le 24/11/2026 : `32 607 MiB` total, **30 795 MiB occupés**, **1 393 MiB libres**, processus de calcul externes actifs sur la carte ;
+- plafond d'admission : **26 Gio souple / 28 Gio dur**, réserve ≥ 4 Gio ;
+- toutes les allocations passent par `MemoryOrchestrator` ; aucun swap, aucun écrasement de checkpoint, aucun usage GPU caché ;
+- la campagne sera lancée **en séquence**, **une tâche GPU à la fois**, avec **VRAM estimée annoncée avant** chaque tâche et **libération vérifiée après** chaque tâche :
+  1. `hardware_m10_primitives` — estimation **≤ 2 Gio** (le sous-graphe à poids réels a mesuré un pic de **25,4 Mio** en campagne `ea115ab`) ;
+  2. `hardware_m10_streaming` — estimation **≤ 4 Gio** (résidence d'une couche : experts `gate/up` 100,7 Mio + `down` 50,3 Mio + projections, streamées une couche à la fois sous le budget souple de 26 Gio) ;
+  3. `hardware_m10_generation` — estimation **≤ 6 Gio** (canvas 256, logits `256 × 262 144` F32 = 268 Mio, lm-head streamé, poids jamais chargés intégralement en VRAM : le checkpoint de 51,6 Go **ne tient pas** dans 32 Gio et **ne sera pas** chargé intégralement).
+
+Le créneau ne sera pas lancé sans **autorisation explicite** et sans que la VRAM soit
+libérée. **Aucune mesure hardware de M10.3 n'est revendiquée dans ce rapport.**
+
+### 16.4 Verdict de l'incrément M10.3
+
+- CI CPU complète, clippy `-D warnings`, checks `cuda-driver` / `cuda-streaming` et **MSRV 1.86** : ✅ (0 erreur, 13 suites vertes, avertissements `unused` du chemin CUDA supprimés) ;
+- graphe complet **implémenté** en CPU et en CUDA, kernels élargis à 24 entrées, PTX régénéré ;
+- différentiels CPU contre la référence eager épinglée : **ROUGE** sur encodeur, vision, décodéur et indices top-k — cause établie (non-reproductibilité du GEMM BF16 tierce + amplification de l'attention sans scaling), tolérances **conservées**, échec **documenté** ;
+- **gate de génération réelle et de streaming sur la RTX 5090 : OUVERT** (non exécuté, en attente de la libération de la VRAM et de l'autorisation) ;
+- PR #40 et #44 : ouvertes sur `main`, **non fusionnées**.
