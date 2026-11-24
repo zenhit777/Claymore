@@ -31,6 +31,7 @@ CUresult cuMemAlloc_v2(CUdeviceptr *pointer, size_t bytes) { (void)pointer; (voi
 CUresult cuMemFree_v2(CUdeviceptr pointer) { (void)pointer; return CUDA_ERROR_NOT_INITIALIZED; }
 CUresult cuMemHostAlloc(void **pointer, size_t bytes, unsigned int flags) { (void)pointer; (void)bytes; (void)flags; return CUDA_ERROR_NOT_INITIALIZED; }
 CUresult cuMemFreeHost(void *pointer) { (void)pointer; return CUDA_ERROR_NOT_INITIALIZED; }
+CUresult cuMemsetD8Async(CUdeviceptr destination, unsigned char value, size_t bytes, CUstream stream) { (void)destination; (void)value; (void)bytes; (void)stream; return CUDA_ERROR_NOT_INITIALIZED; }
 CUresult cuMemcpyHtoDAsync_v2(CUdeviceptr destination, const void *source, size_t bytes, CUstream stream) { (void)destination; (void)source; (void)bytes; (void)stream; return CUDA_ERROR_NOT_INITIALIZED; }
 CUresult cuMemcpyDtoHAsync_v2(void *destination, CUdeviceptr source, size_t bytes, CUstream stream) { (void)destination; (void)source; (void)bytes; (void)stream; return CUDA_ERROR_NOT_INITIALIZED; }
 CUresult cuStreamCreate(CUstream *stream, unsigned int flags) { (void)stream; (void)flags; return CUDA_ERROR_NOT_INITIALIZED; }
