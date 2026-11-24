@@ -46,6 +46,20 @@ fn stats(a: &[f32], b: &[f32]) -> (f32, f32) {
     (max_abs, (sq / a.len() as f32).sqrt())
 }
 
+/// Permute a local cache tensor `[seq, kv_heads, head_dim]` into the pinned
+/// reference layout `[batch, kv_heads, seq, head_dim]` (batch = 1).
+fn permute_kv(flat: &[f32], rows: usize, heads: usize, dim: usize) -> Vec<f32> {
+    let mut permuted = vec![0.0f32; flat.len()];
+    for row in 0..rows {
+        for head in 0..heads {
+            for d in 0..dim {
+                permuted[(head * rows + row) * dim + d] = flat[(row * heads + head) * dim + d];
+            }
+        }
+    }
+    permuted
+}
+
 #[test]
 #[ignore = "requires the pinned checkpoint and stage golden files (release profile)"]
 fn text_embedding_matches_pinned_upstream_on_the_real_checkpoint() {
@@ -180,15 +194,7 @@ fn encoder_layers_match_pinned_upstream_on_the_real_checkpoint() {
         ] {
             let flat = host.to_f32(tensor);
             let golden_cache = load_from(STAGES, &name, &[1, heads, rows, dim]);
-            let mut permuted = vec![0.0f32; flat.len()];
-            for row in 0..rows {
-                for head in 0..heads {
-                    for d in 0..dim {
-                        permuted[(head * rows + row) * dim + d] =
-                            flat[(row * heads + head) * dim + d];
-                    }
-                }
-            }
+            let permuted = permute_kv(&flat, rows, heads, dim);
             let (kmax, krms) = stats(&permuted, &golden_cache);
             eprintln!("enc_kv_{layer}_{which} max_abs={kmax:.6} rms={krms:.6}");
         }
@@ -228,7 +234,8 @@ fn encoder_layers_match_pinned_upstream_on_the_real_checkpoint() {
         let rust_values = host.to_f32(&cache.layers[layer].values);
         let heads = cache.layers[layer].keys.layout().shape()[1];
         let dim = cache.layers[layer].keys.layout().shape()[2];
-        for (which, rust, golden_name) in [
+        let rows = cache.layers[layer].keys.layout().shape()[0];
+        for (which, flat, golden_name) in [
             ("keys", &rust_keys, format!("enc_kv_{layer}_keys_direct")),
             (
                 "values",
@@ -236,8 +243,11 @@ fn encoder_layers_match_pinned_upstream_on_the_real_checkpoint() {
                 format!("enc_kv_{layer}_values_direct"),
             ),
         ] {
-            let golden_cache = load_from(STAGES, &golden_name, &[1, heads, 7, dim]);
-            let (kmax, krms) = stats(rust, &golden_cache);
+            // The golden cache is [batch, kv_heads, seq, head_dim]; the local cache
+            // is [seq, kv_heads, head_dim]. Permute before comparing.
+            let golden_cache = load_from(STAGES, &golden_name, &[1, heads, rows, dim]);
+            let permuted = permute_kv(flat, rows, heads, dim);
+            let (kmax, krms) = stats(&permuted, &golden_cache);
             eprintln!("enc_kv_{layer}_{which} max_abs={kmax:.6} rms={krms:.6}");
         }
         if layer == 0 {
@@ -333,7 +343,8 @@ fn encoder_matches_pinned_upstream_on_the_real_checkpoint() {
     // Layer 0 keys/values after the encoder prefill.
     let keys = host.to_f32(&cache.layers[0].keys);
     let golden_keys = load("enc_kv_0_keys_direct", &[1, 8, 7, 256]);
-    let (kmax, krms) = stats(&golden_keys, &keys);
+    let permuted = permute_kv(&keys, 7, 8, 256);
+    let (kmax, krms) = stats(&permuted, &golden_keys);
     eprintln!("enc_kv_0 keys max_abs={kmax:.6} rms={krms:.6}");
     assert!(kmax <= 0.05, "kv keys drift {kmax}");
     assert!(krms <= 2e-3, "kv keys rms {krms}");
@@ -469,6 +480,39 @@ fn decoder_first_step_matches_pinned_upstream_on_the_real_checkpoint() {
     let dump = std::env::var_os("M10_DUMP_RUST_DECODER").is_some();
     if dump {
         std::fs::create_dir_all("/tmp/opencode/m10/rust_decoder").expect("dump dir");
+        let table = claymore_model_gemma::fullgraph::text_embedding_weight(&host, &ckpt);
+        let embedding = embed_gather_scaled(
+            &host,
+            &canvas,
+            &table,
+            text_embedding_scale(cfg.text_config.as_ref().unwrap().hidden_size.unwrap()),
+        );
+        let bytes: Vec<u8> = host
+            .to_f32(&embedding)
+            .iter()
+            .flat_map(|v| v.to_le_bytes())
+            .collect();
+        std::fs::write(
+            "/tmp/opencode/m10/rust_decoder/rust_decoder_embedding.bin",
+            bytes,
+        )
+        .expect("dump embedding");
+        for (layer, cache_layer) in cache.layers.iter().enumerate() {
+            for (name, tensor) in [("keys", &cache_layer.keys), ("values", &cache_layer.values)] {
+                let shape = tensor.layout().shape().to_vec();
+                let bytes: Vec<u8> = host
+                    .to_f32(tensor)
+                    .iter()
+                    .flat_map(|v| v.to_le_bytes())
+                    .collect();
+                std::fs::write(
+                    format!("/tmp/opencode/m10/rust_decoder/rust_kv{layer}_{name}.bin"),
+                    bytes,
+                )
+                .expect("dump kv layer");
+                eprintln!("kv{layer}_{name} shape={shape:?}");
+            }
+        }
     }
     for (layer, chunk) in stages
         .chunks(claymore_model_gemma::fullgraph::DECODER_STAGES_PER_LAYER)
