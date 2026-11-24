@@ -220,9 +220,10 @@ pub fn dense_mlp(host: &Host, x: &Tensor, gate: &Tensor, up: &Tensor, down: &Ten
 
 /// Router: RMSNorm(no scale) -> *scale*scalar_root -> proj -> softmax ->
 /// deterministic top-k -> normalized weights * per-expert scale.
-/// Returns `(scores [tokens, experts], weights [tokens*top_k], indices [tokens*top_k])`
-/// as F32 vectors: the raw router scores, the normalized weights scaled per
-/// expert, and the selected expert indices.
+/// Returns `(probabilities [tokens, experts], raw_scores [tokens, experts],
+/// weights [tokens*top_k], indices [tokens*top_k])` as F32 vectors: the FP32
+/// softmax probabilities, the FP32 projection scores before softmax, the
+/// normalized weights scaled per expert, and the selected expert indices.
 #[allow(clippy::too_many_arguments)]
 pub fn router_forward(
     host: &Host,
@@ -233,15 +234,26 @@ pub fn router_forward(
     eps: f64,
     root_scale: f32,
     top_k: usize,
-) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
+) -> (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
     let normed = rms_norm_unscaled(host, x, eps);
     let scale_v = host.to_f32(scale);
     let width = normed.layout().shape()[1];
+    // The pinned upstream performs two BF16 tensor operations:
+    // `hidden_states * self.scale`, then `* scalar_root_size`. Preserve both
+    // rounding boundaries; folding the factors into one FP32 multiply changes
+    // the selected experts for close router scores.
     let scaled_values: Vec<f32> = host
         .to_f32(&normed)
         .iter()
         .enumerate()
-        .map(|(i, v)| v * scale_v[i % width] * root_scale)
+        .map(|(i, v)| v * scale_v[i % width])
+        .collect();
+    let scaled_by_expert = host.bf16(normed.layout().shape().to_vec(), &scaled_values);
+    let root_scale = Bf16::from_f32(root_scale).to_f32();
+    let scaled_values: Vec<f32> = host
+        .to_f32(&scaled_by_expert)
+        .iter()
+        .map(|value| value * root_scale)
         .collect();
     let scaled = host.bf16(normed.layout().shape().to_vec(), &scaled_values);
     let scores = linear(host, &scaled, proj);
@@ -251,6 +263,7 @@ pub fn router_forward(
         scores.len() / scaled.layout().shape()[0],
     );
     let per_expert = host.to_f32(per_expert_scale);
+    let mut probabilities = vec![0.0f32; tokens * experts];
     let mut weights = vec![0.0f32; tokens * top_k];
     let mut indices = vec![0.0f32; tokens * top_k];
     for t in 0..tokens {
@@ -261,8 +274,18 @@ pub fn router_forward(
         for p in probs.iter_mut() {
             *p /= sum;
         }
+        probabilities[t * experts..(t + 1) * experts].copy_from_slice(&probs);
+        // Deterministic descending-score order; exact ties break by descending
+        // expert index, the convention `torch.topk` shows on CPU for this
+        // checkpoint. PyTorch does not guarantee a tie group's order, so tie
+        // groups stay tolerance-bound; scores that are not tied select the
+        // same expert as the reference.
         let mut order: Vec<(usize, f32)> = probs.iter().enumerate().map(|(i, p)| (i, *p)).collect();
-        order.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        order.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(b.0.cmp(&a.0))
+        });
         let mut wsum = 0.0f32;
         for (_i, p) in order.iter().take(top_k) {
             wsum += p;
@@ -272,7 +295,7 @@ pub fn router_forward(
             indices[t * top_k + slot] = i as f32;
         }
     }
-    (scores, weights, indices)
+    (probabilities, scores, weights, indices)
 }
 
 /// Experts: for each (token, slot) pair run expert e = index; gate/up from
@@ -292,9 +315,20 @@ pub fn experts_forward(
     let pairs = tokens * top_k;
     let gu = host.to_bits(gate_up);
     let dp = host.to_bits(down);
-    let inter = gate_up.layout().shape()[0] / 2;
+    let inter = gate_up.layout().shape()[1] / 2;
+    assert_eq!(
+        gate_up.layout().shape()[1],
+        2 * inter,
+        "expert gate/up tensor has an invalid second dimension"
+    );
+    assert_eq!(
+        down.layout().shape()[2],
+        inter,
+        "expert down tensor does not match the expert intermediate size"
+    );
     let xv = host.to_f32(x);
     let mut out = vec![0.0f32; tokens * width];
+    let mut contributions = Vec::with_capacity(pairs);
     for p in 0..pairs {
         let e = indices[p] as usize;
         let token = p / top_k;
@@ -307,23 +341,38 @@ pub fn experts_forward(
                 acc_g += row[h] * gu[(e * 2 * inter + i) * width + h].to_f32();
                 acc_u += row[h] * gu[(e * 2 * inter + inter + i) * width + h].to_f32();
             }
+            // Eager expert boundaries: BF16 gate/up, BF16 activation, BF16
+            // gated product, BF16 down projection.
+            let acc_g = Bf16::from_f32(acc_g).to_f32();
+            let acc_u = Bf16::from_f32(acc_u).to_f32();
             let act = 0.5
                 * acc_g
                 * (1.0
                     + ((2.0f32 / std::f32::consts::PI).sqrt()
                         * (acc_g + 0.044715 * acc_g * acc_g * acc_g))
                         .tanh());
-            let v = act * acc_u;
+            let act = Bf16::from_f32(act).to_f32();
+            let v = Bf16::from_f32(act * acc_u).to_f32();
             for (col, dst) in acc_row.iter_mut().enumerate().take(width) {
                 *dst += v * dp[(e * width + col) * inter + i].to_f32();
             }
         }
         let w = weights[p];
+        let contribution: Vec<f32> = acc_row
+            .iter()
+            .map(|value| Bf16::from_f32(w * Bf16::from_f32(*value).to_f32()).to_f32())
+            .collect();
+        contributions.push((e, p, contribution));
+    }
+    // Eager `index_add_` consumes the contributions in ascending expert order.
+    contributions.sort_by_key(|(expert, pair, _row)| (*expert, *pair));
+    for (_expert, pair, contribution) in contributions {
+        let token = pair / top_k;
         for (col, dst) in out[token * width..(token + 1) * width]
             .iter_mut()
             .enumerate()
         {
-            *dst += w * acc_row[col];
+            *dst = Bf16::from_f32(*dst + contribution[col]).to_f32();
         }
     }
     host.bf16(vec![tokens, width], &out)
@@ -344,10 +393,22 @@ pub fn vision_rope_tables(
     let mut cos_out = Vec::with_capacity(positions.len() * 2 * head_dim);
     let mut sin_out = Vec::with_capacity(positions.len() * 2 * head_dim);
     for (x, y) in positions {
-        let ch: Vec<f32> = inv.iter().map(|f| (*x as f32 * f).cos()).collect();
-        let sh: Vec<f32> = inv.iter().map(|f| (*x as f32 * f).sin()).collect();
-        let cw: Vec<f32> = inv.iter().map(|f| (*y as f32 * f).cos()).collect();
-        let sw: Vec<f32> = inv.iter().map(|f| (*y as f32 * f).sin()).collect();
+        let ch: Vec<f32> = inv
+            .iter()
+            .map(|f| Bf16::from_f32((*x as f32 * f).cos()).to_f32())
+            .collect();
+        let sh: Vec<f32> = inv
+            .iter()
+            .map(|f| Bf16::from_f32((*x as f32 * f).sin()).to_f32())
+            .collect();
+        let cw: Vec<f32> = inv
+            .iter()
+            .map(|f| Bf16::from_f32((*y as f32 * f).cos()).to_f32())
+            .collect();
+        let sw: Vec<f32> = inv
+            .iter()
+            .map(|f| Bf16::from_f32((*y as f32 * f).sin()).to_f32())
+            .collect();
         cos_out.extend(ch.iter().chain(ch.iter()).chain(cw.iter()).chain(cw.iter()));
         sin_out.extend(sh.iter().chain(sh.iter()).chain(sw.iter()).chain(sw.iter()));
     }
@@ -370,6 +431,7 @@ pub fn apply_multidim_rope(
     let half = part / 2;
     let xv = host.to_f32(x);
     let mut out = vec![0.0f32; xv.len()];
+    let round = |value: f32| Bf16::from_f32(value).to_f32();
     for t in 0..tokens {
         for h in 0..heads {
             let base = (t * heads + h) * dim;
@@ -383,8 +445,8 @@ pub fn apply_multidim_rope(
                     let s1 = sin[cbase + i + half];
                     let x0 = xv[pbase + i];
                     let x1 = xv[pbase + i + half];
-                    out[pbase + i] = x0 * c0 - x1 * s0;
-                    out[pbase + i + half] = x1 * c1 + x0 * s1;
+                    out[pbase + i] = round(round(x0 * c0) - round(x1 * s0));
+                    out[pbase + i + half] = round(round(x1 * c1) + round(x0 * s1));
                 }
             }
         }
@@ -424,6 +486,15 @@ pub fn embed_gather_scaled(host: &Host, ids: &[u32], table: &Tensor, scale: f32)
     let f = ids.iter().map(|i| *i as f32).collect::<Vec<f32>>();
     let ids_t = host.f32(vec![ids.len()], &f);
     dfn::embed_gather(host.device(), &ids_t, table, scale).unwrap()
+}
+
+/// Text embedding scale used by the pinned upstream model.
+///
+/// `DiffusionGemmaTextScaledWordEmbedding` stores `sqrt(hidden_size)` in a
+/// float32 buffer and converts that buffer to the embedding dtype (BF16)
+/// before multiplying. Preserve that dtype boundary here.
+pub fn text_embedding_scale(hidden: usize) -> f32 {
+    Bf16::from_f32((hidden as f32).sqrt()).to_f32()
 }
 
 /// Matmul `[rows, inner] x [inner, cols]` (F32 result when inputs BF16).

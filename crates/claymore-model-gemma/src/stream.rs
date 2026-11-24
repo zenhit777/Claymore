@@ -270,7 +270,7 @@ impl WeightStream {
                 continue;
             }
             match memory.manager_mut().release(&entry.device_id, tick) {
-                Ok(alloc) => {
+                Ok(_alloc) => {
                     self.resident.remove(&name);
                     self.metrics.evictions += 1;
                     if memory.manager_mut().usage_bytes(MemoryTier::Vram) + need

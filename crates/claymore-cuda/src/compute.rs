@@ -1235,6 +1235,7 @@ impl CudaComputeEngine {
     /// # Safety
     /// Every pointer must reference a live, sufficiently sized allocation in
     /// this engine's CUDA context.
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn router_top_k(
         &self,
         scores: u64,
@@ -1445,6 +1446,7 @@ impl CudaComputeEngine {
     /// # Safety
     /// Every pointer must reference a live, sufficiently sized allocation in
     /// this engine's CUDA context. `output` must be pre-zeroed.
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn scatter_add(
         &self,
         source: u64,
@@ -1463,6 +1465,7 @@ impl CudaComputeEngine {
     /// # Safety
     /// Every pointer must reference a live, sufficiently sized allocation in
     /// this engine's CUDA context. `output` must be pre-zeroed.
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn scatter_add_bf16(
         &self,
         source: u64,
@@ -1530,6 +1533,7 @@ impl CudaComputeEngine {
     /// # Safety
     /// Every pointer must reference a live, sufficiently sized allocation in
     /// this engine's CUDA context.
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn embed_gather(
         &self,
         ids: u64,
@@ -1547,6 +1551,7 @@ impl CudaComputeEngine {
     /// # Safety
     /// Every pointer must reference a live, sufficiently sized allocation in
     /// this engine's CUDA context.
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn embed_gather_bf16(
         &self,
         ids: u64,
@@ -1687,6 +1692,7 @@ impl CudaComputeEngine {
     /// # Safety
     /// Every pointer must reference a live, sufficiently sized allocation in
     /// this engine's CUDA context.
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn scale_bias(
         &self,
         input: u64,
@@ -1704,6 +1710,7 @@ impl CudaComputeEngine {
     /// # Safety
     /// Every pointer must reference a live, sufficiently sized allocation in
     /// this engine's CUDA context.
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn scale_bias_bf16(
         &self,
         input: u64,

@@ -24,10 +24,12 @@ use claymore_memory::{CudaTensorBackend, CudaTensorError, CudaTensorMemory};
 use claymore_tensor::{Bf16, ExecutionRequest, Tensor, TensorDispatcher, TensorOp};
 
 use crate::checkpoint::Checkpoint;
-use crate::config::GemmaModelConfig;
 
 /// Chunk bound for reading one payload slice from a shard.
 pub const READ_CHUNK_BYTES: usize = 8 * 1024 * 1024;
+
+/// Per-layer KV cache entry on host: `(kv_heads, head_dim, rows, keys_bits, values_bits)`.
+pub type KvLayerEntry = (usize, usize, usize, Vec<Bf16>, Vec<Bf16>);
 
 #[derive(Debug, thiserror::Error)]
 pub enum GraphError {
@@ -110,7 +112,6 @@ impl CudaGraph {
 
     fn push(&mut self, tensor: Tensor) -> usize {
         self.arena.push(tensor);
-        self.uploaded_bytes = self.uploaded_bytes;
         self.arena.len() - 1
     }
 
@@ -466,50 +467,63 @@ impl CudaGraph {
         self.download_bf16(index)
     }
 
-    pub fn upload_bits(&mut self, shape: Vec<usize>, bits: Vec<Bf16>) -> Result<usize, GraphError> {
-        self.upload_bf16(shape, &bits)
+    pub fn upload_bits(
+        &mut self,
+        shape: Vec<usize>,
+        bits: impl AsRef<[Bf16]>,
+    ) -> Result<usize, GraphError> {
+        self.upload_bf16(shape, bits.as_ref())
     }
 
-    /// Standard rope tables `[tokens, head_dim]` F32, with the optional
-    /// `partial_rotary_factor` of the global layers.
+    /// Text rope tables `[tokens, head_dim]` BF16. The default rope uses all
+    /// frequencies; proportional rope uses `partial` angles computed over the
+    /// full head dimension and zeroes the remaining frequencies.
     pub fn rope_tables(
         head_dim: usize,
         theta: f32,
         positions: &[usize],
         partial: Option<f32>,
-    ) -> (Vec<f32>, Vec<f32>) {
-        let rotated = match partial {
-            Some(f) => 2 * (head_dim as f32 * f / 2.0) as usize,
-            None => head_dim,
-        };
-        let inv: Vec<f32> = (0..rotated / 2)
-            .map(|i| theta.powf((2 * i) as f32 / rotated as f32).recip())
+    ) -> (Vec<Bf16>, Vec<Bf16>) {
+        let frequencies = head_dim / 2;
+        let rope_angles = partial.map_or(frequencies, |factor| {
+            (head_dim as f32 * factor / 2.0) as usize
+        });
+        let inv: Vec<f32> = (0..frequencies)
+            .map(|i| {
+                if i < rope_angles {
+                    theta.powf((2 * i) as f32 / head_dim as f32).recip()
+                } else {
+                    0.0
+                }
+            })
             .collect();
         let mut cos = Vec::new();
         let mut sin = Vec::new();
         for p in positions {
-            let mut row_c = vec![1.0f32; head_dim];
-            let mut row_s = vec![0.0f32; head_dim];
-            for i in 0..inv.len() {
-                let a = *p as f32 * inv[i];
-                row_c[i] = a.cos();
-                row_c[i + rotated / 2] = a.cos();
-                row_s[i] = a.sin();
-                row_s[i + rotated / 2] = a.sin();
+            let mut row_c = Vec::with_capacity(head_dim);
+            let mut row_s = Vec::with_capacity(head_dim);
+            for frequency in &inv {
+                let angle = *p as f32 * frequency;
+                row_c.push(Bf16::from_f32(angle.cos()));
+                row_s.push(Bf16::from_f32(angle.sin()));
             }
+            let duplicated_c = row_c.clone();
+            row_c.extend_from_slice(&duplicated_c);
+            let duplicated_s = row_s.clone();
+            row_s.extend_from_slice(&duplicated_s);
             cos.extend(row_c);
             sin.extend(row_s);
         }
         (cos, sin)
     }
 
-    /// Axial 2D vision rope tables `[patches, head_dim]` F32, recomposed as
+    /// Axial 2D vision rope tables `[patches, head_dim]` BF16, recomposed as
     /// `[h, h, w, w]` per patch.
     pub fn vision_rope_tables(
         head_dim: usize,
         theta: f32,
         positions: &[(u32, u32)],
-    ) -> (Vec<f32>, Vec<f32>) {
+    ) -> (Vec<Bf16>, Vec<Bf16>) {
         let spatial = head_dim / 2;
         let inv: Vec<f32> = (0..spatial / 2)
             .map(|i| theta.powf((2 * i) as f32 / spatial as f32).recip())
@@ -517,10 +531,22 @@ impl CudaGraph {
         let mut cos_out = Vec::with_capacity(positions.len() * head_dim);
         let mut sin_out = Vec::with_capacity(positions.len() * head_dim);
         for (x, y) in positions {
-            let ch: Vec<f32> = inv.iter().map(|f| (*x as f32 * f).cos()).collect();
-            let sh: Vec<f32> = inv.iter().map(|f| (*x as f32 * f).sin()).collect();
-            let cw: Vec<f32> = inv.iter().map(|f| (*y as f32 * f).cos()).collect();
-            let sw: Vec<f32> = inv.iter().map(|f| (*y as f32 * f).sin()).collect();
+            let ch: Vec<Bf16> = inv
+                .iter()
+                .map(|f| Bf16::from_f32((*x as f32 * f).cos()))
+                .collect();
+            let sh: Vec<Bf16> = inv
+                .iter()
+                .map(|f| Bf16::from_f32((*x as f32 * f).sin()))
+                .collect();
+            let cw: Vec<Bf16> = inv
+                .iter()
+                .map(|f| Bf16::from_f32((*y as f32 * f).cos()))
+                .collect();
+            let sw: Vec<Bf16> = inv
+                .iter()
+                .map(|f| Bf16::from_f32((*y as f32 * f).sin()))
+                .collect();
             cos_out.extend(ch.iter().chain(ch.iter()).chain(cw.iter()).chain(cw.iter()));
             sin_out.extend(sh.iter().chain(sh.iter()).chain(sw.iter()).chain(sw.iter()));
         }
@@ -551,7 +577,7 @@ impl CudaGraph {
                 any_masked |= !visible;
             }
         }
-        any_masked.then(|| values)
+        any_masked.then_some(values)
     }
 
     pub fn bf16_of(values: &[f32]) -> Vec<Bf16> {
@@ -578,7 +604,7 @@ impl CudaGraph {
             .unwrap()
             .hidden_size
             .unwrap();
-        let scale = (hidden as f32).powf(-0.5);
+        let scale = crate::graph::text_embedding_scale(hidden);
         let ids_t = self.upload_f32(
             vec![ids.len()],
             &ids.iter().map(|i| *i as f32).collect::<Vec<f32>>(),
@@ -588,7 +614,7 @@ impl CudaGraph {
 
     /// Per-layer KV cache on host: `(kv_heads, head_dim, rows, keys_bits, values_bits)`.
     pub fn append_cache(
-        cache: &mut Vec<(usize, usize, usize, Vec<Bf16>, Vec<Bf16>)>,
+        cache: &mut Vec<KvLayerEntry>,
         layer: usize,
         heads: usize,
         dim: usize,
@@ -620,7 +646,7 @@ impl CudaGraph {
         prefix: &str,
         layer: usize,
         x: usize,
-        cache: &mut Vec<(usize, usize, usize, Vec<Bf16>, Vec<Bf16>)>,
+        cache: &mut Vec<KvLayerEntry>,
         positions: &[usize],
         head_dim: usize,
         heads: usize,
@@ -635,8 +661,8 @@ impl CudaGraph {
         let p = |n: &str| format!("model.{prefix}.layers.{layer}.self_attn.{n}");
         let tokens = self.arena[x].layout().shape()[0];
         let (cos, sin) = Self::rope_tables(head_dim, rope_theta, positions, partial);
-        let cos_idx = self.upload_f32(vec![positions.len(), head_dim], &cos)?;
-        let sin_idx = self.upload_f32(vec![positions.len(), head_dim], &sin)?;
+        let cos_idx = self.upload_bits(vec![positions.len(), head_dim], cos)?;
+        let sin_idx = self.upload_bits(vec![positions.len(), head_dim], sin)?;
 
         let q_w = self.weight(&p("q_proj.weight"))?;
         let q = self.linear(x, q_w)?;
@@ -665,8 +691,7 @@ impl CudaGraph {
         };
         let ones = {
             let width = head_dim;
-            let v = vec![1.0f32; width];
-            self.upload_f32(vec![width], &v)?
+            self.upload_bits(vec![width], vec![Bf16::from_f32(1.0f32); width])?
         };
         // `v_norm` is an unscaled RMSNorm in the pinned code; the contract
         // applies the scale vector, so the ones vector is the scale.
@@ -741,32 +766,39 @@ impl CudaGraph {
         top_k: usize,
     ) -> Result<usize, GraphError> {
         let width = self.arena[x].layout().shape()[1];
-        let ones = self.upload_f32(vec![width], &vec![1.0f32; width])?;
+        let ones = self.upload_bits(vec![width], vec![Bf16::from_f32(1.0f32); width])?;
         let normed = self.rms_norm(x, ones, eps)?;
         let scale_w = self.weight(&format!("model.{layer_prefix}.layers.{layer}.router.scale"))?;
-        // scale_bias multiplies by `scale` and subtracts `bias`; the root
-        // factor is folded into the scale vector on the host.
-        let scale_bits = self.host_bits(scale_w)?;
-        let scale_values: Vec<f32> = Self::f32_of(&scale_bits)
-            .iter()
-            .map(|v| v * root_scale)
-            .collect();
-        let scale_idx = self.upload_f32(vec![width], &scale_values)?;
-        let zero_bias = self.upload_f32(vec![width], &vec![0.0f32; width])?;
-        let scaled = self.scale_bias(normed, scale_idx, zero_bias)?;
+        let zero_bias = self.upload_bits(vec![width], vec![Bf16::from_f32(0.0f32); width])?;
+        // The pinned upstream applies two separate BF16 tensor operations:
+        // `normed * scale`, then `result * scalar_root_size`. Keeping both
+        // boundaries is required; folding the root factor into the scale vector
+        // on the host rounds once and changes close router decisions.
+        let scaled = self.scale_bias(normed, scale_w, zero_bias)?;
+        let root_bf16 = Bf16::from_f32(root_scale).to_f32();
+        let root_vec = self.upload_bits(vec![width], vec![Bf16::from_f32(root_bf16); width])?;
+        let scaled = self.scale(scaled, root_vec)?;
         let proj_w = self.weight(&format!(
             "model.{layer_prefix}.layers.{layer}.router.proj.weight"
         ))?;
         let scores = self.linear(scaled, proj_w)?;
         let scores_f32 = self.widen(scores)?;
-        let per_expert = self.weight(&format!(
+        // `RouterTopK` is the F32-only op: scores and `per_expert_scale` are
+        // explicitly typed as F32 by the contract.
+        let per_expert_w = self.weight(&format!(
             "model.{layer_prefix}.layers.{layer}.router.per_expert_scale"
         ))?;
+        let per_expert_bits = self.host_bits(per_expert_w)?;
+        let per_expert = self.upload_f32(
+            vec![self.arena[scores_f32].layout().shape()[1]],
+            &Self::f32_of(&per_expert_bits),
+        )?;
         self.router_top_k(scores_f32, per_expert, top_k)
     }
 
     /// MoE experts: gather, per-expert gate/up/down launches, weighted
     /// scatter-add back into `[tokens, hidden]`.
+    #[allow(clippy::too_many_arguments)]
     pub fn experts_layer(
         &mut self,
         x: usize,
@@ -784,7 +816,6 @@ impl CudaGraph {
         let weights = &topk[..pairs];
         let indices = &topk[pairs..];
         let indices_idx = self.upload_f32(vec![pairs], indices)?;
-        let weights_idx = self.upload_f32(vec![pairs], weights)?;
         let gathered = self.gather_rows(x, indices_idx)?;
         let mut out_rows = Vec::new();
         // Group pairs by expert to launch one linear chain per expert.
@@ -848,7 +879,7 @@ impl CudaGraph {
         prefix: &str,
         layer: usize,
         x: usize,
-        cache: &mut Vec<(usize, usize, usize, Vec<Bf16>, Vec<Bf16>)>,
+        cache: &mut Vec<KvLayerEntry>,
         positions: &[usize],
         head_dim: usize,
         heads: usize,
@@ -913,8 +944,8 @@ impl CudaGraph {
         let scalar_w = self.weight(&format!("{norm_prefix}.layer_scalar"))?;
         let scalar_bits = self.host_bits(scalar_w)?;
         let scalar = Self::f32_of(&scalar_bits)[0];
-        let scale_vec = self.upload_f32(vec![hidden], &vec![scalar; hidden])?;
-        let zero_vec = self.upload_f32(vec![hidden], &vec![0.0f32; hidden])?;
+        let scale_vec = self.upload_bits(vec![hidden], vec![Bf16::from_f32(scalar); hidden])?;
+        let zero_vec = self.upload_bits(vec![hidden], vec![Bf16::from_f32(0.0f32); hidden])?;
         self.scale_bias(y, scale_vec, zero_vec)
     }
 
@@ -923,7 +954,7 @@ impl CudaGraph {
     pub fn encoder_forward(
         &mut self,
         ids: &[u32],
-        cache: &mut Vec<(usize, usize, usize, Vec<Bf16>, Vec<Bf16>)>,
+        cache: &mut Vec<KvLayerEntry>,
     ) -> Result<usize, GraphError> {
         let text = self.checkpoint.config().text_config.clone().unwrap();
         let hidden = text.hidden_size.unwrap();
@@ -967,7 +998,7 @@ impl CudaGraph {
     pub fn decoder_forward(
         &mut self,
         canvas: &[u32],
-        cache: &mut Vec<(usize, usize, usize, Vec<Bf16>, Vec<Bf16>)>,
+        cache: &mut Vec<KvLayerEntry>,
         self_cond: Option<&Vec<f32>>,
     ) -> Result<usize, GraphError> {
         let text = self.checkpoint.config().text_config.clone().unwrap();
@@ -978,7 +1009,7 @@ impl CudaGraph {
         let top_k = text.top_k_experts.unwrap_or(8);
         let eps = text.rms_norm_eps.unwrap_or(1e-6) as f32;
         let heads = text.num_attention_heads.unwrap();
-        let scale = (hidden as f32).powf(-0.5);
+        let scale = crate::graph::text_embedding_scale(hidden);
         let embed = self.embed_text(canvas)?;
         let mut inputs = embed;
         if let Some(logits) = self_cond {
@@ -1013,7 +1044,7 @@ impl CudaGraph {
             let table_t = self.upload_bits(vec![vocab, hidden], transposed)?;
             let _ = table;
             let soft = self.matmul(probs_idx, table_t)?;
-            let scale_vec = self.upload_f32(vec![1], &vec![scale])?;
+            let scale_vec = self.upload_bits(vec![1], Self::bf16_of(&[scale]))?;
             let soft_scaled = self.scale(soft, scale_vec)?;
             let pre_norm = self.weight("model.decoder.self_conditioning.pre_norm.weight")?;
             let normed = self.rms_norm(soft_scaled, pre_norm, eps)?;
@@ -1024,9 +1055,12 @@ impl CudaGraph {
                 "model.decoder.self_conditioning.down_proj.weight",
             )?;
             inputs = self.add(inputs, sc)?;
-            let ones = self.upload_f32(vec![hidden], &vec![1.0f32; hidden])?;
-            inputs = self.rms_norm(inputs, ones, eps)?;
         }
+        // The upstream self-conditioning module always applies its unscaled
+        // post-norm. With no previous logits the MLP signal is zero, but the
+        // normalization is still part of the decoder input.
+        let ones = self.upload_bits(vec![hidden], vec![Bf16::from_f32(1.0f32); hidden])?;
+        inputs = self.rms_norm(inputs, ones, eps)?;
         let prefix_len = cache.first().map(|entry| entry.2).unwrap_or(0);
         let positions: Vec<usize> = (prefix_len..prefix_len + canvas.len()).collect();
         for layer in 0..text.num_hidden_layers.unwrap() {
@@ -1076,9 +1110,9 @@ impl CudaGraph {
         let table_t = self.upload_bits(vec![vocab, hidden], transposed)?;
         let logits = self.matmul(hidden_idx, table_t)?;
         let logits_f32 = self.widen(logits)?;
-        let cap_vec = self.upload_f32(vec![1], &vec![cap])?;
-        let divided = self.scale(logits_f32, cap_vec)?;
-        self.softcap(divided, cap)
+        // `SoftCap` is the complete pinned operation `cap * tanh(x / cap)`.
+        // Pre-scaling by `cap` would compute `cap * tanh(x)` instead.
+        self.softcap(logits_f32, cap)
     }
 
     pub fn matmul(&mut self, lhs: usize, rhs: usize) -> Result<usize, GraphError> {
@@ -1125,8 +1159,8 @@ impl CudaGraph {
         }
         x = self.upload_bits(vec![patches, hidden], x_bits)?;
         let (cos, sin) = Self::vision_rope_tables(head_dim, 100.0f32, positions);
-        let cos_idx = self.upload_f32(vec![patches, head_dim], &cos)?;
-        let sin_idx = self.upload_f32(vec![patches, head_dim], &sin)?;
+        let cos_idx = self.upload_bits(vec![patches, head_dim], cos)?;
+        let sin_idx = self.upload_bits(vec![patches, head_dim], sin)?;
         for layer in 0..vision.num_hidden_layers.unwrap() {
             let p = |n: &str| format!("model.encoder.vision_tower.encoder.layers.{layer}.{n}");
             let input_norm = self.weight(&p("input_layernorm.weight"))?;
@@ -1187,7 +1221,13 @@ impl CudaGraph {
             }
         }
         let root = (hidden as f32).sqrt();
-        let pooled_scaled: Vec<f32> = pooled.iter().map(|v| v * root).collect();
+        // Upstream casts the pooled average to the activation dtype before the
+        // root scaling. Keep that boundary.
+        let pooled_bf16: Vec<f32> = pooled
+            .iter()
+            .map(|value| Bf16::from_f32(*value).to_f32())
+            .collect();
+        let pooled_scaled: Vec<f32> = pooled_bf16.iter().map(|v| v * root).collect();
         let bias_bits = self.read_payload("model.encoder.vision_tower.std_bias")?;
         let scale_bits = self.read_payload("model.encoder.vision_tower.std_scale")?;
         let bv = Self::f32_of(&bias_bits);
@@ -1207,7 +1247,7 @@ impl CudaGraph {
         let vision = self.checkpoint.config().vision_config.clone().unwrap();
         let eps = vision.rms_norm_eps.unwrap_or(1e-6) as f32;
         let width = self.arena[pooled].layout().shape()[1];
-        let ones = self.upload_f32(vec![width], &vec![1.0f32; width])?;
+        let ones = self.upload_bits(vec![width], vec![Bf16::from_f32(1.0f32); width])?;
         let normed = self.rms_norm(pooled, ones, eps)?;
         let proj = self.weight("model.encoder.embed_vision.embedding_projection.weight")?;
         self.linear(normed, proj)
@@ -1220,7 +1260,7 @@ impl CudaGraph {
     pub fn generate_block(
         &mut self,
         canvas: Vec<u32>,
-        cache: &mut Vec<(usize, usize, usize, Vec<Bf16>, Vec<Bf16>)>,
+        cache: &mut Vec<KvLayerEntry>,
         policy: &crate::generation_loop::SamplerPolicy,
         rng: &mut dyn FnMut(usize) -> usize,
     ) -> Result<Vec<u32>, GraphError> {
@@ -1228,7 +1268,6 @@ impl CudaGraph {
             accept_canvas, mean_entropy, position_entropy, should_stop, CanvasState,
         };
         let vocab = policy.vocab_size;
-        let temperature = 0.4f32;
         let mut state = CanvasState {
             canvas: canvas.clone(),
             accepted: vec![false; canvas.len()],

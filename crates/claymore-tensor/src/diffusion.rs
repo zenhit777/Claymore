@@ -230,10 +230,10 @@ pub fn rotary_embed(
 /// * `k`/`v` are `[key_tokens, kv_heads, head_dim]` with `heads % kv_heads == 0`;
 /// * `mask` is `[query_tokens, key_tokens]` and is added to the scores.
 ///
-/// Scores, the softmax and the value reduction are evaluated in FP32. As in the
-/// pinned reference, the probabilities are rounded to the input dtype before the
-/// value reduction. A fully masked query row produces a zero output row instead
-/// of NaN; mask builders reject such masks.
+/// Scores, the softmax and the value reduction are evaluated in FP32. The
+/// eager pinned reference materializes BF16 scores, then rounds the softmax
+/// probabilities to BF16 before the value reduction. A fully masked query row
+/// produces a zero output row instead of NaN; mask builders reject such masks.
 #[allow(clippy::too_many_arguments)]
 pub fn attention(
     device: &dyn Device,
@@ -308,13 +308,20 @@ pub fn attention(
                 for dim in 0..head_dim {
                     accumulator = q[q_base + dim].mul_add(k[k_base + dim], accumulator);
                 }
-                let mut score = accumulator * scale;
+                // The eager reference first materializes the BF16 score, then
+                // adds the attention mask, and only then upcasts for softmax.
+                let mut score = round_to_dtype(&[accumulator * scale], dtype)[0];
                 if let Some(mask_values) = &mask_values {
-                    score += mask_values[token * key_tokens + key_index];
+                    score = round_to_dtype(
+                        &[score + mask_values[token * key_tokens + key_index]],
+                        dtype,
+                    )[0];
                 }
                 scores[key_index] = score;
             }
             softmax_row(&scores, &mut probabilities);
+            // The eager reference casts the probabilities back to the activation
+            // dtype before the value reduction.
             let rounded = round_to_dtype(&probabilities, dtype);
             let out_row = &mut output[q_base..q_base + head_dim];
             for (key_index, probability) in rounded.iter().enumerate() {
@@ -617,7 +624,11 @@ pub fn router_top_k(
     write_numeric(device, &out, vec![tokens, 2 * top_k], DType::F32)
 }
 
-/// `gelu_pytorch_tanh(gate) * up`, accumulated in FP32 and rounded once.
+/// `gelu_pytorch_tanh(gate) * up`.
+///
+/// The activation is rounded to the tensor dtype before it is multiplied by
+/// `up`, matching the pinned upstream BF16 execution boundary. The product is
+/// rounded once more at the output.
 pub fn gelu_mul_up(device: &dyn Device, gate: &Tensor, up: &Tensor) -> Result<Tensor, OpError> {
     if gate.layout().shape() != up.layout().shape() {
         return Err(OpError::ShapeMismatch);
@@ -632,11 +643,17 @@ pub fn gelu_mul_up(device: &dyn Device, gate: &Tensor, up: &Tensor) -> Result<Te
     let g = gate.to_f32();
     let u = up.to_f32();
     let k = (2.0f32 / std::f32::consts::PI).sqrt();
-    let mut out = vec![0.0f32; g.len()];
+    let mut activated = vec![0.0f32; g.len()];
     for (index, gate_value) in g.iter().enumerate() {
         let inner = k * (gate_value + 0.044715 * gate_value * gate_value * gate_value);
-        out[index] = 0.5 * gate_value * (1.0 + inner.tanh()) * u[index];
+        activated[index] = 0.5 * gate_value * (1.0 + inner.tanh());
     }
+    let activated = round_to_dtype(&activated, dtype);
+    let out: Vec<f32> = activated
+        .iter()
+        .zip(u.iter())
+        .map(|(activation, up_value)| activation * up_value)
+        .collect();
     write_numeric(device, &out, shape, dtype)
 }
 

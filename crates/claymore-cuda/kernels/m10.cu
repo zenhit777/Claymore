@@ -275,8 +275,8 @@ extern "C" __global__ void claymore_rotary_embed_bf16(
     float second = to_f32(in[pair + half]);
     float c = to_f32(cos[token * head_dim + pair]);
     float s = to_f32(sin[token * head_dim + pair]);
-    dst[pair] = to_bf16_rn(first * c - second * s);
-    dst[pair + half] = to_bf16_rn(second * c + first * s);
+    dst[pair] = to_bf16_rn(to_bf16_rn(first * c) - to_bf16_rn(second * s));
+    dst[pair + half] = to_bf16_rn(to_bf16_rn(second * c) + to_bf16_rn(first * s));
   }
 }
 
@@ -312,9 +312,9 @@ extern "C" __global__ void claymore_attention_bf16(
     for (uint64_t dim = 0; dim < head_dim; ++dim) {
       accumulator = fmaf(to_f32(q[dim]), to_f32(k[dim]), accumulator);
     }
-    float score = accumulator * scale;
+    float score = to_bf16_rn(accumulator * scale);
     if (masked && mask != nullptr) {
-      score += mask[token * key_tokens + index];
+      score = to_bf16_rn(score + mask[token * key_tokens + index]);
     }
     scores[index] = score;
   }
@@ -429,13 +429,16 @@ extern "C" __global__ void claymore_router_top_k_f32(
     for (uint64_t index = 0; index < experts; ++index) {
       probs[index] /= total;
     }
-    // Deterministic top-k: descending probability, ascending index on ties.
+    // Deterministic top-k: descending probability, descending expert index on
+    // exact ties. This matches the tie order `torch.topk` produces on CPU for
+    // the pinned checkpoint; PyTorch does not guarantee a tie group's order,
+    // so tie groups stay tolerance-bound.
     float weight_sum = 0.0f;
     for (uint64_t slot = 0; slot < top_k; ++slot) {
       uint64_t best = 0;
       float best_value = probs[0];
       for (uint64_t index = 1; index < experts; ++index) {
-        if (probs[index] > best_value) {
+        if (probs[index] >= best_value) {
           best_value = probs[index];
           best = index;
         }
@@ -479,7 +482,10 @@ extern "C" __global__ void claymore_gelu_mul_up_bf16(
        index < numel; index += stride) {
     float g = to_f32(gate[index]);
     float inner = k * (g + 0.044715f * g * g * g);
-    out[index] = to_bf16_rn(0.5f * g * (1.0f + tanhf(inner)) * to_f32(up[index]));
+    // The pinned reference materializes gelu(gate) in the activation dtype
+    // before multiplying by `up`, then narrows the product once more.
+    float activation = to_bf16_rn(0.5f * g * (1.0f + tanhf(inner)));
+    out[index] = to_bf16_rn(activation * to_f32(up[index]));
   }
 }
 
