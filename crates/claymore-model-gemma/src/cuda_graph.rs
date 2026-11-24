@@ -805,7 +805,7 @@ impl CudaGraph {
         topk_idx: usize,
         gate_up_name: &str,
         down_name: &str,
-        experts: usize,
+        _experts: usize,
         inter: usize,
         top_k: usize,
     ) -> Result<usize, GraphError> {
