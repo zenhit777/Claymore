@@ -302,6 +302,59 @@ impl SafetensorsFile {
         Ok(bytes)
     }
 
+    /// Read a byte range inside one tensor's payload.
+    ///
+    /// `offset` is relative to the **start of the tensor payload** (not to
+    /// the start of the shard file): the shard header offset is applied here,
+    /// so callers never have to know where the data region begins. The range
+    /// is validated against the tensor's validated byte length and read in
+    /// bounded chunks of at most `MAX_CHUNK_BYTES`.
+    pub fn read_tensor_range(
+        &self,
+        name: &str,
+        offset: u64,
+        length: usize,
+    ) -> Result<Vec<u8>, SafetensorsError> {
+        let entry = self
+            .tensors
+            .get(name)
+            .ok_or_else(|| SafetensorsError::TensorNotFound {
+                path: self.path.clone(),
+                name: name.to_owned(),
+            })?;
+        let end = offset
+            .checked_add(length as u64)
+            .ok_or(SafetensorsError::SizeOverflow)?;
+        if end > entry.byte_len() {
+            return Err(SafetensorsError::TensorRangeOutOfBounds {
+                path: self.path.clone(),
+                name: name.to_owned(),
+                end,
+                byte_len: entry.byte_len(),
+            });
+        }
+        let base = entry
+            .data_start()
+            .checked_add(offset)
+            .ok_or(SafetensorsError::SizeOverflow)?;
+        let mut bytes = Vec::with_capacity(length);
+        let mut read = 0u64;
+        while read < length as u64 {
+            let chunk = usize::try_from(length as u64 - read)
+                .unwrap_or(usize::MAX)
+                .min(MAX_CHUNK_BYTES);
+            bytes.extend_from_slice(
+                &self.read_payload_range(
+                    base.checked_add(read)
+                        .ok_or(SafetensorsError::SizeOverflow)?,
+                    chunk,
+                )?,
+            );
+            read += chunk as u64;
+        }
+        Ok(bytes)
+    }
+
     /// Read one tensor's exact stored bytes. The allocation is bounded by the
     /// tensor's validated byte length; no copy of the whole shard is made.
     pub fn read_bytes(&self, name: &str) -> Result<Vec<u8>, SafetensorsError> {
@@ -712,6 +765,13 @@ pub enum SafetensorsError {
         end: u64,
         file_len: u64,
     },
+    #[error("{path}: tensor {name:?} range ends at {end}, beyond its {byte_len}-byte payload")]
+    TensorRangeOutOfBounds {
+        path: PathBuf,
+        name: String,
+        end: u64,
+        byte_len: u64,
+    },
 }
 
 #[cfg(test)]
@@ -806,6 +866,47 @@ mod tests {
         ));
         assert!(matches!(
             shard.read_bytes("missing"),
+            Err(SafetensorsError::TensorNotFound { .. })
+        ));
+    }
+
+    #[test]
+    fn reads_a_tensor_range_relative_to_the_payload_not_to_the_file() {
+        let dir = TestDir::new();
+        let path = dir.file("range.safetensors");
+        let first: [u16; 3] = [0x3f80, 0xc000, 0x0001];
+        let second: [u16; 2] = [0x4000, 0x4040];
+        let mut data = Vec::new();
+        for bits in first {
+            data.extend_from_slice(&bits.to_le_bytes());
+        }
+        for bits in second {
+            data.extend_from_slice(&bits.to_le_bytes());
+        }
+        let header = format!(
+            r#"{{"a":{{{}}},"b":{{{}}}}}"#,
+            tensor_json("BF16", &[3], 0, 6),
+            tensor_json("BF16", &[2], 6, 10)
+        );
+        write_shard(&path, &header, &data).unwrap();
+
+        let shard = SafetensorsFile::open(&path).unwrap();
+        // The whole payload of the second tensor, read relatively to its own
+        // start: the shard header offset is applied by the reader.
+        assert_eq!(
+            shard.read_tensor_range("b", 0, 4).unwrap(),
+            [0x4000u16.to_le_bytes(), 0x4040u16.to_le_bytes()].concat()
+        );
+        // A range inside one tensor, in bytes: the payload of `a` is
+        // `80 3f 00 c0 01 00`, so bytes 2..4 are `00 c0`.
+        assert_eq!(shard.read_tensor_range("a", 2, 2).unwrap(), [0x00u8, 0xc0]);
+        // A range that leaves the tensor payload is refused.
+        assert!(matches!(
+            shard.read_tensor_range("a", 4, 4),
+            Err(SafetensorsError::TensorRangeOutOfBounds { .. })
+        ));
+        assert!(matches!(
+            shard.read_tensor_range("missing", 0, 2),
             Err(SafetensorsError::TensorNotFound { .. })
         ));
     }

@@ -48,6 +48,8 @@ pub enum OpError {
     IndexDTypeMismatch,
     #[error("embedding scale must be finite")]
     InvalidEmbedScale,
+    #[error("scale factor must be finite")]
+    InvalidScaleFactor,
     #[error("RoPE parameters are invalid: {0}")]
     InvalidRopeParameter(String),
     #[error("attention head configuration is invalid: {0}")]

@@ -141,8 +141,12 @@ extern "C" __global__ void claymore_rotary_embed_f32(
     float second = in[pair + half];
     float c = cos[token * head_dim + pair];
     float s = sin[token * head_dim + pair];
+    // The upstream `rotate_half` convention reads the table entry of each
+    // half independently (the generated tables repeat the frequencies).
+    float c2 = cos[token * head_dim + pair + half];
+    float s2 = sin[token * head_dim + pair + half];
     dst[pair] = first * c - second * s;
-    dst[pair + half] = second * c + first * s;
+    dst[pair + half] = second * c2 + first * s2;
   }
 }
 
@@ -228,6 +232,18 @@ extern "C" __global__ void claymore_scale_f32(
   }
 }
 
+extern "C" __global__ void claymore_scale_scalar_f32(
+    const float *__restrict__ input,
+    float *__restrict__ out,
+    uint64_t numel,
+    float factor) {
+  uint64_t stride = (uint64_t)blockDim.x * gridDim.x;
+  for (uint64_t index = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+       index < numel; index += stride) {
+    out[index] = input[index] * factor;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // BF16 kernels
 // ---------------------------------------------------------------------------
@@ -275,8 +291,12 @@ extern "C" __global__ void claymore_rotary_embed_bf16(
     float second = to_f32(in[pair + half]);
     float c = to_f32(cos[token * head_dim + pair]);
     float s = to_f32(sin[token * head_dim + pair]);
+    // The upstream `rotate_half` convention reads the table entry of each
+    // half independently (the generated tables repeat the frequencies).
+    float c2 = to_f32(cos[token * head_dim + pair + half]);
+    float s2 = to_f32(sin[token * head_dim + pair + half]);
     dst[pair] = to_bf16_rn(to_bf16_rn(first * c) - to_bf16_rn(second * s));
-    dst[pair + half] = to_bf16_rn(to_bf16_rn(second * c) + to_bf16_rn(first * s));
+    dst[pair + half] = to_bf16_rn(to_bf16_rn(second * c2) + to_bf16_rn(first * s2));
   }
 }
 
@@ -365,6 +385,21 @@ extern "C" __global__ void claymore_scale_bf16(
     out[index] = to_bf16_rn(product);
   }
 }
+
+// The factor is an FP32 scalar, exactly like the upstream's
+// `bf16_tensor * python_float`: the product is evaluated in FP32 and rounded
+// once to BF16. The scalar itself is never rounded to BF16.
+extern "C" __global__ void claymore_scale_scalar_bf16(
+    const __nv_bfloat16 *__restrict__ input,
+    __nv_bfloat16 *__restrict__ out,
+    uint64_t numel,
+    float factor) {
+  uint64_t stride = (uint64_t)blockDim.x * gridDim.x;
+  for (uint64_t index = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+       index < numel; index += stride) {
+    out[index] = to_bf16_rn(to_f32(input[index]) * factor);
+  }
+}
 // ---------------------------------------------------------------------------
 // M10.2 kernels: MoE router, gated activation, gather/scatter, embedding,
 // row masking and explicit scale-bias. The same numerical policy applies:
@@ -382,6 +417,321 @@ extern "C" __global__ void claymore_widen_bf16_f32(
   }
 }
 
+// ---------------------------------------------------------------------------
+// ATen-compatible top-k selection
+// ---------------------------------------------------------------------------
+//
+// The pinned upstream selects its experts with `torch.topk(largest=True,
+// sorted=True)` on the FP32 router probabilities. PyTorch's CPU selection is
+// unstable inside a group of experts with identical probabilities, and the
+// pinned checkpoint contains such tie groups at the top-k boundary, where the
+// choice changes the model's weighted output. The helpers below reproduce
+// ATen's algorithm exactly (`std::nth_element` / introselect followed by
+// `std::sort` / introsort, with ATen's value-only comparator), one step at a
+// time, so the device and the CPU reference select the same experts in the
+// same order. The Rust mirror lives in `claymore-tensor/src/aten_topk.rs`.
+
+__device__ __forceinline__ bool aten_less(float left, float right) {
+  return (isnan(left) && !isnan(right)) || (left > right);
+}
+
+__device__ __forceinline__ void aten_push_heap(float *values, uint32_t *indices,
+                                               int hole, int top, float value,
+                                               uint32_t index) {
+  int parent = (hole - 1) / 2;
+  while (hole > top && aten_less(values[parent], value)) {
+    values[hole] = values[parent];
+    indices[hole] = indices[parent];
+    hole = parent;
+    parent = (hole - 1) / 2;
+  }
+  values[hole] = value;
+  indices[hole] = index;
+}
+
+__device__ __forceinline__ void aten_adjust_heap(float *values, uint32_t *indices,
+                                                  int hole, int len, float value,
+                                                  uint32_t index) {
+  int top = hole;
+  int second_child = hole;
+  while (second_child < (len - 1) / 2) {
+    second_child = 2 * (second_child + 1);
+    if (aten_less(values[second_child], values[second_child - 1])) {
+      second_child -= 1;
+    }
+    values[hole] = values[second_child];
+    indices[hole] = indices[second_child];
+    hole = second_child;
+  }
+  if ((len & 1) == 0 && second_child == (len - 2) / 2) {
+    second_child = 2 * (second_child + 1);
+    values[hole] = values[second_child - 1];
+    indices[hole] = indices[second_child - 1];
+    hole = second_child - 1;
+  }
+  aten_push_heap(values, indices, hole, top, value, index);
+}
+
+__device__ __forceinline__ void aten_make_heap(float *values, uint32_t *indices,
+                                                int len) {
+  if (len < 2) {
+    return;
+  }
+  int parent = (len - 2) / 2;
+  while (true) {
+    float value = values[parent];
+    uint32_t index = indices[parent];
+    aten_adjust_heap(values, indices, parent, len, value, index);
+    if (parent == 0) {
+      return;
+    }
+    parent -= 1;
+  }
+}
+
+__device__ __forceinline__ void aten_heap_select(float *values, uint32_t *indices,
+                                                  int first, int middle, int last) {
+  int len = middle - first;
+  // The heap lives in the `[first, middle)` window of the shared arrays.
+  float *heap_values = values + first;
+  uint32_t *heap_indices = indices + first;
+  aten_make_heap(heap_values, heap_indices, len);
+  for (int index = middle; index < last; ++index) {
+    if (aten_less(values[index], heap_values[0])) {
+      float value = values[index];
+      uint32_t expert = indices[index];
+      values[index] = heap_values[0];
+      indices[index] = heap_indices[0];
+      aten_adjust_heap(heap_values, heap_indices, 0, len, value, expert);
+    }
+  }
+}
+
+__device__ __forceinline__ void aten_partial_sort(float *values, uint32_t *indices,
+                                                   int first, int middle, int last) {
+  int len = middle - first;
+  aten_heap_select(values, indices, first, middle, last);
+  float *heap_values = values + first;
+  uint32_t *heap_indices = indices + first;
+  int length = len;
+  while (length > 1) {
+    length -= 1;
+    float value = heap_values[length];
+    uint32_t expert = heap_indices[length];
+    heap_values[length] = heap_values[0];
+    heap_indices[length] = heap_indices[0];
+    aten_adjust_heap(heap_values, heap_indices, 0, length, value, expert);
+  }
+}
+
+__device__ __forceinline__ void aten_move_median_to_first(float *values,
+                                                           uint32_t *indices, int result,
+                                                           int a, int b, int c) {
+  if (aten_less(values[a], values[b])) {
+    if (aten_less(values[b], values[c])) {
+      float value = values[result];
+      values[result] = values[b];
+      values[b] = value;
+      uint32_t expert = indices[result];
+      indices[result] = indices[b];
+      indices[b] = expert;
+    } else if (aten_less(values[a], values[c])) {
+      float value = values[result];
+      values[result] = values[c];
+      values[c] = value;
+      uint32_t expert = indices[result];
+      indices[result] = indices[c];
+      indices[c] = expert;
+    } else {
+      float value = values[result];
+      values[result] = values[a];
+      values[a] = value;
+      uint32_t expert = indices[result];
+      indices[result] = indices[a];
+      indices[a] = expert;
+    }
+  } else if (aten_less(values[a], values[c])) {
+    float value = values[result];
+    values[result] = values[a];
+    values[a] = value;
+    uint32_t expert = indices[result];
+    indices[result] = indices[a];
+    indices[a] = expert;
+  } else if (aten_less(values[b], values[c])) {
+    float value = values[result];
+    values[result] = values[c];
+    values[c] = value;
+    uint32_t expert = indices[result];
+    indices[result] = indices[c];
+    indices[c] = expert;
+  } else {
+    float value = values[result];
+    values[result] = values[b];
+    values[b] = value;
+    uint32_t expert = indices[result];
+    indices[result] = indices[b];
+    indices[b] = expert;
+  }
+}
+
+__device__ __forceinline__ int aten_unguarded_partition(float *values,
+                                                         uint32_t *indices, int first,
+                                                         int last, int pivot_index) {
+  float pivot = values[pivot_index];
+  while (true) {
+    while (aten_less(values[first], pivot)) {
+      first += 1;
+    }
+    last -= 1;
+    while (aten_less(pivot, values[last])) {
+      last -= 1;
+    }
+    if (!(first < last)) {
+      return first;
+    }
+    float value = values[first];
+    values[first] = values[last];
+    values[last] = value;
+    uint32_t expert = indices[first];
+    indices[first] = indices[last];
+    indices[last] = expert;
+    first += 1;
+  }
+}
+
+__device__ __forceinline__ int aten_unguarded_partition_pivot(float *values,
+                                                               uint32_t *indices, int first,
+                                                               int last) {
+  int mid = first + (last - first) / 2;
+  aten_move_median_to_first(values, indices, first, first + 1, mid, last - 1);
+  return aten_unguarded_partition(values, indices, first + 1, last, first);
+}
+
+__device__ __forceinline__ void aten_unguarded_linear_insert(float *values,
+                                                              uint32_t *indices, int last) {
+  float value = values[last];
+  uint32_t expert = indices[last];
+  int previous = last - 1;
+  while (aten_less(value, values[previous])) {
+    values[last] = values[previous];
+    indices[last] = indices[previous];
+    last = previous;
+    previous -= 1;
+  }
+  values[last] = value;
+  indices[last] = expert;
+}
+
+__device__ __forceinline__ void aten_insertion_sort(float *values, uint32_t *indices,
+                                                     int first, int last) {
+  if (first == last) {
+    return;
+  }
+  for (int index = first + 1; index < last; ++index) {
+    if (aten_less(values[index], values[first])) {
+      float value = values[index];
+      uint32_t expert = indices[index];
+      for (int shift = index; shift > first; --shift) {
+        values[shift] = values[shift - 1];
+        indices[shift] = indices[shift - 1];
+      }
+      values[first] = value;
+      indices[first] = expert;
+    } else {
+      aten_unguarded_linear_insert(values, indices, index);
+    }
+  }
+}
+
+__device__ __forceinline__ void aten_unguarded_insertion_sort(float *values,
+                                                               uint32_t *indices, int first,
+                                                               int last) {
+  for (int index = first; index < last; ++index) {
+    if (aten_less(values[index], values[first])) {
+      float value = values[index];
+      uint32_t expert = indices[index];
+      for (int shift = index; shift > first; --shift) {
+        values[shift] = values[shift - 1];
+        indices[shift] = indices[shift - 1];
+      }
+      values[first] = value;
+      indices[first] = expert;
+    } else {
+      aten_unguarded_linear_insert(values, indices, index);
+    }
+  }
+}
+
+__device__ __forceinline__ void aten_introsort_loop(float *values, uint32_t *indices,
+                                                     int first, int last, int depth) {
+  while (last - first > 16) {
+    if (depth == 0) {
+      aten_partial_sort(values, indices, first, last, last);
+      return;
+    }
+    depth -= 1;
+    int cut = aten_unguarded_partition_pivot(values, indices, first, last);
+    aten_introsort_loop(values, indices, cut, last, depth);
+    last = cut;
+  }
+}
+
+__device__ __forceinline__ void aten_final_insertion_sort(float *values,
+                                                           uint32_t *indices, int first,
+                                                           int last) {
+  if (last - first > 16) {
+    aten_insertion_sort(values, indices, first, first + 16);
+    aten_unguarded_insertion_sort(values, indices, first + 16, last);
+  } else {
+    aten_insertion_sort(values, indices, first, last);
+  }
+}
+
+__device__ __forceinline__ void aten_std_sort(float *values, uint32_t *indices,
+                                               int first, int last) {
+  if (first != last) {
+    int depth = 2 * (31 - __clz(last - first));
+    aten_introsort_loop(values, indices, first, last, depth);
+    aten_final_insertion_sort(values, indices, first, last);
+  }
+}
+
+__device__ __forceinline__ void aten_introselect(float *values, uint32_t *indices,
+                                                  int first, int nth, int last, int depth) {
+  while (last - first > 3) {
+    if (depth == 0) {
+      // libstdc++ calls `__heap_select(first, nth + 1, last)` and then swaps
+      // `first` and `nth` to place the nth largest element in its final
+      // position.
+      aten_heap_select(values, indices, first, nth + 1, last);
+      float value = values[first];
+      uint32_t expert = indices[first];
+      values[first] = values[nth];
+      indices[first] = indices[nth];
+      values[nth] = value;
+      indices[nth] = expert;
+      return;
+    }
+    depth -= 1;
+    int cut = aten_unguarded_partition_pivot(values, indices, first, last);
+    if (cut <= nth) {
+      first = cut;
+    } else {
+      last = cut;
+    }
+  }
+  aten_insertion_sort(values, indices, first, last);
+}
+
+__device__ __forceinline__ void aten_nth_element(float *values, uint32_t *indices,
+                                                  int first, int nth, int last) {
+  if (first == last || nth == last) {
+    return;
+  }
+  int depth = 2 * (31 - __clz(last - first));
+  aten_introselect(values, indices, first, nth, last, depth);
+}
+
 extern "C" __global__ void claymore_router_top_k_f32(
     const float *__restrict__ scores,
     const float *__restrict__ per_expert_scale,
@@ -393,65 +743,61 @@ extern "C" __global__ void claymore_router_top_k_f32(
   if (token >= tokens) {
     return;
   }
-  extern __shared__ float shared[];
-  float *probs = shared;
+  extern __shared__ char shared_raw[];
+  float *probs = reinterpret_cast<float *>(shared_raw);
+  uint32_t *indices = reinterpret_cast<uint32_t *>(probs + experts);
+
   const float *row = scores + token * experts;
   uint64_t tid = threadIdx.x;
-  float max_value = -INFINITY;
+
+  // Block-wide maximum. Every thread used to normalize the row with its own
+  // partial maximum, which made the probabilities incomparable and turned the
+  // selection into a pure tie-break.
+  __shared__ float block_max[256];
+  float local_max = -INFINITY;
   for (uint64_t index = tid; index < experts; index += blockDim.x) {
-    max_value = fmaxf(max_value, row[index]);
+    local_max = fmaxf(local_max, row[index]);
   }
+  block_max[tid] = local_max;
   __syncthreads();
-  // One thread per expert is guaranteed (blockDim >= experts).
+  for (uint32_t stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+    if (tid < stride) {
+      block_max[tid] = fmaxf(block_max[tid], block_max[tid + stride]);
+    }
+    __syncthreads();
+  }
+  float max_value = block_max[0];
+
   if (tid < experts) {
     probs[tid] = expf(row[tid] - max_value);
+    indices[tid] = (uint32_t)tid;
   }
   __syncthreads();
-  float sum = 0.0f;
-  for (uint64_t index = tid; index < experts; index += blockDim.x) {
-    sum += probs[index];
-  }
-  __shared__ float block_sum[32];
-  // Reduce the sum across the block.
-  if (tid < 32) {
-    float partial = 0.0f;
-    for (uint64_t index = tid; index < experts; index += 32) {
-      partial += probs[index];
-    }
-    block_sum[tid] = partial;
-  }
-  __syncthreads();
+
   if (tid == 0) {
-    float total = 0.0f;
-    for (uint32_t lane = 0; lane < 32; ++lane) {
-      total += block_sum[lane];
+    int count = (int)experts;
+    int k = (int)top_k;
+    // The CPU reference sums the exponentials sequentially in index order; the
+    // same order is used here so both sides see identical probabilities.
+    float sum = 0.0f;
+    for (int index = 0; index < count; ++index) {
+      sum += probs[index];
     }
-    for (uint64_t index = 0; index < experts; ++index) {
-      probs[index] /= total;
+    for (int index = 0; index < count; ++index) {
+      probs[index] /= sum;
     }
-    // Deterministic top-k: descending probability, descending expert index on
-    // exact ties. This matches the tie order `torch.topk` produces on CPU for
-    // the pinned checkpoint; PyTorch does not guarantee a tie group's order,
-    // so tie groups stay tolerance-bound.
+    // ATen-compatible selection: `std::nth_element` then `std::sort`.
+    aten_nth_element(probs, indices, 0, k - 1, count);
+    aten_std_sort(probs, indices, 0, k - 1);
     float weight_sum = 0.0f;
-    for (uint64_t slot = 0; slot < top_k; ++slot) {
-      uint64_t best = 0;
-      float best_value = probs[0];
-      for (uint64_t index = 1; index < experts; ++index) {
-        if (probs[index] >= best_value) {
-          best_value = probs[index];
-          best = index;
-        }
-      }
-      weight_sum += best_value;
-      probs[best] = -INFINITY;
-      out[token * 2 * top_k + slot] = best_value;
-      out[token * 2 * top_k + top_k + slot] = (float)best;
+    for (int slot = 0; slot < k; ++slot) {
+      weight_sum += probs[slot];
     }
-    for (uint64_t slot = 0; slot < top_k; ++slot) {
-      float weight = out[token * 2 * top_k + slot] / weight_sum;
-      uint64_t expert = (uint64_t)out[token * 2 * top_k + top_k + slot];
-      out[token * 2 * top_k + slot] = weight * per_expert_scale[expert];
+    for (int slot = 0; slot < k; ++slot) {
+      uint32_t expert = indices[slot];
+      float weight = probs[slot] / weight_sum * per_expert_scale[expert];
+      out[token * 2 * top_k + slot] = weight;
+      out[token * 2 * top_k + top_k + slot] = (float)expert;
     }
   }
 }
@@ -493,6 +839,7 @@ extern "C" __global__ void claymore_gather_rows_f32(
     const float *__restrict__ input,
     const float *__restrict__ indices,
     float *__restrict__ out,
+    uint64_t input_rows,
     uint64_t out_rows,
     uint64_t width) {
   uint64_t row = blockIdx.x;
@@ -501,6 +848,10 @@ extern "C" __global__ void claymore_gather_rows_f32(
     return;
   }
   uint64_t source = (uint64_t)indices[row];
+  // Refuse out-of-range indices: never read outside the input allocation.
+  if (source >= input_rows) {
+    return;
+  }
   out[row * width + column] = input[source * width + column];
 }
 
@@ -508,6 +859,7 @@ extern "C" __global__ void claymore_gather_rows_bf16(
     const __nv_bfloat16 *__restrict__ input,
     const float *__restrict__ indices,
     __nv_bfloat16 *__restrict__ out,
+    uint64_t input_rows,
     uint64_t out_rows,
     uint64_t width) {
   uint64_t row = blockIdx.x;
@@ -516,6 +868,10 @@ extern "C" __global__ void claymore_gather_rows_bf16(
     return;
   }
   uint64_t source = (uint64_t)indices[row];
+  // Refuse out-of-range indices: never read outside the input allocation.
+  if (source >= input_rows) {
+    return;
+  }
   out[row * width + column] = input[source * width + column];
 }
 

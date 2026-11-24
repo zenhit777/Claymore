@@ -777,6 +777,61 @@ impl CudaMemoryManager {
         })
     }
 
+    /// Host-side validation of `GatherRows` indices, mirroring the CPU
+    /// primitive: any index outside `[0, input_rows)` (non-finite, negative,
+    /// non-integral or out of range) is refused with `OpError::InvalidIndex`
+    /// before any kernel is launched. The index tensor is read back
+    /// synchronously through a temporary pinned staging buffer so no device
+    /// work can observe out-of-range reads. `offset`/`count` describe the
+    /// tensor window inside its allocation.
+    fn validate_gather_indices(
+        &mut self,
+        indices_id: &str,
+        offset: usize,
+        count: usize,
+        input_rows: usize,
+        tick: u64,
+    ) -> Result<(), CudaMemoryError> {
+        self.advance_tick(tick)?;
+        let indices = self
+            .device
+            .get(indices_id)
+            .ok_or_else(|| CudaMemoryError::UnknownAllocation(indices_id.to_owned()))?;
+        let bytes = indices.len();
+        if bytes == 0 {
+            return Ok(());
+        }
+        let window = count.checked_mul(4).ok_or(CudaError::SizeOverflow)?;
+        let end = offset.checked_add(window).ok_or(CudaError::SizeOverflow)?;
+        if end > bytes {
+            return Err(CudaMemoryError::Cuda(CudaError::BufferTooSmall {
+                requested: end,
+                capacity: bytes,
+            }));
+        }
+        let mut staging = self.driver.allocate_pinned(bytes as u64)?;
+        // SAFETY: both allocations are owned by this manager; the transfer
+        // stream is synchronized before the staging pointer is read.
+        unsafe {
+            indices.copy_to_pinned_async(&mut staging, bytes, &self.transfer_stream)?;
+        }
+        let event = self.driver.create_event()?;
+        event.record(&self.transfer_stream)?;
+        event.synchronize()?;
+        let raw = unsafe { std::slice::from_raw_parts(staging.as_mut_ptr(), bytes) };
+        for chunk in raw[offset..end].chunks_exact(4) {
+            let value = f32::from_ne_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+            if !value.is_finite()
+                || value < 0.0
+                || value >= input_rows as f32
+                || (value as usize) as f32 != value
+            {
+                return Err(CudaMemoryError::Tensor(OpError::InvalidIndex));
+            }
+        }
+        Ok(())
+    }
+
     /// Enqueue one native CUDA kernel for a validated M8 tensor operation.
     ///
     /// Output allocation has already gone through `allocate_device` (and thus
@@ -807,6 +862,15 @@ impl CudaMemoryManager {
         let inputs = op.inputs();
         if input_ids.len() != inputs.len() {
             return Err(CudaMemoryError::TensorInputMismatch);
+        }
+        // `GatherRows` indices are data, not descriptors: refuse an
+        // out-of-range index on the host, exactly like the CPU primitive,
+        // before any kernel can read outside the input allocation.
+        if let TensorOp::GatherRows { input, indices } = op {
+            let input_rows = input.layout().shape()[0];
+            let offset = indices.offset_bytes();
+            let count = indices.layout().numel();
+            self.validate_gather_indices(input_ids[1], offset, count, input_rows, tick)?;
         }
         if !self.device.contains_key(output_id) {
             return Err(CudaMemoryError::ComputeOutputMissing);
@@ -847,7 +911,7 @@ impl CudaMemoryManager {
             n.checked_mul(d).ok_or(CudaError::SizeOverflow)
         })?;
         let output_bytes = output_elements
-            .checked_mul(validated.dtype.element_size_bytes())
+            .checked_mul(validated.output_dtype.element_size_bytes())
             .ok_or(CudaError::SizeOverflow)?;
         if output_bytes > output_buffer.len() {
             return Err(CudaMemoryError::Cuda(CudaError::BufferTooSmall {
@@ -1286,6 +1350,31 @@ impl CudaMemoryManager {
                 self.honor_launch_fault(launch)?;
                 true
             }
+            TensorOp::ScaleScalar { input, factor } => {
+                let launch = if input.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.scale_scalar_bf16(
+                            pointers[0],
+                            pointers[1],
+                            input.layout().numel(),
+                            *factor,
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.scale_scalar(
+                            pointers[0],
+                            pointers[1],
+                            input.layout().numel(),
+                            *factor,
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
             TensorOp::Widen { input } => {
                 let launch = unsafe {
                     self.compute_engine.widen_bf16(
@@ -1344,12 +1433,14 @@ impl CudaMemoryManager {
                 true
             }
             TensorOp::GatherRows { input, indices } => {
+                let input_rows = input.layout().shape()[0];
                 let launch = if input.layout().dtype() == DType::BF16 {
                     unsafe {
                         self.compute_engine.gather_rows_bf16(
                             pointers[0],
                             pointers[1],
                             pointers[2],
+                            input_rows,
                             indices.layout().numel(),
                             input.layout().shape()[1],
                             &self.compute_stream,
@@ -1361,6 +1452,7 @@ impl CudaMemoryManager {
                             pointers[0],
                             pointers[1],
                             pointers[2],
+                            input_rows,
                             indices.layout().numel(),
                             input.layout().shape()[1],
                             &self.compute_stream,

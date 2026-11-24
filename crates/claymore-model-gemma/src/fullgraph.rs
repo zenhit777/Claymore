@@ -39,6 +39,11 @@ fn tensor_of(host: &Host, ckpt: &Checkpoint, name: &str) -> Tensor {
     bits(host, ckpt, name, shape)
 }
 
+/// Load a BF16 tensor from the pinned checkpoint.
+pub fn checkpoint_tensor(host: &Host, ckpt: &Checkpoint, name: &str) -> Tensor {
+    tensor_of(host, ckpt, name)
+}
+
 /// Text embedding table used by both the encoder and decoder.
 pub fn text_embedding_weight(host: &Host, ckpt: &Checkpoint) -> Tensor {
     tensor_of(host, ckpt, "model.decoder.embed_tokens.weight")
@@ -389,7 +394,7 @@ pub fn encoder_forward_traced_limited(
                 &format!("model.decoder.layers.{layer}.router.per_expert_scale"),
             ),
             eps,
-            (hidden as f32).powf(-0.5),
+            (hidden as f64).powf(-0.5),
             text.top_k_experts.unwrap(),
         );
         let exp = experts_forward(
@@ -536,12 +541,10 @@ pub fn decoder_forward_traced(
         // softmax in F32 -> bf16 -> matmul with embed table -> scale
         let probs = softmax_rows(host, logits, canvas_len, vocab);
         let probs_t = host.bf16(vec![canvas_len, vocab], &probs);
-        let soft = claymore_tensor::ops::matmul(
-            host.device(),
-            &probs_t,
-            &transpose_weight(host, &embed_table),
-        )
-        .unwrap();
+        // The pinned upstream multiplies the probabilities by the embedding
+        // table **as stored** (`[vocab, hidden]`): the soft embeddings are the
+        // convex combination by token embedding, not by its transpose.
+        let soft = claymore_tensor::ops::matmul(host.device(), &probs_t, &embed_table).unwrap();
         let soft_scaled = host.bf16(
             vec![canvas_len, hidden],
             &host
@@ -706,7 +709,7 @@ pub fn decoder_forward_traced(
                 &format!("model.decoder.layers.{layer}.router.per_expert_scale"),
             ),
             eps,
-            (hidden as f32).powf(-0.5),
+            (hidden as f64).powf(-0.5),
             text.top_k_experts.unwrap(),
         );
         trace.push((scores, weights.to_vec(), indices.to_vec()));

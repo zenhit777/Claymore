@@ -31,6 +31,10 @@ pub enum OpKind {
     SoftCap,
     /// Explicit broadcast multiplication by a factor tensor.
     Scale,
+    /// Explicit multiplication by an FP32 scalar. The factor is a scalar, not
+    /// a tensor: the product is evaluated in FP32 and rounded once to the
+    /// input dtype, exactly like the upstream's `tensor * python_float`.
+    ScaleScalar,
     /// Bit-exact BF16 widening to F32 (the only cross-dtype operation in the
     /// contract, declared explicitly so no implicit cast path exists).
     Widen,
@@ -52,7 +56,7 @@ pub enum OpKind {
 }
 
 impl OpKind {
-    pub const ALL: [OpKind; 17] = [
+    pub const ALL: [OpKind; 18] = [
         OpKind::Add,
         OpKind::MatMul,
         OpKind::SoftmaxLastDim,
@@ -62,6 +66,7 @@ impl OpKind {
         OpKind::Attention,
         OpKind::SoftCap,
         OpKind::Scale,
+        OpKind::ScaleScalar,
         OpKind::Widen,
         OpKind::RouterTopK,
         OpKind::GeluMulUp,
@@ -83,6 +88,7 @@ impl OpKind {
             OpKind::Attention => "attention",
             OpKind::SoftCap => "soft_cap",
             OpKind::Scale => "scale",
+            OpKind::ScaleScalar => "scale_scalar",
             OpKind::Widen => "widen",
             OpKind::RouterTopK => "router_top_k",
             OpKind::GeluMulUp => "gelu_mul_up",
@@ -209,6 +215,10 @@ pub enum TensorOp<'a> {
         input: &'a Tensor,
         factor: &'a Tensor,
     },
+    ScaleScalar {
+        input: &'a Tensor,
+        factor: f32,
+    },
     Widen {
         input: &'a Tensor,
     },
@@ -259,6 +269,7 @@ impl<'a> TensorOp<'a> {
             TensorOp::Attention { .. } => OpKind::Attention,
             TensorOp::SoftCap { .. } => OpKind::SoftCap,
             TensorOp::Scale { .. } => OpKind::Scale,
+            TensorOp::ScaleScalar { .. } => OpKind::ScaleScalar,
             TensorOp::Widen { .. } => OpKind::Widen,
             TensorOp::RouterTopK { .. } => OpKind::RouterTopK,
             TensorOp::GeluMulUp { .. } => OpKind::GeluMulUp,
@@ -292,6 +303,7 @@ impl<'a> TensorOp<'a> {
             }
             TensorOp::SoftCap { input, .. } => vec![input],
             TensorOp::Scale { input, factor } => vec![input, factor],
+            TensorOp::ScaleScalar { input, .. } => vec![input],
             TensorOp::Widen { input } => vec![input],
             TensorOp::RouterTopK {
                 scores,
@@ -327,6 +339,7 @@ impl<'a> TensorOp<'a> {
             TensorOp::Attention { query, .. } => query.layout().shape().to_vec(),
             TensorOp::SoftCap { input, .. } => input.layout().shape().to_vec(),
             TensorOp::Scale { input, .. } => input.layout().shape().to_vec(),
+            TensorOp::ScaleScalar { input, .. } => input.layout().shape().to_vec(),
             TensorOp::Widen { input } => input.layout().shape().to_vec(),
             TensorOp::RouterTopK { scores, top_k, .. } => {
                 vec![scores.layout().shape()[0], 2 * top_k]
@@ -502,6 +515,11 @@ impl<'a> TensorOp<'a> {
                     return Err(OpError::ScaleMismatch);
                 }
             }
+            TensorOp::ScaleScalar { factor, .. } => {
+                if !factor.is_finite() {
+                    return Err(OpError::InvalidScaleFactor);
+                }
+            }
             TensorOp::Widen { input } => {
                 // The contract pins the only cross-dtype operation: BF16 in, F32 out.
                 if input.layout().dtype() != DType::BF16 {
@@ -649,6 +667,10 @@ pub enum ShapeSignature {
         width: usize,
         factor_width: usize,
     },
+    ScaleScalar {
+        numel: usize,
+        factor: f32,
+    },
     Widen {
         numel: usize,
     },
@@ -706,6 +728,7 @@ fn cuda_grid_limit(signature: ShapeSignature) -> Option<UnsupportedReason> {
         } => (query_tokens.saturating_mul(heads), 1),
         ShapeSignature::SoftCap { numel, .. } => (numel.div_ceil(256), 1),
         ShapeSignature::Scale { numel, .. } => (numel.div_ceil(256), 1),
+        ShapeSignature::ScaleScalar { numel, .. } => (numel.div_ceil(256), 1),
         ShapeSignature::Widen { numel } => (numel.div_ceil(256), 1),
         ShapeSignature::RouterTopK { rows, .. } => (rows, 1),
         ShapeSignature::GeluMulUp { numel } => (numel.div_ceil(256), 1),
@@ -791,6 +814,10 @@ impl TensorOp<'_> {
                     factor_width: factor.layout().numel(),
                 }
             }
+            TensorOp::ScaleScalar { input, factor } => ShapeSignature::ScaleScalar {
+                numel: input.layout().numel(),
+                factor: *factor,
+            },
             TensorOp::Widen { input } => ShapeSignature::Widen {
                 numel: input.layout().numel(),
             },
@@ -1343,7 +1370,7 @@ impl CpuReferenceBackend {
     }
 }
 
-const CPU_OPS: [OpSupport; 32] = {
+const CPU_OPS: [OpSupport; 34] = {
     const fn entry(kind: OpKind, dtype: DType) -> OpSupport {
         OpSupport {
             kind,
@@ -1373,6 +1400,8 @@ const CPU_OPS: [OpSupport; 32] = {
         entry(OpKind::SoftCap, DType::BF16),
         entry(OpKind::Scale, DType::F32),
         entry(OpKind::Scale, DType::BF16),
+        entry(OpKind::ScaleScalar, DType::F32),
+        entry(OpKind::ScaleScalar, DType::BF16),
         entry(OpKind::Widen, DType::BF16),
         entry(OpKind::RouterTopK, DType::F32),
         entry(OpKind::GeluMulUp, DType::F32),
@@ -1428,6 +1457,9 @@ impl TensorComputeBackend for CpuReferenceBackend {
             }
             TensorOp::Scale { input, factor } => {
                 crate::diffusion::scale(&self.device, input, factor)
+            }
+            TensorOp::ScaleScalar { input, factor } => {
+                crate::diffusion::scale_scalar(&self.device, input, *factor)
             }
             TensorOp::Widen { input } => crate::diffusion::widen(&self.device, input),
             TensorOp::RouterTopK {

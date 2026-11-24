@@ -232,7 +232,7 @@ pub fn router_forward(
     scale: &Tensor,
     per_expert_scale: &Tensor,
     eps: f64,
-    root_scale: f32,
+    root_scale: f64,
     top_k: usize,
 ) -> (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
     let normed = rms_norm_unscaled(host, x, eps);
@@ -249,7 +249,13 @@ pub fn router_forward(
         .map(|(i, v)| v * scale_v[i % width])
         .collect();
     let scaled_by_expert = host.bf16(normed.layout().shape().to_vec(), &scaled_values);
-    let root_scale = Bf16::from_f32(root_scale).to_f32();
+    // The upstream multiplies by `scalar_root_size`, a plain Python float
+    // (`config.hidden_size ** -0.5`). PyTorch keeps the scalar in the
+    // operation's math type (FP32 for a BF16 tensor) and rounds only the
+    // *result* to BF16: rounding the scalar itself to BF16 first shifts the
+    // router logits by up to 0.2 %, which changes the BF16 tie structure of
+    // the pinned checkpoint and therefore the selected experts.
+    let root_scale = root_scale as f32;
     let scaled_values: Vec<f32> = host
         .to_f32(&scaled_by_expert)
         .iter()
@@ -275,23 +281,18 @@ pub fn router_forward(
             *p /= sum;
         }
         probabilities[t * experts..(t + 1) * experts].copy_from_slice(&probs);
-        // Deterministic descending-score order; exact ties break by descending
-        // expert index, the convention `torch.topk` shows on CPU for this
-        // checkpoint. PyTorch does not guarantee a tie group's order, so tie
-        // groups stay tolerance-bound; scores that are not tied select the
-        // same expert as the reference.
-        let mut order: Vec<(usize, f32)> = probs.iter().enumerate().map(|(i, p)| (i, *p)).collect();
-        order.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then(b.0.cmp(&a.0))
-        });
+        // ATen-compatible top-k: the pinned upstream calls `torch.topk` on the
+        // FP32 probabilities. PyTorch's CPU selection is unstable inside a tie
+        // group, and the pinned checkpoint contains exact BF16 ties at the
+        // top-k boundary, where the choice changes the model's output. The
+        // shared helper reproduces ATen's algorithm exactly.
+        let selected = claymore_tensor::top_k_largest(&probs, top_k);
         let mut wsum = 0.0f32;
-        for (_i, p) in order.iter().take(top_k) {
-            wsum += p;
+        for &i in &selected {
+            wsum += probs[i];
         }
-        for (slot, (i, p)) in order.into_iter().take(top_k).enumerate() {
-            weights[t * top_k + slot] = p / wsum * per_expert[i];
+        for (slot, &i) in selected.iter().enumerate() {
+            weights[t * top_k + slot] = probs[i] / wsum * per_expert[i];
             indices[t * top_k + slot] = i as f32;
         }
     }

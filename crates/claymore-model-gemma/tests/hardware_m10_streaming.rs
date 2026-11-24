@@ -126,7 +126,11 @@ fn streaming_evicts_lru_residents_before_admission() {
         .byte_len();
     drop(probe);
 
-    let soft = embedding_bytes + 64 * 1024 * 1024;
+    // The headroom left above the resident embedding table is deliberately
+    // smaller than the next prefix tensor (the self-conditioning projections,
+    // 15 859 712 octets), so admitting it must evict the oldest resident.
+    let headroom = 8 * 1024 * 1024;
+    let soft = embedding_bytes + headroom;
     let hard = embedding_bytes * 3 / 2;
     let memory = owner(soft, hard);
     let mut stream =
@@ -134,7 +138,7 @@ fn streaming_evicts_lru_residents_before_admission() {
 
     let names = text_prefix_names(stream.checkpoint().config());
     let first = names[0].clone();
-    stream
+    let first_device = stream
         .ensure_tensor(&memory, &first, 1)
         .expect("first prefix resident");
     assert!(
@@ -143,13 +147,16 @@ fn streaming_evicts_lru_residents_before_admission() {
     );
 
     // A tensor larger than the remaining headroom evicts the oldest resident.
+    // The resident tensor itself is excluded: re-requesting it would take the
+    // cache-hit path and would never exercise the eviction.
     let big = names
         .iter()
+        .filter(|name| **name != first)
         .find(|name| {
             stream
                 .checkpoint()
                 .tensor(name)
-                .map(|loc| loc.entry.byte_len() > embedding_bytes - 128 * 1024 * 1024)
+                .map(|loc| loc.entry.byte_len() > headroom)
                 .unwrap_or(false)
         })
         .cloned()
@@ -160,6 +167,10 @@ fn streaming_evicts_lru_residents_before_admission() {
     assert!(
         stream.metrics().evictions >= 1,
         "LRU eviction must have released the oldest resident"
+    );
+    assert!(
+        !stream.resident_ids().contains(&first_device),
+        "the evicted resident must be gone from the resident set"
     );
     assert!(
         memory.usage_bytes(MemoryTier::Vram) <= hard,

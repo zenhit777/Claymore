@@ -148,6 +148,76 @@ fn encoder_layer0_projections_match_pinned_upstream_on_the_real_checkpoint() {
 
 #[test]
 #[ignore = "requires the pinned checkpoint and stage golden files (release profile)"]
+fn encoder0_router_matches_pinned_upstream_on_the_real_checkpoint() {
+    // Fast, focused check of the router semantics: the golden dump contains the
+    // upstream's router input (`encoder0_routing_residual`), its BF16 router
+    // logits (`encoder0_router_raw_scores`), the FP32 probabilities
+    // (`encoder0_router_scores`), the scaled weights and the selected expert
+    // indices. Feeding the upstream's own input back through our router must
+    // reproduce the upstream's logits bit for bit — the BF16 tie structure of
+    // the pinned checkpoint decides the selected experts, so a one-ULP drift
+    // changes the model output.
+    if !Path::new(ROOT).is_dir()
+        || !Path::new(&format!("{GOLDEN}/encoder0_routing_residual.bin")).is_file()
+    {
+        eprintln!("skip: checkpoint/golden unavailable");
+        return;
+    }
+    let host = Host::new();
+    let ckpt = Checkpoint::open_pinned(ROOT).expect("pinned checkpoint");
+    let cfg = ckpt.config().clone();
+    let text = cfg.text_config.as_ref().unwrap();
+    let hidden = text.hidden_size.unwrap();
+    let eps = text.rms_norm_eps.unwrap_or(1e-6);
+    let residual = load("encoder0_routing_residual", &[1, 7, 2816]);
+    let x = host.bf16(vec![7, hidden], &residual);
+    let (probabilities, raw_scores, weights, indices) = claymore_model_gemma::graph::router_forward(
+        &host,
+        &x,
+        &claymore_model_gemma::fullgraph::checkpoint_tensor(
+            &host,
+            &ckpt,
+            "model.decoder.layers.0.router.proj.weight",
+        ),
+        &claymore_model_gemma::fullgraph::checkpoint_tensor(
+            &host,
+            &ckpt,
+            "model.decoder.layers.0.router.scale",
+        ),
+        &claymore_model_gemma::fullgraph::checkpoint_tensor(
+            &host,
+            &ckpt,
+            "model.decoder.layers.0.router.per_expert_scale",
+        ),
+        eps,
+        (hidden as f64).powf(-0.5),
+        8,
+    );
+
+    let golden_raw = load("encoder0_router_raw_scores", &[7, 128]);
+    let golden_probs = load("encoder0_router_scores", &[7, 128]);
+    let golden_weights = load("encoder0_router_weights", &[7, 8]);
+    let golden_indices = load("encoder0_router_indices", &[7, 8]);
+
+    let raw_exact = raw_scores == golden_raw;
+    let (raw_max, raw_rms) = stats(&raw_scores, &golden_raw);
+    let (prob_max, prob_rms) = stats(&probabilities, &golden_probs);
+    let (weight_max, weight_rms) = stats(&weights, &golden_weights);
+    eprintln!("encoder0_router raw_max_abs={raw_max:.9} raw_rms={raw_rms:.9} exact={raw_exact}");
+    eprintln!("encoder0_router prob_max_abs={prob_max:.9} prob_rms={prob_rms:.9}");
+    eprintln!("encoder0_router weight_max_abs={weight_max:.9} weight_rms={weight_rms:.9}");
+    assert_eq!(
+        raw_scores, golden_raw,
+        "the router logits must be bit-exact with the pinned upstream"
+    );
+    assert_eq!(
+        indices, golden_indices,
+        "the selected experts must match the pinned upstream exactly"
+    );
+}
+
+#[test]
+#[ignore = "requires the pinned checkpoint and stage golden files (release profile)"]
 fn encoder_layers_match_pinned_upstream_on_the_real_checkpoint() {
     if !Path::new(ROOT).is_dir() || !Path::new(&format!("{STAGES}/encoder_layer_0.bin")).is_file() {
         eprintln!("skip: checkpoint/stage golden unavailable");
@@ -487,16 +557,29 @@ fn decoder_first_step_matches_pinned_upstream_on_the_real_checkpoint() {
             &table,
             text_embedding_scale(cfg.text_config.as_ref().unwrap().hidden_size.unwrap()),
         );
-        let bytes: Vec<u8> = host
-            .to_f32(&embedding)
-            .iter()
-            .flat_map(|v| v.to_le_bytes())
-            .collect();
-        std::fs::write(
-            "/tmp/opencode/m10/rust_decoder/rust_decoder_embedding.bin",
-            bytes,
-        )
-        .expect("dump embedding");
+        // The decoder input is the embedding after the always-applied unscaled
+        // self-conditioning post-norm; dump it for the pinned replay.
+        let decoder_input = claymore_model_gemma::graph::rms_norm_unscaled(
+            &host,
+            &embedding,
+            cfg.text_config
+                .as_ref()
+                .unwrap()
+                .rms_norm_eps
+                .unwrap_or(1e-6),
+        );
+        for (name, tensor) in [
+            ("rust_decoder_embedding", &embedding),
+            ("rust_decoder_input", &decoder_input),
+        ] {
+            let bytes: Vec<u8> = host
+                .to_f32(tensor)
+                .iter()
+                .flat_map(|v| v.to_le_bytes())
+                .collect();
+            std::fs::write(format!("/tmp/opencode/m10/rust_decoder/{name}.bin"), bytes)
+                .expect("dump decoder input");
+        }
         for (layer, cache_layer) in cache.layers.iter().enumerate() {
             for (name, tensor) in [("keys", &cache_layer.keys), ("values", &cache_layer.values)] {
                 let shape = tensor.layout().shape().to_vec();

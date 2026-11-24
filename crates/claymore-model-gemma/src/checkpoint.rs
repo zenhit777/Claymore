@@ -488,6 +488,31 @@ impl Checkpoint {
             })
     }
 
+    /// Read a byte range inside one tensor's payload.
+    ///
+    /// `offset` is relative to the start of the tensor payload. The shard
+    /// header offset is applied by the shard reader, so the returned bytes are
+    /// exactly the stored bytes of the requested range.
+    pub fn read_tensor_range(
+        &self,
+        name: &str,
+        offset: u64,
+        length: usize,
+    ) -> Result<Vec<u8>, CheckpointError> {
+        let location = self
+            .tensor(name)
+            .ok_or_else(|| CheckpointError::MissingWeight {
+                tensor: name.to_owned(),
+            })?;
+        location
+            .shard
+            .read_tensor_range(name, offset, length)
+            .map_err(|source| CheckpointError::Safetensors {
+                shard: location.shard.path().display().to_string(),
+                source,
+            })
+    }
+
     /// Read one tensor as explicit FP32 values (BF16 widened exactly).
     pub fn read_f32(&self, name: &str) -> Result<Vec<f32>, CheckpointError> {
         let location = self

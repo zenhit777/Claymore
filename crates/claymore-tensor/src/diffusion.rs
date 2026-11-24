@@ -176,6 +176,11 @@ pub fn linear(device: &dyn Device, input: &Tensor, weight: &Tensor) -> Result<Te
 /// `cos`/`sin` are `[tokens, head_dim]` tables with the same dtype as the
 /// input. The rotation is the upstream `rotate_half` convention:
 /// `out = x * cos + rotate_half(x) * sin`.
+///
+/// On BF16 the upstream tensor operations round each product to BF16 before
+/// the sum, and round the sum again; that boundary is preserved here so the
+/// CUDA kernel and the CPU reference agree bit for bit. F32 keeps its single
+/// final rounding.
 pub fn rotary_embed(
     device: &dyn Device,
     input: &Tensor,
@@ -204,6 +209,17 @@ pub fn rotary_embed(
     let x = source.to_f32();
     let cos_table = cosines.to_f32();
     let sin_table = sines.to_f32();
+    // The pinned upstream evaluates `(x * cos) + (rotate_half(x) * sin)` on
+    // BF16 tensors: each product is rounded to BF16 before the sum, and the
+    // sum is rounded again. F32 keeps its single final rounding.
+    let bf16 = dtype == DType::BF16;
+    let round = |value: f32| {
+        if bf16 {
+            crate::Bf16::from_f32(value).to_f32()
+        } else {
+            value
+        }
+    };
     let half = head_dim / 2;
     let mut output = vec![0.0f32; x.len()];
     for token in 0..tokens {
@@ -212,12 +228,17 @@ pub fn rotary_embed(
             for index in 0..half {
                 let first = x[base + index];
                 let second = x[base + half + index];
+                // The upstream `rotate_half` convention pairs `(i, i + half)`
+                // and reads the table entry of each half independently. The
+                // generated tables repeat the frequencies, so both entries
+                // carry the same value.
                 let cosine = cos_table[token * head_dim + index];
                 let sine = sin_table[token * head_dim + index];
                 let cosine_second = cos_table[token * head_dim + half + index];
                 let sine_second = sin_table[token * head_dim + half + index];
-                output[base + index] = first * cosine - second * sine;
-                output[base + half + index] = second * cosine_second + first * sine_second;
+                output[base + index] = round(round(first * cosine) - round(second * sine));
+                output[base + half + index] =
+                    round(round(second * cosine_second) + round(first * sine_second));
             }
         }
     }
@@ -447,6 +468,29 @@ pub fn scale(device: &dyn Device, input: &Tensor, factor: &Tensor) -> Result<Ten
     write_numeric(device, &output, shape.to_vec(), dtype)
 }
 
+/// Multiply a tensor by an FP32 scalar, rounding the product once to the
+/// input dtype.
+///
+/// The pinned upstream multiplies a BF16 tensor by a plain Python float
+/// (`hidden_states * scalar_root_size`). PyTorch evaluates that product in
+/// FP32 and rounds the result to BF16; the scalar itself is never rounded to
+/// BF16. Reproducing that boundary matters: rounding the scalar first shifts
+/// the router logits and changes the BF16 tie structure of the checkpoint.
+pub fn scale_scalar(device: &dyn Device, input: &Tensor, factor: f32) -> Result<Tensor, OpError> {
+    if !factor.is_finite() {
+        return Err(OpError::InvalidScaleFactor);
+    }
+    let shape = input.layout().shape();
+    if shape.is_empty() {
+        return Err(OpError::InvalidRank);
+    }
+    let source = read_numeric(device, input)?;
+    let dtype = source.dtype();
+    let values = source.to_f32();
+    let output: Vec<f32> = values.iter().map(|value| value * factor).collect();
+    write_numeric(device, &output, shape.to_vec(), dtype)
+}
+
 /// Additive mask where every query attends to every key.
 pub fn bidirectional_mask(query_tokens: usize, key_tokens: usize) -> Vec<f32> {
     vec![0.0; query_tokens * key_tokens]
@@ -564,8 +608,10 @@ pub fn widen(device: &dyn Device, input: &Tensor) -> Result<Tensor, OpError> {
 /// and per-expert scale, emitted as `[tokens, 2 * top_k]` F32: the first `k`
 /// columns are weights, the last `k` columns are expert indices.
 ///
-/// Ties break on ascending expert index, matching the CPU reference order used
-/// by the pinned upstream top-k on host tensors.
+/// The selection reproduces the pinned upstream's `torch.topk` call exactly,
+/// including the order inside a group of experts with identical probabilities
+/// (see [`crate::aten_topk`]): PyTorch's CPU selection is unstable there, and
+/// the pinned checkpoint contains such tie groups at the top-k boundary.
 pub fn router_top_k(
     device: &dyn Device,
     scores: &Tensor,
@@ -608,15 +654,18 @@ pub fn router_top_k(
         for prob in probs.iter_mut() {
             *prob /= sum;
         }
-        // Deterministic top-k: descending probability, ascending index on ties.
-        let mut order: Vec<(usize, f32)> = probs.iter().enumerate().map(|(i, p)| (i, *p)).collect();
-        order.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        // ATen-compatible top-k: the pinned upstream calls `torch.topk` on the
+        // FP32 probabilities, and PyTorch's CPU selection is unstable inside a
+        // tie group (the pinned checkpoint has exact BF16 ties, including at
+        // the top-k boundary where the choice changes the model's output).
+        // `top_k_largest` reproduces ATen's algorithm exactly.
+        let selected = crate::aten_topk::top_k_largest(&probs, top_k);
         let mut weight_sum = 0.0f32;
-        for (_, probability) in order.iter().take(top_k) {
-            weight_sum += probability;
+        for &index in &selected {
+            weight_sum += probs[index];
         }
-        for (slot, (index, probability)) in order.into_iter().take(top_k).enumerate() {
-            let weight = probability / weight_sum * per_expert[index];
+        for (slot, &index) in selected.iter().enumerate() {
+            let weight = probs[index] / weight_sum * per_expert[index];
             out[token * 2 * top_k + slot] = weight;
             out[token * 2 * top_k + top_k + slot] = index as f32;
         }
@@ -1098,6 +1147,41 @@ mod tests {
         assert_eq!(
             scale(&device, &input, &bad).unwrap_err(),
             OpError::ScaleMismatch
+        );
+    }
+
+    #[test]
+    fn scale_scalar_rounds_once_and_keeps_the_scalar_in_fp32() {
+        let device = CpuDevice::new();
+        let input = tensor(&device, vec![2, 3], &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        let out = values(&device, &scale_scalar(&device, &input, 0.5).unwrap());
+        assert_eq!(out, [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]);
+
+        // The scalar is an FP32 value: it is never rounded to BF16 before the
+        // product. `2816 ** -0.5` is not BF16-representable, and rounding it
+        // first shifts the result by up to 0.2 %.
+        let factor = (2816f64).powf(-0.5) as f32;
+        let bf16_input = bf16_tensor(&device, vec![1], &[3.0]);
+        let scaled = values(
+            &device,
+            &scale_scalar(&device, &bf16_input, factor).unwrap(),
+        );
+        let expected = Bf16::from_f32(3.0f32 * factor).to_f32();
+        assert_eq!(scaled[0], expected);
+        let rounded_scalar = Bf16::from_f32(factor).to_f32();
+        assert_ne!(
+            scaled[0],
+            Bf16::from_f32(3.0f32 * rounded_scalar).to_f32(),
+            "the scalar must not be rounded to BF16"
+        );
+
+        assert_eq!(
+            scale_scalar(&device, &input, f32::NAN).unwrap_err(),
+            OpError::InvalidScaleFactor
+        );
+        assert_eq!(
+            scale_scalar(&device, &input, f32::INFINITY).unwrap_err(),
+            OpError::InvalidScaleFactor
         );
     }
 

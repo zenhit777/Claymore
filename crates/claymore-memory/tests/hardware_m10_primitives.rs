@@ -31,8 +31,9 @@ use claymore_device::DType;
 use claymore_memory::{CudaMemoryError, CudaTensorError, MemoryError};
 use claymore_tensor::{
     add, attention, embed_gather, gather_rows, gelu_mul_up, linear, rms_norm, rope_inv_freq,
-    rope_tables, rotary_embed, router_top_k, row_mask, scale, scale_bias, scatter_add, soft_cap,
-    widen, Bf16, ExecutionRequest, OpKind, RopeType, ShapeSignature, TensorOp,
+    rope_tables, rotary_embed, router_top_k, row_mask, scale, scale_bias, scale_scalar,
+    scatter_add, soft_cap, widen, Bf16, ExecutionRequest, OpKind, RopeType, ShapeSignature,
+    TensorOp,
 };
 
 /// FP32 differential tolerance (absolute) for every M10 primitive.
@@ -719,6 +720,56 @@ fn hw_m10_11_router_top_k_matches_cpu() {
         refusal.is_err(),
         "BF16 router scores must be refused, got {refusal:?}"
     );
+
+    // The pinned upstream's own router row: the BF16 logits contain exact tie
+    // groups (experts 68/33 and 22/126), one of them straddling the top-k
+    // boundary. The selection order inside a tie group is decided by ATen's
+    // unstable `torch.topk`, so the device must reproduce the upstream's
+    // order exactly, not just the selected set.
+    let pinned = claymore_tensor::aten_topk::PINNED_ROUTER_RAW_ROW_0;
+    let pinned_experts = pinned.len();
+    let pinned_top_k = 8usize;
+    let pinned_scale: Vec<f32> = (0..pinned_experts)
+        .map(|i| 1.0 + (i as f32) / 32.0)
+        .collect();
+    let cpu_out = {
+        let scores_t = common::f32_tensor(&cpu, vec![1, pinned_experts], &pinned);
+        let scale_t = common::f32_tensor(&cpu, vec![pinned_experts], &pinned_scale);
+        common::values(
+            &cpu,
+            &router_top_k(&cpu, &scores_t, &scale_t, pinned_top_k).unwrap(),
+        )
+    };
+    let scores_t = memory.upload_f32(vec![1, pinned_experts], &pinned).unwrap();
+    let scale_t = memory
+        .upload_f32(vec![pinned_experts], &pinned_scale)
+        .unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::RouterTopK {
+            scores: &scores_t,
+            per_expert_scale: &scale_t,
+            top_k: pinned_top_k,
+        }))
+        .expect("router launch");
+    let gpu_out = memory.download_f32(&output).unwrap();
+    for slot in 0..pinned_top_k {
+        assert_eq!(
+            cpu_out[pinned_top_k + slot] as u32,
+            gpu_out[pinned_top_k + slot] as u32,
+            "pinned router index mismatch at {slot}: cpu={} gpu={}",
+            cpu_out[pinned_top_k + slot],
+            gpu_out[pinned_top_k + slot]
+        );
+    }
+    // The pinned upstream's selection for that row.
+    assert_eq!(
+        cpu_out[pinned_top_k..pinned_top_k * 2]
+            .iter()
+            .map(|value| *value as u32)
+            .collect::<Vec<u32>>(),
+        vec![90, 113, 68, 33, 55, 22, 126, 105]
+    );
+    assert_close("router_top_k pinned row", &cpu_out, &gpu_out);
 }
 
 #[test]
@@ -1090,6 +1141,66 @@ fn hw_m10_17_scale_bias_f32_and_bf16_match_cpu() {
         &memory.download_bf16(&output).unwrap(),
         BF16_ULP,
     );
+}
+
+#[test]
+#[ignore = "requires a CUDA driver and a usable NVIDIA device"]
+fn hw_m10_18_scale_scalar_f32_and_bf16_match_cpu() {
+    let _serial = common::serial();
+    let cpu = common::cpu();
+    let memory = common::memory();
+    let dispatcher = common::dispatcher(&memory);
+
+    let (rows, width) = (5usize, 7usize);
+    let values: Vec<f32> = (0..rows * width)
+        .map(|i| ((i % 15) as f32 - 7.0) / 8.0)
+        .collect();
+    // The upstream's `scalar_root_size` is a plain Python float that is not
+    // BF16-representable: the scalar must stay in FP32 and the product must be
+    // rounded once to the input dtype.
+    let factor = (2816f64).powf(-0.5) as f32;
+
+    let cpu_out = {
+        let input = common::f32_tensor(&cpu, vec![rows, width], &values);
+        common::values(&cpu, &scale_scalar(&cpu, &input, factor).unwrap())
+    };
+    let input = memory.upload_f32(vec![rows, width], &values).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::ScaleScalar {
+            input: &input,
+            factor,
+        }))
+        .expect("scale_scalar f32 launch");
+    assert_close(
+        "scale_scalar f32",
+        &cpu_out,
+        &memory.download_f32(&output).unwrap(),
+    );
+
+    let bits: Vec<Bf16> = values.iter().map(|v| Bf16::from_f32(*v)).collect();
+    let cpu_out = {
+        let input = common::bf16_tensor(&cpu, vec![rows, width], &bits);
+        common::bf16_values(&cpu, &scale_scalar(&cpu, &input, factor).unwrap())
+    };
+    let input = memory.upload_bf16(vec![rows, width], &bits).unwrap();
+    let output = dispatcher
+        .execute(&ExecutionRequest::new(TensorOp::ScaleScalar {
+            input: &input,
+            factor,
+        }))
+        .expect("scale_scalar bf16 launch");
+    let gpu_out = memory.download_bf16(&output).unwrap();
+    assert_bf16("scale_scalar bf16", &cpu_out, &gpu_out, BF16_ULP);
+    // The product is rounded once: the device result is the BF16 rounding of
+    // the exact FP32 product, not a second rounding of a BF16 scalar.
+    for (index, value) in bits.iter().enumerate() {
+        let expected = Bf16::from_f32(value.to_f32() * factor);
+        assert_eq!(
+            gpu_out[index].to_bits(),
+            expected.to_bits(),
+            "scale_scalar bf16 mismatch at {index}"
+        );
+    }
 }
 
 /// Bounded full-payload verification of the pinned checkpoint is available in

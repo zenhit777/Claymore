@@ -355,7 +355,7 @@ fn managed(tensor: &Tensor) -> Result<&ManagedCudaBuffer, CudaTensorError> {
         .ok_or(CudaTensorError::ForeignBuffer)
 }
 
-const CUDA_OPS: [OpSupport; 32] = {
+const CUDA_OPS: [OpSupport; 34] = {
     const fn entry(kind: OpKind, dtype: DType) -> OpSupport {
         OpSupport {
             kind,
@@ -385,6 +385,8 @@ const CUDA_OPS: [OpSupport; 32] = {
         entry(OpKind::SoftCap, DType::BF16),
         entry(OpKind::Scale, DType::F32),
         entry(OpKind::Scale, DType::BF16),
+        entry(OpKind::ScaleScalar, DType::F32),
+        entry(OpKind::ScaleScalar, DType::BF16),
         entry(OpKind::Widen, DType::BF16),
         entry(OpKind::RouterTopK, DType::F32),
         entry(OpKind::GeluMulUp, DType::F32),
@@ -441,9 +443,11 @@ impl TensorComputeBackend for CudaTensorBackend {
             }
             input_ids.push(buffer.id.clone());
         }
+        // The output dtype is the contract's, not the input's: `Widen` is the
+        // only cross-dtype operation (BF16 in, F32 out).
         let output = self
             .memory
-            .allocate_tensor(validated.shape, validated.dtype)
+            .allocate_tensor(validated.shape, validated.output_dtype)
             .map_err(backend_error)?;
         let output_id = managed(&output).map_err(backend_error)?.id.clone();
         let input_refs: Vec<&str> = input_ids.iter().map(String::as_str).collect();
@@ -506,6 +510,10 @@ pub enum CudaTensorTask {
         input: Tensor,
         factor: Tensor,
     },
+    ScaleScalar {
+        input: Tensor,
+        factor: f32,
+    },
 }
 
 impl CudaTensorTask {
@@ -542,6 +550,10 @@ impl CudaTensorTask {
             },
             CudaTensorTask::SoftCap { input, cap } => TensorOp::SoftCap { input, cap: *cap },
             CudaTensorTask::Scale { input, factor } => TensorOp::Scale { input, factor },
+            CudaTensorTask::ScaleScalar { input, factor } => TensorOp::ScaleScalar {
+                input,
+                factor: *factor,
+            },
         }
     }
 }

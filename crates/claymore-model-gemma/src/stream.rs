@@ -8,8 +8,6 @@
 //! released only after the transfer event completes.
 
 use std::collections::BTreeMap;
-#[cfg(feature = "cuda-streaming")]
-use std::io::{Read, Seek, SeekFrom};
 
 #[cfg(feature = "cuda-streaming")]
 use claymore_core::MemoryTier;
@@ -32,11 +30,6 @@ pub enum StreamError {
     #[cfg(feature = "cuda-streaming")]
     #[error(transparent)]
     Memory(#[from] CudaMemoryError),
-    #[error("io error while reading shard {shard}: {source}")]
-    Io {
-        shard: String,
-        source: std::io::Error,
-    },
     #[error("tensor {tensor} is not in the pinned inventory")]
     MissingWeight { tensor: String },
     #[error("weight stream is closed after cancellation")]
@@ -272,7 +265,13 @@ impl WeightStream {
                 evictable += entry.bytes;
                 continue;
             }
-            match memory.manager_mut().release(&entry.device_id, tick) {
+            // The `RefMut` returned by `manager_mut()` is a temporary of the
+            // match scrutinee: it stays alive until the end of the `match`,
+            // so the release result is bound first. Borrowing the manager
+            // again inside the arm would panic with `RefCell already
+            // borrowed`.
+            let release = memory.manager_mut().release(&entry.device_id, tick);
+            match release {
                 Ok(_alloc) => {
                     self.resident.remove(&name);
                     self.metrics.evictions += 1;
@@ -320,8 +319,6 @@ impl WeightStream {
             })?;
         let device_id = format!("w:{name}");
         let bytes = location.entry.byte_len();
-        let shard_path = location.shard.path().display().to_string();
-        let data_start = location.entry.data_start();
         if let Some(resident) = self.resident.get_mut(name) {
             resident.last_used = tick;
             self.metrics.cache_hits += 1;
@@ -339,25 +336,16 @@ impl WeightStream {
             .metrics
             .peak_pinned_bytes
             .max(memory.manager_mut().usage_bytes(MemoryTier::PinnedHost));
-        let mut file = std::fs::File::open(&shard_path).map_err(|source| StreamError::Io {
-            shard: shard_path.clone(),
-            source,
-        })?;
-        file.seek(SeekFrom::Start(data_start))
-            .map_err(|source| StreamError::Io {
-                shard: shard_path.clone(),
-                source,
-            })?;
+        // The shard reader applies the header offset: the range is read
+        // relative to the start of the tensor payload, never to the start of
+        // the shard file.
         let mut offset = 0usize;
         let mut remaining = bytes;
         while remaining > 0 {
             let chunk = remaining.min(STAGING_CHUNK_BYTES as u64) as usize;
-            let mut buffer = vec![0u8; chunk];
-            file.read_exact(&mut buffer)
-                .map_err(|source| StreamError::Io {
-                    shard: shard_path.clone(),
-                    source,
-                })?;
+            let buffer = self
+                .checkpoint
+                .read_tensor_range(name, offset as u64, chunk)?;
             memory
                 .manager_mut()
                 .write_pinned(&pinned_id, offset, &buffer, tick)?;

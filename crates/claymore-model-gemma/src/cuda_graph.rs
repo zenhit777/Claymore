@@ -16,17 +16,21 @@
 //! activations and re-upload the composed result, always through pinned
 //! staging.
 
-use std::collections::BTreeMap;
-use std::io::{Read, Seek, SeekFrom};
+use std::collections::{BTreeMap, BTreeSet};
 
 use claymore_core::MemoryTier;
 use claymore_memory::{CudaTensorBackend, CudaTensorError, CudaTensorMemory};
 use claymore_tensor::{Bf16, ExecutionRequest, Tensor, TensorDispatcher, TensorOp};
 
-use crate::checkpoint::Checkpoint;
+use crate::checkpoint::{Checkpoint, CheckpointError};
 
 /// Chunk bound for reading one payload slice from a shard.
 pub const READ_CHUNK_BYTES: usize = 8 * 1024 * 1024;
+
+/// VRAM headroom kept free for the next allocation. The graph never lets the
+/// manager evict a tensor it still references: it frees its own least
+/// recently used resident weights before the admission budget is reached.
+pub const VRAM_HEADROOM_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 /// Per-layer KV cache entry on host: `(kv_heads, head_dim, rows, keys_bits, values_bits)`.
 pub type KvLayerEntry = (usize, usize, usize, Vec<Bf16>, Vec<Bf16>);
@@ -39,11 +43,10 @@ pub enum GraphError {
     Execution(#[from] claymore_tensor::ExecutionError),
     #[error("tensor {tensor} is not in the pinned inventory")]
     MissingWeight { tensor: String },
-    #[error("io error while reading shard {shard}: {source}")]
-    Io {
-        shard: String,
-        source: std::io::Error,
-    },
+    #[error(transparent)]
+    Checkpoint(#[from] CheckpointError),
+    #[error("tensor {tensor} has unsupported dtype {dtype} for the CUDA graph")]
+    UnexpectedDtype { tensor: String, dtype: String },
     #[error("slice {name} is out of the tensor payload range")]
     SliceOutOfBounds { name: String },
     #[error("arena index {index} is out of range")]
@@ -52,13 +55,25 @@ pub enum GraphError {
 
 /// CUDA-side graph owner: one memory owner, one dispatcher, one arena of
 /// live tensors, one LRU weight residency map.
+///
+/// The arena keeps **stable indices**; a released slot becomes `None` and is
+/// never reused, so a stale index can never point at another tensor. Resident
+/// weights are protected from scope releases and evicted in LRU order when
+/// the VRAM high-water mark is reached, so the manager never has to evict a
+/// tensor the graph still references.
 pub struct CudaGraph {
     memory: CudaTensorMemory,
     dispatcher: TensorDispatcher,
     checkpoint: Checkpoint,
-    arena: Vec<Tensor>,
+    /// Device tensor arena. `None` marks a released slot.
+    arena: Vec<Option<Tensor>>,
+    /// Resident weight tensors, by cache key.
     resident: BTreeMap<String, usize>,
-    tick: u64,
+    /// Last-use stamp of every resident key, for LRU eviction.
+    resident_lru: BTreeMap<String, u64>,
+    /// Arena slots holding a resident weight: never released by a scope.
+    protected: BTreeSet<usize>,
+    use_stamp: u64,
     peak_vram_bytes: u64,
     uploaded_bytes: u64,
     downloaded_bytes: u64,
@@ -73,7 +88,9 @@ impl CudaGraph {
             checkpoint,
             arena: Vec::new(),
             resident: BTreeMap::new(),
-            tick: 0,
+            resident_lru: BTreeMap::new(),
+            protected: BTreeSet::new(),
+            use_stamp: 0,
             peak_vram_bytes: 0,
             uploaded_bytes: 0,
             downloaded_bytes: 0,
@@ -107,18 +124,93 @@ impl CudaGraph {
     }
 
     fn index(&self, index: usize) -> Result<&Tensor, GraphError> {
-        self.arena.get(index).ok_or(GraphError::BadIndex { index })
+        self.arena
+            .get(index)
+            .and_then(|slot| slot.as_ref())
+            .ok_or(GraphError::BadIndex { index })
     }
 
     fn push(&mut self, tensor: Tensor) -> usize {
-        self.arena.push(tensor);
+        self.arena.push(Some(tensor));
         self.arena.len() - 1
+    }
+
+    // ------------------------------------------------------------------
+    // Bounded residency.
+
+    /// VRAM high-water mark: the soft admission budget minus the headroom
+    /// kept free for the next allocation.
+    fn vram_high_water(&self) -> u64 {
+        let soft = self.memory.manager().budgets().vram_soft_bytes;
+        soft.saturating_sub(VRAM_HEADROOM_BYTES)
+    }
+
+    fn vram_usage(&self) -> u64 {
+        self.memory.usage_bytes(MemoryTier::Vram)
+    }
+
+    /// Stamp a resident key as the most recently used one.
+    fn touch(&mut self, key: &str) {
+        self.use_stamp += 1;
+        self.resident_lru.insert(key.to_owned(), self.use_stamp);
+    }
+
+    /// Drop one resident weight and its device allocation.
+    fn evict_resident(&mut self, key: &str) {
+        if let Some(index) = self.resident.remove(key) {
+            self.resident_lru.remove(key);
+            self.protected.remove(&index);
+            // Dropping the tensor releases the allocation through the manager.
+            self.arena[index] = None;
+        }
+    }
+
+    /// Evict the least recently used resident weights until the VRAM usage
+    /// fits under `target`. Returns the number of evicted residents.
+    fn evict_resident_to(&mut self, target: u64) -> usize {
+        let mut evicted = 0;
+        while self.vram_usage() > target {
+            let victim = self
+                .resident_lru
+                .iter()
+                .min_by_key(|(_, stamp)| **stamp)
+                .map(|(key, _)| key.clone());
+            match victim {
+                Some(key) => {
+                    self.evict_resident(&key);
+                    evicted += 1;
+                }
+                None => break,
+            }
+        }
+        evicted
+    }
+
+    /// Make room for `bytes` without letting the manager evict a live tensor:
+    /// the graph frees its own least recently used resident weights first.
+    fn reserve(&mut self, bytes: u64) {
+        let target = self.vram_high_water().saturating_sub(bytes);
+        self.evict_resident_to(target);
+    }
+
+    /// Release every arena slot created after `marker`, except the resident
+    /// weights and the explicitly kept slots. The dropped tensors release
+    /// their device allocations through the manager.
+    pub fn release_scope(&mut self, marker: usize, keep: &[usize]) {
+        for index in marker..self.arena.len() {
+            if self.protected.contains(&index) || keep.contains(&index) {
+                continue;
+            }
+            self.arena[index] = None;
+        }
     }
 
     // ------------------------------------------------------------------
     // Uploads and downloads (pinned staging, manager admission).
 
     pub fn upload_bf16(&mut self, shape: Vec<usize>, bits: &[Bf16]) -> Result<usize, GraphError> {
+        let bytes = shape.iter().product::<usize>().saturating_mul(2) as u64;
+        self.reserve(bytes);
         let tensor = self.memory.upload_bf16(shape, bits)?;
         self.uploaded_bytes += tensor.layout().span_bytes() as u64;
         self.record_peak();
@@ -126,6 +218,8 @@ impl CudaGraph {
     }
 
     pub fn upload_f32(&mut self, shape: Vec<usize>, values: &[f32]) -> Result<usize, GraphError> {
+        let bytes = shape.iter().product::<usize>().saturating_mul(4) as u64;
+        self.reserve(bytes);
         let tensor = self.memory.upload_f32(shape, values)?;
         self.uploaded_bytes += tensor.layout().span_bytes() as u64;
         self.record_peak();
@@ -134,13 +228,13 @@ impl CudaGraph {
 
     pub fn download_bf16(&mut self, index: usize) -> Result<Vec<Bf16>, GraphError> {
         let bits = self.memory.download_bf16(self.index(index)?)?;
-        self.downloaded_bytes += self.arena[index].layout().span_bytes() as u64;
+        self.downloaded_bytes += self.index(index)?.layout().span_bytes() as u64;
         Ok(bits)
     }
 
     pub fn download_f32(&mut self, index: usize) -> Result<Vec<f32>, GraphError> {
         let values = self.memory.download_f32(self.index(index)?)?;
-        self.downloaded_bytes += self.arena[index].layout().span_bytes() as u64;
+        self.downloaded_bytes += self.index(index)?.layout().span_bytes() as u64;
         Ok(values)
     }
 
@@ -191,32 +285,31 @@ impl CudaGraph {
             .ok_or(GraphError::MissingWeight {
                 tensor: name.to_owned(),
             })?;
-        let shard_path = location.shard.path().display().to_string();
-        let mut file =
-            std::fs::File::open(location.shard.path()).map_err(|source| GraphError::Io {
-                shard: shard_path.clone(),
-                source,
-            })?;
-        let start = location.entry.data_start() + (start_element * 2) as u64;
-        file.seek(SeekFrom::Start(start))
-            .map_err(|source| GraphError::Io {
-                shard: shard_path.clone(),
-                source,
-            })?;
-        let bytes = count_elements * 2;
-        let mut raw = Vec::with_capacity(bytes);
-        let mut remaining = bytes;
-        while remaining > 0 {
-            let chunk = remaining.min(READ_CHUNK_BYTES);
-            let mut buffer = vec![0u8; chunk];
-            file.read_exact(&mut buffer)
-                .map_err(|source| GraphError::Io {
-                    shard: shard_path.clone(),
-                    source,
-                })?;
-            raw.extend_from_slice(&buffer);
-            remaining -= chunk;
+        // `TensorEntry::data_start` is relative to the shard's **data
+        // region**: the header offset is applied by the shard reader. Reading
+        // through `read_tensor_range` keeps the absolute file offset correct
+        // for every tensor, whatever its position in the shard.
+        let element_size = location.entry.dtype().element_size_bytes();
+        if element_size != 2 {
+            return Err(GraphError::UnexpectedDtype {
+                tensor: name.to_owned(),
+                dtype: location.entry.dtype().name().to_owned(),
+            });
         }
+        let start_byte = u64::try_from(start_element)
+            .ok()
+            .and_then(|value| value.checked_mul(element_size as u64))
+            .ok_or_else(|| GraphError::SliceOutOfBounds {
+                name: name.to_owned(),
+            })?;
+        let length = count_elements.checked_mul(element_size).ok_or_else(|| {
+            GraphError::SliceOutOfBounds {
+                name: name.to_owned(),
+            }
+        })?;
+        let raw = self
+            .checkpoint
+            .read_tensor_range(name, start_byte, length)?;
         Ok(raw
             .chunks_exact(2)
             .map(|b| Bf16::from_ne_bytes(b.try_into().unwrap()))
@@ -226,6 +319,7 @@ impl CudaGraph {
     /// Residency-managed BF16 tensor for a full checkpoint tensor name.
     pub fn weight(&mut self, name: &str) -> Result<usize, GraphError> {
         if let Some(&index) = self.resident.get(name) {
+            self.touch(name);
             return Ok(index);
         }
         let shape = self
@@ -240,6 +334,8 @@ impl CudaGraph {
         let bits = self.read_payload(name)?;
         let index = self.upload_bf16(shape, &bits)?;
         self.resident.insert(name.to_owned(), index);
+        self.protected.insert(index);
+        self.touch(name);
         Ok(index)
     }
 
@@ -252,24 +348,30 @@ impl CudaGraph {
     ) -> Result<usize, GraphError> {
         let key = format!("{name}#{start_element}");
         if let Some(&index) = self.resident.get(&key) {
+            self.touch(&key);
             return Ok(index);
         }
         let count = shape.iter().product::<usize>();
         let bits = self.read_slice(name, start_element, count)?;
         let index = self.upload_bf16(shape, &bits)?;
-        self.resident.insert(key, index);
+        self.resident.insert(key.clone(), index);
+        self.protected.insert(index);
+        self.touch(&key);
         Ok(index)
     }
 
     /// Release one resident weight after its last CUDA use has completed.
     pub fn release_resident(&mut self, key: &str) -> Result<(), GraphError> {
         if let Some(index) = self.resident.remove(key) {
+            self.resident_lru.remove(key);
+            self.protected.remove(&index);
             let id = self.memory.buffer_id(self.index(index)?)?;
-            self.tick += 1;
+            let tick = self.memory.tick();
             self.memory
                 .manager_mut()
-                .release(&id, self.tick)
+                .release(&id, tick)
                 .map_err(CudaTensorError::from)?;
+            self.arena[index] = None;
         }
         Ok(())
     }
@@ -286,7 +388,13 @@ impl CudaGraph {
     fn finish(&mut self, output: Tensor) -> Result<usize, GraphError> {
         self.launches += 1;
         self.record_peak();
-        Ok(self.push(output))
+        let index = self.push(output);
+        // Keep the graph footprint under the high-water mark: the manager must
+        // never have to evict a tensor the graph still references. The op has
+        // completed (its completion event was observed), so the resident
+        // weights it used are free to go.
+        self.evict_resident_to(self.vram_high_water());
+        Ok(index)
     }
 
     pub fn linear(&mut self, input: usize, weight: usize) -> Result<usize, GraphError> {
@@ -357,6 +465,14 @@ impl CudaGraph {
         let input = self.index(input)?;
         let factor = self.index(factor)?;
         self.finish(self.exec_op(TensorOp::Scale { input, factor })?)
+    }
+
+    /// Multiply by an FP32 scalar. The factor is a scalar, not a tensor: the
+    /// product is evaluated in FP32 and rounded once to the input dtype, like
+    /// the upstream's `bf16_tensor * python_float`.
+    pub fn scale_scalar(&mut self, input: usize, factor: f32) -> Result<usize, GraphError> {
+        let input = self.index(input)?;
+        self.finish(self.exec_op(TensorOp::ScaleScalar { input, factor })?)
     }
 
     pub fn scale_bias(
@@ -448,12 +564,26 @@ impl CudaGraph {
         if index >= self.arena.len() {
             return Err(GraphError::BadIndex { index });
         }
-        let id = self.memory.buffer_id(&self.arena[index])?;
-        self.tick += 1;
+        let id = self.memory.buffer_id(self.index(index)?)?;
+        let tick = self.memory.tick();
         self.memory
             .manager_mut()
-            .release(&id, self.tick)
+            .release(&id, tick)
             .map_err(CudaTensorError::from)?;
+        // A released slot must never stay reachable through the residency
+        // maps: a later `weight` lookup would hand out a dangling index.
+        let dangling: Vec<String> = self
+            .resident
+            .iter()
+            .filter(|(_, slot)| **slot == index)
+            .map(|(key, _)| key.clone())
+            .collect();
+        for key in dangling {
+            self.resident.remove(&key);
+            self.resident_lru.remove(&key);
+        }
+        self.protected.remove(&index);
+        self.arena[index] = None;
         Ok(())
     }
 
@@ -659,7 +789,7 @@ impl CudaGraph {
         append: bool,
     ) -> Result<usize, GraphError> {
         let p = |n: &str| format!("model.{prefix}.layers.{layer}.self_attn.{n}");
-        let tokens = self.arena[x].layout().shape()[0];
+        let tokens = self.index(x)?.layout().shape()[0];
         let (cos, sin) = Self::rope_tables(head_dim, rope_theta, positions, partial);
         let cos_idx = self.upload_bits(vec![positions.len(), head_dim], cos)?;
         let sin_idx = self.upload_bits(vec![positions.len(), head_dim], sin)?;
@@ -754,8 +884,9 @@ impl CudaGraph {
         self.linear(a, down_w)
     }
 
-    /// Router: unscaled RMSNorm, per-column `scale * root_scale`, projection,
-    /// widening, top-k. Returns the `[tokens, 2*top_k]` device tensor.
+    /// Router: unscaled RMSNorm, per-column `scale`, FP32 scalar
+    /// `root_scale`, projection, widening, top-k. Returns the
+    /// `[tokens, 2*top_k]` device tensor.
     pub fn router_layer(
         &mut self,
         x: usize,
@@ -765,19 +896,20 @@ impl CudaGraph {
         root_scale: f32,
         top_k: usize,
     ) -> Result<usize, GraphError> {
-        let width = self.arena[x].layout().shape()[1];
+        let width = self.index(x)?.layout().shape()[1];
         let ones = self.upload_bits(vec![width], vec![Bf16::from_f32(1.0f32); width])?;
         let normed = self.rms_norm(x, ones, eps)?;
         let scale_w = self.weight(&format!("model.{layer_prefix}.layers.{layer}.router.scale"))?;
         let zero_bias = self.upload_bits(vec![width], vec![Bf16::from_f32(0.0f32); width])?;
-        // The pinned upstream applies two separate BF16 tensor operations:
-        // `normed * scale`, then `result * scalar_root_size`. Keeping both
-        // boundaries is required; folding the root factor into the scale vector
-        // on the host rounds once and changes close router decisions.
+        // The pinned upstream applies two separate operations:
+        // `normed * scale` (a BF16 tensor product, rounded to BF16), then
+        // `result * scalar_root_size` (a BF16 tensor times a plain Python
+        // float, evaluated in FP32 and rounded once to BF16). The scalar must
+        // not be rounded to BF16: that shifts the router logits and changes
+        // the BF16 tie structure of the pinned checkpoint, hence the selected
+        // experts.
         let scaled = self.scale_bias(normed, scale_w, zero_bias)?;
-        let root_bf16 = Bf16::from_f32(root_scale).to_f32();
-        let root_vec = self.upload_bits(vec![width], vec![Bf16::from_f32(root_bf16); width])?;
-        let scaled = self.scale(scaled, root_vec)?;
+        let scaled = self.scale_scalar(scaled, root_scale)?;
         let proj_w = self.weight(&format!(
             "model.{layer_prefix}.layers.{layer}.router.proj.weight"
         ))?;
@@ -790,7 +922,7 @@ impl CudaGraph {
         ))?;
         let per_expert_bits = self.host_bits(per_expert_w)?;
         let per_expert = self.upload_f32(
-            vec![self.arena[scores_f32].layout().shape()[1]],
+            vec![self.index(scores_f32)?.layout().shape()[1]],
             &Self::f32_of(&per_expert_bits),
         )?;
         self.router_top_k(scores_f32, per_expert, top_k)
@@ -809,13 +941,26 @@ impl CudaGraph {
         inter: usize,
         top_k: usize,
     ) -> Result<usize, GraphError> {
-        let tokens = self.arena[x].layout().shape()[0];
-        let hidden = self.arena[x].layout().shape()[1];
+        let tokens = self.index(x)?.layout().shape()[0];
+        let hidden = self.index(x)?.layout().shape()[1];
         let pairs = tokens * top_k;
         let topk = self.download_f32(topk_idx)?;
-        let weights = &topk[..pairs];
-        let indices = &topk[pairs..];
-        let indices_idx = self.upload_f32(vec![pairs], indices)?;
+        // The router output is `[tokens, 2 * top_k]`: for every token, the
+        // first `top_k` values are the weights and the next `top_k` are the
+        // selected expert indices. The pairs are token-major, so the flat
+        // buffers are de-interleaved token by token.
+        let mut weights = Vec::with_capacity(pairs);
+        let mut indices = Vec::with_capacity(pairs);
+        for token in 0..tokens {
+            let base = token * 2 * top_k;
+            weights.extend_from_slice(&topk[base..base + top_k]);
+            indices.extend_from_slice(&topk[base + top_k..base + 2 * top_k]);
+        }
+        // The gathered rows are the **token** activations, one per (token,
+        // slot) pair: the expert index selects the expert weights, never a
+        // token row. The pinned reference reads `x[p / top_k]` for pair `p`.
+        let token_rows: Vec<f32> = (0..pairs).map(|p| (p / top_k) as f32).collect();
+        let indices_idx = self.upload_f32(vec![pairs], &token_rows)?;
         let gathered = self.gather_rows(x, indices_idx)?;
         let mut out_rows = Vec::new();
         // Group pairs by expert to launch one linear chain per expert.
@@ -875,8 +1020,68 @@ impl CudaGraph {
     /// The text weights are tied between the encoder and the decoder
     /// (`norm_prefix`), but each tower learns its **own** `layer_scalar`, so the
     /// scalar source is passed separately (`scalar_prefix`).
+    ///
+    /// Every intermediate tensor of the layer is released when the layer
+    /// returns: only the output and the resident weights survive.
     #[allow(clippy::too_many_arguments)]
     pub fn text_layer(
+        &mut self,
+        prefix: &str,
+        layer: usize,
+        scalar_prefix: &str,
+        x: usize,
+        cache: &mut Vec<KvLayerEntry>,
+        positions: &[usize],
+        head_dim: usize,
+        heads: usize,
+        kv_heads: usize,
+        rope_theta: f32,
+        partial: Option<f32>,
+        sliding: Option<usize>,
+        is_causal: bool,
+        eps: f32,
+        append: bool,
+        hidden: usize,
+        inter: usize,
+        experts: usize,
+        top_k: usize,
+    ) -> Result<usize, GraphError> {
+        let marker = self.arena.len();
+        let outcome = self.text_layer_body(
+            prefix,
+            layer,
+            scalar_prefix,
+            x,
+            cache,
+            positions,
+            head_dim,
+            heads,
+            kv_heads,
+            rope_theta,
+            partial,
+            sliding,
+            is_causal,
+            eps,
+            append,
+            hidden,
+            inter,
+            experts,
+            top_k,
+        );
+        match outcome {
+            Ok(output) => {
+                self.release_scope(marker, &[output]);
+                Ok(output)
+            }
+            Err(error) => {
+                self.release_scope(marker, &[]);
+                Err(error)
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn text_layer_body(
         &mut self,
         prefix: &str,
         layer: usize,
@@ -924,8 +1129,13 @@ impl CudaGraph {
         // MoE branch.
         let pre2_w = self.weight(&format!("{norm_prefix}.pre_feedforward_layernorm_2.weight"))?;
         let pre2 = self.rms_norm(x, pre2_w, eps)?;
-        let root_scale = (hidden as f32).powf(-0.5);
-        let topk = self.router_layer(pre2, "decoder", layer, eps, root_scale, top_k)?;
+        let root_scale = (hidden as f64).powf(-0.5) as f32;
+        // The router reads the **residual** `x`, normalized by an *unscaled*
+        // RMSNorm (the ones vector inside `router_layer`); the scaled
+        // `pre_feedforward_layernorm_2` output `pre2` feeds the **experts**.
+        // Feeding `pre2` to the router changes the BF16 tie structure of the
+        // router logits and therefore the selected experts.
+        let topk = self.router_layer(x, "decoder", layer, eps, root_scale, top_k)?;
         let exp = self.experts_layer(
             pre2,
             topk,
@@ -962,7 +1172,12 @@ impl CudaGraph {
     ) -> Result<usize, GraphError> {
         let text = self.checkpoint.config().text_config.clone().unwrap();
         let hidden = text.hidden_size.unwrap();
-        let inter = text.intermediate_size.unwrap_or(704);
+        // The expert matrices are sized by the **MoE** intermediate size
+        // (`moe_intermediate_size`, 704), not by the dense MLP intermediate
+        // size (`intermediate_size`, 2112): the checkpoint stores
+        // `gate_up_proj [128, 2 * 704, 2816]`. Using the dense value shifts
+        // every expert slice and overflows the tensor.
+        let inter = text.moe_intermediate_size.unwrap_or(704);
         let experts = text.num_experts.unwrap_or(128);
         let top_k = text.top_k_experts.unwrap_or(8);
         let eps = text.rms_norm_eps.unwrap_or(1e-6) as f32;
@@ -1025,7 +1240,9 @@ impl CudaGraph {
         let text = self.checkpoint.config().text_config.clone().unwrap();
         let hidden = text.hidden_size.unwrap();
         let vocab = text.vocab_size.unwrap();
-        let inter = text.intermediate_size.unwrap_or(704);
+        // MoE expert intermediate size, not the dense MLP one (see the
+        // encoder prefill for the rationale).
+        let inter = text.moe_intermediate_size.unwrap_or(704);
         let experts = text.num_experts.unwrap_or(128);
         let top_k = text.top_k_experts.unwrap_or(8);
         let eps = text.rms_norm_eps.unwrap_or(1e-6) as f32;
@@ -1051,20 +1268,11 @@ impl CudaGraph {
                 }
             }
             let probs_idx = self.upload_bits(vec![canvas.len(), vocab], Self::bf16_of(&probs))?;
+            // The upstream multiplies the probabilities by the embedding table
+            // **as stored** (`[vocab, hidden]`): the soft embeddings are the
+            // convex combination of the token embeddings.
             let table = self.weight("model.decoder.embed_tokens.weight")?;
-            let transposed = {
-                let bits = self.read_payload("model.decoder.embed_tokens.weight")?;
-                let mut out = Vec::with_capacity(bits.len());
-                for col in 0..hidden {
-                    for row in 0..vocab {
-                        out.push(bits[row * hidden + col]);
-                    }
-                }
-                out
-            };
-            let table_t = self.upload_bits(vec![vocab, hidden], transposed)?;
-            let _ = table;
-            let soft = self.matmul(probs_idx, table_t)?;
+            let soft = self.matmul(probs_idx, table)?;
             let scale_vec = self.upload_bits(vec![1], Self::bf16_of(&[scale]))?;
             let soft_scaled = self.scale(soft, scale_vec)?;
             let pre_norm = self.weight("model.decoder.self_conditioning.pre_norm.weight")?;
@@ -1135,22 +1343,37 @@ impl CudaGraph {
         let cap = text.final_logit_softcapping.unwrap() as f32;
         let hidden = text.hidden_size.unwrap();
         let vocab = text.vocab_size.unwrap();
-        let transposed = {
-            let bits = self.read_payload("model.decoder.embed_tokens.weight")?;
-            let mut out = Vec::with_capacity(bits.len());
-            for col in 0..hidden {
-                for row in 0..vocab {
-                    out.push(bits[row * hidden + col]);
-                }
-            }
-            out
-        };
-        let table_t = self.upload_bits(vec![vocab, hidden], transposed)?;
+        // The tied head projects the hidden states on the **transposed**
+        // embedding table: `[tokens, hidden] x [hidden, vocab]`.
+        let table_t = self.embedding_transposed(hidden, vocab)?;
         let logits = self.matmul(hidden_idx, table_t)?;
         let logits_f32 = self.widen(logits)?;
         // `SoftCap` is the complete pinned operation `cap * tanh(x / cap)`.
         // Pre-scaling by `cap` would compute `cap * tanh(x)` instead.
         self.softcap(logits_f32, cap)
+    }
+
+    /// Resident transposed embedding table `[hidden, vocab]` for the tied lm
+    /// head. The transpose is built once and kept resident: it is reused by
+    /// every denoising step.
+    fn embedding_transposed(&mut self, hidden: usize, vocab: usize) -> Result<usize, GraphError> {
+        let key = "model.decoder.embed_tokens.weight#transposed".to_owned();
+        if let Some(&index) = self.resident.get(&key) {
+            self.touch(&key);
+            return Ok(index);
+        }
+        let bits = self.read_payload("model.decoder.embed_tokens.weight")?;
+        let mut out = Vec::with_capacity(bits.len());
+        for col in 0..hidden {
+            for row in 0..vocab {
+                out.push(bits[row * hidden + col]);
+            }
+        }
+        let index = self.upload_bf16(vec![hidden, vocab], &out)?;
+        self.resident.insert(key.clone(), index);
+        self.protected.insert(index);
+        self.touch(&key);
+        Ok(index)
     }
 
     pub fn matmul(&mut self, lhs: usize, rhs: usize) -> Result<usize, GraphError> {
@@ -1284,7 +1507,7 @@ impl CudaGraph {
     pub fn embed_vision_forward(&mut self, pooled: usize) -> Result<usize, GraphError> {
         let vision = self.checkpoint.config().vision_config.clone().unwrap();
         let eps = vision.rms_norm_eps.unwrap_or(1e-6) as f32;
-        let width = self.arena[pooled].layout().shape()[1];
+        let width = self.index(pooled)?.layout().shape()[1];
         let ones = self.upload_bits(vec![width], vec![Bf16::from_f32(1.0f32); width])?;
         let normed = self.rms_norm(pooled, ones, eps)?;
         let proj = self.weight("model.encoder.embed_vision.embedding_projection.weight")?;
@@ -1316,12 +1539,16 @@ impl CudaGraph {
         };
         let mut self_cond: Option<Vec<f32>> = None;
         for step in 0..policy.max_denoising_steps {
+            // Every denoising step owns its activations: they are released when
+            // the step ends, so 256 steps never accumulate 256 canvas passes.
+            let marker = self.arena.len();
             // Linear temperature schedule t_min 0.4 -> t_max 0.8.
             let temperature =
                 0.4 + (0.8 - 0.4) * (step as f32) / (policy.max_denoising_steps - 1) as f32;
             let hidden = self.decoder_forward(&state.canvas, cache, self_cond.as_ref())?;
             let logits_idx = self.lm_logits(hidden)?;
             let logits = self.download_f32(logits_idx)?;
+            self.release_scope(marker, &[]);
             let entropies = position_entropy(&logits, canvas.len(), vocab, temperature);
             let argmax: Vec<u32> = (0..canvas.len())
                 .map(|c| {

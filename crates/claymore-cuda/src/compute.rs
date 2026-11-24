@@ -40,11 +40,13 @@ const ROTARY_F32: &[u8] = b"claymore_rotary_embed_f32\0";
 const ATTENTION_F32: &[u8] = b"claymore_attention_f32\0";
 const SOFT_CAP_F32: &[u8] = b"claymore_soft_cap_f32\0";
 const SCALE_F32: &[u8] = b"claymore_scale_f32\0";
+const SCALE_SCALAR_F32: &[u8] = b"claymore_scale_scalar_f32\0";
 const LINEAR_BF16: &[u8] = b"claymore_linear_bf16\0";
 const ROTARY_BF16: &[u8] = b"claymore_rotary_embed_bf16\0";
 const ATTENTION_BF16: &[u8] = b"claymore_attention_bf16\0";
 const SOFT_CAP_BF16: &[u8] = b"claymore_soft_cap_bf16\0";
 const SCALE_BF16: &[u8] = b"claymore_scale_bf16\0";
+const SCALE_SCALAR_BF16: &[u8] = b"claymore_scale_scalar_bf16\0";
 
 const WIDEN_BF16_F32: &[u8] = b"claymore_widen_bf16_f32\0";
 const ROUTER_TOP_K_F32: &[u8] = b"claymore_router_top_k_f32\0";
@@ -99,11 +101,13 @@ struct Kernels {
     attention_f32: CuFunctionRaw,
     soft_cap_f32: CuFunctionRaw,
     scale_f32: CuFunctionRaw,
+    scale_scalar_f32: CuFunctionRaw,
     linear_bf16: CuFunctionRaw,
     rotary_bf16: CuFunctionRaw,
     attention_bf16: CuFunctionRaw,
     soft_cap_bf16: CuFunctionRaw,
     scale_bf16: CuFunctionRaw,
+    scale_scalar_bf16: CuFunctionRaw,
     widen_bf16_f32: CuFunctionRaw,
     router_top_k_f32: CuFunctionRaw,
     gelu_mul_up_f32: CuFunctionRaw,
@@ -160,11 +164,21 @@ impl CudaComputeEngine {
             attention_f32: load_function(&module_m10, ATTENTION_F32, "claymore_attention_f32")?,
             soft_cap_f32: load_function(&module_m10, SOFT_CAP_F32, "claymore_soft_cap_f32")?,
             scale_f32: load_function(&module_m10, SCALE_F32, "claymore_scale_f32")?,
+            scale_scalar_f32: load_function(
+                &module_m10,
+                SCALE_SCALAR_F32,
+                "claymore_scale_scalar_f32",
+            )?,
             linear_bf16: load_function(&module_m10, LINEAR_BF16, "claymore_linear_bf16")?,
             rotary_bf16: load_function(&module_m10, ROTARY_BF16, "claymore_rotary_embed_bf16")?,
             attention_bf16: load_function(&module_m10, ATTENTION_BF16, "claymore_attention_bf16")?,
             soft_cap_bf16: load_function(&module_m10, SOFT_CAP_BF16, "claymore_soft_cap_bf16")?,
             scale_bf16: load_function(&module_m10, SCALE_BF16, "claymore_scale_bf16")?,
+            scale_scalar_bf16: load_function(
+                &module_m10,
+                SCALE_SCALAR_BF16,
+                "claymore_scale_scalar_bf16",
+            )?,
             widen_bf16_f32: load_function(&module_m10, WIDEN_BF16_F32, "claymore_widen_bf16_f32")?,
             router_top_k_f32: load_function(
                 &module_m10,
@@ -1167,6 +1181,86 @@ impl CudaComputeEngine {
         }
     }
 
+    /// Multiply by an FP32 scalar. The factor is a scalar, not a tensor: the
+    /// product is evaluated in FP32 and rounded once to the input dtype.
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context and stay live until the stream completion
+    /// event has been observed by the caller.
+    pub unsafe fn scale_scalar(
+        &self,
+        input: u64,
+        output: u64,
+        numel: usize,
+        factor: f32,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.scale_scalar_dispatch(input, output, numel, factor, false, stream)
+    }
+
+    /// BF16 variant of `scale_scalar`.
+    /// # Safety
+    /// Every pointer must reference a live, sufficiently sized allocation in
+    /// this engine's CUDA context and stay live until the stream completion
+    /// event has been observed by the caller.
+    pub unsafe fn scale_scalar_bf16(
+        &self,
+        input: u64,
+        output: u64,
+        numel: usize,
+        factor: f32,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.scale_scalar_dispatch(input, output, numel, factor, true, stream)
+    }
+
+    unsafe fn scale_scalar_dispatch(
+        &self,
+        input: u64,
+        output: u64,
+        numel: usize,
+        factor: f32,
+        bf16: bool,
+        stream: &CudaStream,
+    ) -> Result<(), CudaError> {
+        self.prepare(stream)?;
+        if !factor.is_finite() {
+            return Err(invalid("scale factor must be finite"));
+        }
+        let count = checked_count(numel, "scale_scalar requires at least one element")?;
+        let grid = grid_for(count, ELEMENTWISE_BLOCK, CUDA_GRID_X_MAX)?;
+        let params = [
+            p(&input),
+            p(&output),
+            p(&count),
+            &factor as *const f32 as *const c_void,
+        ];
+        let function = if bf16 {
+            self.kernels.scale_scalar_bf16
+        } else {
+            self.kernels.scale_scalar_f32
+        };
+        // SAFETY: identical lifetime contract to `add`.
+        unsafe {
+            check(
+                crate::driver::cuLaunchKernel(
+                    function,
+                    grid,
+                    1,
+                    1,
+                    ELEMENTWISE_BLOCK,
+                    1,
+                    1,
+                    0,
+                    stream.raw,
+                    params.as_ptr(),
+                    ptr::null_mut(),
+                ),
+                "cuLaunchKernel(scale_scalar)",
+            )
+        }
+    }
+
     /// Zero a live device allocation. Used to prepare scatter-add outputs,
     /// the only accumulation kernel in the contract; atomics require a
     /// pre-zeroed destination.
@@ -1255,10 +1349,10 @@ impl CudaComputeEngine {
                 "router expert count exceeds the launch block width",
             ));
         }
-        // probs + the 32-lane block reduction buffer, in dynamic shared memory.
+        // The row probabilities and their expert indices live in dynamic
+        // shared memory; the block-wide maximum uses a static buffer.
         let shared = (experts as u32)
-            .checked_mul(4)
-            .and_then(|n| n.checked_add(32 * 4))
+            .checked_mul(8)
             .ok_or_else(|| invalid("router shared memory overflow"))?;
         if shared > 48 * 1024 {
             return Err(invalid("router shared memory exceeds 48 KiB"));
@@ -1370,32 +1464,40 @@ impl CudaComputeEngine {
     /// # Safety
     /// Every pointer must reference a live, sufficiently sized allocation in
     /// this engine's CUDA context.
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn gather_rows(
         &self,
         input: u64,
         indices: u64,
         output: u64,
+        input_rows: usize,
         out_rows: usize,
         width: usize,
         stream: &CudaStream,
     ) -> Result<(), CudaError> {
-        self.gather_rows_dispatch(input, indices, output, out_rows, width, false, stream)
+        self.gather_rows_dispatch(
+            input, indices, output, input_rows, out_rows, width, false, stream,
+        )
     }
 
     /// BF16 variant of `gather_rows`.
     /// # Safety
     /// Every pointer must reference a live, sufficiently sized allocation in
     /// this engine's CUDA context.
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn gather_rows_bf16(
         &self,
         input: u64,
         indices: u64,
         output: u64,
+        input_rows: usize,
         out_rows: usize,
         width: usize,
         stream: &CudaStream,
     ) -> Result<(), CudaError> {
-        self.gather_rows_dispatch(input, indices, output, out_rows, width, true, stream)
+        self.gather_rows_dispatch(
+            input, indices, output, input_rows, out_rows, width, true, stream,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1404,6 +1506,7 @@ impl CudaComputeEngine {
         input: u64,
         indices: u64,
         output: u64,
+        input_rows: usize,
         out_rows: usize,
         width: usize,
         bf16: bool,
@@ -1411,8 +1514,16 @@ impl CudaComputeEngine {
     ) -> Result<(), CudaError> {
         self.prepare(stream)?;
         let (rows64, width64) = checked_last_dim(out_rows, width)?;
+        let input_rows64 = input_rows as u64;
         let grid_y = grid_for(width64, ELEMENTWISE_BLOCK, CUDA_GRID_Y_MAX)?;
-        let params = [p(&input), p(&indices), p(&output), p(&rows64), p(&width64)];
+        let params = [
+            p(&input),
+            p(&indices),
+            p(&output),
+            p(&input_rows64),
+            p(&rows64),
+            p(&width64),
+        ];
         let function = if bf16 {
             self.kernels.gather_rows_bf16
         } else {
