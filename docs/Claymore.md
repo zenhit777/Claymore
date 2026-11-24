@@ -563,8 +563,8 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M6 | Runtime unifié | **Première tranche livrée par la PR #20** ; orchestration haut niveau et frontières mode d'exécution réparties entre M7/M8 |
 | M7 | Scheduler et orchestration mémoire | **Livré sur `main` par la PR #21** |
 | M7.1 | Durcissement scheduler/runtime et préparation M8 | **Livré sur `main` par la PR #22** ; CI verte ; revalidation RTX 5090 réussie au SHA de code `c16e925` (17/17 requis par campagne, deux campagnes ; 27/27 tests workspace par campagne) ; limites restantes suivies dans l'issue #23 |
-| M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **Livré sur `main`** par la PR #24 ; validation F32/BF16 RTX 5090 documentée |
-| M9 | Orchestration de diffusion modulaire commune | **Livré sur `main`** par la PR #32 ; limites et suivis #33 à #38 |
+| M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **Livré sur `main` par la PR #24** — Tensor canonique, contrats, dispatch, kernels CUDA F32/BF16 et intégration mémoire/scheduler ; preuves matérielles versionnées |
+| M9 | Orchestration de diffusion modulaire commune | Cœur livré par la PR #32 ; validation CPU, métriques et documentation finalisées par la PR #43 (issue #31) ; suivis #33 à #38 |
 | M10 | Adaptateur et intégration DiffusionGemma | **En cours, PR #40 ouverte et non mergée** — branche `feat/m10-diffusiongemma` ; ingestion épinglée du checkpoint réel, primitives M10 F32/BF16 (26 entrées PTX `sm_120`), adaptateur `DiffusionExecutor`, **graphe complet implémenté** (MoE top-8, tour de vision, auto-conditionnement, cache KV encodeur, streaming borné, résidence LRU) et **campagne RTX 5090 exécutée** au SHA `77e7665` : 21/21 primitives, 2/2 streaming, **génération réelle verte** (canvas 256, 48 étapes, pic VRAM 24,25 Gio, 909 Gio uploadés) ; **différentiel de chaîne rouge et documenté**, tolérances conservées ; sémantique validée par étape (indices du routeur 56/56 identiques CPU ↔ CUDA) |
 | M11 | Adaptateur et intégration Clover | Planifié |
 | M12 | Optimisation et validation de performance | Planifié |
@@ -737,22 +737,20 @@ Critères d'acceptation :
 
 ### M9 — Orchestration de diffusion modulaire commune
 
-**État :** livré sur `main` par la PR #32 (fusionnée le 23 novembre 2026). L'API `DiffusionPlan`, `DiffusionExecutor`, `DiffusionOrchestrator`, les étapes Prepare/Denoise/Validate/Commit, les dépendances de scheduler, l'annulation coopérative et les tests CPU sont livrés. Les limites et suites sont suivies par les issues #33 à #38. Voir [m9-diffusion-orchestration.md](m9-diffusion-orchestration.md).
+**État :** cœur d'orchestration livré par la PR #32 ; les compléments CPU-only de couverture et de documentation sont livrés dans cette contribution (issue #31). Les follow-ups d'équité, de hooks de stratégie, de rétention et de convergence des schedulers restent suivis séparément (#33 à #38).
 
-**Objectif :** construire le moteur d'orchestration de diffusion commun de Claymore, modulaire et extensible, au-dessus du runtime et du socle tensoriel M8.
+Travaux livrés dans le cœur :
+- cycle de génération par blocs, plan validé et transitions explicites ;
+- dépendances de tâches et exécution d'une étape bornée ;
+- annulation coopérative aux frontières sûres et propagation d'échec ;
+- métriques CPU de sessions, étapes, blocs et durées d'exécution par phase ;
+- tests unitaires et d'intégration synthétiques CPU multi-blocs.
 
-Travaux :
-- définir le cycle de génération, les états et les contrats de progression communs ;
-- factoriser les invariants partagés sans imposer une boucle ou un graphe unique ;
-- définir les interfaces de stratégies et points d'extension pour canvas/state, denoising, attention, block diffusion, GDN et routage expert ;
-- intégrer scheduler, mémoire, transferts, annulation et télémétrie ;
-- valider les transitions et erreurs par des stratégies simulées CPU.
-
-Critères d'acceptation :
-- un seul moteur d'orchestration de diffusion et des stratégies composables ;
-- aucune dépendance aux détails d'un modèle dans le cœur commun ;
-- tests démontrant l'extensibilité sans imposer de fausse abstraction commune ;
-- sûreté des ressources et annulation vérifiées de bout en bout.
+Critères de validation CPU-only :
+- tests d'intégration couvrant progression multi-blocs, commit, erreur isolée, annulation, session indépendante et nouvelle session après annulation ;
+- compteurs reproductibles de blocs/étapes/sessions ; durées monotones par phase exposées comme diagnostics et sans effet sur l'ordonnancement ;
+- documentation du cycle de vie, du diagramme de séquence, de la propriété/synchronisation et des limites de reprise ;
+- aucune génération de modèle, compatibilité de checkpoint ou métrique GPU revendiquée.
 
 ### M10 — Adaptateur DiffusionGemma
 
@@ -851,7 +849,7 @@ Historique de référence :
 - **v0.3** : memory orchestrator host-side ;
 - **v0.4** : backend CUDA Driver API optionnel.
 
-Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in). La PR #6 a livré M2 (`Device` / `Tensor` et simulateur CPU ; le type `Tensor` a ensuite été recentré dans `claymore-tensor` pendant M8). Les PR #15 et #16 ont livré M3 et M4 ; les PR #17 et #18 ont livré M5, dont le chemin nominal a été validé sur RTX 5090. La PR #20 a livré la première tranche M6. L'injection de fautes reste suivie séparément dans l'issue #19.
+Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in) ; la PR #5 a livré M1 ; la PR #6 a livré M2 ; les PR #15 et #16 ont livré M3 et M4 ; les PR #17 et #18 ont livré M5 ; la PR #20 a livré la première tranche M6 ; les PR #21 et #22 ont livré M7 et M7.1 ; la PR #24 a livré M8 ; la PR #32 a livré le cœur M9 ; la PR #43 a finalisé les compléments CPU-only et documentaires M9. La PR #40 porte l'intégration M10 : la génération réelle DiffusionGemma a été exécutée sur RTX 5090, mais le différentiel numérique de chaîne reste rouge et constitue un gate ouvert.
 
 Une PR ne doit pas être déclarée prête uniquement parce que le code existe : elle doit préciser si les tests couvrent le build par défaut, la feature CUDA, le matériel réel ou seulement un backend simulé.
 
@@ -955,6 +953,7 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-22 | Éviction Adaptive : comparer d'abord la chaleur (hit count), puis la récence (tick), et utiliser le coût de rechargement en nanosecondes uniquement comme départage ; un coût inconnu vaut zéro pour ce seul départage. Aucun chargeur ne l'alimente automatiquement à ce stade. |
 | 2026-11-22 | Finalisation M8 : BF16 est implémenté en 16 bits exacts avec conversion FP32 explicite et arrondi round-to-nearest-even. Matmul et réductions accumulent en FP32 ; la sortie BF16 est arrondie une seule fois. FP16 reste non supporté et aucun cast/fallback implicite n'est autorisé. |
 | 2026-11-22 | Les deux modules PTX (`m8_f32.ptx` et `m8_bf16.ptx`) ciblent `sm_120` ; les kernels BF16 utilisent `cvt.rn.bf16.f32` et `fma.rn.f32`. La tolérance matérielle BF16 est exprimée en pas représentables (0 pour add, 1 pour matmul/softmax/RMSNorm), fixée avant la campagne. |
+| 2026-11-23 | DiffusionGemma est initialement ciblé en génération de texte uniquement ; image et vidéo sont hors périmètre sans décision produit et spécification multimodale ultérieures. Le runtime M9 expose les métriques CPU d'orchestration et des durées observées par phase, sans métriques GPU simulées. |
 | 2026-11-23 | M10 : le checkpoint est épinglé par révision et empreintes SHA-256 (`config.json`, index, `generation_config.json`) contrôlées à l'ouverture ; aucune révision mobile n'est suivie. La politique canonique de génération est l'`EntropyBoundSampler` de transformers ; le `scheduler_config.json` (abstraction `diffusers` `BlockRefinementScheduler`) est enregistré comme artefact séparé et non fusionné. |
 | 2026-11-23 | M10 : `layer_scalar` est une valeur apprise par couche (`0,068847656` en couche 0), pas `1.0`. Une primitive `Scale` explicite (F32/BF16, scalaire ou par colonne) est ajoutée pour l'appliquer comme dernière opération de couche ; aucune identité implicite n'est supposée. |
 | 2026-11-23 | M10 : pour une réduction dont la sortie peut s'annuler, le compte d'ULP n'est pas une borne (un élément proche de zéro peut avoir un ULP arbitrairement grand à erreur absolue bornée). Le critère d'attention BF16 est **dérivé du modèle d'erreur** : `max_abs ≤ 2^-8 · max|v|` (l'arrondi BF16 des probabilités de softmax apporte ≤ `2^-9` d'erreur relative, plus un bit de marge). L'ULP, le max, le RMS et le relatif restent mesurés et publiés. Les tolérances F32 (`1e-4`) et BF16 élémentaire/réduction (1 ULP) sont inchangées. |

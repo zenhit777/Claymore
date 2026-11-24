@@ -12,7 +12,7 @@ Le module `claymore_runtime::diffusion` expose :
 - `DiffusionStep` : `PrepareBlock`, `Denoise`, `ValidateBlock`, `CommitBlock`.
 - `DiffusionExecutor` : frontière d'exécution implémentée par l'adaptateur de modèle.
 - `DiffusionOrchestrator` : admission, dépendances, progression, annulation et propagation des erreurs.
-- `DiffusionSessionSnapshot` et `DiffusionMetrics` : état observable sans exposer de tenseurs ni de buffers.
+- `DiffusionSessionSnapshot` et `DiffusionMetrics` : état observable sans exposer de tenseurs ni de buffers. Les métriques comptent les sessions, étapes, blocs soumis/committés/en attente, erreurs et annulations ; elles mesurent également le temps passé dans l'exécuteur par phase (préparation, denoising, validation, commit).
 
 ## Invariants
 
@@ -38,6 +38,58 @@ Conséquences explicites : pas d'ordonnancement global entre requêtes et diffus
 
 À priorité égale, les sessions de diffusion sont FIFO : toutes les étapes de la première session admise précèdent celles de la suivante. Une politique round-robin/équité est hors périmètre de cette version.
 
+
+
+## Cycle de vie et reprise
+
+Une session suit les états `Queued → Running → Completed | Failed | Cancelled`. Les étapes d'un plan sont pré-admises comme une chaîne de dépendances ; une seule étape prête est exécutée par appel à `run_one`. Un bloc n'est compté comme terminé qu'après le succès de `CommitBlock`.
+
+L'annulation est coopérative : avant une étape, elle empêche son exécution ; si elle est demandée pendant l'appel de l'exécuteur, l'étape réussie est comptabilisée puis l'annulation est observée à la frontière suivante. Une erreur marque la session `Failed` et empêche l'exécution des étapes dépendantes. Les sessions indépendantes restent exécutables.
+
+**Reprise :** M9 ne fournit pas de reprise d'une session terminale ni de rollback des effets déjà réalisés par un adaptateur. Après échec ou annulation, le client peut soumettre une nouvelle session avec un nouveau plan ; la stratégie de reprise, la reconstruction de l'état du modèle et l'idempotence des étapes sont à la charge de l'adaptateur et ne sont pas garanties par le cœur commun.
+
+## Télémétrie CPU
+
+Les compteurs sont déterministes pour une séquence donnée : sessions soumises/terminées/échouées/annulées, étapes commencées/terminées/échouées/annulées, blocs soumis et committés. Une étape en attente annulée par l'annulation d'une session est comptée dans `steps_cancelled` ; les étapes dépendantes annulées à la suite d'un échec sont également comptées. Une étape qui a réussi avant l'observation de l'annulation reste comptée comme terminée. `blocks_pending` est une jauge calculée à la lecture : blocs non committés appartenant aux sessions non terminales ; les blocs d'une session échouée ou annulée ne restent pas « en attente ».
+
+Les durées `*_duration_ns` sont des mesures monotones du seul appel `DiffusionExecutor::execute_step`, classées par phase. `execution_duration_ns` est leur somme. Elles excluent l'attente dans le scheduler et le temps de préparation du scheduler ; elles sont diagnostiques, non déterministes entre exécutions et ne pilotent ni l'ordre des tâches ni les transitions. Aucun compteur VRAM, CUDA ou GPU n'est synthétisé par ce module.
+
+## Diagramme de séquence
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Orchestrator
+    participant Scheduler
+    participant Adapter as DiffusionExecutor
+    Client->>Orchestrator: submit(plan, cancellation, priority)
+    Orchestrator->>Scheduler: submit chained step tasks
+    Orchestrator-->>Client: session_id
+    loop Une étape prête à la fois
+        Client->>Orchestrator: run_one(adapter)
+        Orchestrator->>Scheduler: start_next(Compute)
+        Scheduler-->>Orchestrator: task_id
+        Orchestrator->>Adapter: execute_step(step)
+        Adapter-->>Orchestrator: Ok ou erreur
+        alt étape réussie
+            Orchestrator->>Scheduler: complete(task_id)
+            Orchestrator->>Orchestrator: actualise progression et métriques
+        else erreur
+            Orchestrator->>Scheduler: fail(task_id)
+            Orchestrator->>Scheduler: annule les dépendants
+        end
+        Orchestrator-->>Client: outcome + snapshot consultable
+    end
+```
+
+## Propriété et synchronisation
+
+- L'orchestrateur possède les snapshots, plans, index de tâches et jetons d'annulation ; le scheduler dédié possède l'état des tâches et leurs dépendances.
+- Les poids, tenseurs, buffers, événements CUDA et états spécifiques du modèle restent possédés par l'adaptateur et les services mémoire/exécution.
+- Le scheduler et l'orchestrateur restent synchrones et confinés au thread propriétaire ; aucun contrat `Send`/`Sync` ou exécution parallèle n'est promis.
+- L'adaptateur ne doit retourner `Ok(())` qu'après que l'étape bornée est sûre à considérer comme terminée, y compris après synchronisation du travail device éventuel.
+- Le cœur M9 ne réalise aucune allocation GPU, copie, kernel ou chargement de checkpoint.
+
 ## Validation
 
-Les tests unitaires du module couvrent la validation du plan (cas positifs et négatifs), l'ordre déterministe multi-blocs, le FIFO inter-sessions, l'isolation des échecs, la propagation d'échec vers les dépendants, l'annulation avant admission/en file et la comptabilisation d'une étape réussie lorsque l'annulation survient pendant son exécution. Les tests CPU sont indépendants de CUDA. La validation matérielle RTX 5090 n'est pas un gate M9, car cette phase ajoute uniquement le contrôle de flux et des contrats CPU.
+Les tests unitaires et d'intégration CPU couvrent la validation du plan, l'ordre multi-blocs, le FIFO inter-sessions, l'isolation des échecs, la propagation d'échec, l'annulation avant admission et à une frontière sûre, la progression des blocs après commit, les compteurs et les durées par phase. Les tests CPU sont indépendants de CUDA. La validation matérielle RTX 5090 n'est pas un gate M9, car cette phase ajoute uniquement le contrôle de flux et des contrats CPU.
