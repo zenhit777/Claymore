@@ -637,7 +637,7 @@ mod tests {
         for dtype in [DType::F32, DType::BF16] {
             for kind in claymore_tensor::OpKind::ALL {
                 let declared = single_dtype_ops.iter().find(|(k, _d)| *k == kind);
-                if let Some((k, d)) = declared {
+                if let Some((_, d)) = declared {
                     if dtype == *d {
                         assert!(
                             CUDA_OPS
