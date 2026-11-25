@@ -1,90 +1,140 @@
-# Agent IA — M10 DiffusionGemma sur RTX 5090
+# Agent IA — finalisation matérielle M10 sur RTX 5090
 
-## Mission
+## Mission et état de départ
 
-Poursuivre M10 dans le dépôt Claymore après le socle CPU préparatoire. Travailler sur la branche `feat/m10-diffusiongemma` (ou une branche de travail issue de celle-ci) et livrer une intégration réelle, reproductible et auditée du checkpoint exact `google/diffusiongemma-26B-A4B-it` sur la RTX 5090 32 Gio sous WSL2.
+Tu interviens exclusivement pour lever les dernières réserves matérielles de la PR #40 / issue #42 de Claymore.
 
-Ne pas déclarer le modèle compatible sur la seule base d'une compilation, d'un chargement de config ou de tests synthétiques. Ne pas remplacer DiffusionGemma par un modèle autoregressif. Ne pas créer de second runtime ou moteur tensoriel. Les contrats Tensor, Device, mémoire, scheduler et orchestration M9 de Claymore sont propriétaires et doivent rester les seuls chemins d'exécution.
+Dépôt : https://github.com/zenhit777/Claymore  
+Branche de travail : `feat/m10-diffusiongemma`  
+PR à ne jamais fusionner : https://github.com/zenhit777/Claymore/pull/40  
+Issue de suivi : https://github.com/zenhit777/Claymore/issues/42
 
-## Pré-vol obligatoire
+**Le travail CPU-only est terminé et ne doit pas être redéveloppé.** Les rapports et fixtures existants sont la référence :
+- `docs/audits/m10-cpu-campaign-2026-11-25.md`
+- `docs/audits/m10-cpu-2026-11-25-logs.sha256`
+- `crates/claymore-model-gemma/tests/data/m10_layers/`
+- `tools/m10/`
+- `docs/audits/m10-architect-decisions.md`
 
-1. Lire `docs/Claymore.md`, `docs/architecture.md`, `docs/m8-architecture.md`, `docs/m9-diffusion-orchestration.md`, `docs/audits/m8-model-graph-requirements.md` et ce document M10.
-2. Vérifier `git status`, branche et SHA. Ne pas écraser de modifications utilisateur.
-3. Capturer `nvidia-smi`, modèle/VRAM/compute capability, driver, CUDA toolkit, `rustc -Vv`, `cargo -V`, `nvcc --version`, `free -h`.
-4. Épingler les révisions exactes du dépôt Hugging Face, `config.json`, `model.safetensors.index.json` et code d'implémentation de référence. Enregistrer URLs, commit/revision et SHA-256 dans le rapport. Ne jamais suivre silencieusement `main` mobile.
+Les bisects de référence ont déjà été exécutés : encodeur 210/210 (pire 2,0 pas BF16, borne 4,0), vision 0,2 pas (borne 4,0), décodeur 10,0 pas (borne 20,0 ; 470/480 + 10 échanges de frontière justifiés, zéro divergence structurelle). Ne régénère ni ne réépingle aucune dorée et ne change pas D1/D2.
 
-## Architecture exigée
+Une campagne RTX 5090 groupée a déjà obtenu 6/6 étapes vertes sur la tête CPU finalisée : driver 5/5, mémoire 17/17, tenseurs 19/19, injections 13/13, primitives M10 21/21 et vérification complète du checkpoint. Le sous-graphe décodeur réel de couche 0 est bit-exact. Rapport : `docs/audits/m10-rtx5090-grouped-campaign-2026-11-25.md`.
 
-- `claymore-model-gemma` est l'adaptateur ; `claymore-runtime` conserve l'orchestration et le scheduler ; `claymore-tensor` reste propriétaire des opérations et layouts ; `claymore-memory` reste propriétaire de l'admission/résidence/libération.
-- L'encodeur causal traite le prompt propre et les blocs déjà validés et construit le KV cache requis.
-- Le décodeur applique attention bidirectionnelle sur le canvas et cross-attention vers le contexte encodeur.
-- Canvas initial de 256 positions (sauf si la révision épinglée documente explicitement une valeur différente).
-- Chaque itération produit des candidats et scores de confiance ; seules les positions atteignant le seuil sont validées. Les autres suivent exactement la politique de re-noising/scheduling de la référence épinglée.
-- Les dépendances entre étapes sont exprimées par M9 ; aucune ressource tensorielle ou poids ne doit être placée dans les payloads scheduler.
-- BF16 explicite pour les poids ; accumulation FP32 selon les contrats numériques. FP16 non supporté. Aucun cast, fallback CPU, transfert Host ou allocation non budgétée implicite.
+**Réserves matérielles non levées :**
+1. mesures différentielles CUDA ↔ CPU des 30 couches du décodeur ;
+2. mesures différentielles CUDA ↔ CPU des logits ;
+3. publication des mesures, limites, journaux et preuve de propreté mémoire sur la tête finale.
 
-## Travail à effectuer
+La dérive de chaîne contre la référence eager amont est un suivi D2, pas un gate numérique absolu. Ne réintroduis pas l'ancienne exigence de comparaison de chaîne bit-exacte contre la dorée eager.
 
-### A. Chargement et audit checkpoint
+## Autorisation obligatoire — ne pas lancer avant confirmation
 
-- Implémenter un lecteur Safetensors/ShardIndex borné et sûr : validation de toutes les entrées, shapes, offsets, dtype BF16, tailles et correspondance avec les paramètres de configuration.
-- Charger shard par shard via les contrats Device/Memory ; refuser les offsets chevauchants, noms inattendus, dtypes interdits, dépassements et fichiers incomplets.
-- Ajouter tests CPU de corruption, truncation, overflow, index mal formé, shard manquant et poids inattendus.
-- Définir clairement les poids résidents, poids offloadés, buffers temporaires et budgets.
+La RTX 5090 est partagée. **Avant toute commande qui initialise CUDA, alloue de la VRAM ou lance un kernel**, vérifie qu'une autorisation explicite et récente du propriétaire pour cette campagne figure dans les instructions de mission. Le présent prompt décrit le travail mais ne constitue pas, à lui seul, une preuve que la carte est libre ou qu'un créneau vient d'être accordé.
 
-### B. Primitives tensorielle manquantes
+Si l'autorisation manque, arrête-toi après les vérifications CPU/non intrusives et demande l'accord. Ne sonde pas la carte de manière répétée et ne lance aucun test matériel.
 
-- Ajouter les opérations minimales réellement nécessaires au graphe : projections/linear, RoPE, masquage, attention multi-tête bidirectionnelle, cross-attention, cache KV (append/read/position), logits et sélection de confiance.
-- CPU reference déterministe pour petites dimensions.
-- Kernel CUDA F32/BF16 approprié, exact dispatch (dtype + shape/layout/capacités), aucune opération non supportée n'est dispatchée.
-- Tester stabilité softmax, masques, séquences longues, dimensions non alignées, cas limites, NaN/Inf et écarts CPU/CUDA.
-- Ne pas développer des kernels génériques non nécessaires au graphe vérifié.
+## Phase 0 — gel et préflight
 
-### C. Exécuteur et orchestration
+1. Lire `AGENTS.md`, les instructions du dépôt, les rapports CPU/GPU, le protocole `docs/audits/m10-rtx5090-grouped-protocol.md` et le registre D1/D2.
+2. Vérifier `git status`, branche et SHA exact. Refuser de travailler sur un arbre sale ou une branche différente sans instruction explicite. Ne jamais écraser des modifications préexistantes.
+3. Vérifier que la tête est celle de la PR #40 et que la CI stable + Rust 1.86 est verte. Consigner le SHA complet qui sera réellement testé.
+4. Confirmer que les sources CUDA, PTX et le manifeste de provenance correspondent exactement à la tête gelée. Calculer et consigner leurs SHA-256.
+5. Vérifier la disponibilité du checkpoint épinglé via `CLAYMORE_M10_CHECKPOINT`, sans le télécharger à nouveau si l'artefact vérifié est déjà présent. Identité attendue : `google/diffusiongemma-26B-A4B-it`, révision `cd40195554d3cfcb56f34b9adfb66efc790ed5b6`.
+6. Après autorisation, faire un seul préflight matériel : `nvidia-smi`, VRAM libre, processus compute, driver, SM 120, CUDA toolkit/nvcc, WSL2, RAM et espace disque. Si la VRAM libre est insuffisante pour la prochaine étape, ne pas démarrer ; documenter et demander un autre créneau.
+7. Annoncer le budget VRAM maximal estimé avant chaque étape. Une seule tâche GPU à la fois. Vérifier la libération après chaque tâche.
 
-- Implémenter l'adaptateur `DiffusionExecutor` en respectant les étapes PrepareBlock, Denoise, ValidateBlock et CommitBlock.
-- L'exécution doit être bornée par étape et retourner uniquement après complétion sûre des kernels/transferts (events/tokens réels).
-- Implémenter annulation aux frontières sûres, propagation des erreurs typées et cleanup sans libération de buffers en vol.
-- Ne pas prétendre que la simple mise en file CUDA signifie que l'étape est terminée.
+Liaison WSL2 attendue pour le vrai driver, selon le protocole validé :
+```bash
+export RUSTFLAGS="-L native=/usr/lib/wsl/lib"
+export LD_LIBRARY_PATH="/usr/lib/wsl/lib"
+```
+Ne pas utiliser le stub CUDA de CI pour une campagne matérielle.
 
-### D. Campagne RTX 5090
+## Phase 1 — mesures CUDA ↔ CPU du décodeur complet
 
-Exécuter au minimum :
-1. découverte driver/device et compatibilité PTX/SM 120 ;
-2. tests d'allocation/libération et intégration MemoryOrchestrator ;
-3. tests des kernels individuels F32/BF16 contre CPU ;
-4. tests différentiels du sous-graphe encoder, KV cache, decoder bidirectionnel/cross-attention ;
-5. un passage de denoising complet sur un canvas synthétique ;
-6. si ressources et licence/accès le permettent, un chargement et une génération avec le checkpoint réel épinglé ;
-7. pression mémoire, répétitions, annulation et échec injecté ; vérifier absence de fuite, OOM non maîtrisé et use-after-free.
+Objectif : mesurer le différentiel sur **les 30 couches**, et non seulement sur la couche 0 déjà validée.
 
-Ne pas diminuer les tolérances après observation. Fixer les critères avant campagne et consigner écarts max, RMS error, erreurs relatives, cas NaN/Inf et éventuelles différences BF16 en ULP.
+1. Réutiliser les entrées, états et caches de référence versionnés dans les fixtures M10. Pour chaque couche, injecter l'entrée dorée exacte et les K/V de référence correspondant à cette couche. Ne jamais substituer un cache Claymore dérivé à un cache K/V de référence.
+2. Exécuter le chemin CPU et le chemin CUDA avec les mêmes poids épinglés, mêmes tenseurs d'entrée, même masque, mêmes positions et même état de canvas.
+3. Comparer chaque étape pertinente de chaque couche, au minimum : entrée, normalisations, projections Q/K/V, normalisations Q/K, RoPE, attention, projections de sortie, résiduels, MLP/MoE, couche de sortie et états/cache utilisés par la couche suivante.
+4. Mesurer séparément les logits finaux : tenseur brut avant sélection, dimensions, valeurs finies, max absolu, RMS, erreur relative, pas BF16 relatifs au pic de ligne, et divergences de classement si une sélection est appliquée.
+5. Produire un tableau par couche et par étape, ainsi qu'un résumé global et les pires cas avec index de tenseur/ligne/élément.
+6. Répéter les opérations sensibles pour vérifier la reproductibilité. Distinguer les différences de calcul d'un défaut de cache, de layout, de synchronisation ou d'ordre d'accumulation.
 
-## Sécurité mémoire et budgets
+**Contrat numérique :**
+- Respecter D1 : exprimer la dérive en pas BF16 relatifs au pic de ligne, pas en seuil absolu isolé.
+- Respecter D2 : la comparaison de chaîne contre la dorée eager reste un suivi, pas une porte absolue.
+- Pour les comparaisons CUDA ↔ CPU, relever les bornes actuellement codées avant l'exécution. Ne jamais les relâcher après observation. Si une borne échoue, isoler et corriger le défaut ; si les mesures justifient une borne plus stricte, proposer la modification avec preuve et test contractuel. Ne pas inventer une tolérance a posteriori.
+- Ne pas modifier les décisions architecturales, les dorées, leurs empreintes ou le contrat top-k.
 
-- VRAM physique 32 Gio ; soft budget 26 Gio ; hard ceiling 28 Gio ; réserver au moins 4 Gio au système/driver.
-- Aucun dépassement de budget par allocation CUDA directe hors MemoryOrchestrator.
-- KV cache, activations et canvas doivent avoir une durée de vie explicite et des mesures de pic.
-- Si le checkpoint ne tient pas dans les budgets, documenter et implémenter un offload borné validé ; ne jamais compter sur swap système.
+## Phase 2 — campagne matérielle finale
 
-## CI et qualité
+Sur le SHA gelé, rejouer séquentiellement les contrôles matériels du protocole, au minimum :
+1. `hardware_cuda_driver` ;
+2. `hardware_cuda_memory` ;
+3. `hardware_cuda_tensor` ;
+4. tests matériels de `claymore-memory` ignorés et injections de fautes ;
+5. `hardware_m10_primitives` en release ;
+6. vérification intégrale du checkpoint avec `verify_checkpoint` ;
+7. différentiel complet des 30 couches du décodeur et des logits ;
+8. génération réelle DiffusionGemma avec la politique épinglée, si le protocole de validation finale la requiert et si le budget annoncé le permet.
 
-Exécuter et corriger :
+Ne lance jamais deux tâches simultanément. Pour chaque étape, consigner commande exacte, heure, code de retour, VRAM avant/pic/après et processus compute résiduels. Vérifier qu'aucun buffer n'est libéré en vol, qu'aucun OOM non maîtrisé ne survient et qu'aucun processus de calcul ne subsiste après la campagne.
+
+Budget connu : VRAM physique 32 Gio, budget souple 26 Gio, plafond dur 28 Gio, réserve de sécurité minimale 4 Gio. Le plafond est un seuil d'admission, pas une limite de taille du checkpoint ; les poids sont streamés par couche et le swap n'est pas un tier de poids.
+
+## Modifications de kernels : règle stricte
+
+Le but de cette mission est la mesure sur le code gelé. **Ne modifie aucun `.cu`, `.cuh` ou PTX pendant la campagne.**
+
+Si un défaut de kernel est découvert :
+1. arrêter la campagne en cours et préserver tous les journaux ;
+2. diagnostiquer le défaut et proposer un correctif séparé ;
+3. si le correctif est autorisé, mettre à jour le manifeste de provenance dans le même changement, régénérer les PTX de manière reproductible et vérifier leurs empreintes ;
+4. relancer la CI complète ;
+5. refaire une campagne matérielle complète sur le nouveau SHA, y compris toutes les étapes précédentes. Une campagne sur un SHA antérieur ne valide pas le nouveau code.
+
+Aucun changement opportuniste de tolérance, aucun test désactivé, aucun fallback CPU, aucun cast implicite, aucune allocation CUDA hors MemoryOrchestrator, aucun swap comme tier de poids.
+
+## Phase 3 — rapport et livrables
+
+Créer un rapport dédié, par exemple `docs/audits/m10-rtx5090-final-decoder-logits-2026-11-25.md`, qui contient :
+- SHA complet du code testé et état de la branche ;
+- révision du checkpoint et empreintes de ses artefacts ;
+- environnement matériel/logiciel complet ;
+- autorisation et préflight, budgets annoncés ;
+- commandes exactes et journaux bruts horodatés ;
+- résultats détaillés des 30 couches et des logits, métriques et bornes ;
+- résultats de tous les tests matériels, génération si exécutée ;
+- VRAM/RAM/transferts/pics, vérification de libération et absence de processus résiduel ;
+- écarts, échecs, limites et éléments non revendiqués ;
+- manifeste SHA-256 des journaux.
+
+Mettre à jour les documents M10 uniquement avec des faits prouvés. Les documents généraux `docs/m10-diffusiongemma.md`, `docs/architecture.md`, `docs/Claymore.md` doivent rester cohérents avec le rapport CPU et la campagne matérielle. Ne pas réécrire l'historique comme si les anciennes campagnes n'avaient pas eu lieu.
+
+## Phase 4 — validation logicielle et compte rendu
+
+Après tout changement, exécuter :
 ```bash
 cargo fmt --all -- --check
 cargo test --workspace --all-targets --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo check -p claymore-cuda --features cuda-driver --locked
-cargo test -p claymore-model-gemma --all-targets --locked
+cargo check -p claymore-cuda --features cuda-driver --all-targets --locked
+cargo check -p claymore-memory --features cuda-driver --all-targets --locked
+cargo check -p claymore-model-gemma --features cuda-streaming --all-targets --locked
+cargo +1.86 test --workspace --all-targets --locked
+cargo +1.86 clippy --workspace --all-targets --locked -- -D warnings
 ```
-Respecter Rust 1.86 MSRV et le lockfile. Les tests CI sans GPU doivent rester indépendants du matériel.
+Vérifier les deux jobs GitHub Actions sur le commit final : stable et Rust 1.86, événements push et pull_request si disponibles.
 
-## Livrables obligatoires
+Pousser les commits sur `feat/m10-diffusiongemma` et mettre à jour la PR #40. Ne créer aucune PR concurrente et ne fusionner ni #40 ni une autre PR.
 
-- Code compilable et tests CPU/CUDA.
-- Rapport `docs/audits/m10-rtx5090-hardware-validation.md` contenant SHA Claymore testé, SHA/revisions checkpoint/code upstream, OS/WSL2, GPU, driver, CUDA, Rust, commandes exactes, sorties, budgets/pics mémoire, tolérances fixées avant test, résultats bruts et limites.
-- Logs bruts horodatés dans `docs/audits/`.
-- Mise à jour de `docs/m10-diffusiongemma.md`, `docs/Claymore.md` et `docs/architecture.md` sans revendiquer de capacité non testée.
-- Résumé des changements, commandes exécutées, tests passés/échoués, risques et SHA de commit.
+À la fin, fournir :
+- SHA final testé ;
+- liste exacte des réserves levées et non levées ;
+- résultats GPU détaillés et liens vers les logs/rapports ;
+- CI et MSRV observés ;
+- tout défaut restant avec cause et preuve ;
+- déclaration explicite indiquant si la validation définitive de l'architecte peut être demandée.
 
-Créer une PR ciblant `main`. Ne jamais fusionner la PR. Si le checkpoint réel ne peut être chargé (accès, licence, RAM/VRAM ou format), arrêter à un état explicite, fournir les preuves et laisser le gate de génération réelle ouvert plutôt que simuler un succès.
+**Ne jamais déclarer M10 définitivement validé et ne jamais fusionner la PR #40 : seul l'architecte rend le verdict final et le propriétaire décide du merge.**
