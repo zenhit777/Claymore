@@ -1,0 +1,6523 @@
+{
+ "artifacts": {
+  "canvas0_direct": {
+   "dtype": "float32-le",
+   "file": "canvas0_direct.bin",
+   "layout": "[batch, canvas] token ids widened to FP32",
+   "sha256": "e430dd5f9f1749a2f67dd82049b57513b93892d11341f343856920c0d16763f6",
+   "shape": [
+    1,
+    16
+   ]
+  },
+  "dec_in_0": {
+   "dtype": "float32-le",
+   "file": "dec_in_0.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "f54e99ce9db4bbde82c9c0853ed0823fca84ff894b973c804cf698682c9ee513",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_1": {
+   "dtype": "float32-le",
+   "file": "dec_in_1.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "49b93a05f54c590edd4fecb3cd5b4c21a67809fdd0b3e175928013cb06827cf2",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_10": {
+   "dtype": "float32-le",
+   "file": "dec_in_10.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "b5c27be9a619e5636f53fc703a74063f07fb72227b678ab2044737e46785c77f",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_11": {
+   "dtype": "float32-le",
+   "file": "dec_in_11.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "7e6af0c133175604c14c1f7db4466d370b6e03c709e515dae918301950df4efb",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_12": {
+   "dtype": "float32-le",
+   "file": "dec_in_12.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "6ffffc056118b22b0012c8f62a0e8a623cc4932a5ba8b465bd6a00a0ed1a3ee0",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_13": {
+   "dtype": "float32-le",
+   "file": "dec_in_13.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "423d1431e30f8a12c65a18f822a1b92bea498cbb2300a0768d7c6923a4e576c2",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_14": {
+   "dtype": "float32-le",
+   "file": "dec_in_14.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "277e1f56808bc8d823d675b4745757e03b6b3c01fcfcc598dd4d779a590c194e",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_15": {
+   "dtype": "float32-le",
+   "file": "dec_in_15.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "d32ee5decf0bad786b99e612807369de8091dd6960267218f7ceeabbd671a6e1",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_16": {
+   "dtype": "float32-le",
+   "file": "dec_in_16.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "3c87bb1efbb578acc35aabced92cee97b2cf9631e9a470fadef979f44149307b",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_17": {
+   "dtype": "float32-le",
+   "file": "dec_in_17.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "31b79daf6d8921aa8ab521580c068774e57f6b69a5b023e47f0c67a618dbd2d0",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_18": {
+   "dtype": "float32-le",
+   "file": "dec_in_18.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "97d559ac4059e3797d3321651776ee630cce8cc63aff4a01ccb8245558a5d6f1",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_19": {
+   "dtype": "float32-le",
+   "file": "dec_in_19.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "f9940ae103c09035712071069468bc0d35129847941a5f84ad7169d5c926ee0f",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_2": {
+   "dtype": "float32-le",
+   "file": "dec_in_2.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "6c40d32839767a458840e52a86d5a8c8e6630952f9eb12c21bc38d14ca2945f3",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_20": {
+   "dtype": "float32-le",
+   "file": "dec_in_20.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "cb13beac13ab0f31747fb9f2b73773cdd29c211414148a7e7054e6a16b3cccd6",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_21": {
+   "dtype": "float32-le",
+   "file": "dec_in_21.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "f9f8261ec6a2afe8d5cb3b95ea4994379fb39982480943e8bf630437dbafad9d",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_22": {
+   "dtype": "float32-le",
+   "file": "dec_in_22.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "225db52c3f26cbe5bf235608afa715d1ba6741b9eeeba07a6adc021df10f5837",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_23": {
+   "dtype": "float32-le",
+   "file": "dec_in_23.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "b307fd043aee1617eeccfcdcd4fec654de100b69696552a94d66a1a3624af602",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_24": {
+   "dtype": "float32-le",
+   "file": "dec_in_24.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "c59c4db90cba49d0f0285d9ef5769d89a842f6017a10151f8eb10318e7b74ccb",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_25": {
+   "dtype": "float32-le",
+   "file": "dec_in_25.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "6e2e7ccf13b217094698833f5e606ec74320ab009ab813b186d1e6dabe7ff8e8",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_26": {
+   "dtype": "float32-le",
+   "file": "dec_in_26.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "7ad27cee3772f1e8211e676f2f5cd1e8bb20f14665c3533c7c73923ee46974f8",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_27": {
+   "dtype": "float32-le",
+   "file": "dec_in_27.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "54e84e32f3c46b0cc5da0bc46aa3247a3468af2b12caa7f355be7bafd05d63cb",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_28": {
+   "dtype": "float32-le",
+   "file": "dec_in_28.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "4e3c85c30622b3930df07c7cb54f28e07f4ea613366aca7abf2dc49499190e43",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_29": {
+   "dtype": "float32-le",
+   "file": "dec_in_29.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "dbed46d8cbc51216c3b9d4c36d3e0265cdb308a676f3f006cfed8dd455c396cd",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_3": {
+   "dtype": "float32-le",
+   "file": "dec_in_3.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "4e320ab6480f98ae26ade5ca5180396a0c75c65d7a97bd88a3010be3c618c989",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_4": {
+   "dtype": "float32-le",
+   "file": "dec_in_4.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "6fe7190705e122098d52fec65da3c464fdb0b1c7153534964b8d41560b229ed2",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_5": {
+   "dtype": "float32-le",
+   "file": "dec_in_5.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "5b656c24c2abfa46f9748f4373f4bcb927ce1edbf7e17fd8648f7ee8388a544d",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_6": {
+   "dtype": "float32-le",
+   "file": "dec_in_6.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "783c44f749d71ce453d35eca2c934be4ab2b9378a69360d78e945491751984df",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_7": {
+   "dtype": "float32-le",
+   "file": "dec_in_7.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "95724ba239ddcb4b0fcc67319c0a93719c2a1b39f753716409d5036e46c2901e",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_8": {
+   "dtype": "float32-le",
+   "file": "dec_in_8.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "a6ab0a2081bd730af6c573fba1e96b0218a55eb454162f2a89381989210a7533",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "dec_in_9": {
+   "dtype": "float32-le",
+   "file": "dec_in_9.bin",
+   "layout": "[batch, canvas, hidden] layer entry",
+   "sha256": "26c86592bca7d69cc24cba8f42214a17fc6484ab79d653ace05faf3cbf961589",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_embedding": {
+   "dtype": "float32-le",
+   "file": "decoder_embedding.bin",
+   "layout": "[batch, canvas, hidden] scaled embedding",
+   "sha256": "473c1152b9eb79e5c9332da5b537a03c61b6cd2070e44a84f722fe6b65be9e31",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_last_hidden0_direct": {
+   "dtype": "float32-le",
+   "file": "decoder_last_hidden0_direct.bin",
+   "layout": "[batch, canvas, hidden] post final norm",
+   "sha256": "092998eaaa13209cc1bea1194b5e646568d1956fb1e6fed0a3cad18ab519c94f",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_0": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_0.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "49b93a05f54c590edd4fecb3cd5b4c21a67809fdd0b3e175928013cb06827cf2",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_1": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_1.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "6c40d32839767a458840e52a86d5a8c8e6630952f9eb12c21bc38d14ca2945f3",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_10": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_10.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "7e6af0c133175604c14c1f7db4466d370b6e03c709e515dae918301950df4efb",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_11": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_11.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "6ffffc056118b22b0012c8f62a0e8a623cc4932a5ba8b465bd6a00a0ed1a3ee0",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_12": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_12.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "423d1431e30f8a12c65a18f822a1b92bea498cbb2300a0768d7c6923a4e576c2",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_13": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_13.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "277e1f56808bc8d823d675b4745757e03b6b3c01fcfcc598dd4d779a590c194e",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_14": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_14.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "d32ee5decf0bad786b99e612807369de8091dd6960267218f7ceeabbd671a6e1",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_15": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_15.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "3c87bb1efbb578acc35aabced92cee97b2cf9631e9a470fadef979f44149307b",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_16": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_16.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "31b79daf6d8921aa8ab521580c068774e57f6b69a5b023e47f0c67a618dbd2d0",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_17": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_17.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "97d559ac4059e3797d3321651776ee630cce8cc63aff4a01ccb8245558a5d6f1",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_18": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_18.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "f9940ae103c09035712071069468bc0d35129847941a5f84ad7169d5c926ee0f",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_19": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_19.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "cb13beac13ab0f31747fb9f2b73773cdd29c211414148a7e7054e6a16b3cccd6",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_2": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_2.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "4e320ab6480f98ae26ade5ca5180396a0c75c65d7a97bd88a3010be3c618c989",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_20": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_20.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "f9f8261ec6a2afe8d5cb3b95ea4994379fb39982480943e8bf630437dbafad9d",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_21": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_21.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "225db52c3f26cbe5bf235608afa715d1ba6741b9eeeba07a6adc021df10f5837",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_22": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_22.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "b307fd043aee1617eeccfcdcd4fec654de100b69696552a94d66a1a3624af602",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_23": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_23.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "c59c4db90cba49d0f0285d9ef5769d89a842f6017a10151f8eb10318e7b74ccb",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_24": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_24.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "6e2e7ccf13b217094698833f5e606ec74320ab009ab813b186d1e6dabe7ff8e8",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_25": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_25.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "7ad27cee3772f1e8211e676f2f5cd1e8bb20f14665c3533c7c73923ee46974f8",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_26": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_26.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "54e84e32f3c46b0cc5da0bc46aa3247a3468af2b12caa7f355be7bafd05d63cb",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_27": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_27.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "4e3c85c30622b3930df07c7cb54f28e07f4ea613366aca7abf2dc49499190e43",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_28": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_28.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "dbed46d8cbc51216c3b9d4c36d3e0265cdb308a676f3f006cfed8dd455c396cd",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_29": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_29.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "f5e1e6ebc645aaaa5b4d73b4a454ef906d16dced0d946fc5d7f9149793cf1e87",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_3": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_3.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "6fe7190705e122098d52fec65da3c464fdb0b1c7153534964b8d41560b229ed2",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_4": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_4.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "5b656c24c2abfa46f9748f4373f4bcb927ce1edbf7e17fd8648f7ee8388a544d",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_5": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_5.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "783c44f749d71ce453d35eca2c934be4ab2b9378a69360d78e945491751984df",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_6": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_6.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "95724ba239ddcb4b0fcc67319c0a93719c2a1b39f753716409d5036e46c2901e",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_7": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_7.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "a6ab0a2081bd730af6c573fba1e96b0218a55eb454162f2a89381989210a7533",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_8": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_8.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "26c86592bca7d69cc24cba8f42214a17fc6484ab79d653ace05faf3cbf961589",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_layer_9": {
+   "dtype": "float32-le",
+   "file": "decoder_layer_9.bin",
+   "layout": "[batch, canvas, hidden] layer exit",
+   "sha256": "b5c27be9a619e5636f53fc703a74063f07fb72227b678ab2044737e46785c77f",
+   "shape": [
+    1,
+    16,
+    2816
+   ]
+  },
+  "decoder_logits0_direct": {
+   "dtype": "float32-le",
+   "file": "decoder_logits0_direct.bin",
+   "layout": "[batch, canvas, vocab] soft-capped FP32",
+   "sha256": "3e2226df50d705eb044be5183d390bf29901b8bd551b9f841bb35b4448d16821",
+   "shape": [
+    1,
+    16,
+    262144
+   ]
+  },
+  "embed_vision_output_direct": {
+   "dtype": "float32-le",
+   "file": "embed_vision_output_direct.bin",
+   "layout": "[batch, hidden] embedder output",
+   "sha256": "9ef004236b535c1db94b2b906af1ac4b88c6979daba03c068b1f367093bf2e4a",
+   "shape": [
+    1,
+    2816
+   ]
+  },
+  "enc_in_0": {
+   "dtype": "float32-le",
+   "file": "enc_in_0.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "3a764f9ab5b3ef6d4800657b74f936389c42dfa7c6a7b00bdd4a243c0c753b97",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_1": {
+   "dtype": "float32-le",
+   "file": "enc_in_1.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "24e4dc0319bb109beb4fc240e8f25191eb86fd025939813e2ded8a1709937b5f",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_10": {
+   "dtype": "float32-le",
+   "file": "enc_in_10.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "3699e00d7a99aba2efa22b8b86d9408d32d88a79005aae8b2a168d1df0ab5a25",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_11": {
+   "dtype": "float32-le",
+   "file": "enc_in_11.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "90b9f5bd1217e1964e8948c842576add2cda0ef450eb98fd7a8c94df4cb3f487",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_12": {
+   "dtype": "float32-le",
+   "file": "enc_in_12.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "38af370b8b255519232c3be2a8979725397585208c332d749cd07d5148e3f140",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_13": {
+   "dtype": "float32-le",
+   "file": "enc_in_13.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "a3f6a7068a78bc158da21711cf2f297a632a43db6812eeb9d41ebcafa658ec78",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_14": {
+   "dtype": "float32-le",
+   "file": "enc_in_14.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "1aa74718872d34b96671161c4e4702868c4f7a0a19ae103dd10fb0f52ff3c9bf",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_15": {
+   "dtype": "float32-le",
+   "file": "enc_in_15.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "dd178e316eef0634b0ef61facd10ad2d8cbb14b824a699dfe8e8fbff5388edfd",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_16": {
+   "dtype": "float32-le",
+   "file": "enc_in_16.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "a34a31a2112b14858e63668b23883b78110dc3202d0ff7d95a7db723bfcfb06e",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_17": {
+   "dtype": "float32-le",
+   "file": "enc_in_17.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "4fa652df8206576891dc461c24acbcde153da67b9900e6d3948c7e505ae97957",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_18": {
+   "dtype": "float32-le",
+   "file": "enc_in_18.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "3b4d95a0d543d269ccfd5bc3d5ea8ba9a4c0e29efae6a22cf621c4d554f7f158",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_19": {
+   "dtype": "float32-le",
+   "file": "enc_in_19.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "dbe25fd3a1ca19968b234c81e774735a1ec6ee7a699154ed2ef1004cc3fdb28e",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_2": {
+   "dtype": "float32-le",
+   "file": "enc_in_2.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "5cacaddb139b549e9b280908e6ee3998dfccb1b8101ea43b31a9d4df51e05965",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_20": {
+   "dtype": "float32-le",
+   "file": "enc_in_20.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "e5e11f442d14719d1bcd66c181f3e4515aaf0bbe69ea030ff56675b658e2583f",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_21": {
+   "dtype": "float32-le",
+   "file": "enc_in_21.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "7c6ed03dc35da0cff519000911e5ffff323468c9377d62dac111c0ad0556b437",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_22": {
+   "dtype": "float32-le",
+   "file": "enc_in_22.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "9ad5093269843b6645fd2eb6b664f0ee99d4c8f51e5f4869561efccdcec750f4",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_23": {
+   "dtype": "float32-le",
+   "file": "enc_in_23.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "2483e857febba9a4b5e50958d8dd1b88c2b19e7228d8272349ed9cf0f50f78fb",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_24": {
+   "dtype": "float32-le",
+   "file": "enc_in_24.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "b2f2454894758bbf74c8cf0f402507facf3a8883fb9c17467edaf1b68a4331b1",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_25": {
+   "dtype": "float32-le",
+   "file": "enc_in_25.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "8eddfc252c36e7bc2c70919c5da13a24a338518d95f6a92b2c2662b7d5e42e64",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_26": {
+   "dtype": "float32-le",
+   "file": "enc_in_26.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "6b884de707e72706ebed85bc5386917359bc279f4b22bc79e2d43118380da497",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_27": {
+   "dtype": "float32-le",
+   "file": "enc_in_27.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "6bda20603cbe7e429e8e49dedb215c66bbf5c94a0a3f93d293b76f5427facaa9",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_28": {
+   "dtype": "float32-le",
+   "file": "enc_in_28.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "852cf4dc018f2d3b0fd1aad5169e0edc95a50eaae6cbb518f4fafeaa5b5f2d08",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_29": {
+   "dtype": "float32-le",
+   "file": "enc_in_29.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "11ed925364363ba1e4a28a675c4513e1816b2ae43583c2b28418be2afb60fe03",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_3": {
+   "dtype": "float32-le",
+   "file": "enc_in_3.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "7d81b797868816587b5fd62b7d01a22efdfd2fae40abe908bdf43d0fc1360f51",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_4": {
+   "dtype": "float32-le",
+   "file": "enc_in_4.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "660e950c8c4604a0a83f57a77670fa50bf9f0d2f2118d28c9bbba4122e9efdb7",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_5": {
+   "dtype": "float32-le",
+   "file": "enc_in_5.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "5eb4cb68fe6e3efd39cf31ae223c63de303d7af069b8a3c1188d57f23bcff1f4",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_6": {
+   "dtype": "float32-le",
+   "file": "enc_in_6.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "5c6f34f6bde7a497d25af930880913d749c266e6df60487e7c08fadb7de3365e",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_7": {
+   "dtype": "float32-le",
+   "file": "enc_in_7.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "4fd5b04aa05eb39cf253f9812ae8275156522a033637af5510902cb32b932340",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_8": {
+   "dtype": "float32-le",
+   "file": "enc_in_8.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "b93a685dc765088fc0e7604891a4f026ecbc1233aeed0b491640e83dfdd22121",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_in_9": {
+   "dtype": "float32-le",
+   "file": "enc_in_9.bin",
+   "layout": "[batch, seq, hidden] layer entry",
+   "sha256": "7241cd662a20e1fe24df844d91390d9b71ebcb5e4507659b0135b13d5f90baa7",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "enc_kv_0_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_0_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "9ac28f7a6c3851ea77c06874fc0630d7459d0b554315dd20627b3bded11bfdb6",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_0_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_0_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "8c7467abb7a478e7cb51bab6c2bf52e4a1611f3c133741394f3e8cec29abe244",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_10_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_10_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "5e4621308a432ba6ec2f9171edb86d391b4be5cf336c9ea33607aaef06574fda",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_10_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_10_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "d52c6233d92854957330651e5bf9adb8e6da6d0d21811a4607867b27800fa5c4",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_11_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_11_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "7c1f5f6c416ba2f07953d9c39b90f70e9ecd157e8b2f84d2696106517e427da3",
+   "shape": [
+    1,
+    2,
+    7,
+    512
+   ]
+  },
+  "enc_kv_11_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_11_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "ae0ced3357a625d19664d17351eccb13ba38448c2144b4ad2bec38ebd39d629d",
+   "shape": [
+    1,
+    2,
+    7,
+    512
+   ]
+  },
+  "enc_kv_12_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_12_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "46b500772a45bcac5e6d4c9250b4682248f39eaba453a454121dcb2908753e86",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_12_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_12_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "7078c398f17fcfd6825bd5034e4e562f4edec283a6e1318c073dd005789ab838",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_13_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_13_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "8d681d7a9fdfe484e90f9976f4146eaf12a9d9de403460a683e32bf68629c6ee",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_13_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_13_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "521821978312f2a4d5df325cf475bfeaf99fe3c3b998c3760144ceb8ffe9c954",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_14_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_14_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "12650dd38bca82c3203c0afebc64455e7d4483197b6b3ad6154a9069b7fb43a2",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_14_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_14_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "4ada6e3280c2a4e3b48ec24ac1556dd9a65fec107c662bf3a06c091fdb953537",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_15_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_15_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "156cc9a016ca01998316db76f5caf508e31b4d7445c05e9ca10608079df913c2",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_15_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_15_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "60730020c74fc16efd8f2bbecea3b2cb86fa51f8d67b96f8816adb35025c675b",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_16_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_16_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "e719f84e3e835cc6ab7f7bbe8757b2f9b7fca07d9e57a1474a96f1a592738bf1",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_16_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_16_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "2fb925adadfd43ee8074596320030b783d1ae86cd17415e16c38dcd9177dbe5d",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_17_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_17_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "ca4fbe1e5d2a32329d2c9d0317f4ca8db0190202fb160c024dd96325088ac74f",
+   "shape": [
+    1,
+    2,
+    7,
+    512
+   ]
+  },
+  "enc_kv_17_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_17_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "ccc2cfbef6c3e6e11f992db776443966bdbc898d6026c146080b484cd88e956b",
+   "shape": [
+    1,
+    2,
+    7,
+    512
+   ]
+  },
+  "enc_kv_18_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_18_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "08e5fc3e82d76b5e9928db6ccac94f681f435e05c07dcd1b838aa0a21e3983f9",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_18_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_18_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "8ac86262164beb4f74b9d82ac5496d89f8becef2de228d9cfcdf8cba31ff51b5",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_19_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_19_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "d8ff228de74c54187526af22dba78c01a5d7827bb0a6da70af8914a72723fb3b",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_19_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_19_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "f5db7bb4a9dd886c3dcb29bba61772ddf8c671cb2e9538ecb44ce47d4e2f7ceb",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_1_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_1_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "ffa0085ac30c1e56c65d495a01672099ce8bb3960e08c04693ffebe82573a331",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_1_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_1_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "dd3c5c4797beb646ae5a562a747c2b1ef42f9a6fd57a104906f52a67682b9bb8",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_20_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_20_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "c6ca13597f453669fcf37c575089f2ef772bce879f187c438a8dcffd3ef6b394",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_20_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_20_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "11d93d9092781feb56bb57908ab1c380e89e8e0725bef6c85bf9cd00b8710f35",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_21_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_21_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "8d57733c13075dde1308edd57f8fdfb185d7b8f1ec5b3a4926ae16b266d117a7",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_21_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_21_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "8a09147455aca3bb81e92a0e090fd38bf233e74e109743d679b12011bf9d1eb1",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_22_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_22_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "da23298fa55f8b52e78196f6604ac4e67efbbdda9bbbe2599796e20fd6e644b3",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_22_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_22_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "3f21cfbb2f699c49760f62659e2342179143207683d28ea399fe3b444814d16b",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_23_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_23_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "392181489255e5ea2c40641b024feab23505bb2c89651116db2662c0a30320d7",
+   "shape": [
+    1,
+    2,
+    7,
+    512
+   ]
+  },
+  "enc_kv_23_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_23_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "daa13c6e0ec6bb26aa53ee23892d33a5563d38481ff77dcdf36ce1a29689fcb4",
+   "shape": [
+    1,
+    2,
+    7,
+    512
+   ]
+  },
+  "enc_kv_24_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_24_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "b3946921ef1ae5ab48f68c76633a7dc846f68b364cbc2e3ca988a4041fbdae7d",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_24_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_24_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "7be5dede83b99d28696636bd505f44f87b01e85eb8a824fa5ba3bd9744f75e6c",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_25_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_25_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "bbe96f9bca0502346af28ce5efdbc0ac7d4eb794f308a20740b9c06e0f13ea87",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_25_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_25_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "99bb4f0a4fd467d57c7c96c12b258ca1ab8c646dac0b5281ececa8283bc0c386",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_26_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_26_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "8094da342cb2edeee6b9131e85df9ab7956501d908c8520365fdd498806f2e07",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_26_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_26_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "6bdcaf95ff4aa0ff3640b21bf3ffff65f0afd1d85a07428c84e6389d56e80ff7",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_27_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_27_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "0181af651ef8810e961c93d167f54a936151a3ce2b8641fb3edb59107325b498",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_27_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_27_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "f55d6c3958dc6d3d728a91d6ab3ccf1c61c1a624ce90f2331eb639c305c71038",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_28_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_28_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "270590e21b43bed404a296b55ffc042d9fba071eb4c4e56515346a798eaa12f0",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_28_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_28_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "93644caffa5d6eca82c1ffe0b446b8aa428b4d52bc2e3e86f8cafe0d7b33f20a",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_29_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_29_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "83f4323e60a4bf3a8216a548f146e658354d0a8c559a44b8c38d4cbb136d5cb5",
+   "shape": [
+    1,
+    2,
+    7,
+    512
+   ]
+  },
+  "enc_kv_29_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_29_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "0c2b2977fffa0ed9912e5b0cbee16127231faa8754406df66d759e3e79820810",
+   "shape": [
+    1,
+    2,
+    7,
+    512
+   ]
+  },
+  "enc_kv_2_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_2_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "a3ffed40ce62e62afb64f964c4b9c74b0683fce6762a3a2829b8db446b4c6917",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_2_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_2_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "28a267355955f832c9fec4b6de29176400600c279704aa89d7195a60e1d8a52c",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_3_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_3_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "87a3d02fa979a1e08b0755ea398a862995d710a82fa6fe301b1ddb3a776ae278",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_3_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_3_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "6221aa8da513ad64c8e61ba47d13861e1e26420f9dd5b02c508798a1380007bc",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_4_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_4_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "9329ae901dad087a790cf9ee4f029909fcac0f5ee2be90d2e81111de4098112b",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_4_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_4_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "9f0bcaf7ba60ad298240f10ebf718ea2ccb61d199f7df148c063b99600d4a41c",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_5_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_5_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "4becf0bc755f25003302fbd13d82e8ba7069352366e3cb1cf4a7beef0de7ef00",
+   "shape": [
+    1,
+    2,
+    7,
+    512
+   ]
+  },
+  "enc_kv_5_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_5_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "1b30eb39a92ac1d687c1d8de5e48b5524100d2802c96c6911271f5e26b265f1b",
+   "shape": [
+    1,
+    2,
+    7,
+    512
+   ]
+  },
+  "enc_kv_6_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_6_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "c611a929e4cdc40bf66b38512b8f9ed8839fac12a8a148291f4169462d406956",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_6_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_6_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "e3772a8674e5bcdf40bee75ae6eaaee981777c88cb5957da0daa14e0e254f248",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_7_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_7_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "f1e0343764b91e139236e54e3f5f1b13013e28e9e13cc49590afff4cd7198352",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_7_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_7_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "f59122461c1e9750fc022402d539cd9021429d69a587b6b5d0356961404c26b0",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_8_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_8_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "6c7bc4504108c91e2a88d6410f3099515939d8d2e9b68df00a96806c166d84bc",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_8_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_8_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "fa7b6adcd2aa5225e838f69b78fe5364104dfe89af5b138ba6f669b8009406e9",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_9_keys": {
+   "dtype": "float32-le",
+   "file": "enc_kv_9_keys.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-rope, reference layout",
+   "sha256": "d1a83df1548dc1e4cf360946c7391abe44404898ee820e3d3108f518a2c501de",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "enc_kv_9_values": {
+   "dtype": "float32-le",
+   "file": "enc_kv_9_values.bin",
+   "layout": "[batch, kv_heads, seq, head_dim] post-norm, reference layout",
+   "sha256": "83e919886aafcf7e22e4cae68bf780620dba70b6573370d189fc5ea643551926",
+   "shape": [
+    1,
+    8,
+    7,
+    256
+   ]
+  },
+  "encoder0_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder0_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "367f44e6d3cc770dd4e420fb1fa2f0691e751c1608ade3f05ed703b2f1628af7",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder0_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder0_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "1e472943890e6154b59237f721579bcb73b1ef0fbada147aee03dfcedab4ec7a",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder0_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder0_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "eaf2db18debe44bc5ad1960f8741570b3c82069bbd07cdb1faac933a992428d2",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder0_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder0_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "9c4d41cf65eee4614aeb58d1619e38cc97299ab6d29cadd5d4b2bc8891152e2b",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder10_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder10_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "ba7b0d0ccbbfe308134832aa25d747866983a57ef59be4d73229ea13a55bb13e",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder10_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder10_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "9177e2873c6238c781b5e8d5bc2a5a1c3b0408d23da653be547b11d92be48974",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder10_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder10_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "0e3d55fce8b0d5f531b8fa2e1a4205380cb330c2c4c9964e55fb2717d755f77d",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder10_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder10_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "47c4f518bc1fe2f847362581e91c8cb6ea5e3801ce8bd3dcb85a33f475d28764",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder11_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder11_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "171df8533438f66fc0d7bb9af5c9b3f071a0d404e4a6bfc4a89762f81128e219",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder11_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder11_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "1a74145aa63c706b0162ce1821102cb4b4a83596be9842c9633b4af6e3c7eb62",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder11_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder11_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "408b723c0e0aff837ad80fc728fd37845bf9038c9bc8f64bb35d59c41fe109ff",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder11_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder11_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "0dafdd61fd84fccd5b436e3ff7500697b9ea740445877109ef06d2ffec8b166a",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder12_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder12_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "816e7466d83d9565b611fc6b55246cbaf527eb1972b212b33767118d6d899a42",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder12_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder12_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "5d395f29b7ee2ecd0e08eb0f86966ba0051ab452e0e59c445fa822b5ba3976ae",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder12_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder12_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "6202d5859c0b543e81c4d96d730cf6c17f586523dbebab715af98020c7b56766",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder12_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder12_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "911d5b48ed3e757918929b62bfcba3013344065c75212890c68aa72a473e9d34",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder13_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder13_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "bc24a08fe202e9cf45a8215afb0fda5794598c37dcce0729e46654b5ee1bd57f",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder13_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder13_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "886b70d7ade957a5c98dce37be37256385f0203ed73de9c9ca6e9bd09b7d8aa3",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder13_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder13_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "d3f4a8914aa9929cbe2222cadf593f3060e213a1c68c09ba7e8f27e8dbfe160a",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder13_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder13_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "905fec830b95971bde652a03901c212dc9bec3b910fc409967b100fbfbd228a2",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder14_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder14_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "3e7e8358a585459322ab582aa78e1dfea16c9a5617f9f65f7a2114cdde91ee7f",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder14_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder14_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "fdedd411e59f0c804216b042fc574b318abc8b05482a45072ad121576dab76d5",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder14_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder14_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "b8823d5f37619d188d04f6e8c6fea21ebcc741ee89a33f334da98c5194ae68e7",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder14_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder14_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "526c592871b9489a950d694b3de431b88d452e1f1ac3091c4974ce36a8eaf439",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder15_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder15_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "6b1a4daf783ede3a977f20a7fd43684250d8fd661be183c5bdbd63117d5fbf3b",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder15_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder15_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "6d4812b9001a309de5df365def555d4d9b3cf993858258c23e37e49c0283e282",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder15_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder15_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "145808a4c90a0f4d62f72cc8f3375d38861a9ac17ff476ce65539e72984b6441",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder15_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder15_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "7a147135874dd226bee3d97e60f0fea6173d2bf17e4f95a08c654a5ed4caf611",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder16_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder16_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "ff022e4ae325b971acbed9abd00e19c6e509fb88f2f2e7bf2b206c27dde7ac14",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder16_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder16_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "4927410ef038568906eafe2fffa08938a59f31b6760603c8479347a6a5946ad8",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder16_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder16_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "0e9bf095508a33d2ded8fa40ec99c82cd70451ef0c1f8e5afa34e5138dcbffc8",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder16_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder16_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "16fb8f32d11f431c67e7d1ce552c022021b234982aa25534360ada7c957cecb4",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder17_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder17_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "e939d8488759fa7bc4114dbd1891f66fa932999e5937c659f00072f07490d822",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder17_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder17_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "6bcf558b294651e9190f415137b43185e2c0151f3d591a01cc3b32396e647cca",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder17_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder17_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "46b91ef1d1c607d6b9dd40892441556852391fb627618b677ce7958308528554",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder17_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder17_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "096c3f77677de916f8236880eb192d6964bca52293fb5413b86d5f9800ed2e15",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder18_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder18_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "771b1390d25510908df2fbf5d834a8f417988ed6f404bcb541930b91e867bbee",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder18_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder18_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "6bdbef3a7bacf00deeb69a87aec1d8d6aad3b13dbd65c14801fd333d64870b76",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder18_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder18_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "a18cf152215e35ea5ed90ab32467578ad4be2878ea90b62b9f9cb1c91add82ce",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder18_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder18_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "ef93f4eab5765d1dc599f828afa514bd89150d64afa215e38b569ae7c463cd90",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder19_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder19_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "6deff50654e15c43dd67ca6e9395ba17a6ca4b266ef36d174323f37333ea560c",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder19_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder19_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "1e8a2aa87fe1be1c692bedb16eae9631bb3ebc0c9472ef528ddb53ac37d26fcc",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder19_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder19_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "38785aac90b67b1023bfa77b2f247902153de64a206ebf7029e9ee16210152bc",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder19_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder19_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "3391d3f9a232dfa7fefe7794eb1c3a120bad08a7c80466746ee79e2429c0bfbe",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder1_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder1_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "5dfd24bcb81b2b3f218ddfc448f40d4a9530c17263c29d7439b29d0786523d16",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder1_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder1_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "e3c1288dcf6f21080d79a69198bd178da37c349169ffea1aa591e4ac1d7e0634",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder1_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder1_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "fb146574d6f0072c8db24afa93728eb5a2a0e20630491a543dee8cad24d8fd31",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder1_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder1_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "67cc0126b001a6a1edd6cfe86fc9ff38e99080701e39535b28c3c4445342d807",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder20_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder20_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "38c0c45ed256c013051e8e9d9f1472cd115e479a55c71dabcb3ce221ef74858d",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder20_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder20_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "d9fa6c7eadb094f3cfa964589a3100f8b7134804061b45c46212915578892c5f",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder20_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder20_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "ecb183ca9bbfe22db56579cc8194a4baf212477df09c9e7447c2e18c41e3a1d7",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder20_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder20_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "36c8407d96574bd5df496a43bd9aaa4733978a0f90817ad6b9add63705c6703e",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder21_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder21_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "6023bba5fe3e70c29babeccf792f96fc974808bcb4426046ad449a86086f62c0",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder21_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder21_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "6390aff1f41a6d28611e793ba1f2884e5e256f2e31fd91cf322012d1533cf4a6",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder21_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder21_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "f396d597328146e98141e59a30ab82e4ce94f7374035b479a3f092518a813b17",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder21_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder21_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "d75becbe0becdbc1d848d8918c931ed1cdaedde5ff3a792ba0273d9c3618193e",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder22_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder22_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "01d9098e0e1103d06d12a8360d1b578f6274571bf4e1f1e643a059d9bd0ade13",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder22_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder22_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "be97f528cfa5747bf168373bce13b1f063739fe3b0cba03412bf3fa8fa25d3ee",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder22_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder22_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "1d77c0308f82fd567e288f163275ccd2526cf35137204e51a5b623fc7d8f6aeb",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder22_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder22_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "0259f107f27c99038dadeb9f393fb07778b3baf304b0b9e6ca2fbf9cc8869268",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder23_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder23_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "b02b7011ae851cf0c62e07b16270387019817ed73c852cbea7cf6f078f4e6723",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder23_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder23_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "07850190e04cd06c950fc2354087b5c8f569a15f1a50ea224dcdb8cf36a7fb51",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder23_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder23_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "fc13c73aa0e5ff1bd4be01ca086c2c64ed48a4503706e6708986c51f2c5ac5cf",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder23_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder23_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "f4da5a76a1f69b64ec5a0322a6b8a54314670e0da16467398424af795aec8c5e",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder24_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder24_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "4281a04c713f583fb07d7d2aa3213ca4ecc6b1db8f71cb7e53fefbae6ae5f92b",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder24_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder24_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "cd83d23ef437f8c8939b8d974df357c4b6de4ac250e1e5a0a9a471f572c2b4f8",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder24_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder24_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "243f614d6410e9c9b74d6c97ca4c1814f4c505562aa7c18197b7362367e63a7a",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder24_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder24_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "3bf606bae4ca4b6106ec096dd14c7d82ded9678dd14aa21143a0a83486e418be",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder25_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder25_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "7f586a0be5372429d14b1fc8df59d3622d45fad56be5477b313f96baedc9a1e5",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder25_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder25_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "fb8a65046bcb8728e9ccdc63db0f37fd497d4b77a677a9f1373ca7ddecb289b6",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder25_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder25_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "242c6dcf6528d0e07a82527ffaf51b095501ac7856c99869ed0ef7fda4241c68",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder25_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder25_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "1e94705a35bd2b1fab1fa58209934e126bbd70d63486e002ee0a891b88c7c3ba",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder26_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder26_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "16349557ce143cd85250f81668bbd3caf846904b3a80bdb2f19f70e6cbd52237",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder26_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder26_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "8b2ebcad970d1dcc0230acf6e15efa61ab83ce246d0f69211c5ff530341a02e6",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder26_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder26_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "93de76da74a91ae41b4bb5ab915feca9a9d77d03950d8a49b5ef7281dd0b685f",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder26_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder26_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "86aae7163bc10bb1f4dad67dc6fbb73624e803a4f15e41645c811117cb0acaf4",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder27_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder27_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "5640d1411c414893d7757f9cbfb6f559492b88668dab54fd81d11ebbc4ce42e6",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder27_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder27_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "084223d7cc1bedb2cab4e9a59a203a564aa0c1688d187b638b02cc9f5b20828a",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder27_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder27_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "c955dab366d198c6c4e0810309a967d82ea1e82283a7af45596426b5937b31ac",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder27_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder27_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "aa841db5803300094a15f4012a3e39c622ae7fa1879c72d126f7d02b0fa7b040",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder28_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder28_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "a11f69a783ecd6a68a8c39dc4469be30b4b74deada19e5372b2db37fd0a1a6bd",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder28_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder28_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "297aa48961c32bbc8db7f5cdbd01ed58336569fcfe82cdb66763b3dba8e2ba6f",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder28_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder28_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "178d09f4af3ea22420d5faf17fb9acddd0115fc9a7ec836c2763dedaff62e57d",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder28_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder28_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "3ad8a3db73631fa65b47405483aa3f4ee0d0f60b1446769893ab93ca93da313f",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder29_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder29_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "ee8d4babde0a93f0bc2798bc6d9bc8b170442f81f7076f352cf7b6b74eac383a",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder29_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder29_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "5ce3552a444d1a38761000f7a3dced105467873981353408cd0f0685de64d6d2",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder29_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder29_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "54508e299e080e1a7ae90625927865ccde515c704330551062ca48cbbd63c1a2",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder29_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder29_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "8eb05675d28a2d3f911ef470f88d8bb857943900730b177b87ec047220128f32",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder2_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder2_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "71a2f577a6fafe7664ede3d4718151d3f5f1fc5ee6103b224b6e9a1d782a9cf2",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder2_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder2_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "a18126fa73300876ed59d885827f3f0559426bb7f02ee8b18b789a7a13169318",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder2_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder2_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "89176389467a83fe49f079031eb12fc46d892199862527ff80524a2364e1f574",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder2_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder2_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "19ba5a577abc5ecf8df2ef3fadfcd257e7ce4a5e0679abb61335e0309f6408e6",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder3_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder3_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "da5eaa9b21f227a77e24dec6791b0347a5e8b3a86d23a5f934bdc36b8c47f597",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder3_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder3_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "7ec7f8df8cc99de8704238d4d470e30dd692c947399279f7e45a5b25d0dbb99d",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder3_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder3_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "f96c6ebb035c5ddceb508948694251367525f773b41cd422c57dac8314ad7086",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder3_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder3_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "2620ba8b5086f1089bf7d43ca9ee32e4596d366ba3197e936402e7db0121567f",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder4_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder4_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "4d6fe863d3b399937e3a62981e76e313d7a9d91d7742222a1609b4b29f86c850",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder4_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder4_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "998a2e5c0c8bf0c5e472b1fd0b84904a1b694ec2551bd5ff0e771492737eaec6",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder4_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder4_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "aa78e61ae807ebc901fe3bbdba20de456dd6d7178862740d6be8e39ca591ce6b",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder4_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder4_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "a192b6c261a9fbe68c271b15ee0694b38494c3bbf23503f22d93d496ec0a96d3",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder5_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder5_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "a73dfe683fa25c91728071582d3f276266349c6e05a6e02cb6fbbd9832799157",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder5_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder5_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "9c8a5eabd948f985f8df4f6817cc4a74ced6d48b0c10e190b890fd9880b58581",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder5_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder5_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "b435acaa6f3de7da5620770b5607daa7a2a260de6f3c7fb7d62480eeaf167847",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder5_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder5_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "88eea8a709ce4cd01af2bfb0e8e0e57e8957e117fa9eedd2d50b1a73014cc72f",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder6_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder6_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "3716cc65592e69c8db98b425cd3d85328cb90ee6a419500ab5d91c1044ce33f2",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder6_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder6_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "714c492ed4aac0ceca82f5bfab81d2445b66bd037e9cd1ac7ad24366abaa4ce4",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder6_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder6_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "6b36f4c22936a1f8bd9f3876ad65e079c06dd002091a66d32a2f17fb9943128e",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder6_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder6_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "a69f96b4681c717b2bb5d8c8f96541c100288da5a90bff1465aac838e920268f",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder7_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder7_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "0ee0d64e8c434b0c45b02e15ab65b34828c5699f93d24d820a3efaf59d4a12b1",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder7_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder7_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "11adba02baa8cd053304d22a5c8ffd461b6e213adf907c21346ee98e380acc69",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder7_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder7_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "eecf952a503d3e177de839325b6b2efeaee7dfacb1138047ea435cfed83ef650",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder7_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder7_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "85a870183bed80e9c5595beb52d8cc2046fef683311de18d3d3bab0dd9b61f1a",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder8_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder8_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "439247fd2e9771dd7bf3fc1c2c9b9737dc69291417c2810473bcb98a96dc8816",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder8_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder8_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "8299693c8d9912b9cb0bf27679294a518080ec1830f37215559047c685297c5b",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder8_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder8_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "86922c39c5a6df0e619b412a134e9219fda4c442a97746d944d605cd2a8df92b",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder8_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder8_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "fc3e14557d2506bfa52373b4be42433b60150f48b67a7baf87f21fc9570ec207",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder9_expert_output": {
+   "dtype": "float32-le",
+   "file": "encoder9_expert_output.bin",
+   "layout": "[rows, hidden] MoE expert sum",
+   "sha256": "39f9608a8229ed8977ce25031d85101316078c8bbf38f2ff55b4f7392e085a0a",
+   "shape": [
+    7,
+    2816
+   ]
+  },
+  "encoder9_router_indices": {
+   "dtype": "float32-le",
+   "file": "encoder9_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "51e8c0fc95559f0614922fe294c70aea5cc211bfa8ef2ac64a867abdd3348265",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder9_router_scores": {
+   "dtype": "float32-le",
+   "file": "encoder9_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "3a4c111e679175dac189ac2c19d37f8c213a97db99b5c73840af31d3ae681a43",
+   "shape": [
+    7,
+    128
+   ]
+  },
+  "encoder9_router_weights": {
+   "dtype": "float32-le",
+   "file": "encoder9_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "ff72a6093096cee058d5684255b70505dfeda633cb168375df0811ef7c5c0010",
+   "shape": [
+    7,
+    8
+   ]
+  },
+  "encoder_embedding": {
+   "dtype": "float32-le",
+   "file": "encoder_embedding.bin",
+   "layout": "[batch, seq, hidden] scaled embedding",
+   "sha256": "3a764f9ab5b3ef6d4800657b74f936389c42dfa7c6a7b00bdd4a243c0c753b97",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_last_hidden_direct": {
+   "dtype": "float32-le",
+   "file": "encoder_last_hidden_direct.bin",
+   "layout": "[batch, seq, hidden] post final norm",
+   "sha256": "e9c1f9606abfc13d2a10f9332115114c7ed0c757f9abbc4322a11fa48aa66b29",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_0": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_0.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "24e4dc0319bb109beb4fc240e8f25191eb86fd025939813e2ded8a1709937b5f",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_1": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_1.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "5cacaddb139b549e9b280908e6ee3998dfccb1b8101ea43b31a9d4df51e05965",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_10": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_10.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "90b9f5bd1217e1964e8948c842576add2cda0ef450eb98fd7a8c94df4cb3f487",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_11": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_11.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "38af370b8b255519232c3be2a8979725397585208c332d749cd07d5148e3f140",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_12": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_12.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "a3f6a7068a78bc158da21711cf2f297a632a43db6812eeb9d41ebcafa658ec78",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_13": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_13.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "1aa74718872d34b96671161c4e4702868c4f7a0a19ae103dd10fb0f52ff3c9bf",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_14": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_14.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "dd178e316eef0634b0ef61facd10ad2d8cbb14b824a699dfe8e8fbff5388edfd",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_15": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_15.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "a34a31a2112b14858e63668b23883b78110dc3202d0ff7d95a7db723bfcfb06e",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_16": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_16.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "4fa652df8206576891dc461c24acbcde153da67b9900e6d3948c7e505ae97957",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_17": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_17.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "3b4d95a0d543d269ccfd5bc3d5ea8ba9a4c0e29efae6a22cf621c4d554f7f158",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_18": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_18.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "dbe25fd3a1ca19968b234c81e774735a1ec6ee7a699154ed2ef1004cc3fdb28e",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_19": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_19.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "e5e11f442d14719d1bcd66c181f3e4515aaf0bbe69ea030ff56675b658e2583f",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_2": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_2.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "7d81b797868816587b5fd62b7d01a22efdfd2fae40abe908bdf43d0fc1360f51",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_20": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_20.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "7c6ed03dc35da0cff519000911e5ffff323468c9377d62dac111c0ad0556b437",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_21": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_21.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "9ad5093269843b6645fd2eb6b664f0ee99d4c8f51e5f4869561efccdcec750f4",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_22": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_22.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "2483e857febba9a4b5e50958d8dd1b88c2b19e7228d8272349ed9cf0f50f78fb",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_23": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_23.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "b2f2454894758bbf74c8cf0f402507facf3a8883fb9c17467edaf1b68a4331b1",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_24": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_24.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "8eddfc252c36e7bc2c70919c5da13a24a338518d95f6a92b2c2662b7d5e42e64",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_25": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_25.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "6b884de707e72706ebed85bc5386917359bc279f4b22bc79e2d43118380da497",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_26": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_26.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "6bda20603cbe7e429e8e49dedb215c66bbf5c94a0a3f93d293b76f5427facaa9",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_27": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_27.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "852cf4dc018f2d3b0fd1aad5169e0edc95a50eaae6cbb518f4fafeaa5b5f2d08",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_28": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_28.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "11ed925364363ba1e4a28a675c4513e1816b2ae43583c2b28418be2afb60fe03",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_29": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_29.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "305c0cfb0cae66eb64a7289d274223dff770eeae663f486953155f9fd63d6527",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_3": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_3.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "660e950c8c4604a0a83f57a77670fa50bf9f0d2f2118d28c9bbba4122e9efdb7",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_4": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_4.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "5eb4cb68fe6e3efd39cf31ae223c63de303d7af069b8a3c1188d57f23bcff1f4",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_5": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_5.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "5c6f34f6bde7a497d25af930880913d749c266e6df60487e7c08fadb7de3365e",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_6": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_6.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "4fd5b04aa05eb39cf253f9812ae8275156522a033637af5510902cb32b932340",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_7": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_7.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "b93a685dc765088fc0e7604891a4f026ecbc1233aeed0b491640e83dfdd22121",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_8": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_8.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "7241cd662a20e1fe24df844d91390d9b71ebcb5e4507659b0135b13d5f90baa7",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "encoder_layer_9": {
+   "dtype": "float32-le",
+   "file": "encoder_layer_9.bin",
+   "layout": "[batch, seq, hidden] layer exit",
+   "sha256": "3699e00d7a99aba2efa22b8b86d9408d32d88a79005aae8b2a168d1df0ab5a25",
+   "shape": [
+    1,
+    7,
+    2816
+   ]
+  },
+  "moe0_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe0_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "5d119c6951030848da4b5b0e8f6ba6e5a72b041a404bfff22a9d4c171b39f8c1",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe0_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe0_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "f32bd0c3470e088f5fd6bda3d416a78cf76ab9ee10001e42621beb3b3b4f3f72",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe0_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe0_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "aa6f7733baf9a376c3e72d6ff9a673fd6e70fb825338362a9f19854cd23de42c",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe10_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe10_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "d11a7100ecdc784c83859658e2e6479a95baea80dd334c91a50ec61e39687da0",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe10_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe10_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "06b1fe788830f2a906f3adde211cd62c3f715903f63bdaee89cdc073a2d155d8",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe10_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe10_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "2bd69cf64fe34c6eeffb75879c63c5c34c126171a480932dc28ff6c62864cc47",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe11_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe11_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "c6ebf94998a2c6130161bf9e41a3c7aea30e2c308dcc90e8e7f7a84939cd3a51",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe11_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe11_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "76adfa9493f5db952a65de3376e2e1cbb2d6e21b3f1bd26fd3bb322308ae9484",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe11_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe11_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "819b60bab75b1f0606a2f61819383710163a3093ed2441d8fd536220f2cd52fe",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe12_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe12_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "6ccec39afba110cbbbc9ad6d7ed1f80cc28b2209c9c4c11fcaaa8133dc71f673",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe12_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe12_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "232f650d3969f769e9d128c63509a2baaad16a83df6655839d5d6e072e6dfaa5",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe12_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe12_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "d68fabae44955b8e45492cd194997a0f098591dec7b96ee665c8f90fdde7f129",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe13_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe13_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "dfb122f7eae2aec95a65a4a46b61861d4d86fe7aa2adc98a29e3588574afac88",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe13_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe13_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "b21330a97fe177e20491d9e7163aff0409f997e86dceef722f40266e686bd972",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe13_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe13_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "fa7d3ba1d208f4197deb3df067b55708bbcedc984ab59c991de01a4fb45ac08b",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe14_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe14_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "7f218ed7ba5f785e81e56bc61de5442feb81852b143441bba4c1e093f1a58bf7",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe14_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe14_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "fb6bd2149481984646bf971e4a8882be52b2464c6e6f35c7824c493e54e9042e",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe14_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe14_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "62b402eef8213a5d46612cef1bff026598008fd33cd080fda5c8856ae01c7908",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe15_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe15_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "96144d38091b09da993b42a694c57585f6b4d2994f2f3e0a8a3197ccb065ce14",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe15_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe15_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "ae8bac4599e95c8d4ad680e92d555dfdd1745bb413c30ede76ce69e08f40ff3b",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe15_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe15_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "6d104d3c8f53caedf0d988668e090af93fcb7bb030c66e80aafc3e55fd899d70",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe16_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe16_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "3443dde69d0057d67df11f04c6368f123c00799859569b7d05371988e04e3a41",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe16_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe16_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "8fceebd9d70c8456b73d07eaf95c47b2b06965ae7177acc57e547696afabc872",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe16_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe16_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "f267dfcf70f8d3b90bf6101083578bb72b8f8dc9fed15f2e02c78519e35ed566",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe17_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe17_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "1b35276b1d2bd940fa3d5cf8dd8eda358e2cd40532cbb48c62fe64db7f5784bd",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe17_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe17_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "88eec0d68b8d036340011647dba94369f4afcca1ec2946982a4f9782289cf6d9",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe17_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe17_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "8bcfafd2f634592e0c96ccb021d1f9291b2d82b794fd5761c5cb3489165e60f6",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe18_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe18_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "6545e07c6a1fc34f409a5d76ffa5d0ee48eca50055a7ec673270ceb9fba40493",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe18_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe18_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "35bd675e89aea56cf8ac48990a629d1fa7e3077a0e9124b0e3065dc214472d06",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe18_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe18_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "78d619373515db8757078a71d5e505f3026eb9a49d6bb9888d1d9ed26b63117e",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe19_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe19_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "dc8bc06867a4e7212d6328f84189ec6fb5ae7727e7d9113a728812e307936bb1",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe19_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe19_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "b596716962a6623671708b601c933c03a7a2409ec8d3ab6369981bec5647eaba",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe19_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe19_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "ef1c0205a701c9b0bdbfc8448dd0c27a6a5e44b80a943b62042a7c780e4285a5",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe1_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe1_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "90cf70afb76a5c1a9307746874ebcb51ab6ac9e2bedbd9e46f9cb162b2b106b1",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe1_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe1_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "98eeb56e3906d2fdeb35799de6243745ed88628373ccd5918482e30015b2fb34",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe1_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe1_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "aab21925f65d8e1ced838391f114f2aef04edeb5b2c8dedd99d893362613036f",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe20_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe20_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "cd283805f3fa689fa80d8360109ad45474da7ea7c847cc17e31e0897ca239710",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe20_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe20_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "33b9b754ef9c352b8f196d77dd89c4bb0e961c64905f68a58c6e586a839003e1",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe20_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe20_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "63b19f00c9ed46bfdf9e1a2dc1a319c48db14b6f1ff373e185191b5fa8884408",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe21_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe21_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "78831e9537d1c07bbb3888f47244e5232be7e738b2299bfe33609bc4a0987146",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe21_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe21_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "94c7778fdf5ce9054a8ea36cf363f571f23d471c3dc7afad021cbb696b6621e4",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe21_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe21_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "4f5dd888ec72bf8a3676b7db08db0e818114c46ca3ef25b2f4e30bc9a611007b",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe22_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe22_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "e9104bf9393d1732f5d43297cc2b8727e245691811473bdb7f724082b9849e34",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe22_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe22_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "9b2cee6bdfd3c3f2cf1475ff8c6453d0e056d928bc0c5590a19eaf9bbf578bbd",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe22_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe22_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "bd6ec676228047ea7cf57110739da80e8de175c0516f0fce7bf58f1fd4298a85",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe23_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe23_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "15c2d58cd79bc4b23d47fd568fe7fd056215ce7c35506cafd0481b5bbb554f1a",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe23_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe23_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "983e329ce19e1784f22b4c032e567e9a46b661db527ea00eeba58f732be7badb",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe23_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe23_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "b84b2f71d0190fc1eb657138850f55621ccc5555ab7d7eb5e0d60be950c8045a",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe24_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe24_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "33482b67c91c397406b8cf096c4a41d0dbb665f380e9940bb28d126d5d4a019d",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe24_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe24_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "3084b598108505882c9108c6cb1660aa17c6d36e6ee1cde4a16074fbef87284b",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe24_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe24_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "4824a7f3519779eee0ff58e56fdd55f60dde0220c93288039f7ef2abfcd797a4",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe25_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe25_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "82a24da9e850828cbed0b3b75b0cd9ace3aaa0916360ad7a694b5a7817234a70",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe25_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe25_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "d33f81792b4d41cf071bdf06f6e0296cc9b7123f37b9e8d7c14644bc4356061e",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe25_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe25_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "94e9b84e23814815f02a741b9feeb31af54e2ecc993dc02f0afc7e2564f68944",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe26_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe26_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "a5736122c786bce74e2a0acc80c67c80463c5ddd2ca8857b91661844c81ef93a",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe26_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe26_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "5f172c1fc2b328b33355da21fad3fce5150172f0a2f9649b0759e2fe817cadc2",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe26_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe26_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "80fc06e13db4a1c3c852542d05aee2787b53c6812cd09e6068a753163b5ade75",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe27_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe27_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "a616188b77524fe5be932cbea06e3579fc5e565b0719e5fc72419f47cd134562",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe27_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe27_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "93531c4f5d12138be7b9fa24283885d3673ce721c6d51b1366c22f56e0c60d2a",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe27_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe27_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "5f6037098f46438726670514822b80c5228cac2856bc73799c21c1660897aaf5",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe28_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe28_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "205852ac927759bacb7ff65d793d8f83e06939f4f9017633a966fba7df92522e",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe28_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe28_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "e1899654982c723bee68fcf52f498f9ad31702fb701c18d119aa0117685c788b",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe28_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe28_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "bce0ad9cc2a9f542bbee5cd4b0d5d55cd05e3c2ce6364e928f247ed09fd10cc4",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe29_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe29_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "b002337f778973bcf1c12ebfaaada3e7aeff4d0471f3bcaba3036f3c26c1a470",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe29_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe29_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "83b8bfa808280a9db27082a3b2974c90d6812dfb3551d0d5b57c421d697ec988",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe29_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe29_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "2b05ed8f45302bda3ff09b81534ce8b595fa907d341a051765cec1c51ae6696f",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe2_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe2_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "c9717b6110a11285c28f1ddbce9d7bc71d99b396f0d6a7515d0667ba2facc282",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe2_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe2_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "97caffc1b9bd034c09886b7ccd96db8c17468bc5e4fea167e8ad69e783b5b10a",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe2_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe2_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "9f4efb78885abe753e36ac1fbb170af6d29d56ad8666ea2ed4f4da8e0c756350",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe3_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe3_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "10a2905a9b358f49cbbeceec340cf530e9cfac094b1acbc20544ab06f8edb9b3",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe3_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe3_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "5bfffcfb704e6d2fbe58ffbe6775319fd9094f37b807faabec079fe7366dec6e",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe3_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe3_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "d6d3b9a76a3916c66cf127b07afc692f456c61c3f519e88b48ef73046b45cff0",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe4_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe4_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "41a88425a3d22658662a09fff4ea83e1228b08cc333ae78eb9aec7a182cebe04",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe4_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe4_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "5af11cae7efabde7bbbf20a602a76d5e57dd009cab06687b36ea3830f1f0765b",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe4_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe4_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "e7bdbf13dbcf132986a1a6efce15f1c000a7d849e7fab03633065bb92be26e2b",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe5_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe5_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "ced11fd71960825c1a2057e471b6e853f06c7b3f00f71edc4383d4b81742ad8a",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe5_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe5_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "b35e138902e339a7dd3c4a3952da92d4dbdd60c08f3b76f7a194ad90bc9669da",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe5_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe5_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "8acaa85d70d3fa95dbc3834dcab9eb303e73a417a807f7a1f82e0526ed1c972f",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe6_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe6_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "45ed4fb9609d60e3e2574302ccab8b497452641973e0374b256633996cfa376d",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe6_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe6_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "08c675d8cca2d22e375c3fd2b908d286b0da75b4adaea077af895540aac6b15c",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe6_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe6_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "3637a46706edb959d4962172354cf038304a3f521036404e100a04668287a638",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe7_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe7_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "f4ccae031967ab9946aa300ea1b94b6f4103ce2133a2f410656de01557f7b8e2",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe7_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe7_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "04cd4d31ace14e45d53e9ba30f28731a86d236a7b48ed6188199bd211d33128d",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe7_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe7_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "b4c75514fbdd75887e5b8328e57f0f9948b7d119b4c63de8e1afea650ee59346",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe8_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe8_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "cc910e34c5ced3958414c7228550f17c8acfb4c5a60562dd7112a689d539f039",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe8_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe8_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "ea9e6b1f264127e85613477de6f6bb1d22bad1e123cb3b4670f994a85854f7e9",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe8_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe8_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "280d6636bd1b87c0ee310d1ad261e731ee5bff5e14987db3e825066ff2980fad",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe9_router_indices": {
+   "dtype": "float32-le",
+   "file": "moe9_router_indices.bin",
+   "layout": "[rows, top_k] ids widened to FP32",
+   "sha256": "daebff8e04f700a17e6128204506b358bc85cd1b8a785d0e3c8fb48d115a18c3",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "moe9_router_scores": {
+   "dtype": "float32-le",
+   "file": "moe9_router_scores.bin",
+   "layout": "[rows, num_experts] FP32 probabilities",
+   "sha256": "4dc987989b4dbefc68dce9511c00fd469f88621bc3b26750fdc2b46c014f4c47",
+   "shape": [
+    16,
+    128
+   ]
+  },
+  "moe9_router_weights": {
+   "dtype": "float32-le",
+   "file": "moe9_router_weights.bin",
+   "layout": "[rows, top_k] FP32",
+   "sha256": "4f91b1c701928fd1d61fb9ea87f00bd96a699b2a44438588bd95207558645517",
+   "shape": [
+    16,
+    8
+   ]
+  },
+  "prompt_ids": {
+   "dtype": "float32-le",
+   "file": "prompt_ids.bin",
+   "layout": "[batch, seq] token ids widened to FP32",
+   "sha256": "237534e64705a51c7abe3d9000793969d3063aabb49e1c6d95a323679dc813e4",
+   "shape": [
+    1,
+    7
+   ]
+  },
+  "vision_in_0": {
+   "dtype": "float32-le",
+   "file": "vision_in_0.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "454093796cd8d4e03f12b1edb38a993587a6b7edd09a395bf07c0b6e2cabd5b9",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_1": {
+   "dtype": "float32-le",
+   "file": "vision_in_1.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "3fb1817f21ef18df6955c0de696c9041efefd4081278253f5cf07064c9b62721",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_10": {
+   "dtype": "float32-le",
+   "file": "vision_in_10.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "51654db76b8ffa87987df68d9e9408424a73af1394bc155db7f397258b199ab1",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_11": {
+   "dtype": "float32-le",
+   "file": "vision_in_11.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "abf3512670433495dd33539db21ef96e004ca6847c7603f1f9945ced19254733",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_12": {
+   "dtype": "float32-le",
+   "file": "vision_in_12.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "7c431be4be9586f21cf469d1a318399eae891c0453e40a7a8f5ca282cafa5c60",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_13": {
+   "dtype": "float32-le",
+   "file": "vision_in_13.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "4247f930846e72cf01141fa34030f81b11ba41143276ee9cc05653446aecd591",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_14": {
+   "dtype": "float32-le",
+   "file": "vision_in_14.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "fe47d4c3ded8c38a54e41652a7ccda155193d2820cb1a39c5d91f55526a80a1a",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_15": {
+   "dtype": "float32-le",
+   "file": "vision_in_15.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "7ae26b91a5971f0c78a1aacfb20dc9c41a87f69618f07472ac39d5e9304aba4c",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_16": {
+   "dtype": "float32-le",
+   "file": "vision_in_16.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "ec7fae2bec93cf2839ec2c931c46db209d70187f03a008fdace926826a0eb1b6",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_17": {
+   "dtype": "float32-le",
+   "file": "vision_in_17.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "46f02ebf763180d4d935ffcdf9579eab0d631623a44acc3db4ce7084f079b96c",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_18": {
+   "dtype": "float32-le",
+   "file": "vision_in_18.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "c571d0420283aa3aa7d4ce3294b90d9d92572cd20814d0d807c85e9711948f19",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_19": {
+   "dtype": "float32-le",
+   "file": "vision_in_19.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "a230bb0dc4fe6b03a1f69324822cc88753f2789694381261b3fb5fb2564445b8",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_2": {
+   "dtype": "float32-le",
+   "file": "vision_in_2.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "153d1a2685d9357f89ce7b6d7df75bb97b70783036e606d592316eded3ee0216",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_20": {
+   "dtype": "float32-le",
+   "file": "vision_in_20.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "9b051c11c31d04307d6651d815f79c6933435ff77771905449d0f2ce78560db5",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_21": {
+   "dtype": "float32-le",
+   "file": "vision_in_21.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "20fbc67aa4c2a72926026c5598efd1c4700a246bc89ad5cfa5feb2ce764f362d",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_22": {
+   "dtype": "float32-le",
+   "file": "vision_in_22.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "a3e3bdb2ea935aa1811b774dadb5b16c8482a8d39a0c4a8709c42d45dcfffe4a",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_23": {
+   "dtype": "float32-le",
+   "file": "vision_in_23.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "1ca40e2093cce554a33640ad1d1e19bb859b82821e158979f7196994fae57be2",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_24": {
+   "dtype": "float32-le",
+   "file": "vision_in_24.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "1f924a6a78531b309bf183cb2b4ad1cfade956b7a887206bdffef37433e9fd00",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_25": {
+   "dtype": "float32-le",
+   "file": "vision_in_25.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "1192dbe80d5f4902aeac0e8d0829e71080578764d1ac4af1e6ff2ae504fb62c5",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_26": {
+   "dtype": "float32-le",
+   "file": "vision_in_26.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "957d97f7af3782bdc36064fe40143f3cbdcbeefa01b085ac09eca0dba37978a6",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_3": {
+   "dtype": "float32-le",
+   "file": "vision_in_3.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "841240f4fe7e7431e6926002f9de55d0251b6acbba8ff1287589d584a5e3d72c",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_4": {
+   "dtype": "float32-le",
+   "file": "vision_in_4.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "8a3dd7228383b033a72dd0b4a3b119c94d4da8054d354675fcfd9ad168296e0f",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_5": {
+   "dtype": "float32-le",
+   "file": "vision_in_5.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "1ad35d72449b8f1ccf55787cc61b17843cf55b82084aa8ccd7bfd384a702c1c6",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_6": {
+   "dtype": "float32-le",
+   "file": "vision_in_6.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "a7d75011396da5c2670c0ee3e095867ed0f34edff0f396de056a58e9bedf67cd",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_7": {
+   "dtype": "float32-le",
+   "file": "vision_in_7.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "ca36ac227545724daeb0df1e0353f63d86ccff3983a068211eb5f8e2e277e11f",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_8": {
+   "dtype": "float32-le",
+   "file": "vision_in_8.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "393a92fe6ccbfa8e413af8659c301539b8fb7fa93b3d1478b70eb538330f2ec8",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_in_9": {
+   "dtype": "float32-le",
+   "file": "vision_in_9.bin",
+   "layout": "[batch, patches, hidden] layer entry",
+   "sha256": "3fb87770db0252e3af73798f3b7083ac9c08ed1fdf063d40b36a29ddea3311f3",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_last_hidden_direct": {
+   "dtype": "float32-le",
+   "file": "vision_last_hidden_direct.bin",
+   "layout": "[batch, pooled, hidden] standardized",
+   "sha256": "16b06a60e81117f9f810a4b0e63f8c22cf355e16a28c92c6b4b0271aaf406f41",
+   "shape": [
+    1,
+    1152
+   ]
+  },
+  "vision_layer_0": {
+   "dtype": "float32-le",
+   "file": "vision_layer_0.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "3fb1817f21ef18df6955c0de696c9041efefd4081278253f5cf07064c9b62721",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_1": {
+   "dtype": "float32-le",
+   "file": "vision_layer_1.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "153d1a2685d9357f89ce7b6d7df75bb97b70783036e606d592316eded3ee0216",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_10": {
+   "dtype": "float32-le",
+   "file": "vision_layer_10.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "abf3512670433495dd33539db21ef96e004ca6847c7603f1f9945ced19254733",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_11": {
+   "dtype": "float32-le",
+   "file": "vision_layer_11.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "7c431be4be9586f21cf469d1a318399eae891c0453e40a7a8f5ca282cafa5c60",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_12": {
+   "dtype": "float32-le",
+   "file": "vision_layer_12.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "4247f930846e72cf01141fa34030f81b11ba41143276ee9cc05653446aecd591",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_13": {
+   "dtype": "float32-le",
+   "file": "vision_layer_13.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "fe47d4c3ded8c38a54e41652a7ccda155193d2820cb1a39c5d91f55526a80a1a",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_14": {
+   "dtype": "float32-le",
+   "file": "vision_layer_14.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "7ae26b91a5971f0c78a1aacfb20dc9c41a87f69618f07472ac39d5e9304aba4c",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_15": {
+   "dtype": "float32-le",
+   "file": "vision_layer_15.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "ec7fae2bec93cf2839ec2c931c46db209d70187f03a008fdace926826a0eb1b6",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_16": {
+   "dtype": "float32-le",
+   "file": "vision_layer_16.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "46f02ebf763180d4d935ffcdf9579eab0d631623a44acc3db4ce7084f079b96c",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_17": {
+   "dtype": "float32-le",
+   "file": "vision_layer_17.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "c571d0420283aa3aa7d4ce3294b90d9d92572cd20814d0d807c85e9711948f19",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_18": {
+   "dtype": "float32-le",
+   "file": "vision_layer_18.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "a230bb0dc4fe6b03a1f69324822cc88753f2789694381261b3fb5fb2564445b8",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_19": {
+   "dtype": "float32-le",
+   "file": "vision_layer_19.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "9b051c11c31d04307d6651d815f79c6933435ff77771905449d0f2ce78560db5",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_2": {
+   "dtype": "float32-le",
+   "file": "vision_layer_2.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "841240f4fe7e7431e6926002f9de55d0251b6acbba8ff1287589d584a5e3d72c",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_20": {
+   "dtype": "float32-le",
+   "file": "vision_layer_20.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "20fbc67aa4c2a72926026c5598efd1c4700a246bc89ad5cfa5feb2ce764f362d",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_21": {
+   "dtype": "float32-le",
+   "file": "vision_layer_21.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "a3e3bdb2ea935aa1811b774dadb5b16c8482a8d39a0c4a8709c42d45dcfffe4a",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_22": {
+   "dtype": "float32-le",
+   "file": "vision_layer_22.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "1ca40e2093cce554a33640ad1d1e19bb859b82821e158979f7196994fae57be2",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_23": {
+   "dtype": "float32-le",
+   "file": "vision_layer_23.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "1f924a6a78531b309bf183cb2b4ad1cfade956b7a887206bdffef37433e9fd00",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_24": {
+   "dtype": "float32-le",
+   "file": "vision_layer_24.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "1192dbe80d5f4902aeac0e8d0829e71080578764d1ac4af1e6ff2ae504fb62c5",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_25": {
+   "dtype": "float32-le",
+   "file": "vision_layer_25.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "957d97f7af3782bdc36064fe40143f3cbdcbeefa01b085ac09eca0dba37978a6",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_26": {
+   "dtype": "float32-le",
+   "file": "vision_layer_26.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "59f21ada21cd236d4cd7427b3d098d1a5dd23ce051770841ef1d25f669f2b30a",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_3": {
+   "dtype": "float32-le",
+   "file": "vision_layer_3.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "8a3dd7228383b033a72dd0b4a3b119c94d4da8054d354675fcfd9ad168296e0f",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_4": {
+   "dtype": "float32-le",
+   "file": "vision_layer_4.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "1ad35d72449b8f1ccf55787cc61b17843cf55b82084aa8ccd7bfd384a702c1c6",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_5": {
+   "dtype": "float32-le",
+   "file": "vision_layer_5.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "a7d75011396da5c2670c0ee3e095867ed0f34edff0f396de056a58e9bedf67cd",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_6": {
+   "dtype": "float32-le",
+   "file": "vision_layer_6.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "ca36ac227545724daeb0df1e0353f63d86ccff3983a068211eb5f8e2e277e11f",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_7": {
+   "dtype": "float32-le",
+   "file": "vision_layer_7.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "393a92fe6ccbfa8e413af8659c301539b8fb7fa93b3d1478b70eb538330f2ec8",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_8": {
+   "dtype": "float32-le",
+   "file": "vision_layer_8.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "3fb87770db0252e3af73798f3b7083ac9c08ed1fdf063d40b36a29ddea3311f3",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_layer_9": {
+   "dtype": "float32-le",
+   "file": "vision_layer_9.bin",
+   "layout": "[batch, patches, hidden] layer exit",
+   "sha256": "51654db76b8ffa87987df68d9e9408424a73af1394bc155db7f397258b199ab1",
+   "shape": [
+    1,
+    9,
+    1152
+   ]
+  },
+  "vision_pixel_position_ids": {
+   "dtype": "float32-le",
+   "file": "vision_pixel_position_ids.bin",
+   "layout": "[batch, patches, 2] (x, y), x-major 3x3",
+   "sha256": "b1a325b1069bd1ee2098d17fc5dbb3250c287ac6350c723f347faa7c27d4ce9c",
+   "shape": [
+    1,
+    9,
+    2
+   ]
+  },
+  "vision_pixel_values": {
+   "dtype": "float32-le",
+   "file": "vision_pixel_values.bin",
+   "layout": "[batch, patches, patch_pixels] (2(v-0.5) applied downstream)",
+   "sha256": "d25d1265dc485e7334a7adb193619dcbf9e84a87d9a64bef378f4cfb937ef841",
+   "shape": [
+    1,
+    9,
+    768
+   ]
+  }
+ },
+ "checkpoint": {
+  "config_sha256": "13b11d2fe87302cc2332c64eb9eb4ac305d9b8a123ffe9c5cb5b1920fc70c506",
+  "index_sha256": "6e33e8465d55fe6c7bc0a5453c7a4b341e6467d032c6ded82aaf439f61dac69a",
+  "revision_pinned": "cd40195554d3cfcb56f34b9adfb66efc790ed5b6",
+  "root": "/tmp/opencode/m10/checkpoint"
+ },
+ "command": "gen_reference.py --checkpoint /tmp/opencode/m10/checkpoint --golden /tmp/opencode/m10/golden_eager --layers /tmp/opencode/m10/golden_layers --out /tmp/m10-reference/run-2026-11-25",
+ "elapsed_seconds": 5.4,
+ "environment": {
+  "cpu_model": "AMD Ryzen 9 7950X3D 16-Core Processor",
+  "cuda_visible_devices": "",
+  "libc": "glibc 2.39",
+  "numpy": "2.5.5",
+  "omp_num_threads": "unset",
+  "platform": "Linux-6.18.58.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "torch": "2.15.0+cpu",
+  "torch_num_threads": 8,
+  "transformers": "5.24.0.dev0",
+  "transformers_commit_pinned": "671aa77576266f41f33f9c28e2d824bfd1b1b63c",
+  "upstream_module_sha256": {
+   "configuration_diffusion_gemma.py": "53d427f95c248c25878870d31f8a13da3b08dc900eee89e6345d62187e5f7f72",
+   "configuration_gemma4.py": "26cc84fa1d9685984e02d0dc39b4ed0c3297cdc9925c58c7b1e590d5af9f7eeb",
+   "generation_diffusion_gemma.py": "82c57822f9acfdb41bdf16bb814a1e74e5f3efd5607cfd2a59e363e947adce76",
+   "modeling_diffusion_gemma.py": "8bc5f5cff6e43d0ee4178fa9aae657437894dc8511bf118bfe90f4676b4db846",
+   "modeling_gemma4.py": "d1d223937f328cba90a6dca7c150c61a23ce19458e4d3cd5d8f180a7b10782c2"
+  }
+ },
+ "gate_failures": [],
+ "generated_at": "2026-11-25T06:09:20+0100",
+ "golden_gates": [
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_0 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder0_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder0_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder0_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder0_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_0_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_0_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_1 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder1_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder1_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder1_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder1_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_1_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_1_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_2 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder2_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder2_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder2_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder2_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_2_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_2_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_3 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder3_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder3_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder3_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder3_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_3_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_3_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_4 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder4_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder4_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder4_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder4_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_4_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_4_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_5 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder5_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder5_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder5_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder5_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_5_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_5_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_6 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder6_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder6_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder6_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder6_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_6_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_6_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_7 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder7_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder7_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder7_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder7_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_7_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_7_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_8 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder8_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder8_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder8_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder8_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_8_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_8_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_9 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder9_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder9_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder9_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder9_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_9_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_9_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_10 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder10_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder10_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder10_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder10_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_10_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_10_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_11 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder11_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder11_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder11_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder11_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_11_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_11_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_12 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder12_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder12_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder12_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder12_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_12_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_12_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_13 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder13_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder13_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder13_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder13_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_13_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_13_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_14 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder14_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder14_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder14_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder14_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_14_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_14_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_15 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder15_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder15_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder15_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder15_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_15_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_15_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_16 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder16_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder16_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder16_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder16_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_16_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_16_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_17 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder17_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder17_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder17_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder17_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_17_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_17_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_18 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder18_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder18_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder18_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder18_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_18_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_18_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_19 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder19_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder19_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder19_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder19_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_19_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_19_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_20 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder20_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder20_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder20_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder20_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_20_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_20_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_21 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder21_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder21_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder21_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder21_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_21_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_21_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_22 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder22_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder22_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder22_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder22_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_22_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_22_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_23 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder23_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder23_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder23_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder23_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_23_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_23_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_24 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder24_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder24_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder24_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder24_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_24_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_24_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_25 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder25_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder25_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder25_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder25_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_25_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_25_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_26 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder26_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder26_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder26_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder26_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_26_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_26_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_27 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder27_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder27_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder27_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder27_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_27_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_27_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_28 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder28_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder28_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder28_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder28_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_28_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_28_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_layer_29 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder29_router_scores vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder29_router_weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder29_router_indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder29_expert_output vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_29_keys vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_kv_29_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_0 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_1 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_2 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_3 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_4 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_5 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_6 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_7 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_8 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_9 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_10 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_11 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_12 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_13 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_14 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_15 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_16 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_17 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_18 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_19 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_20 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_21 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_22 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_23 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_24 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_25 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_layer_26 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_0 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_1 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_2 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_3 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_4 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_5 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_6 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_7 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_8 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_9 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_10 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_11 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_12 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_13 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_14 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_15 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_16 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_17 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_18 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_19 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_20 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_21 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_22 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_23 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_24 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_25 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_26 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_27 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_28 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_layer_29 vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "prompt_ids vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "canvas0_direct vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_pixel_values vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_pixel_position_ids vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_embedding vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder_last_hidden_direct vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_last_hidden_direct vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "embed_vision_output_direct vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_embedding vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_last_hidden0_direct vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "decoder_logits0_direct vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "moe0 router logits vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "moe0 topk weights vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "moe0 topk indices vs golden"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_0 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_1 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_2 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_3 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_4 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_5 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_6 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_7 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_8 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_9 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_10 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_11 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_12 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_13 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_14 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_15 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_16 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_17 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_18 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_19 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_20 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_21 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_22 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_23 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_24 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_25 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_26 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_27 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_28 vs golden_layers"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_29 vs golden_layers"
+  }
+ ],
+ "internal_checks": [
+  {
+   "bit_identical": true,
+   "check": "enc_in_1 == encoder_layer_0"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_2 == encoder_layer_1"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_3 == encoder_layer_2"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_4 == encoder_layer_3"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_5 == encoder_layer_4"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_6 == encoder_layer_5"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_7 == encoder_layer_6"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_8 == encoder_layer_7"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_9 == encoder_layer_8"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_10 == encoder_layer_9"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_11 == encoder_layer_10"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_12 == encoder_layer_11"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_13 == encoder_layer_12"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_14 == encoder_layer_13"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_15 == encoder_layer_14"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_16 == encoder_layer_15"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_17 == encoder_layer_16"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_18 == encoder_layer_17"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_19 == encoder_layer_18"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_20 == encoder_layer_19"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_21 == encoder_layer_20"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_22 == encoder_layer_21"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_23 == encoder_layer_22"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_24 == encoder_layer_23"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_25 == encoder_layer_24"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_26 == encoder_layer_25"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_27 == encoder_layer_26"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_28 == encoder_layer_27"
+  },
+  {
+   "bit_identical": true,
+   "check": "enc_in_29 == encoder_layer_28"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_1 == vision_layer_0"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_2 == vision_layer_1"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_3 == vision_layer_2"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_4 == vision_layer_3"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_5 == vision_layer_4"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_6 == vision_layer_5"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_7 == vision_layer_6"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_8 == vision_layer_7"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_9 == vision_layer_8"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_10 == vision_layer_9"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_11 == vision_layer_10"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_12 == vision_layer_11"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_13 == vision_layer_12"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_14 == vision_layer_13"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_15 == vision_layer_14"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_16 == vision_layer_15"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_17 == vision_layer_16"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_18 == vision_layer_17"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_19 == vision_layer_18"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_20 == vision_layer_19"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_21 == vision_layer_20"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_22 == vision_layer_21"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_23 == vision_layer_22"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_24 == vision_layer_23"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_25 == vision_layer_24"
+  },
+  {
+   "bit_identical": true,
+   "check": "vision_in_26 == vision_layer_25"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_1 == decoder_layer_0"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_2 == decoder_layer_1"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_3 == decoder_layer_2"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_4 == decoder_layer_3"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_5 == decoder_layer_4"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_6 == decoder_layer_5"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_7 == decoder_layer_6"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_8 == decoder_layer_7"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_9 == decoder_layer_8"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_10 == decoder_layer_9"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_11 == decoder_layer_10"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_12 == decoder_layer_11"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_13 == decoder_layer_12"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_14 == decoder_layer_13"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_15 == decoder_layer_14"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_16 == decoder_layer_15"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_17 == decoder_layer_16"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_18 == decoder_layer_17"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_19 == decoder_layer_18"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_20 == decoder_layer_19"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_21 == decoder_layer_20"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_22 == decoder_layer_21"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_23 == decoder_layer_22"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_24 == decoder_layer_23"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_25 == decoder_layer_24"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_26 == decoder_layer_25"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_27 == decoder_layer_26"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_28 == decoder_layer_27"
+  },
+  {
+   "bit_identical": true,
+   "check": "dec_in_29 == decoder_layer_28"
+  },
+  {
+   "bit_identical": true,
+   "check": "encoder KV prefix stays 7 rows through the decoder pass (no canvas prefixing)"
+  }
+ ],
+ "scenario": {
+  "attn_implementation": "eager",
+  "cache_rows_at_decoder_entry": {
+   "0": 7,
+   "1": 7,
+   "2": 7,
+   "3": 7,
+   "4": 7,
+   "5": 7,
+   "6": 7,
+   "7": 7,
+   "8": 7,
+   "9": 7,
+   "10": 7,
+   "11": 7,
+   "12": 7,
+   "13": 7,
+   "14": 7,
+   "15": 7,
+   "16": 7,
+   "17": 7,
+   "18": 7,
+   "19": 7,
+   "20": 7,
+   "21": 7,
+   "22": 7,
+   "23": 7,
+   "24": 7,
+   "25": 7,
+   "26": 7,
+   "27": 7,
+   "28": 7,
+   "29": 7
+  },
+  "canvas_seed": 42,
+  "canvas_tokens": 16,
+  "decoder_positions": "arange(7,23)",
+  "decoder_prefix_kv": "none (step 0; the decoder pass never mutates the cache rows)",
+  "dtype": "bfloat16",
+  "encoder_prefix_len": 7,
+  "experts_implementation": "eager",
+  "final_logit_softcapping": 30.0,
+  "pixel_seed": 1234,
+  "prompt_text": "What is the capital of France?",
+  "prompt_tokens": 7,
+  "top_k_experts": 8,
+  "vision_grid": "3x3, x-major",
+  "vision_patches": 9
+ },
+ "schema": "claymore-m10-reference/1"
+}
