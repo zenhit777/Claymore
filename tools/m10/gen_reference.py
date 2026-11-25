@@ -450,7 +450,7 @@ def main() -> int:
     manifest_text = json.dumps(manifest, indent=1, sort_keys=True)
     (out / "manifest.json").write_text(manifest_text + "\n")
     (out / "manifest.sha256").write_text(
-        f"{hashlib.sha256((manifest_text + chr(10)).encode())}  manifest.json\n"
+        f"{hashlib.sha256((manifest_text + chr(10)).encode()).hexdigest()}  manifest.json\n"
     )
 
     print(f"artifacts={len(saver.manifest)} internal_ok={len(internal) - sum(0 if c['bit_identical'] else 1 for c in internal)}/{len(internal)} golden_gates={len(gates)}", flush=True)
