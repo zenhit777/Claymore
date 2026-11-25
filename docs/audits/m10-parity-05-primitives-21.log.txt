@@ -1,0 +1,78 @@
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+   Compiling claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+   Compiling claymore-memory v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-memory)
+    Finished `release` profile [optimized] target(s) in 3.25s
+     Running tests/hardware_m10_primitives.rs (target/release/build/claymore-memory/d1a401ee4cb6bdb4/out/hardware_m10_primitives-d1a401ee4cb6bdb4)
+
+running 21 tests
+test hw_m10_01_linear_f32_matches_cpu ... HW-M10 linear f32: n=91 max_abs=0e0
+ok
+test hw_m10_02_linear_bf16_matches_cpu_within_one_ulp ... HW-M10 linear bf16: n=45 max_ulp=0
+ok
+test hw_m10_03_rotary_f32_and_bf16_match_cpu ... HW-M10 rotary f32: n=320 max_abs=0e0
+HW-M10 rotary bf16: n=320 max_ulp=0
+ok
+test hw_m10_04_attention_f32_masked_and_unmasked_match_cpu ... HW-M10 attention f32 masked=false: n=192 max_abs=0e0
+HW-M10 attention f32 masked=true: n=192 max_abs=0e0
+ok
+test hw_m10_05_attention_bf16_within_two_ulp ... HW-M10 attention bf16: n=128 max_ulp=0
+ok
+test hw_m10_06_soft_cap_f32_and_bf16_match_cpu ... HW-M10 soft_cap f32: n=72 max_abs=0e0
+HW-M10 soft_cap bf16: n=72 max_ulp=0
+ok
+test hw_m10_07_dispatch_is_exact_on_dtype_and_signature ... ok
+test hw_m10_08_scale_f32_and_bf16_match_cpu ... HW-M10 scale f32 scalar: n=24 max_abs=0e0
+HW-M10 scale f32 column: n=24 max_abs=0e0
+HW-M10 scale bf16 scalar: n=24 max_ulp=0
+HW-M10 scale bf16 column: n=24 max_ulp=0
+ok
+test hw_m10_09_real_weight_decoder_layer_subgraph_matches_cpu ... skipping: CLAYMORE_M10_CHECKPOINT is not set
+ok
+test hw_m10_10_hard_budget_is_enforced_before_device_allocation ... HW-M10 in-budget linear: n=131072 max_ulp=0
+HW-M10 pressure: hard=1 MiB over_ceiling_request=refused over_ceiling_op=refused in_budget_op=ok vram_total=34162016256 vram_free=32425115648
+ok
+test hw_m10_10_widen_bf16_is_bit_exact ... HW-M10 widen bf16->f32: n=45 exact
+ok
+test hw_m10_11_in_flight_m10_launch_protects_its_allocations ... HW-M10 in-flight guard: 4 guarded allocations protected, eviction blocked while pending, allowed after completion
+ok
+test hw_m10_11_router_top_k_matches_cpu ... HW-M10 router_top_k f32: n=32 max_abs=0e0
+HW-M10 router_top_k pinned row: n=16 max_abs=0e0
+ok
+test hw_m10_12_gelu_mul_up_f32_and_bf16_match_cpu ... HW-M10 gelu_mul_up f32: n=120 max_abs=0e0
+HW-M10 gelu_mul_up bf16: n=120 max_ulp=0
+ok
+test hw_m10_12_repeated_m10_launches_are_bit_exact ... HW-M10 repeated attention 0: n=262144 max_abs=0e0 bound=3.90625e-3 rms=0e0 max_ulp=0
+HW-M10 repeated attention 1: n=262144 max_abs=0e0 bound=3.90625e-3 rms=0e0 max_ulp=0
+HW-M10 repeated attention 2: n=262144 max_abs=0e0 bound=3.90625e-3 rms=0e0 max_ulp=0
+HW-M10 repeated attention 3: n=262144 max_abs=0e0 bound=3.90625e-3 rms=0e0 max_ulp=0
+HW-M10 repeated attention 4: n=262144 max_abs=0e0 bound=3.90625e-3 rms=0e0 max_ulp=0
+HW-M10 repetition: 5 launches bit-identical, accounting returned to baseline each cycle, peak=1572864 bytes
+ok
+test hw_m10_13_gather_rows_f32_and_bf16_are_exact ... HW-M10 gather_rows: exact on f32 and bf16
+ok
+test hw_m10_14_scatter_add_f32_and_bf16_match_cpu_within_derived_bounds ... HW-M10 scatter_add f32: n=30 max_abs=0e0
+HW-M10 scatter_add bf16: n=30 max_ulp=0
+ok
+test hw_m10_15_embed_gather_f32_and_bf16_match_cpu ... HW-M10 embed_gather f32: n=32 max_abs=0e0
+HW-M10 embed_gather bf16: n=32 max_ulp=0
+ok
+test hw_m10_16_row_mask_f32_and_bf16_are_exact ... HW-M10 row_mask f32: exact
+HW-M10 row_mask bf16: masked rows zeroed
+ok
+test hw_m10_17_scale_bias_f32_and_bf16_match_cpu ... HW-M10 scale_bias f32: n=35 max_abs=0e0
+HW-M10 scale_bias bf16: n=35 max_ulp=0
+ok
+test hw_m10_18_scale_scalar_f32_and_bf16_match_cpu ... HW-M10 scale_scalar f32: n=35 max_abs=0e0
+HW-M10 scale_scalar bf16: n=35 max_ulp=0
+ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.10s
+

@@ -842,6 +842,20 @@ du routeur (les experts sélectionnés) est **exactement** la même qu'en CPU : 
 CUDA compose la sémantique MoE épinglée comme la référence CPU. Le rouge est donc une
 **limite de reproductibilité de la chaîne BF16**, pas un défaut d'opération.
 
+> **⚠ Conclusion partiellement invalidée le 25 novembre 2026.** La phrase
+> ci-dessus est exacte sur la dérive **CPU ↔ dorée eager**, qui subsiste ; elle est
+> **fausse** sur la dérive **CUDA ↔ CPU**. Cette dernière n'était pas une limite de
+> reproductibilité BF16 mais **cinq défauts d'opération** dans les kernels
+> (exponentielle approchée `ex2.approx.ftz.f32`, réductions en arbre contre
+> réduction séquentielle CPU, réciproque multipliée au lieu de la division,
+> `powf(-0.5)` contre `1/sqrt`, accumulation atomique non déterministe). Corrigés,
+> ils donnent un accord CUDA ↔ CPU **bit exact** (`0,000000 / 0,000000` sur la
+> sortie de l'encodeur de 30 couches et sur les 6 étapes de la couche 0), sur la
+> même carte et le même checkpoint. Voir
+> [m10-cuda-cpu-parity-fix.md](m10-cuda-cpu-parity-fix.md) pour la localisation,
+> le correctif et les quatre runs d'attribution. Les tableaux du présent §16.3.3.4
+> décrivent l'état **avant** correction.
+
 ##### 16.3.3.5 Verdict de la tâche 3/3
 
 | Test | Verdict | Nature |
