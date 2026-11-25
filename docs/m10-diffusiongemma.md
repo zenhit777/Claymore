@@ -319,3 +319,15 @@ nvcc -arch=compute_120 -code=compute_120 -O3 -ptx \
 ```
 
 Les tests matériels de la suite M10 nécessitent le checkpoint épinglé ; sans `CLAYMORE_M10_CHECKPOINT`, le test à poids réels s'arrête explicitement sur un saut déclaré plutôt que de simuler un succès.
+
+
+## État normatif après verdict architecte du 25 novembre 2026
+
+Cette section prévaut sur les formulations historiques contradictoires conservées dans les journaux et rapports de campagnes antérieurs.
+
+- **PR #40** : ouverte, non fusionnée ; verdict **VALIDÉE SOUS RÉSERVES** sur le SHA `24cb8dd8731fb767574204b3723cbaa2ae6030b0`. La CI GitHub Actions sur cette tête est verte (4/4 jobs).
+- **Génération réelle** : déjà démontrée sur RTX 5090 le 24 novembre : canvas 256, 48 étapes, 256/256 positions acceptées, pic 24 831 Mio. Ne pas répéter cette revendication comme un travail encore à développer.
+- **Contrat numérique** : appliquer D1/D2 de `audits/m10-architect-decisions.md`. Le bisect encodeur à entrée dorée est contractuel (210/210 lignes, top-8 exact, ≤ 4 pas BF16). Les comparaisons de chaîne sont des mesures de suivi, pas des gates absolus. Les dorées ne sont ni modifiées ni ré-épinglées.
+- **Travaux CPU-only restant à réaliser avant la campagne GPU** : (1) produire et versionner la procédure reproductible de génération/validation des entrées de référence par couche ; (2) ajouter les bisects à entrée dorée pour les 27 couches de vision et les couches du décodeur, avec états/cache requis ; (3) fixer les bornes D1 uniquement après mesure ; (4) exécuter réellement les tests `golden_cpu` et les trois bisects avec checkpoint et artefacts présents ; (5) publier logs, hashes, commandes et rapport. Ces tâches n'utilisent pas la RTX 5090 et doivent être traitées en premier.
+- **Travail réservé à l'agent matériel** : après gel du code et des sources/PTX, rejouer sur RTX 5090 les tests CUDA↔CPU du décodeur et des logits, puis les tests matériels et la génération complète si le protocole final l'exige. Toute modification `.cu`/`.cuh`/PTX impose régénération, provenance mise à jour et nouveau rejeu matériel.
+- **Pas de merge automatique** : la fusion de #40 reste une décision distincte.
