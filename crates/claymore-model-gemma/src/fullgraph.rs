@@ -617,7 +617,51 @@ pub fn decoder_forward_traced(
     inputs = rms_norm_unscaled(host, &inputs, eps);
     let prefix_len = cache.seq_len();
     let positions: Vec<usize> = (prefix_len..prefix_len + canvas_len).collect();
-    for layer in 0..text.num_hidden_layers.unwrap() {
+    let inputs = decoder_forward_range(
+        host,
+        ckpt,
+        cfg,
+        &inputs,
+        cache,
+        &positions,
+        0..text.num_hidden_layers.unwrap(),
+        trace,
+        layer_trace,
+        stages,
+    );
+    rms_norm(
+        host,
+        &inputs,
+        &tensor_of(host, ckpt, "model.decoder.norm.weight"),
+        eps,
+    )
+}
+
+/// Range runner over decoder layers shared by [`decoder_forward_traced`] and
+/// the CPU golden-bisect injection point [`decoder_forward_traced_from_hidden`].
+/// It starts from an injected BF16 `[rows, hidden]` state, runs exactly
+/// `layers`, and returns the post-layer state **without** the trailing
+/// `model.decoder.norm` — the same convention as
+/// [`encoder_forward_traced_from_hidden`]. The layer math is the one
+/// [`decoder_forward_traced`] runs; nothing here duplicates it.
+#[allow(clippy::too_many_arguments)]
+fn decoder_forward_range(
+    host: &Host,
+    ckpt: &Checkpoint,
+    cfg: &GemmaModelConfig,
+    start: &Tensor,
+    cache: &mut crate::graph::KvCache,
+    positions: &[usize],
+    layers: std::ops::Range<usize>,
+    trace: &mut Vec<(Vec<f32>, Vec<f32>, Vec<f32>)>,
+    layer_trace: &mut Vec<Tensor>,
+    stages: &mut Vec<Tensor>,
+) -> Tensor {
+    let text = cfg.text_config.as_ref().unwrap();
+    let hidden = text.hidden_size.unwrap();
+    let eps = text.rms_norm_eps.unwrap_or(1e-6);
+    let mut inputs = clone_tensor(host, start);
+    for layer in layers {
         let global = text
             .layer_types
             .get(layer)
@@ -651,7 +695,7 @@ pub fn decoder_forward_traced(
             eps,
         );
         let attn_out = attention_block(
-            host, ckpt, "decoder", layer, &normed, cache, &positions, head_dim, heads, kv_heads,
+            host, ckpt, "decoder", layer, &normed, cache, positions, head_dim, heads, kv_heads,
             rope, partial, sliding, false, eps, false,
         );
         let post = rms_norm(
@@ -798,11 +842,42 @@ pub fn decoder_forward_traced(
         stages.push(clone_tensor(host, &inputs));
         layer_trace.push(clone_tensor(host, &inputs));
     }
-    rms_norm(
+    inputs
+}
+
+/// Diagnostic entry point for the CPU golden bisect of the decoder: gives the
+/// decoder layers the reference's own layer-entry state and the reference
+/// encoder KV cache, and runs exactly one layer (`layer..layer + 1`). The
+/// cache must already hold the reference encoder prefix — an empty cache or a
+/// cache produced by a Claymore chain is not a reference input. `positions`
+/// are the canvas positions (for the pinned scenario `7..23`, the prefix
+/// length is the cache row count). No final norm, no self-conditioning: the
+/// injected state is the layer input itself. The layer math is the one
+/// [`decoder_forward_traced`] runs, via the same shared range runner.
+#[allow(clippy::too_many_arguments)]
+pub fn decoder_forward_traced_from_hidden(
+    host: &Host,
+    ckpt: &Checkpoint,
+    cfg: &GemmaModelConfig,
+    start: &Tensor,
+    cache: &mut crate::graph::KvCache,
+    positions: &[usize],
+    layer: usize,
+    trace: &mut Vec<(Vec<f32>, Vec<f32>, Vec<f32>)>,
+    layer_trace: &mut Vec<Tensor>,
+    stages: &mut Vec<Tensor>,
+) -> Tensor {
+    decoder_forward_range(
         host,
-        &inputs,
-        &tensor_of(host, ckpt, "model.decoder.norm.weight"),
-        eps,
+        ckpt,
+        cfg,
+        start,
+        cache,
+        positions,
+        layer..layer + 1,
+        trace,
+        layer_trace,
+        stages,
     )
 }
 
@@ -929,10 +1004,6 @@ pub fn vision_forward_stages(
 ) -> (Tensor, Tensor) {
     let vision = cfg.vision_config.as_ref().unwrap();
     let hidden = vision.hidden_size.unwrap();
-    let heads = vision.num_attention_heads.unwrap();
-    let kv_heads = vision.num_key_value_heads.unwrap();
-    let head_dim = vision.head_dim.unwrap();
-    let eps = vision.rms_norm_eps.unwrap_or(1e-6);
     let patches = positions.len();
     let per_patch = pixels.len() / patches;
     let scaled: Vec<f32> = pixels.iter().map(|v| 2.0 * (v - 0.5)).collect();
@@ -962,8 +1033,71 @@ pub fn vision_forward_stages(
         }
     }
     x = add(host, &x, &host.bf16(vec![patches, hidden], &pos_emb));
+    let x = vision_forward_inner(
+        host,
+        ckpt,
+        cfg,
+        &x,
+        positions,
+        0..vision.num_hidden_layers.unwrap(),
+        stages,
+    );
+    // Pooling: k^2 groups by position grid, mean over each group.
+    let out_len = patches / (pooling_kernel * pooling_kernel);
+    let max_x = positions.iter().map(|p| p.0).max().unwrap() + 1;
+    let xv = host.to_f32(&x);
+    let mut pooled = vec![0.0f32; out_len * hidden];
+    let inv_k2 = 1.0f32 / (pooling_kernel * pooling_kernel) as f32;
+    for (i, (xpos, ypos)) in positions.iter().enumerate() {
+        let gx = (*xpos as usize) / pooling_kernel;
+        let gy = (*ypos as usize) / pooling_kernel;
+        let group = gx + (max_x as usize / pooling_kernel) * gy;
+        for h in 0..hidden {
+            pooled[group * hidden + h] += xv[i * hidden + h] * inv_k2;
+        }
+    }
+    let root = (hidden as f32).sqrt();
+    let pooled_bf16: Vec<f32> = pooled
+        .iter()
+        .map(|value| claymore_tensor::Bf16::from_f32(*value).to_f32())
+        .collect();
+    let pooled_scaled: Vec<f32> = pooled_bf16.iter().map(|v| v * root).collect();
+    let std_bias = tensor_of(host, ckpt, "model.encoder.vision_tower.std_bias");
+    let std_scale = tensor_of(host, ckpt, "model.encoder.vision_tower.std_scale");
+    let bv = host.to_f32(&std_bias);
+    let sv = host.to_f32(&std_scale);
+    let mut out = vec![0.0f32; out_len * hidden];
+    for g in 0..out_len {
+        for h in 0..hidden {
+            out[g * hidden + h] = (pooled_scaled[g * hidden + h] - bv[h]) * sv[h];
+        }
+    }
+    (x, host.bf16(vec![out_len, hidden], &out))
+}
+
+/// Shared per-layer body of the vision tower: for each layer in `layers`,
+/// from the BF16 layer-entry state `[patches, hidden]`, the upstream hooks
+/// in order: input layernorm, attention output (after `o_proj`),
+/// post-attention layernorm, pre-feedforward layernorm, MLP output,
+/// post-feedforward layernorm, and the residual layer output. No pooling.
+fn vision_forward_inner(
+    host: &Host,
+    ckpt: &Checkpoint,
+    cfg: &GemmaModelConfig,
+    start: &Tensor,
+    positions: &[(u32, u32)],
+    layers: std::ops::Range<usize>,
+    stages: &mut Vec<Tensor>,
+) -> Tensor {
+    let vision = cfg.vision_config.as_ref().unwrap();
+    let heads = vision.num_attention_heads.unwrap();
+    let kv_heads = vision.num_key_value_heads.unwrap();
+    let head_dim = vision.head_dim.unwrap();
+    let eps = vision.rms_norm_eps.unwrap_or(1e-6);
+    let patches = positions.len();
     let (cos, sin) = crate::graph::vision_rope_tables(head_dim, 100.0f32, positions);
-    for layer in 0..vision.num_hidden_layers.unwrap() {
+    let mut x = clone_tensor(host, start);
+    for layer in layers {
         let p = |n: &str| format!("model.encoder.vision_tower.encoder.layers.{layer}.{n}");
         let normed = rms_norm(
             host,
@@ -1045,37 +1179,26 @@ pub fn vision_forward_stages(
         x = add(host, &x, &pff);
         stages.push(clone_tensor(host, &x));
     }
-    // Pooling: k^2 groups by position grid, mean over each group.
-    let out_len = patches / (pooling_kernel * pooling_kernel);
-    let max_x = positions.iter().map(|p| p.0).max().unwrap() + 1;
-    let xv = host.to_f32(&x);
-    let mut pooled = vec![0.0f32; out_len * hidden];
-    let inv_k2 = 1.0f32 / (pooling_kernel * pooling_kernel) as f32;
-    for (i, (xpos, ypos)) in positions.iter().enumerate() {
-        let gx = (*xpos as usize) / pooling_kernel;
-        let gy = (*ypos as usize) / pooling_kernel;
-        let group = gx + (max_x as usize / pooling_kernel) * gy;
-        for h in 0..hidden {
-            pooled[group * hidden + h] += xv[i * hidden + h] * inv_k2;
-        }
-    }
-    let root = (hidden as f32).sqrt();
-    let pooled_bf16: Vec<f32> = pooled
-        .iter()
-        .map(|value| claymore_tensor::Bf16::from_f32(*value).to_f32())
-        .collect();
-    let pooled_scaled: Vec<f32> = pooled_bf16.iter().map(|v| v * root).collect();
-    let std_bias = tensor_of(host, ckpt, "model.encoder.vision_tower.std_bias");
-    let std_scale = tensor_of(host, ckpt, "model.encoder.vision_tower.std_scale");
-    let bv = host.to_f32(&std_bias);
-    let sv = host.to_f32(&std_scale);
-    let mut out = vec![0.0f32; out_len * hidden];
-    for g in 0..out_len {
-        for h in 0..hidden {
-            out[g * hidden + h] = (pooled_scaled[g * hidden + h] - bv[h]) * sv[h];
-        }
-    }
-    (x, host.bf16(vec![out_len, hidden], &out))
+    x
+}
+
+/// Diagnostic entry point for the CPU golden bisect of the vision tower:
+/// gives layer `layer` the reference's own layer-entry state (after patch
+/// embedding and position-embedding addition) `[patches, hidden]` and runs
+/// exactly that one layer, recording the seven upstream hooks. No pooling,
+/// no patch embedder: the injected state is the layer input itself. The
+/// layer math is the one [`vision_forward_stages`] runs, via the same shared
+/// body.
+pub fn vision_forward_layer_from_hidden(
+    host: &Host,
+    ckpt: &Checkpoint,
+    cfg: &GemmaModelConfig,
+    start: &Tensor,
+    positions: &[(u32, u32)],
+    layer: usize,
+    stages: &mut Vec<Tensor>,
+) -> Tensor {
+    vision_forward_inner(host, ckpt, cfg, start, positions, layer..layer + 1, stages)
 }
 
 /// `DiffusionGemmaMultimodalEmbedder`: unscaled RMSNorm + projection.
