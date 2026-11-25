@@ -1406,7 +1406,9 @@ fn cuda_decoder_layers_match_cpu_step_by_step() {
         "router: ensembles fideles={router_faithful}/{rows} echanges de frontiere={router_swaps} structurels={}",
         router_structural.len()
     );
-    eprintln!("router: ensembles CUDA==CPU: {cuda_eq_cpu_sets}/{rows} (gate D5: toutes les lignes)");
+    eprintln!(
+        "router: ensembles CUDA==CPU: {cuda_eq_cpu_sets}/{rows} (gate D5: toutes les lignes)"
+    );
     if cuda_eq_cpu_sets != rows {
         score_drift_failures.push(format!(
             "ensembles d'experts CUDA≠CPU sur {} ligne(s) de {rows}",
@@ -1585,12 +1587,14 @@ fn cuda_lm_logits_match_cpu_on_the_reference_hidden() {
         "logits CUDA↔CPU rms {rms} above {LOGITS_RMS} (bit equality required since D5)"
     );
     assert_eq!(
-        argmax_same, CANVAS,
+        argmax_same,
+        CANVAS,
         "logits argmax CUDA↔CPU differs on {} row(s)",
         CANVAS - argmax_same
     );
     assert_eq!(
-        top8_same, CANVAS,
+        top8_same,
+        CANVAS,
         "logits top-8 CUDA↔CPU differs on {} row(s)",
         CANVAS - top8_same
     );
