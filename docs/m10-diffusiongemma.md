@@ -15,7 +15,9 @@ Validation matérielle complète et journaux bruts : [m10-rtx5090-hardware-valid
 
 PR de la campagne : #40 (`feat/m10-diffusiongemma`, base `main`, **ouverte, non fusionnée**). PR de suivi M10.2 — M10.6 : #44 (`feat/m10-campaign-followup`, base `main`) — **fermée sans fusion le 25 novembre 2026** : son contenu (correctif de parité numérique) a été intégré à #40 par fast-forward, et #44 n'a donc aucun commit qui lui soit propre.
 
-### Statut au 25 novembre 2026 (M10.4 — M10.5)
+### Statut au 25 novembre 2026 (M10.4 — M10.5) — HISTORIQUE
+
+> **Section historique, supplantée par « État normatif après verdict architecte du 25 novembre 2026 » en fin de document.** Au moment de ce statut (début de journée), M10 n'était pas validé ; M10 est désormais **VALIDÉ SOUS RÉSERVES NON BLOQUANTES** (voir `audits/m10-architect-decisions.md` §2 et §3). Les lignes « rouge » ci-dessous décrivent les portes de chaîne qui ont depuis été remplacées par des tests de suivi (D2).
 
 **M10 n'est pas validé.** Le différentiel de chaîne CPU ↔ référence eager
 reste rouge et les tolérances n'ont **pas** été assouplies. Le correctif M10.4
@@ -214,7 +216,9 @@ exécutable dans le créneau de la campagne). Golden capturés : `vision_last_hi
 `moe0_expert_outputs` du run de génération). Le test `golden_cpu` compare
 chaque stage Rust aux golden F32 avec tolérances dérivées documentées
 (encodeur `max_abs ≤ 0,03`/RMS `2e-3`, vision `0,06`/`2e-3`, embed
-`0,1`/`4e-3`, décodeur `0,12`/`4e-3`, logits `2,0`/`0,1`).
+`0,1`/`4e-3`, décodeur `0,12`/`4e-3`, logits `2,0`/`0,1`). **Historique :**
+ces tolérances ont été remplacées le 25/11 par un suivi (D2) ; elles ne sont
+plus des portes (voir « État normatif »).
 
 ### Campagne GPU finale (24 novembre 2026)
 
@@ -329,9 +333,9 @@ Les tests matériels de la suite M10 nécessitent le checkpoint épinglé ; sans
 
 Cette section prévaut sur les formulations historiques contradictoires conservées dans les journaux et rapports de campagnes antérieurs.
 
-- **PR #40** : ouverte, non fusionnée ; verdict **VALIDÉE SOUS RÉSERVES** sur le SHA `24cb8dd8731fb767574204b3723cbaa2ae6030b0`. La CI GitHub Actions sur cette tête est verte (4/4 jobs).
+- **PR #40** : ouverte, non fusionnée ; verdict **VALIDÉE SOUS RÉSERVES** sur le SHA `24cb8dd8731fb767574204b3723cbaa2ae6030b0`, confirmé à la revue finale (réserves résiduelles non bloquantes R1 à R7 : `audits/m10-architect-decisions.md` §3). La CI GitHub Actions est verte sur chaque tête citée ; le SHA validé en revue finale est celui indiqué dans le commentaire de verdict de la PR.
 - **Génération réelle** : déjà démontrée sur RTX 5090 le 24 novembre : canvas 256, 48 étapes, 256/256 positions acceptées, pic 24 831 Mio. Ne pas répéter cette revendication comme un travail encore à développer.
-- **Contrat numérique** : appliquer D1/D2 de `audits/m10-architect-decisions.md`. Le bisect encodeur à entrée dorée a été rejoué dans la campagne CPU de finalisation (210/210 lignes, top-8 exact, pire 2,0 pas BF16, borne 4,0 ; journal `m10-cpu-2026-11-25-04-bisect-encoder-entrees-dorees.log.txt`). Les bisects vision et décodeur ont également été exécutés ; voir le rapport CPU pour les métriques et bornes. Les comparaisons de chaîne sont des mesures de suivi, pas des gates absolus. Les dorées ne sont ni modifiées ni ré-épinglées.
+- **Contrat numérique** : appliquer D1/D2/D5 de `audits/m10-architect-decisions.md`. Le bisect encodeur à entrée dorée a été rejoué dans la campagne CPU de finalisation (210/210 lignes, top-8 exact, pire 2,0 pas BF16, borne 4,0 ; journal `m10-cpu-2026-11-25-04-bisect-encoder-entrees-dorees.log.txt`). Les bisects vision et décodeur ont également été exécutés ; voir le rapport CPU pour les métriques et bornes. Les comparaisons de chaîne sont des mesures de suivi, pas des gates absolus. Les dorées ne sont ni modifiées ni ré-épinglées.
 - **Travaux CPU-only** : terminés le 25/11 et consignés dans `audits/m10-cpu-campaign-2026-11-25.md`. Le générateur et les 455 artefacts de référence, les fixtures versionnées, les bisects vision/décodeur, les bornes D1 fixées après mesure, les tests exécutés sur le checkpoint et les journaux/hash sont livrés. Ne pas redévelopper ces éléments ; les chiffres et limites sont ceux du rapport.
 - **Travail réservé à l'agent matériel** : **exécuté le 25/11** — campagne groupée 6/6 étapes vertes, puis campagne finale 9/9 étapes vertes sur le SHA `460c9ef` (driver, mémoire, tenseurs, injections, primitives M10, vérification intégrale du checkpoint, generation matérielle 3/3, et **deux passes du différentiel CUDA↔CPU des 30 couches du décodeur et des logits**, bit-exactes). Journaux bruts, empreintes SHA-256, métriques, budgets et preuve de libération mémoire : `audits/m10-rtx5090-final-decoder-logits-2026-11-25.md` et `audits/m10-final-*.log.txt`. Ne pas refaire la campagne déjà réussie sans motif. Toute modification `.cu`/`.cuh`/PTX impose régénération, provenance mise à jour et nouvelle campagne matérielle complète.
 - **Pas de merge automatique** : la fusion de #40 reste une décision distincte.
@@ -400,6 +404,8 @@ fusionnée.
 
 La finalisation CPU et la campagne RTX 5090 groupée sont désormais exécutées ; voir les rapports `audits/m10-cpu-campaign-2026-11-25.md` et `audits/m10-rtx5090-grouped-campaign-2026-11-25.md`. Le bisect vision (0,2 pas BF16, borne 4) et le bisect décodeur (10,0 pas, borne 20 ; 470/480 + 10 échanges de frontière, 0 structurel) sont contractuels selon D1. La campagne matérielle est verte sur ses six étapes ; le décodeur réel de couche 0 est bit-exact.
 
-**La réserve de mesure matérielle est désormais levée.** La campagne finale du 25/11 (SHA `460c9ef`, 9/9 étapes vertes) a produit les mesures CUDA↔CPU des **30 couches du décodeur et des logits** : **bit-exact** — `max_abs = 0,000000`, `rms = 0,000000`, **0,0 pas BF16** sur les 810 comparaisons d'étape (30 couches × 27 étapes), sur le routeur (scores bruts et poids, 30 couches) et sur les logits ; ensembles d'experts CUDA identiques à la référence sur 470/480 lignes, avec les **10 échanges de frontière** du bisect CPU et **zéro** divergence structurelle ; deux passes de tables **strictement identiques**. Rapport : `audits/m10-rtx5090-final-decoder-logits-2026-11-25.md` ; journaux bruts `audits/m10-final-<n>-2026-11-25_*.log.txt` ; empreintes `audits/m10-final-2026-11-25-logs.sha256`.
+**La réserve de mesure matérielle est levée.** La campagne finale du 25/11 (SHA `460c9ef`, 9/9 étapes vertes) a produit les mesures CUDA↔CPU des **30 couches du décodeur et des logits** : **bit-exact** — `max_abs = 0,000000`, `rms = 0,000000`, **0,0 pas BF16** sur les 810 comparaisons d'étape (30 couches × 27 étapes), sur le routeur (scores bruts et poids, 30 couches) et sur les logits ; ensembles d'experts CUDA identiques au CPU sur 480/480 lignes et à la référence sur 470/480, avec les **10 échanges de frontière** du bisect CPU et **zéro** divergence structurelle ; deux passes de tables **strictement identiques**. Rapport : `audits/m10-rtx5090-final-decoder-logits-2026-11-25.md` ; journaux bruts `audits/m10-final-<n>-2026-11-25_*.log.txt` ; empreintes `audits/m10-final-2026-11-25-logs.sha256`.
 
-La dérive de chaîne contre la référence eager reste un suivi D2, non une porte de clôture. Les décisions D1/D2, les dorées et leurs empreintes ne doivent pas être modifiées. Le **resserrement** des portes CUDA↔CPU à partir de ces mesures (valeurs candidates : 0,0 pas, routeur et logits à 0,000000) est une **décision d'architecte** : il n'est pas appliqué ici, car une égalité bit stricte serait plus forte que ce que D1 énonce. Le **merge de la PR #40** reste une décision distincte.
+**Décision D5 (revue finale, 25/11) : les portes CUDA↔CPU sont resserrées à l'égalité bit** pour les couches du décodeur, le routeur et les logits (auparavant `20,0` pas, `1e-3`, `2,0`/`0,1`), comme elles l'étaient déjà pour la chaîne encodeur. Ce n'est pas plus fort que D1 : D1 régit la conformité à la référence **amont** ; D5 compare deux implémentations Claymore dont les kernels sont des ports de l'arithmétique CPU, verrouillés par `kernel_order_parity` et `kernel_provenance`. Le resserrement ne s'applique jamais à la comparaison à la dorée, qui reste un suivi (D2). Le harnais durci n'a pas été rejoué sur la carte (réserve R7). Les réserves résiduelles R1 à R7, dont la divergence de fenêtre glissante CPU/CUDA au-delà de 1024 lignes de cache (R1), sont consignées dans `audits/m10-architect-decisions.md` §3.
+
+La dérive de chaîne contre la référence eager reste un suivi D2, non une porte de clôture. Les décisions D1/D2, les dorées et leurs empreintes ne doivent pas être modifiées. Le **merge de la PR #40** reste une décision distincte du propriétaire.
