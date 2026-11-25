@@ -391,9 +391,8 @@ fn softmax_row(scores: &[f32], output: &mut [f32]) {
         output.fill(f32::NAN);
         return;
     }
-    let reciprocal = sum.recip();
     for value in output.iter_mut() {
-        *value *= reciprocal;
+        *value /= sum;
     }
 }
 

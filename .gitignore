@@ -2,3 +2,5 @@
 *.log
 .env
 .DS_Store
+AGENTS.md
+

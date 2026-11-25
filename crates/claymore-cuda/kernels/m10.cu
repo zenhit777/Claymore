@@ -5,7 +5,7 @@
  * crates/claymore-cuda/src/kernels/m10.ptx. Regenerate with (CUDA 13.0 or
  * newer, Blackwell sm_120):
  *
- *   nvcc -arch=compute_120 -code=compute_120 -O3 -ptx \
+ *   nvcc -arch=compute_120 -code=compute_120 -O3 -ptx -fmad=false \
  *     -o crates/claymore-cuda/src/kernels/m10.ptx \
  *     crates/claymore-cuda/kernels/m10.cu
  *
@@ -25,74 +25,7 @@
  * GPU execution path that must be differentially validated against it.
  */
 
-#include <cuda_bf16.h>
-#include <math.h>
-#include <stdint.h>
-
-// ---------------------------------------------------------------------------
-// Shared device helpers
-// ---------------------------------------------------------------------------
-
-__device__ __forceinline__ float to_f32(__nv_bfloat16 value) {
-  return __bfloat162float(value);
-}
-
-__device__ __forceinline__ __nv_bfloat16 to_bf16_rn(float value) {
-  return __float2bfloat16_rn(value);
-}
-
-__device__ __forceinline__ int32_t bfloat_bits(float value) {
-  // BF16 round-to-nearest-even, reinterpreted through the documented CUDA
-  // helpers: no access to the opaque storage of `__nv_bfloat16`.
-  uint32_t bits = __float_as_uint(value);
-  uint32_t lsb = (bits >> 16) & 1u;
-  uint32_t bias = 0x7fffu + lsb;
-  uint32_t rounded = (bits + bias) >> 16;
-  return (int32_t)(uint16_t)rounded;
-}
-
-__device__ __forceinline__ float bits_to_f32(int32_t bits) {
-  // Exact BF16 -> FP32 widening (zero low 16 bits).
-  return __uint_as_float(((uint32_t)(uint16_t)bits) << 16);
-}
-
-// Stable softmax over one row. `scores` is the FP32 score vector of length
-// `width` (per row), `out` receives the FP32 probabilities.
-//
-// A fully masked row (max == -inf) yields zeros instead of NaN, matching the
-// CPU reference. NaN or +Inf scores propagate as NaN.
-__device__ void softmax_row(const float *scores, float *out, uint64_t width) {
-  float max_value = -INFINITY;
-  bool has_nan = false;
-  for (uint64_t i = 0; i < width; ++i) {
-    if (isnan(scores[i])) {
-      has_nan = true;
-      break;
-    }
-    max_value = fmaxf(max_value, scores[i]);
-  }
-  if (has_nan || isinf(max_value)) {
-    for (uint64_t i = 0; i < width; ++i) {
-      out[i] = NAN;
-    }
-    return;
-  }
-  if (max_value == -INFINITY) {
-    for (uint64_t i = 0; i < width; ++i) {
-      out[i] = 0.0f;
-    }
-    return;
-  }
-  float sum = 0.0f;
-  for (uint64_t i = 0; i < width; ++i) {
-    out[i] = expf(scores[i] - max_value);
-    sum += out[i];
-  }
-  float inv_sum = (sum > 0.0f && isfinite(sum)) ? 1.0f / sum : NAN;
-  for (uint64_t i = 0; i < width; ++i) {
-    out[i] *= inv_sum;
-  }
-}
+#include "claymore_math.cuh"
 
 // ---------------------------------------------------------------------------
 // F32 kernels
@@ -190,7 +123,7 @@ extern "C" __global__ void claymore_attention_f32(
   }
   __syncthreads();
   if (tid == 0) {
-    softmax_row(scores, probabilities, key_tokens);
+    claymore_softmax_row(scores, probabilities, key_tokens);
   }
   __syncthreads();
   for (uint64_t dim = tid; dim < head_dim; dim += blockDim.x) {
@@ -211,7 +144,7 @@ extern "C" __global__ void claymore_soft_cap_f32(
   uint64_t stride = (uint64_t)blockDim.x * gridDim.x;
   for (uint64_t index = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
        index < numel; index += stride) {
-    out[index] = cap * tanhf(input[index] / cap);
+    out[index] = cap * claymore_tanhf(input[index] / cap);
   }
 }
 
@@ -340,7 +273,7 @@ extern "C" __global__ void claymore_attention_bf16(
   }
   __syncthreads();
   if (tid == 0) {
-    softmax_row(scores, probabilities, key_tokens);
+    claymore_softmax_row(scores, probabilities, key_tokens);
   }
   __syncthreads();
   for (uint64_t dim = tid; dim < head_dim; dim += blockDim.x) {
@@ -366,7 +299,7 @@ extern "C" __global__ void claymore_soft_cap_bf16(
   for (uint64_t index = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
        index < numel; index += stride) {
     float value = to_f32(input[index]);
-    out[index] = to_bf16_rn(cap * tanhf(value / cap));
+    out[index] = to_bf16_rn(cap * claymore_tanhf(value / cap));
   }
 }
 
@@ -769,7 +702,7 @@ extern "C" __global__ void claymore_router_top_k_f32(
   float max_value = block_max[0];
 
   if (tid < experts) {
-    probs[tid] = expf(row[tid] - max_value);
+    probs[tid] = claymore_expf(row[tid] - max_value);
     indices[tid] = (uint32_t)tid;
   }
   __syncthreads();
@@ -813,7 +746,7 @@ extern "C" __global__ void claymore_gelu_mul_up_f32(
        index < numel; index += stride) {
     float g = gate[index];
     float inner = k * (g + 0.044715f * g * g * g);
-    out[index] = 0.5f * g * (1.0f + tanhf(inner)) * up[index];
+    out[index] = 0.5f * g * (1.0f + claymore_tanhf(inner)) * up[index];
   }
 }
 
@@ -830,7 +763,7 @@ extern "C" __global__ void claymore_gelu_mul_up_bf16(
     float inner = k * (g + 0.044715f * g * g * g);
     // The pinned reference materializes gelu(gate) in the activation dtype
     // before multiplying by `up`, then narrows the product once more.
-    float activation = to_bf16_rn(0.5f * g * (1.0f + tanhf(inner)));
+    float activation = to_bf16_rn(0.5f * g * (1.0f + claymore_tanhf(inner)));
     out[index] = to_bf16_rn(activation * to_f32(up[index]));
   }
 }
@@ -875,20 +808,32 @@ extern "C" __global__ void claymore_gather_rows_bf16(
   out[row * width + column] = input[source * width + column];
 }
 
+// Scatter-add in the CPU reference's order: each destination row is
+// accumulated by one thread over the pairs in increasing pair index, in FP32,
+// and narrowed once at output. `atomicAdd` arrival order is not deterministic,
+// and the BF16 atomic variant rounds at every step, so neither reproduces the
+// reference bit for bit. The destination is written in full, so no pre-zero is
+// needed.
 extern "C" __global__ void claymore_scatter_add_f32(
     const float *__restrict__ source,
     const float *__restrict__ weights,
     const float *__restrict__ rows,
     float *__restrict__ out,
     uint64_t pairs,
-    uint64_t width) {
-  uint64_t pair = blockIdx.x;
+    uint64_t width,
+    uint64_t out_rows) {
+  uint64_t row = blockIdx.x;
   uint64_t column = (uint64_t)blockIdx.y * blockDim.x + threadIdx.x;
-  if (pair >= pairs || column >= width) {
+  if (row >= out_rows || column >= width) {
     return;
   }
-  uint64_t row = (uint64_t)rows[pair];
-  atomicAdd(&out[row * width + column], weights[pair] * source[pair * width + column]);
+  float accumulator = 0.0f;
+  for (uint64_t pair = 0; pair < pairs; ++pair) {
+    if ((uint64_t)rows[pair] == row) {
+      accumulator += weights[pair] * source[pair * width + column];
+    }
+  }
+  out[row * width + column] = accumulator;
 }
 
 extern "C" __global__ void claymore_scatter_add_bf16(
@@ -897,19 +842,20 @@ extern "C" __global__ void claymore_scatter_add_bf16(
     const float *__restrict__ rows,
     __nv_bfloat16 *__restrict__ out,
     uint64_t pairs,
-    uint64_t width) {
-  uint64_t pair = blockIdx.x;
+    uint64_t width,
+    uint64_t out_rows) {
+  uint64_t row = blockIdx.x;
   uint64_t column = (uint64_t)blockIdx.y * blockDim.x + threadIdx.x;
-  if (pair >= pairs || column >= width) {
+  if (row >= out_rows || column >= width) {
     return;
   }
-  uint64_t row = (uint64_t)rows[pair];
-  // BF16 atomic add is rounded at every accumulation step, matching the
-  // pinned upstream bf16 index_add_ CUDA behaviour. Differential tolerance is
-  // a model-derived bound, not a ULP budget, because the accumulation order is
-  // not deterministic.
-  __nv_bfloat16 value = to_bf16_rn(weights[pair] * to_f32(source[pair * width + column]));
-  atomicAdd(&out[row * width + column], value);
+  float accumulator = 0.0f;
+  for (uint64_t pair = 0; pair < pairs; ++pair) {
+    if ((uint64_t)rows[pair] == row) {
+      accumulator += weights[pair] * to_f32(source[pair * width + column]);
+    }
+  }
+  out[row * width + column] = to_bf16_rn(accumulator);
 }
 
 extern "C" __global__ void claymore_embed_gather_f32(

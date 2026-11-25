@@ -1261,9 +1261,9 @@ impl CudaComputeEngine {
         }
     }
 
-    /// Zero a live device allocation. Used to prepare scatter-add outputs,
-    /// the only accumulation kernel in the contract; atomics require a
-    /// pre-zeroed destination.
+    /// Zero a live device allocation. Kept for callers that need a cleared
+    /// buffer: the accumulation kernels write their destination in full, so
+    /// they no longer require a pre-zero.
     /// # Safety
     /// `output` must reference a live allocation of at least `bytes` bytes in
     /// this engine's CUDA context.
@@ -1550,13 +1550,13 @@ impl CudaComputeEngine {
         }
     }
 
-    /// Weighted scatter-add with FP32 atomics. The destination `output` must
-    /// be zeroed by `zero` on the same stream before this launch; the
-    /// accumulation order is not deterministic, so the differential budget is
-    /// a model-derived bound rather than a ULP budget.
+    /// Weighted scatter-add, accumulated in the CPU reference's order: one
+    /// thread sums each destination row over the pairs in increasing pair index
+    /// in FP32, then narrows once. The destination is written in full, so no
+    /// pre-zero is needed.
     /// # Safety
     /// Every pointer must reference a live, sufficiently sized allocation in
-    /// this engine's CUDA context. `output` must be pre-zeroed.
+    /// this engine's CUDA context.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn scatter_add(
         &self,
@@ -1566,16 +1566,27 @@ impl CudaComputeEngine {
         output: u64,
         pairs: usize,
         width: usize,
+        out_rows: usize,
         stream: &CudaStream,
     ) -> Result<(), CudaError> {
-        self.scatter_add_dispatch(source, weights, rows, output, pairs, width, false, stream)
+        self.scatter_add_dispatch(
+            source,
+            weights,
+            rows,
+            output,
+            pairs,
+            width,
+            out_rows,
+            false,
+            stream,
+        )
     }
 
-    /// BF16 variant of `scatter_add` (bf16 atomic accumulation, matching the
-    /// pinned upstream bf16 index_add behaviour).
+    /// BF16 variant of `scatter_add`: FP32 accumulation in pair order, narrowed
+    /// to BF16 once at output, exactly as the CPU reference.
     /// # Safety
     /// Every pointer must reference a live, sufficiently sized allocation in
-    /// this engine's CUDA context. `output` must be pre-zeroed.
+    /// this engine's CUDA context.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn scatter_add_bf16(
         &self,
@@ -1585,9 +1596,20 @@ impl CudaComputeEngine {
         output: u64,
         pairs: usize,
         width: usize,
+        out_rows: usize,
         stream: &CudaStream,
     ) -> Result<(), CudaError> {
-        self.scatter_add_dispatch(source, weights, rows, output, pairs, width, true, stream)
+        self.scatter_add_dispatch(
+            source,
+            weights,
+            rows,
+            output,
+            pairs,
+            width,
+            out_rows,
+            true,
+            stream,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1599,11 +1621,13 @@ impl CudaComputeEngine {
         output: u64,
         pairs: usize,
         width: usize,
+        out_rows: usize,
         bf16: bool,
         stream: &CudaStream,
     ) -> Result<(), CudaError> {
         self.prepare(stream)?;
         let (pairs64, width64) = checked_last_dim(pairs, width)?;
+        let out_rows64 = out_rows as u64;
         let grid_y = grid_for(width64, ELEMENTWISE_BLOCK, CUDA_GRID_Y_MAX)?;
         let params = [
             p(&source),
@@ -1612,18 +1636,20 @@ impl CudaComputeEngine {
             p(&output),
             p(&pairs64),
             p(&width64),
+            p(&out_rows64),
         ];
         let function = if bf16 {
             self.kernels.scatter_add_bf16
         } else {
             self.kernels.scatter_add_f32
         };
-        // SAFETY: identical lifetime contract to `add`; `output` is pre-zeroed.
+        // SAFETY: identical lifetime contract to `add`; the grid runs one block
+        // per destination row, which writes every output cell.
         unsafe {
             check(
                 crate::driver::cuLaunchKernel(
                     function,
-                    pairs64 as c_uint,
+                    out_rows64 as c_uint,
                     grid_y,
                     1,
                     ELEMENTWISE_BLOCK,

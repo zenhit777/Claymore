@@ -608,18 +608,19 @@ fn hw_m10_08_scale_f32_and_bf16_match_cpu() {
 // M10.2 primitives: MoE, embedding, masking and widening.
 //
 // Extra tolerances declared before the campaign:
-// - F32 scatter-add: absolute error <= 1e-3. Atomic accumulation order is not
-//   deterministic; the bound is derived from per-pair products with weights
-//   in [-1, 1] and inputs in [-1, 1] over at most 8 pairs per row.
-// - BF16 scatter-add: at most 4 representable BF16 steps, because each bf16
-//   `atomicAdd` rounds its partial sum, and a few accumulation orders can
-//   move a result across two rounding boundaries.
+// - F32 scatter-add: exact. The kernel accumulates each destination row in
+//   increasing pair index in FP32 and narrows once, so the order is
+//   deterministic and identical to the CPU reference. The campaign of
+//   25 November 2026 measured `max_abs=0e0` on the RTX 5090.
+// - BF16 scatter-add: exact, same deterministic accumulation narrowed to BF16
+//   once at output. The campaign of 25 November 2026 measured `max_ulp=0`.
 // - Widen, gather, embed-gather and row-mask are pure data movement: exact.
 
-/// F32 absolute tolerance for the atomic scatter-add kernel.
-const F32_SCATTER_ABS_TOLERANCE: f32 = 1e-3;
-/// BF16 ULP budget for the atomic scatter-add kernel.
-const BF16_SCATTER_ULP: u32 = 4;
+/// F32 absolute tolerance for the scatter-add kernel: the accumulation order
+/// is deterministic, so the kernel must match the CPU reference bit for bit.
+const F32_SCATTER_ABS_TOLERANCE: f32 = 0.0;
+/// BF16 ULP budget for the scatter-add kernel: exact, as measured on hardware.
+const BF16_SCATTER_ULP: u32 = 0;
 
 #[test]
 #[ignore = "requires a CUDA driver and a usable NVIDIA device"]
@@ -894,7 +895,7 @@ fn hw_m10_13_gather_rows_f32_and_bf16_are_exact() {
 
 #[test]
 #[ignore = "requires a CUDA driver and a usable NVIDIA device"]
-fn hw_m10_14_scatter_add_f32_and_bf16_match_cpu_within_derived_bounds() {
+fn hw_m10_14_scatter_add_f32_and_bf16_match_cpu_exactly() {
     let _serial = common::serial();
     let cpu = common::cpu();
     let memory = common::memory();

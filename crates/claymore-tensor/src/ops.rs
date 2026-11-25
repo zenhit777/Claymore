@@ -269,7 +269,7 @@ pub fn rms_norm(
         .zip(output.chunks_exact_mut(width))
     {
         let mean_square = src.iter().map(|x| x * x).sum::<f32>() / width as f32;
-        let inv_rms = (mean_square + epsilon).powf(-0.5);
+        let inv_rms = 1.0f32 / (mean_square + epsilon).sqrt();
         for index in 0..width {
             dst[index] = src[index] * inv_rms * weights[index];
         }

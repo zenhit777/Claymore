@@ -1468,21 +1468,9 @@ impl CudaMemoryManager {
                 rows: _,
                 out_rows,
             } => {
-                // Atomic accumulation requires a pre-zeroed destination.
-                let element_bytes = if source.layout().dtype() == DType::BF16 {
-                    2
-                } else {
-                    4
-                };
+                // One block per destination row; the kernel writes every cell,
+                // so no pre-zero is issued.
                 let width = source.layout().shape()[1];
-                let zero = unsafe {
-                    self.compute_engine.zero(
-                        pointers[3],
-                        *out_rows * width * element_bytes,
-                        &self.compute_stream,
-                    )
-                };
-                self.honor_launch_fault(zero)?;
                 let launch = if source.layout().dtype() == DType::BF16 {
                     unsafe {
                         self.compute_engine.scatter_add_bf16(
@@ -1492,6 +1480,7 @@ impl CudaMemoryManager {
                             pointers[3],
                             source.layout().shape()[0],
                             width,
+                            *out_rows,
                             &self.compute_stream,
                         )
                     }
@@ -1504,6 +1493,7 @@ impl CudaMemoryManager {
                             pointers[3],
                             source.layout().shape()[0],
                             width,
+                            *out_rows,
                             &self.compute_stream,
                         )
                     }
