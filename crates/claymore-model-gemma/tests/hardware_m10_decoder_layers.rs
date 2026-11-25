@@ -2,11 +2,13 @@
 //! and of the tied lm head (logits), on the pinned checkpoint and the
 //! versioned M10 layer fixtures.
 //!
-//! This is the measurement that remains open in the architect decision
+//! This is the measurement that remained open in the architect decision
 //! register (`docs/audits/m10-architect-decisions.md` §2, reserve 1): the
 //! grouped campaign of 2026-11-25 replayed the real decoder **subgraph of
 //! layer 0** (`hw_m10_09`, bit-exact) but the per-layer CUDA ↔ CPU table of
-//! the 30 layers and the logits table had never been produced.
+//! the 30 layers and the logits table had never been produced. The final
+//! campaign of 2026-11-25 (SHA `460c9ef`) produced them: 810/810 stage
+//! comparisons, the router and the logits are **bit-equal**, twice.
 //!
 //! Method (mirrors `tests/decoder_layer_bisect.rs` on the CPU side and
 //! `tests/hardware_m10_generation.rs::encoder_first_layer_matches_cpu_step_by_step`
@@ -38,22 +40,38 @@
 //!   and every layer output must come back **bit-identical** (in-session
 //!   reproducibility, arena/LRU cross-layer contamination check).
 //!
-//! Numerical gates are **fixed before the run** (never loosened from an
-//! observed value; the logits inherit the bounds already coded in
-//! `hardware_m10_generation.rs`):
+//! # Gates — decision D5 of the architect register
 //!
-//! | metric | bound | provenance |
+//! The gates were **fixed before the run** at the values of the first
+//! column group below. The run measured exact zeros everywhere. On
+//! 2026-11-25 the architect applied decision **D5**: the **internal**
+//! CUDA ↔ CPU contract is bit equality, for the decoder layers, the router
+//! and the logits, exactly as it already was for the encoder chain
+//! (`hardware_m10_generation.rs::cuda_graph_chain_is_bit_equal_to_cpu_and_tracks_golden`).
+//! This is **not** stronger than D1: D1 governs conformity to the *upstream
+//! reference* (golden, in BF16 steps of the row peak); the CUDA ↔ CPU
+//! contract compares two Claymore implementations whose kernels are ports
+//! of the CPU arithmetic by construction (glibc-2.39 `expf`/`expm1f`/`tanhf`
+//! ports, index-ordered reductions, `-fmad=false` PTX, locked by
+//! `kernel_order_parity` and `kernel_provenance`). Any non-zero difference
+//! is therefore a kernel regression, not noise.
+//!
+//! | metric | pre-campaign bound | gate since D5 |
 //! |---|---|---|
-//! | layer-stage CUDA↔CPU worst-row drift | `20.0` BF16 steps | D1 rule applied to the decoder layer drift already measured CPU↔reference (10.0, layer 26, bound 20.0): the CUDA path must not drift from the reference path more than the reference path itself is bound to |
-//! | router weights / raw scores CUDA↔CPU | `max_abs ≤ 1e-3` | the tie-precision bound `MAX_SCORE_DRIFT` the decoder bisect contract fixed from the reference's own 8-vs-9 gaps |
-//! | router expert sets | exact, else one reference-tied boundary swap, zero structural | decoder bisect contract, `docs/audits/m10-cpu-campaign-2026-11-25.md` §7 |
-//! | logits CUDA↔CPU | `max_abs ≤ 2.0`, `rms ≤ 0.1` | the bounds already coded in `hardware_m10_generation.rs`; the isolated head cannot legitimately be looser |
-//! | all comparisons | finite values, peak VRAM ≤ 28 GiB | M10 hard ceiling |
+//! | layer-stage CUDA↔CPU worst-row drift | `20.0` BF16 steps | `0.0` (bit equality) |
+//! | router raw scores / weights CUDA↔CPU | `max_abs ≤ 1e-3` | `0.0` (bit equality) |
+//! | router expert sets CUDA vs CPU | reported | **all rows identical** |
+//! | logits CUDA↔CPU | `max_abs ≤ 2.0`, `rms ≤ 0.1` | `0.0` / `0.0` (bit equality) |
+//! | logits argmax / top-8 CUDA vs CPU | reported | **all rows identical** |
+//! | router expert sets vs the reference | exact, else one reference-tied boundary swap, zero structural | unchanged (D1/D2: upstream conformity, tie precision `1e-3` of the reference's own 8-vs-9 gaps) |
+//! | all comparisons | finite values, peak VRAM ≤ 28 GiB | unchanged |
 //!
-//! The ranking divergence of the logits (argmax / top-8 flips CUDA vs CPU)
-//! is **reported**, per D2; turning it into a contract is a register
-//! decision to take once the numbers exist (tightening only, never
-//! loosening).
+//! The boundary-tie bound `BOUNDARY_TIE_GAP` is **not** a CUDA ↔ CPU gate:
+//! it measures how close the reference's 8th and 9th experts are, and stays
+//! at its D1/D2 value. Tightening is a change of contract, recorded in the
+//! register; loosening any gate after observation remains forbidden. A
+//! kernel change (`.cu`/`.cuh`/PTX) requires a new complete campaign and a
+//! provenance manifest update.
 //!
 //! ```text
 //! RUSTFLAGS="-L native=/usr/lib/wsl/lib" \
@@ -86,13 +104,18 @@ const TOP_K: usize = 8;
 const EXPERTS: usize = 128;
 const GOLDEN: &str = "/tmp/opencode/m10/golden_eager";
 
-/// Gates fixed **before** the run — see the module table. Never loosen these
-/// after observation; tightening is a register decision with the campaign
-/// evidence attached.
-const MAX_ROW_DRIFT_STEPS: f32 = 20.0;
-const MAX_SCORE_DRIFT: f32 = 1.0e-3;
-const LOGITS_MAX_ABS: f32 = 2.0;
-const LOGITS_RMS: f32 = 0.1;
+/// CUDA ↔ CPU gates since decision D5: bit equality. Any non-zero value is a
+/// kernel regression. Never loosen these; a deliberate kernel change needs a
+/// new complete campaign and a provenance manifest update.
+const CUDA_CPU_MAX_ROW_STEPS: f32 = 0.0;
+const CUDA_CPU_MAX_SCORE_DRIFT: f32 = 0.0;
+const LOGITS_MAX_ABS: f32 = 0.0;
+const LOGITS_RMS: f32 = 0.0;
+
+/// Tie precision of the reference's own 8th-vs-9th expert gap (D1/D2, fixed
+/// by the decoder bisect contract). It qualifies a boundary swap against the
+/// **reference** top-8 set; it is not a CUDA ↔ CPU gate.
+const BOUNDARY_TIE_GAP: f32 = 1.0e-3;
 
 fn fixture_dir() -> std::path::PathBuf {
     match std::env::var_os("CLAYMORE_M10_LAYERS_DIR") {
@@ -770,7 +793,8 @@ fn cuda_decoder_layers_match_cpu_step_by_step() {
         };
         // Over positions 7..23 (kv rows 0..22) neither interpretation masks
         // anything: the two sliding semantics coincide for this scenario
-        // (recorded explicitly; they differ only beyond 1024 rows).
+        // (recorded explicitly; they differ only beyond 1024 rows — open
+        // reserve R1 of the architect register, never exercised here).
         assert!(CudaGraph::build_mask(&positions, PREFIX + CANVAS, sliding_cuda, false).is_none());
         assert!(CudaGraph::build_mask(&positions, PREFIX + CANVAS, sliding_cpu, false).is_none());
 
@@ -1160,20 +1184,20 @@ fn cuda_decoder_layers_match_cpu_step_by_step() {
             one("layer_output", s.out, CANVAS, HIDDEN, &cpu_layer_out);
         }
 
-        // Raw widened scores: F32 comparison with the tie bound. The drift is
-        // collected, not asserted per layer: the table must be complete even
-        // when a bound is exceeded (the bound is checked once, at the end).
+        // Raw widened scores: F32 CUDA ↔ CPU, bit equality since D5. The
+        // drift is collected, not asserted per layer: the table must be
+        // complete even when a gate is exceeded (checked once, at the end).
         {
             let cuda_scores = graph
                 .download_f32(s.router_scores)
                 .expect("download scores");
             let (max_abs, rms) = stats(&cuda_scores, &cpu_raw);
             eprintln!(
-                "layer {layer:>2} | router_scores    | {max_abs:.6} | {rms:.6} | (f32, bound {MAX_SCORE_DRIFT})"
+                "layer {layer:>2} | router_scores    | {max_abs:.6} | {rms:.6} | (f32, gate {CUDA_CPU_MAX_SCORE_DRIFT})"
             );
-            if max_abs > MAX_SCORE_DRIFT {
+            if max_abs > CUDA_CPU_MAX_SCORE_DRIFT {
                 score_drift_failures.push(format!(
-                    "couche {layer}: scores routeur CUDA↔CPU {max_abs} > {MAX_SCORE_DRIFT}"
+                    "couche {layer}: scores routeur CUDA↔CPU {max_abs} > {CUDA_CPU_MAX_SCORE_DRIFT}"
                 ));
             }
             if max_abs > worst_score_drift.0 {
@@ -1190,11 +1214,11 @@ fn cuda_decoder_layers_match_cpu_step_by_step() {
             .collect();
         let (max_abs, rms) = stats(&cuda_weights, &cpu_weights);
         eprintln!(
-            "layer {layer:>2} | router_weights   | {max_abs:.6} | {rms:.6} | (f32, bound {MAX_SCORE_DRIFT})"
+            "layer {layer:>2} | router_weights   | {max_abs:.6} | {rms:.6} | (f32, gate {CUDA_CPU_MAX_SCORE_DRIFT})"
         );
-        if max_abs > MAX_SCORE_DRIFT {
+        if max_abs > CUDA_CPU_MAX_SCORE_DRIFT {
             score_drift_failures.push(format!(
-                "couche {layer}: poids routeur CUDA↔CPU {max_abs} > {MAX_SCORE_DRIFT}"
+                "couche {layer}: poids routeur CUDA↔CPU {max_abs} > {CUDA_CPU_MAX_SCORE_DRIFT}"
             ));
         }
         let cuda_indices: Vec<u32> = topk_values
@@ -1239,7 +1263,7 @@ fn cuda_decoder_layers_match_cpu_step_by_step() {
             let gap = (golden_scores[row * EXPERTS + extra[0] as usize]
                 - golden_scores[row * EXPERTS + missing[0] as usize])
                 .abs();
-            if extra.len() == 1 && missing.len() == 1 && gap <= MAX_SCORE_DRIFT {
+            if extra.len() == 1 && missing.len() == 1 && gap <= BOUNDARY_TIE_GAP {
                 router_swaps += 1;
             } else {
                 router_structural.push(format!(
@@ -1266,9 +1290,9 @@ fn cuda_decoder_layers_match_cpu_step_by_step() {
         if layer_worst_steps > worst_overall.0 {
             worst_overall = (layer_worst_steps, layer, layer_worst_label.clone());
         }
-        if layer_worst_steps > MAX_ROW_DRIFT_STEPS {
+        if layer_worst_steps > CUDA_CPU_MAX_ROW_STEPS {
             drift_failures.push(format!(
-                "couche {layer} étape {}: {layer_worst_steps:.1} pas BF16 > {MAX_ROW_DRIFT_STEPS}",
+                "couche {layer} étape {}: {layer_worst_steps:.4} pas BF16 > {CUDA_CPU_MAX_ROW_STEPS}",
                 layer_worst_label
             ));
         }
@@ -1382,7 +1406,13 @@ fn cuda_decoder_layers_match_cpu_step_by_step() {
         "router: ensembles fideles={router_faithful}/{rows} echanges de frontiere={router_swaps} structurels={}",
         router_structural.len()
     );
-    eprintln!("router: ensembles CUDA==CPU: {cuda_eq_cpu_sets}/{rows} (rapporté)");
+    eprintln!("router: ensembles CUDA==CPU: {cuda_eq_cpu_sets}/{rows} (gate D5: toutes les lignes)");
+    if cuda_eq_cpu_sets != rows {
+        score_drift_failures.push(format!(
+            "ensembles d'experts CUDA≠CPU sur {} ligne(s) de {rows}",
+            rows - cuda_eq_cpu_sets
+        ));
+    }
     for line in &router_structural {
         eprintln!("STRUCTUREL {line}");
     }
@@ -1407,8 +1437,8 @@ fn cuda_decoder_layers_match_cpu_step_by_step() {
     if peak > 28 * (1 << 30) {
         vram_failures.push(format!("pic VRAM final {peak} > 28 GiB"));
     }
-    // The bounds are checked once, on the collected violations, so the table
-    // above is complete even when a bound is exceeded.
+    // The gates are checked once, on the collected violations, so the table
+    // above is complete even when a gate is exceeded.
     assert!(
         drift_failures.is_empty() && score_drift_failures.is_empty() && vram_failures.is_empty(),
         "porte(s) dépassée(s):\n  {}\n  {}\n  {}",
@@ -1489,7 +1519,8 @@ fn cuda_lm_logits_match_cpu_on_the_reference_hidden() {
     );
     eprintln!("logits CPU vs dorée (SUIVI): max_abs={cgmax:.6} rms={cgrms:.6} pire_ligne={cgsteps:.1} pas");
 
-    // Ranking divergence (D2: reported). argmax and top-8 set per row.
+    // Ranking divergence CUDA vs CPU: argmax and top-8 set per row. Gated
+    // since D5 (bit-equal logits cannot rank differently).
     let mut argmax_same = 0usize;
     let mut top8_same = 0usize;
     for row in 0..CANVAS {
@@ -1534,7 +1565,7 @@ fn cuda_lm_logits_match_cpu_on_the_reference_hidden() {
         }
     }
     eprintln!(
-        "logits classement: argmax identiques {argmax_same}/{CANVAS} lignes, top-8 identiques {top8_same}/{CANVAS} lignes (rapportés, D2)"
+        "logits classement: argmax identiques {argmax_same}/{CANVAS} lignes, top-8 identiques {top8_same}/{CANVAS} lignes (gate D5: toutes les lignes)"
     );
 
     assert!(
@@ -1547,11 +1578,21 @@ fn cuda_lm_logits_match_cpu_on_the_reference_hidden() {
     );
     assert!(
         max_abs <= LOGITS_MAX_ABS,
-        "logits CUDA↔CPU drift {max_abs} above {LOGITS_MAX_ABS}"
+        "logits CUDA↔CPU drift {max_abs} above {LOGITS_MAX_ABS} (bit equality required since D5)"
     );
     assert!(
         rms <= LOGITS_RMS,
-        "logits CUDA↔CPU rms {rms} above {LOGITS_RMS}"
+        "logits CUDA↔CPU rms {rms} above {LOGITS_RMS} (bit equality required since D5)"
+    );
+    assert_eq!(
+        argmax_same, CANVAS,
+        "logits argmax CUDA↔CPU differs on {} row(s)",
+        CANVAS - argmax_same
+    );
+    assert_eq!(
+        top8_same, CANVAS,
+        "logits top-8 CUDA↔CPU differs on {} row(s)",
+        CANVAS - top8_same
     );
     let (peak, uploaded, downloaded, launches) = graph.metrics();
     eprintln!(
