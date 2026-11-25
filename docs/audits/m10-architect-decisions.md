@@ -14,25 +14,21 @@ les formulations « à trancher » des §11.8 et §12 du rapport.
 | **Contrat interne CUDA ↔ CPU** | La chaîne encodeur CUDA est **bit-égale** au CPU (mesure `0,000000 / 0,000000`, `m10-parity-04`). Toute différence non nulle est une régression des kernels. | `cuda_graph_chain_is_bit_equal_to_cpu_and_tracks_golden` exige `max_abs == 0` et `rms == 0` pour l'encodeur. Décodeur et logits CUDA ↔ CPU : bornes existantes **conservées**, jamais mesurées avant ce correctif (le test s'arrêtait plus tôt) ; à resserrer après la prochaine campagne. |
 | **Contrat de parité glibc** | **Validé** : palier 1 (tables glibc 2.39) sur toute machine ; palier 2 sur hôte-oracle seulement. Le palier 2 est conservé (la couverture dense reste sous contrat chez les développeurs). | inchangé |
 | **Provenance des kernels** | Nouveau verrou **en CI** : empreintes SHA-256 des `.cu`, `.cuh` et `.ptx` épinglées ; toute modification d'une source sans mise à jour du manifeste, de la procédure et de la campagne GPU échoue. | `tests/kernel_provenance.rs` |
-| **Campagne RTX 5090** | **Non commandée.** Rejeu obligatoire après tout changement de `.cu`/PTX (le verrou de provenance le détecte) avec les critères du manifeste de `kernel_provenance.rs`. | — |
+| **Campagne RTX 5090** | Campagne groupée du 25/11 exécutée : 6/6 étapes vertes, checkpoint vérifié, primitives 21/21 bit-exactes et sous-graphe décodeur couche 0 bit-exact. Réserve restante : mesures CUDA↔CPU des 30 couches du décodeur et des logits. Tout changement `.cu`/PTX impose une nouvelle campagne complète et mise à jour de provenance. | — |
 
 ## 1. Ce que ces décisions ne prouvent pas
 
-- Les comparaisons de chaîne n'étant plus bornées, **elles ne protègent plus d'une dérive
-  de chaîne** : seul le bisect de l'encodeur est contractuel. **Il n'existe pas encore de
-  bisect à entrée dorée pour la tour de vision ni pour le décodeur** ; ces deux étages ne
-  sont donc couverts que par le suivi. Ce trou borne le statut M10 (§2 ci-dessous).
-- Les gates de chaîne ont été remplacés sans nouvelle mesure sur dorées : ces tests
-  sont `#[ignore]` et n'ont pas pu être rejoués dans ce cycle (checkpoint absent). Ils ont
-  été compilés, formatés et passés à clippy `-D warnings`.
+- Les comparaisons de chaîne n'étant plus bornées, **elles ne protègent pas contre une dérive de chaîne** : conformément à D2, elles restent un suivi. Les bisects à entrée dorée de l'encodeur, de la vision et du décodeur sont désormais exécutés et contractuels selon leurs bornes mesurées ; voir `m10-cpu-campaign-2026-11-25.md`.
+- Les suites CPU dorées/bisects ont été réellement exécutées sur l'environnement avec checkpoint épinglé ; les 12 tests ignorés de la CI standard sont explicitement documentés et couverts par les journaux de campagne appropriés.
 
 ## 2. Statut M10
 
-**M10 : validé sous réserve, pas validé sans réserve.**
-Les réserves de clôture, par ordre de priorité :
-1. produire les entrées par couche de référence (`golden_layers`) pour la vision et le
-   décodeur et ajouter leurs bisects (même métrique D1, bornes fixées sur la mesure) ;
-2. rejouer une fois la campagne RTX 5090 sur la tête finale pour mesurer décodeur et logits
-   CUDA ↔ CPU, puis resserrer les bornes du tableau ci-dessus ;
-3. exécuter les tests `golden_cpu` / bisect sur une machine disposant du checkpoint, avec
-   résultat publié.
+**M10 : validé sous réserves, pas validé sans réserve.** La finalisation CPU du 25/11 est achevée : générateur et fixtures de référence, bisects des 30 couches encodeur (210/210, 2,0 pas), des 27 couches vision (0,2 pas) et des 30 couches décodeur (10,0 pas ; 470/480 + 10 échanges de frontière justifiés), tests exécutés sur checkpoint, journaux et empreintes publiés.
+
+La campagne RTX 5090 groupée du 25/11 est également exécutée (6/6 étapes vertes). Elle couvre driver, mémoire, tenseurs, injections de fautes, primitives M10 et vérification complète du checkpoint ; le sous-graphe décodeur réel de couche 0 est bit-exact.
+
+Réserves de clôture restantes :
+1. mesurer CUDA↔CPU sur les **30 couches du décodeur et les logits** sur RTX 5090 ; publier métriques, journaux bruts, SHA, budgets et preuve de libération des ressources ; resserrer les bornes CUDA↔CPU existantes uniquement après mesure ;
+2. réaligner et vérifier `docs/m10-diffusiongemma.md`, `docs/architecture.md` et `docs/Claymore.md` sur la finalisation CPU et la campagne matérielle du 25/11.
+
+Les décisions D1/D2 ne changent pas. La dérive de chaîne contre la référence eager reste un suivi, pas un gate numérique absolu. Les dorées et leurs empreintes ne doivent être ni régénérées ni réépinglées. Toute modification de `.cu`/`.cuh`/PTX après le gel impose la mise à jour du manifeste et une nouvelle campagne RTX 5090 complète.
