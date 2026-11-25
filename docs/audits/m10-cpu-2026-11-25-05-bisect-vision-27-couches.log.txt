@@ -1,0 +1,46 @@
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+   Compiling claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Finished `release` profile [optimized] target(s) in 0.32s
+     Running tests/vision_layer_bisect.rs (target/release/build/claymore-model-gemma/64c1d7c9aa87b7a5/out/vision_layer_bisect-64c1d7c9aa87b7a5)
+
+running 1 test
+test vision_layers_reproduce_the_reference_when_fed_reference_inputs ... vision layer  0  max_abs=0.031250  rms=0.000426714  pire_ligne=  0.0 pas BF16
+vision layer  1  max_abs=0.015625  rms=0.000392456  pire_ligne=  0.0 pas BF16
+vision layer  2  max_abs=0.125000  rms=0.002397442  pire_ligne=  0.1 pas BF16
+vision layer  3  max_abs=0.250000  rms=0.002462294  pire_ligne=  0.1 pas BF16
+vision layer  4  max_abs=0.031250  rms=0.000721938  pire_ligne=  0.0 pas BF16
+vision layer  5  max_abs=0.015625  rms=0.000318794  pire_ligne=  0.0 pas BF16
+vision layer  6  max_abs=0.015625  rms=0.000472888  pire_ligne=  0.0 pas BF16
+vision layer  7  max_abs=1.000000  rms=0.015610272  pire_ligne=  0.2 pas BF16
+vision layer  8  max_abs=0.003906  rms=0.000064871  pire_ligne=  0.0 pas BF16
+vision layer  9  max_abs=0.062500  rms=0.000780586  pire_ligne=  0.0 pas BF16
+vision layer 10  max_abs=0.500000  rms=0.009037496  pire_ligne=  0.1 pas BF16
+vision layer 11  max_abs=0.250000  rms=0.007737637  pire_ligne=  0.1 pas BF16
+vision layer 12  max_abs=0.062500  rms=0.001554129  pire_ligne=  0.0 pas BF16
+vision layer 13  max_abs=0.031250  rms=0.000638636  pire_ligne=  0.0 pas BF16
+vision layer 14  max_abs=0.007812  rms=0.000116676  pire_ligne=  0.0 pas BF16
+vision layer 15  max_abs=0.062500  rms=0.001651316  pire_ligne=  0.0 pas BF16
+vision layer 16  max_abs=0.250000  rms=0.009750484  pire_ligne=  0.0 pas BF16
+vision layer 17  max_abs=0.500000  rms=0.018250907  pire_ligne=  0.1 pas BF16
+vision layer 18  max_abs=0.125000  rms=0.004041443  pire_ligne=  0.0 pas BF16
+vision layer 19  max_abs=0.500000  rms=0.014338353  pire_ligne=  0.1 pas BF16
+vision layer 20  max_abs=0.500000  rms=0.030359276  pire_ligne=  0.1 pas BF16
+vision layer 21  max_abs=0.250000  rms=0.006942563  pire_ligne=  0.0 pas BF16
+vision layer 22  max_abs=0.250000  rms=0.012353302  pire_ligne=  0.0 pas BF16
+vision layer 23  max_abs=0.500000  rms=0.042111035  pire_ligne=  0.1 pas BF16
+vision layer 24  max_abs=2.000000  rms=0.071518034  pire_ligne=  0.2 pas BF16
+vision layer 25  max_abs=1.000000  rms=0.098330237  pire_ligne=  0.1 pas BF16
+vision layer 26  max_abs=1.000000  rms=0.034835320  pire_ligne=  0.1 pas BF16
+pire dérive vision 0.2 pas BF16 (couche 7) sur 27 couches
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.02s
+

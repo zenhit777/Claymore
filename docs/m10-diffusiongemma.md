@@ -331,3 +331,42 @@ Cette section prévaut sur les formulations historiques contradictoires conserv�
 - **Travaux CPU-only restant à réaliser avant la campagne GPU** : (1) produire et versionner la procédure reproductible de génération/validation des entrées de référence par couche ; (2) ajouter les bisects à entrée dorée pour les 27 couches de vision et les couches du décodeur, avec états/cache requis ; (3) fixer les bornes D1 uniquement après mesure ; (4) exécuter réellement les tests `golden_cpu` et les trois bisects avec checkpoint et artefacts présents ; (5) publier logs, hashes, commandes et rapport. Ces tâches n'utilisent pas la RTX 5090 et doivent être traitées en premier.
 - **Travail réservé à l'agent matériel** : après gel du code et des sources/PTX, rejouer sur RTX 5090 les tests CUDA↔CPU du décodeur et des logits, puis les tests matériels et la génération complète si le protocole final l'exige. Toute modification `.cu`/`.cuh`/PTX impose régénération, provenance mise à jour et nouveau rejeu matériel.
 - **Pas de merge automatique** : la fusion de #40 reste une décision distincte.
+
+### Finalisation CPU du 25 novembre 2026 — les cinq travaux CPU sont faits
+
+Cette sous-section met à jour la précédente ; le rapport complet, les journaux
+bruts et leurs empreintes sont dans `audits/m10-cpu-campaign-2026-11-25.md`.
+Aucune utilisation du GPU.
+
+1. **Procédure reproductible versionnée** : `tools/m10/` (générateur unique
+   anti-écrasement avec portes de bit-exactité contre les dorées historiques,
+   environment épinglé, manifeste d'empreintes) et `tools/m10/README.md` ;
+   politique projet dans `docs/reproducibility.md`. Le générateur a produit
+   455 artefacts : 85/85 contrôles internes, 311/311 portes dorées.
+2. **Fixtures par couche engagées** : `crates/claymore-model-gemma/tests/data/m10_layers/`
+   (41 Mio, engagement `ef329ca`), identité épinglée par SHA-256 du manifeste
+   et validée en CI standard par `tests/m10_reference.rs` (sans checkpoint).
+   Les tests contractuels ne dépendent plus que du checkpoint épinglé, via
+   `CLAYMORE_M10_CHECKPOINT`.
+3. **Bisects vision et décodeur ajoutés** avec les points d'injection partagés
+   avec les chaînes (`vision_forward_layer_from_hidden`,
+   `decoder_forward_traced_from_hidden` — extraction de corps partagé, sans
+   duplication ; égalité bit à bit chaîne avant/après refactor :
+   `diff` des tables `golden_cpu` identique). Égalité d'entrée vérifiée avant
+   chaque comparaison ; le cache du décodeur est le cache K/V de référence de
+   la couche, jamais un cache Claymore.
+4. **Bornes D1 fixées après mesure complète** : encodeur 4,0 (2 × 2,0,
+   inchangé, rejeu conforme `parity-11` : 210/210, 2,0 ULP, couche 2) ;
+   vision **0,2 mesuré → borne 4,0** ; décodeur **10,0 mesuré → borne 20,0**
+   (règle uniforme `max(2 × mesuré, 4,0)`). Sélection d'experts du décodeur :
+   la frontière top-8/top-9 de la référence est à précision d'égalité (écarts
+   mesurés : 0.0 en majorité, max ~5e-4) — une égalité stricte d'ensembles
+   exigerait une réduction bit identique, ce que D1 interdit ; porte retenue =
+   ensemble identique **ou** échange unique de frontière à égalité de scores
+   de référence (470/480 + 10, 0 structurel).
+5. **Logs, hashes, commandes et rapport publiés** : `audits/m10-cpu-campaign-2026-11-25.md`
+   + six journaux bruts `m10-cpu-2026-11-25-*.log.txt` + `…-logs.sha256`.
+
+Le créneau GPU groupé est **préparé, non exécuté** :
+`audits/m10-rtx5090-grouped-protocol.md`, en attente d'autorisation
+utilisateur explicite (AGENTS.md). PR #40 toujours ouverte, non fusionnée.
