@@ -1,0 +1,58 @@
+============================================================
+ÉTAPE 4: fault-injection — 2026-11-25T16:40:50+01:00
+HEAD: daa8773a97d1e1fcf6777c548de0c8bb3e6e299e
+------------------------------------------------------------
+Wed Nov 25 16:40:50 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+|  0%   49C    P8             46W /  575W |    1357MiB /  32607MiB |      1%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A         1427784      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+
+------------------------------------------------------------
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/build/claymore-memory/3688c07dc043eb86/out/claymore_memory-3688c07dc043eb86)
+
+running 13 tests
+test cuda::tests::cuda_manager_reports_device_memory ... ok
+test cuda::tests::hardware_poll_retires_completed_transfer_before_admission_without_wait ... M5-HW-POLL-01 retired=1; admission evicted completed victim without explicit wait
+ok
+test cuda::tests::injected_create_event_failure_leaves_every_allocation_releasable ... ok
+test cuda::tests::injected_event_record_failure_with_successful_sync_lifts_every_guard ... ok
+test cuda::tests::injected_event_record_failure_with_sync_error_preserves_gpu_guards ... ok
+test cuda::tests::injected_launch_failure_with_successful_sync_releases_every_allocation ... ok
+test cuda::tests::injected_launch_failure_with_sync_error_poisons_and_pins_all_allocations ... ok
+test cuda::tests::injected_m10_event_record_failure_with_successful_sync_lifts_every_guard ... ok
+test cuda::tests::injected_m10_launch_failure_with_successful_sync_releases_every_allocation ... ok
+test cuda::tests::injected_m10_launch_failure_with_sync_error_poisons_and_pins_all_allocations ... ok
+test cuda::tests::injected_m10_partial_guard_failure_with_successful_sync_lifts_only_installed_guards ... ok
+test cuda::tests::injected_partial_guard_failure_with_successful_sync_lifts_only_installed_guards ... ok
+test cuda::tests::injected_partial_guard_failure_with_sync_error_poisons_and_pins_all_allocations ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 1.77s
+
+============================================================
+ÉTAPE 4 TERMINÉE rc=0 — 2026-11-25T16:40:51+01:00
