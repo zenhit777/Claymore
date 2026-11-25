@@ -28,7 +28,7 @@
 //! that probe -- i.e. only on a glibc 2.39 host: the port must also equal the
 //! installed libm on **every swept input**, pinned or not, which is what keeps
 //! the dense pitch under contract where the tables do not reach. On a host that
-//! is not the oracle the tier-two comparison is skipped with a line on stdout,
+//! is not the oracle the tier-two comparison is skipped with a line on stderr,
 //! and `report_divergence_against_installed_libm` (ignored) prints its full
 //! divergence set for publication.
 //!
@@ -374,7 +374,8 @@ fn lcg(state: &mut u64) -> f32 {
 /// They are a **host probe**, never a tolerance. If the installed libm returns
 /// anything else at these points, that libm is not the oracle and the tests
 /// stop comparing against it (the pinned reference table is still asserted in
-/// full, on every host) and say so on stdout.
+/// full, on every host) and say so on stderr (a test binary captures that
+/// stream, so the line is visible with `--nocapture`).
 const SENTINELS_GLIBC_2_39: [(&str, u32, u32); 2] = [
     // expm1f(2^-23): the port and glibc 2.39 return the argument exactly;
     // glibc >= 2.4x returns one ULP higher.

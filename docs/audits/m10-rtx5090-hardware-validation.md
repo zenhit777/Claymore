@@ -27,9 +27,11 @@
 > vers `ef1a1cf`, aucun commit dupliqué, PR #40 mise à jour) puis les deux jobs de CI
 > ont été rejoués localement sur l'arbre d'intégration : **PASS** (voir
 > `m10-cuda-cpu-parity-fix.md` §7.1.3). Qualification depuis : ces répliques
-> locales **ne sont pas** la CI GitHub, et la CI GitHub réelle a depuis été
-> observée **rouge deux fois** sur cette branche (`ef1a1cf`, puis `85f7772`) ;
-> cause, réfutation de la première correction et contrat de remplacement au
+> locales **ne sont pas** la CI GitHub, et la CI GitHub réelle a été observée
+> **rouge deux fois** sur cette branche (`ef1a1cf`, puis `85f7772`) **avant d'être
+> observée verte sur la tête `88d3989`** (runs `45539679704` et `45539689788`, 4
+> jobs en succès) ; cause, réfutation de la première correction et contrat de
+> remplacement au
 > **§7.4** du même rapport et aux journaux `m10-parity-12` / `m10-parity-13`.
 > Un diagnostic complet de la divergence
 > CPU ↔ dorée est consigné au **§11 du même rapport** : il **explique** le rouge

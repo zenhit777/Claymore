@@ -409,7 +409,8 @@ l'affirme contre **l'oracle publié**. Deux paliers, dans
    **aussi** égaler la libm installée sur **toutes** les entrées balayées,
    épinglées ou non. C'est ce qui maintient le pas dense sous contrat là où les
    tables ne vont pas. Hors hôte-oracle, ce palier est ignoré **avec une ligne
-   sur stdout** (le saut n'est pas masqué) et le diagnostic ignoré
+   sur stderr** (le saut n'est pas masqué ; un binaire de test capture ce flux,
+   donc la ligne n'apparaît qu'avec `--nocapture`) et le diagnostic ignoré
    `report_divergence_against_installed_libm` publie le jeu de divergence complet.
 
 Les tables ne sont régénérables que sur un hôte-oracle :
@@ -441,18 +442,48 @@ propriété de l'oracle.
 
 **Vérifications rejouées après correction** (hôte glibc 2.39) :
 `cargo fmt --all -- --check` OK ; `cargo test -p claymore-model-gemma --test
-kernel_order_parity` → **7 passés / 0 échec / 2 ignorés**, palier 2 actif
-(aucune ligne de saut sur stdout) ; `cargo clippy -p claymore-model-gemma
+kernel_order_parity` → **7 passés / 0 échec / 2 ignorés**, palier 2 actif (sur
+cet hôte la sonde passe, donc aucune ligne de saut n'est émise) ;
+`cargo clippy -p claymore-model-gemma
 --all-targets -- -D warnings` code de sortie `0` ; réplique locale du job `test`
 → **12 étapes OK, 325 passés / 0 échec / 26 ignorés** ; réplique locale du job
 MSRV `1.86.0` → **8 étapes OK, 264 passés / 0 échec / 10 ignorés**. Chiffres
 détaillés au journal `m10-parity-13`.
 
-**État du run déclenché par le commit de correction.** Consigné au paragraphe
-final de `docs/audits/m10-parity-13-oracle-epingle-glibc239.log.txt` et au
-commentaire de synthèse de la PR #40, une fois le run réellement relevé sur
-GitHub Actions. Ce fichier ne peut pas contenir l'état du run qu'il déclenche
-lui-même : la boucle est coupée là, volontairement, et l'état du run de la tête
+**État du run déclenché par le commit de correction — relevé sur GitHub Actions.**
+Le commit `88d3989e3cac1cbc3b7a0d0cbe80e871ea61e5ae` déclenche deux runs, tous deux
+**verts** :
+
+| Déclencheur | Run | `test` | `msrv` |
+|---|---|---|---|
+| `push` | `45539679704` (25/11 03:23:47Z → 03:24:16Z) | `138954848745` **succès** | `138954848291` **succès** |
+| `pull_request` | `45539689788` (25/11 03:23:52Z → 03:24:30Z) | `138954881028` **succès** | `138954880571` **succès** |
+
+Preuves dans le journal du job `138954881028` (relevé brut, §5 du journal
+`m10-parity-13`) :
+
+- étape « Run tests » : `kernel_order_parity` → `test result: ok. 7 passed; 0
+  failed; 2 ignored`, les deux ignorés étant `regenerate_glibc_2_39_reference_tables`
+  et `report_divergence_against_installed_libm` ; **aucune** occurrence de la ligne
+  de saut, ce qui confirme que le flux stderr du palier 2 est capturé par le
+  binaire de test hors `--nocapture` ;
+- étape de mesure (`--nocapture`, `continue-on-error`) sur l'image
+  `ubuntu-26.04` : `expf: 0 divergence(s) out of 32878 swept inputs (24632
+  distinct)`, `expm1f: 3242 divergence(s) out of 549204 swept inputs (532952
+  distinct)`, `tanhf: 890 divergence(s) out of 126112 swept inputs (120394
+  distinct)`, `total: 4132 divergence(s) out of 708194 swept inputs (677978
+  distinct)` ; désaccords avec les tables épinglées : `expf 0 de 9272`,
+  `expm1f 211 de 33752`, `tanhf 446 de 12874`.
+
+Ce relevé **clôture la réfutation** : la libc de l'image du runner diffère de
+glibc 2.39 sur **4 132** entrées balayées, dont **657** des entrées des tables
+épinglées — pas deux. Le premier rouge n'en montrait que deux parce que
+l'assertion coupe au premier écart. Le contrat épinglé, lui, est passé sur le
+runner sans modification du port : c'est bien la comparaison à l'hôte qui était la
+source du rouge, pas la parité.
+
+Ce fichier ne peut pas contenir l'état du run qu'il déclenche **lui-même** : la
+boucle est coupée là, volontairement, et l'état du run de la tête
 finale est donné dans le commentaire de la PR, pas ici.
 
 **Réfutation consignée (b).** La conclusion antérieure « les runs de la PR #40 ne
@@ -540,8 +571,8 @@ fichiers déjà cités au §8.3 :
 | `m10-parity-09-ci-local-msrv-1.86.log.txt` | Réplique locale du job `msrv` (Rust 1.86), §7.1.2 |
 | `m10-parity-10-ci-local-branche-integree.log.txt` | Les deux jobs rejoués sur `feat/m10-diffusiongemma` après intégration, fmt inclus : `CI-REPLICA RESULT: PASS`, `MSRV-REPLICA RESULT: PASS`, §7.1.3 |
 | `m10-parity-11-bisect-couches-entrees-dorees.log.txt` | bisect couche par couche à entrée dorée injectée, avec la borne `MAX_ROW_DRIFT_STEPS = 4,0` : `lignes fideles=210/210`, pire écart `2,0` pas BF16 (couche 2), table identique au run sans borne (§11.4) |
-| `m10-parity-12-ci-github-ef1a1cf-jobs-rouges.log.txt` | **état réel de la CI GitHub** sur `ef1a1cf` : 2 runs et 4 jobs en échec (IDs, URLs, extraits bruts des deux jobs), image du runner `ubuntu-26.04`, les deux entrées à 1 ULP, diagnostic local `0 divergence / 708 194 entrées` (§7.4). Portion « Lecture » **réfutée par addition** en fin de fichier (§7.4, réfutation (a)) |
-| `m10-parity-13-oracle-epingle-glibc239.log.txt` | **second état rouge observé**, sur `85f7772` : 2 runs et 4 jobs en échec (IDs, URLs), deux nouvelles entrées à 1 ULP, inventaire des causes, contrat en deux paliers, tables de référence glibc 2.39 publiées (entrées, octets, SHA-256), correction de couverture du balayage, et les deux répliques locales rejouées (§7.4) |
+| `m10-parity-12-ci-github-ef1a1cf-jobs-rouges.log.txt` | **état réel de la CI GitHub** sur `ef1a1cf` : 2 runs et 4 jobs en échec (IDs, URLs, extraits bruts des deux jobs), image du runner `ubuntu-26.04`, les deux entrées à 1 ULP, diagnostic local `0 divergence / 708 194 entrées` (§7.4). Portion « Lecture » **réfutée par addition** en fin de fichier (§7.4, réfutation (a)), puis **close par mesure** sur le runner : `4 132` entrées divergentes, dont `657` des tables épinglées |
+| `m10-parity-13-oracle-epingle-glibc239.log.txt` | **second état rouge observé**, sur `85f7772` : 2 runs et 4 jobs en échec (IDs, URLs), deux nouvelles entrées à 1 ULP, inventaire des causes, contrat en deux paliers, tables de référence glibc 2.39 publiées (entrées, octets, SHA-256), correction de couverture du balayage, les deux répliques locales rejouées ; **§5 : premier run vert observé**, sur `88d3989` (2 runs, 4 jobs en succès, résultat de l'étape de mesure sur l'image du runner) (§7.4) |
 
 Les fichiers bruts restent également disponibles hors dépôt dans
 `/tmp/opencode/m10/`.

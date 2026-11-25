@@ -186,3 +186,10 @@ résultat dépend de l'image. Le contrat est désormais épinglé à l'oracle lu
 (table de résultats glibc 2.39 versionnée, plus comparaison à la libm installée
 seulement sur les hôtes qui sont l'oracle). Détail et chiffres au journal
 m10-parity-13 et à la section 7.4 du rapport.
+
+La borne est établie depuis, par mesure sur le runner lui-même (etape de mesure
+du job `Format, test, and lint` du run 45539689788, tete 88d3989) : **4 132**
+entrees balayees divergentes sur 708 194 (expf 0, expm1f 3 242, tanhf 890), dont
+**657** des entrees des tables epinglees (expm1f 211 / 33 752, tanhf 446 / 12 874,
+expf 0 / 9 272). Le contrat epingle, lui, passe sur cette image : les deux runs de
+la tete 88d3989 sont **verts**.
