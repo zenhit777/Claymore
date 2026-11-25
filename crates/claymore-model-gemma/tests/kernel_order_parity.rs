@@ -31,14 +31,38 @@ fn f32_of_bits(bits: u32) -> f32 {
 // ---------------------------------------------------------------------------
 
 const EXP2F_TAB: [u64; 32] = [
-    0x3ff0000000000000, 0x3fefd9b0d3158574, 0x3fefb5586cf9890f, 0x3fef9301d0125b51,
-    0x3fef72b83c7d517b, 0x3fef54873168b9aa, 0x3fef387a6e756238, 0x3fef1e9df51fdee1,
-    0x3fef06fe0a31b715, 0x3feef1a7373aa9cb, 0x3feedea64c123422, 0x3feece086061892d,
-    0x3feebfdad5362a27, 0x3feeb42b569d4f82, 0x3feeab07dd485429, 0x3feea47eb03a5585,
-    0x3feea09e667f3bcd, 0x3fee9f75e8ec5f74, 0x3feea11473eb0187, 0x3feea589994cce13,
-    0x3feeace5422aa0db, 0x3feeb737b0cdc5e5, 0x3feec49182a3f090, 0x3feed503b23e255d,
-    0x3feee89f995ad3ad, 0x3feeff76f2fb5e47, 0x3fef199bdd85529c, 0x3fef3720dcef9069,
-    0x3fef5818dcfba487, 0x3fef7c97337b9b5f, 0x3fefa4afa2a490da, 0x3fefd0765b6e4540,
+    0x3ff0000000000000,
+    0x3fefd9b0d3158574,
+    0x3fefb5586cf9890f,
+    0x3fef9301d0125b51,
+    0x3fef72b83c7d517b,
+    0x3fef54873168b9aa,
+    0x3fef387a6e756238,
+    0x3fef1e9df51fdee1,
+    0x3fef06fe0a31b715,
+    0x3feef1a7373aa9cb,
+    0x3feedea64c123422,
+    0x3feece086061892d,
+    0x3feebfdad5362a27,
+    0x3feeb42b569d4f82,
+    0x3feeab07dd485429,
+    0x3feea47eb03a5585,
+    0x3feea09e667f3bcd,
+    0x3fee9f75e8ec5f74,
+    0x3feea11473eb0187,
+    0x3feea589994cce13,
+    0x3feeace5422aa0db,
+    0x3feeb737b0cdc5e5,
+    0x3feec49182a3f090,
+    0x3feed503b23e255d,
+    0x3feee89f995ad3ad,
+    0x3feeff76f2fb5e47,
+    0x3fef199bdd85529c,
+    0x3fef3720dcef9069,
+    0x3fef5818dcfba487,
+    0x3fef7c97337b9b5f,
+    0x3fefa4afa2a490da,
+    0x3fefd0765b6e4540,
 ];
 
 fn f64_of_bits(bits: u64) -> f64 {
@@ -75,7 +99,10 @@ fn cuda_expf(x: f32) -> f32 {
     // Unsigned wrap-around, as in C: the table entry and the exponent shift
     // are added modulo 2^64.
     let s = f64_of_bits(EXP2F_TAB[(ki % 32) as usize].wrapping_add(ki << 47));
-    let a = r.mul_add(f64_of_bits(0x3ebc6af84b912394), f64_of_bits(0x3f2ebfce50fac4f3));
+    let a = r.mul_add(
+        f64_of_bits(0x3ebc6af84b912394),
+        f64_of_bits(0x3f2ebfce50fac4f3),
+    );
     let r2 = r * r;
     let y = r.mul_add(f64_of_bits(0x3f962e42ff0c52d6), 1.0);
     (a.mul_add(r2, y) * s) as f32
@@ -118,7 +145,11 @@ fn cuda_expm1f(mut x: f32) -> f32 {
         } else {
             let kk = (f32_of_bits(0x3fb8_aa3b) * x + (if xsb == 0 { 0.5 } else { -0.5 })) as i32;
             let tk = kk as f32;
-            (x - tk * f32_of_bits(0x3f31_7180), tk * f32_of_bits(0x3717_f7d1), kk)
+            (
+                x - tk * f32_of_bits(0x3f31_7180),
+                tk * f32_of_bits(0x3717_f7d1),
+                kk,
+            )
         };
         x = hi - lo;
         c = (hi - x) - lo;
@@ -133,10 +164,15 @@ fn cuda_expm1f(mut x: f32) -> f32 {
     let hfx = 0.5 * x;
     let hxs = x * hfx;
     let r1 = 1.0
-        + hxs * (f32_of_bits(0xbd08_8889)
-            + hxs * (f32_of_bits(0x3ad0_0d01)
-                + hxs * (f32_of_bits(0xb8a6_70cd)
-                    + hxs * (f32_of_bits(0x3686_7e54) + hxs * f32_of_bits(0xb457_edbb)))));
+        + hxs
+            * (f32_of_bits(0xbd08_8889)
+                + hxs
+                    * (f32_of_bits(0x3ad0_0d01)
+                        + hxs
+                            * (f32_of_bits(0xb8a6_70cd)
+                                + hxs
+                                    * (f32_of_bits(0x3686_7e54)
+                                        + hxs * f32_of_bits(0xb457_edbb)))));
     let mut t = 3.0 - r1 * hfx;
     let mut e = hxs * ((r1 - t) / (6.0 - x * t));
     if k == 0 {
@@ -321,8 +357,17 @@ fn portable_expf_matches_glibc() {
         }
     }
     for boundary in [
-        0x42b1_7217u32, 0x42b1_7218, 0x42b1_7180, 0x42b1_7181, 0x7f80_0000, 0x7f80_0001,
-        0xff80_0000, 0x0000_0000, 0x8000_0000, 0x42ce_8ecf, 0x42ce_8ed0,
+        0x42b1_7217u32,
+        0x42b1_7218,
+        0x42b1_7180,
+        0x42b1_7181,
+        0x7f80_0000,
+        0x7f80_0001,
+        0xff80_0000,
+        0x0000_0000,
+        0x8000_0000,
+        0x42ce_8ecf,
+        0x42ce_8ed0,
     ] {
         for d in -2i64..=2 {
             let bits = (boundary as i64 + d) as u32;
@@ -363,9 +408,20 @@ fn portable_expm1f_matches_glibc() {
         }
     }
     for boundary in [
-        0x4195_b844u32, 0x42b1_7218, 0x42b1_7180, 0x42b1_7181, 0x3eb1_7218, 0x3eb1_7219,
-        0x3f85_1592, 0x3f85_1591, 0x3300_0000, 0x32ff_ffff, 0x7f80_0000, 0x7f80_0001,
-        0x0000_0000, 0x8000_0000,
+        0x4195_b844u32,
+        0x42b1_7218,
+        0x42b1_7180,
+        0x42b1_7181,
+        0x3eb1_7218,
+        0x3eb1_7219,
+        0x3f85_1592,
+        0x3f85_1591,
+        0x3300_0000,
+        0x32ff_ffff,
+        0x7f80_0000,
+        0x7f80_0001,
+        0x0000_0000,
+        0x8000_0000,
     ] {
         for d in -2i64..=4 {
             let bits = (boundary as i64 + d) as u32;
@@ -414,8 +470,16 @@ fn portable_tanhf_matches_glibc() {
         }
     }
     for boundary in [
-        0x41b0_0000u32, 0x41b0_0001, 0x3f80_0000, 0x3f7f_ffff, 0x2400_0000, 0x23ff_ffff,
-        0x7f80_0000, 0x7f80_0001, 0x0000_0000, 0x8000_0000,
+        0x41b0_0000u32,
+        0x41b0_0001,
+        0x3f80_0000,
+        0x3f7f_ffff,
+        0x2400_0000,
+        0x23ff_ffff,
+        0x7f80_0000,
+        0x7f80_0001,
+        0x0000_0000,
+        0x8000_0000,
     ] {
         for d in -2i64..=4 {
             let bits = (boundary as i64 + d) as u32;
@@ -423,7 +487,18 @@ fn portable_tanhf_matches_glibc() {
             samples.push(bits | 0x8000_0000);
         }
     }
-    for x in [100.0f32, 1e30, 1e38, f32::MAX, f32::MIN, 22.0, -22.0, 21.999999, 1.0, -1.0] {
+    for x in [
+        100.0f32,
+        1e30,
+        1e38,
+        f32::MAX,
+        f32::MIN,
+        22.0,
+        -22.0,
+        21.999999,
+        1.0,
+        -1.0,
+    ] {
         samples.push(x.to_bits());
         samples.push(x.to_bits() | 0x8000_0000);
     }
@@ -462,7 +537,8 @@ fn rms_norm_kernel_order_matches_the_reference_bit_for_bit() {
         let scale: Vec<f32> = (0..width).map(|_| lcg(&mut state)).collect();
         let input = tensor_of(&host, vec![rows, width], &values);
         let scale_tensor = tensor_of(&host, vec![width], &scale);
-        let reference = ops::rms_norm(host.device(), &input, &scale_tensor, 1e-6).expect("rms_norm");
+        let reference =
+            ops::rms_norm(host.device(), &input, &scale_tensor, 1e-6).expect("rms_norm");
         let kernel = cuda_rms_norm_f32(&values, &scale, width, 1e-6);
         let reference_values = values_of(&host, &reference);
         for (i, (a, b)) in reference_values.iter().zip(kernel.iter()).enumerate() {
@@ -488,7 +564,10 @@ fn softmax_kernel_order_matches_the_reference_bit_for_bit() {
         let reference = ops::softmax_last_dim(host.device(), &input).expect("softmax");
         let mut kernel = vec![0.0f32; rows * width];
         for row in 0..rows {
-            cuda_softmax_row(&values[row * width..(row + 1) * width], &mut kernel[row * width..(row + 1) * width]);
+            cuda_softmax_row(
+                &values[row * width..(row + 1) * width],
+                &mut kernel[row * width..(row + 1) * width],
+            );
         }
         let reference_values = values_of(&host, &reference);
         for (i, (a, b)) in reference_values.iter().zip(kernel.iter()).enumerate() {
@@ -516,8 +595,14 @@ fn scatter_add_kernel_order_matches_the_reference_bit_for_bit() {
         let source_tensor = tensor_of(&host, vec![pairs, width], &source);
         let weights_tensor = tensor_of(&host, vec![pairs], &weights);
         let rows_tensor = tensor_of(&host, vec![pairs], &rows);
-        let reference = diffusion::scatter_add(host.device(), &source_tensor, &weights_tensor, &rows_tensor, tokens)
-            .expect("scatter_add");
+        let reference = diffusion::scatter_add(
+            host.device(),
+            &source_tensor,
+            &weights_tensor,
+            &rows_tensor,
+            tokens,
+        )
+        .expect("scatter_add");
         let kernel = cuda_scatter_add_f32(&source, &weights, &rows, tokens, width);
         let reference_values = values_of(&host, &reference);
         for (i, (a, b)) in reference_values.iter().zip(kernel.iter()).enumerate() {
@@ -538,7 +623,10 @@ fn masked_rows_keep_the_reference_conventions() {
     let scores = [f32::NEG_INFINITY; 8];
     let mut out = vec![1.0f32; 8];
     cuda_softmax_row(&scores, &mut out);
-    assert!(out.iter().all(|v| *v == 0.0), "fully masked row must be zeros");
+    assert!(
+        out.iter().all(|v| *v == 0.0),
+        "fully masked row must be zeros"
+    );
 
     let mut scores = [0.5f32; 8];
     scores[3] = f32::NAN;

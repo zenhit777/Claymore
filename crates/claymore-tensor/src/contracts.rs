@@ -733,7 +733,9 @@ fn cuda_grid_limit(signature: ShapeSignature) -> Option<UnsupportedReason> {
         ShapeSignature::RouterTopK { rows, .. } => (rows, 1),
         ShapeSignature::GeluMulUp { numel } => (numel.div_ceil(256), 1),
         ShapeSignature::GatherRows { out_rows, width } => (out_rows, width.div_ceil(256)),
-        ShapeSignature::ScatterAdd { out_rows, width, .. } => (out_rows, width.div_ceil(256)),
+        ShapeSignature::ScatterAdd {
+            out_rows, width, ..
+        } => (out_rows, width.div_ceil(256)),
         ShapeSignature::EmbedGather { tokens, width, .. } => (tokens, width.div_ceil(256)),
         ShapeSignature::RowMask { rows, width } => (rows, width.div_ceil(256)),
         ShapeSignature::ScaleBias { numel, .. } => (numel.div_ceil(256), 1),

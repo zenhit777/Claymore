@@ -1570,15 +1570,7 @@ impl CudaComputeEngine {
         stream: &CudaStream,
     ) -> Result<(), CudaError> {
         self.scatter_add_dispatch(
-            source,
-            weights,
-            rows,
-            output,
-            pairs,
-            width,
-            out_rows,
-            false,
-            stream,
+            source, weights, rows, output, pairs, width, out_rows, false, stream,
         )
     }
 
@@ -1600,15 +1592,7 @@ impl CudaComputeEngine {
         stream: &CudaStream,
     ) -> Result<(), CudaError> {
         self.scatter_add_dispatch(
-            source,
-            weights,
-            rows,
-            output,
-            pairs,
-            width,
-            out_rows,
-            true,
-            stream,
+            source, weights, rows, output, pairs, width, out_rows, true, stream,
         )
     }
 
