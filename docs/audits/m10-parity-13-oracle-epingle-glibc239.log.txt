@@ -1,0 +1,149 @@
+M10 / journal 13 - Second run rouge (85f7772) et oracle epingle a glibc 2.39 (25/11/2026)
+==========================================================================================
+
+Objet
+-----
+Consigner trois choses : (1) le second etat ROUGE reellement observe sur la
+PR #40, tete 85f7772017, (2) la refutation de la conclusion du journal 12 sur
+l'etendue des divergences libm, (3) la correction apportee - un oracle epingle
+par tables de reference au lieu de la libm installee - et sa revalidation
+locale.
+
+
+1. Runs GitHub Actions sur 85f7772017177621e999d50e8d4e287607cbcc83
+--------------------------------------------------------------------
+Depot zenhit777/Claymore, branche feat/m10-diffusiongemma, workflow Rust CI.
+Les deux runs sont completed/failure :
+
+  run_id       declencheur     cree        lien
+  45538595444  push            03:14:33Z  https://github.com/zenhit777/Claymore/actions/runs/45538595444
+  45538600058  pull_request    03:14:35Z  https://github.com/zenhit777/Claymore/actions/runs/45538600058
+
+Jobs en echec (deux par run) :
+
+  run 45538595444 (push)
+    138951244933  Format, test, and lint         03:14:35Z -> 03:14:54Z  failure
+                  https://github.com/zenhit777/Claymore/actions/runs/45538595444/job/138951244933
+    138951245523  Minimum supported Rust 1.86    03:14:35Z -> 03:14:52Z  failure
+                  https://github.com/zenhit777/Claymore/actions/runs/45538595444/job/138951245523
+  run 45538600058 (pull_request)
+    138951262162  Format, test, and lint         03:14:37Z -> 03:14:49Z  failure
+                  https://github.com/zenhit777/Claymore/actions/runs/45538600058/job/138951262162
+    138951261791  Minimum supported Rust 1.86    03:14:38Z -> 03:15:03Z  failure
+                  https://github.com/zenhit777/Claymore/actions/runs/45538600058/job/138951261791
+
+Etape en echec dans les quatre cas : « Run tests » (respectivement
+« Verify workspace on the declared MSRV » pour les deux jobs MSRV). Image du
+runner : 20261116.202.1 (ubuntu-26.04), identique a celle du journal 12.
+
+Extraits du journal du job 138951262162 (log brut
+/tmp/opencode/m10/job-138951262162.log, 55 340 octets) :
+
+  test portable_tanhf_matches_glibc ... FAILED
+  test portable_expm1f_matches_glibc ... FAILED
+  thread 'portable_tanhf_matches_glibc' panicked at .../kernel_order_parity.rs:596:9:
+  assertion `left == right` failed: tanhf(-0.0078125) port=-0.0078123407 glibc=-0.007812341
+    left: 3154116266
+   right: 3154116267
+  thread 'portable_expm1f_matches_glibc' panicked at .../kernel_order_parity.rs:512:9:
+  assertion `left == right` failed: expm1f(1.0) port=1.7182817 glibc=1.7182819
+    left: 1071378600
+   right: 1071378601
+  test result: FAILED. 5 passed; 2 failed; 1 ignored; 0 measured; 0 filtered out
+
+Les deux points publies par le journal 12 (tanhf(2**-7), expm1f(2**-23)) ne
+remontaient plus : le verrou de 85f7772 les affirmait correctement. Les
+entrees qui echouent ici sont ailleurs dans le balayage.
+
+
+2. Refutation : « ces deux entees sont les seules divergences »
+---------------------------------------------------------------
+Le journal 12 et la section 7.4 du rapport affirmaient que, sur l'image du
+runner, les deux entrees epinglees etaient « les seules divergences de tout le
+balayage ». C'est FAUX, et la raison est technique : l'assertion est a
+l'interieur de la boucle du balayage, donc le test s'arrete a la PREMIERE
+divergence rencontree. Deux tests en echec donnaient donc deux divergences
+observables, pas deux divergences existantes. En retirant ces deux points, la
+recherche a montre les suivantes (tanhf(-2**-7), puis expm1f(1.0)) - et rien
+ne dit que la liste s'arrete la.
+
+La formulation d'origine est conservee ici telle quelle, avec sa refutation :
+la comparaison port <-> libm installee n'est pas une comparaison a deux points
+mais a plusieurs centaines de milliers, et son issue depend de l'image du
+runner.
+
+
+3. Correction : le contrat est epingle a l'oracle, plus a l'hote
+----------------------------------------------------------------
+Le verrou de 85f7772 (R2) comparait encore le port a la libm installee sur
+tout le balayage, sauf deux points. Cet oracle-la est deplace par l'image du
+runner, donc le contrat etait conditionne a la machine. Nouveau contrat, dans
+crates/claymore-model-gemma/tests/kernel_order_parity.rs :
+
+  - palier 1, sur TOUTE machine : le port doit reproduire les resultats de
+    glibc 2.39 publies dans trois tables de reference versionnees
+    (tests/data/glibc_2_39_expf.bin, glibc_2_39_expm1f.bin,
+    glibc_2_39_tanhf.bin) ;
+  - palier 2, seulement si la libm installee passe la sonde des deux sentinelles
+    (autrement dit si l'hote EST glibc 2.39) : le port doit de plus egaler la
+    libm installee sur TOUTES les entrees balayees, epinglees ou non. C'est ce
+    qui garde le pas dense sous contrat la ou les tables ne vont pas ;
+  - hors hotes-oracles, le palier 2 est ignore avec une ligne sur stdout (le
+    saut n'est pas silencieux) et le diagnostic ignore
+    report_divergence_against_installed_libm publie le jeu de divergence ;
+  - les tables ne sont regenerables que sur un hote-oracle : le test ignore
+    regenerate_glibc_2_39_reference_tables refuse toute machine dont la libm
+    differe des sentinelles.
+
+Aucune tolerance n'est relachee, aucune entree retiree, aucun test desactive.
+
+Decouverte annexe pendant cette correction : les grilles d'exposant du balayage
+construisaient leur mantisse par `(m * 0x40000) & 0x800000`, ce qui ne produit
+que DEUX mantisses distinctes par tranche d'exposant (le masque capturait le bit
+de signe pour m >= 32, et m / m+32 collisionnaient). Le masque corrige
+`& 0x007f_ffff` en donne 32. Le nombre d'entrees BALAYEES (poussees) est
+inchange, le nombre d'entrees DISTINCTES non :
+
+  fonction   entrees poussees   entrees distinctes (apres le masque corrige)
+  expf                 32 878                                        24 632
+  expm1f              549 204                                       532 952
+  tanhf               126 112                                       120 394
+  total               708 194                                       677 978
+
+Ces comptes sontceux du poste de mesure (glibc 2.39), pas du runner.
+
+
+4. Tables de reference publiees et revalidation locale
+------------------------------------------------------
+Generateur : regenerate_glibc_2_39_reference_tables (ignore), hote Ubuntu
+24.04.5, ldd (Ubuntu GLIBC 2.39-0ubuntu8.12) 2.39. Format : magic CMP1, compte
+u32 LE, paires (bits d'entree, bits du resultat) triees par entree.
+
+  fichier                               entrees   octets   sha256 (64)
+  tests/data/glibc_2_39_expf.bin          9 272    74 184  e73cd92604c4082de7ef0ad28fb5f8dbb654c6c004a7c079663bfbf81f1406ca
+  tests/data/glibc_2_39_expm1f.bin       33 752   270 024  b64d93e4e2fd2ab2f46612b919809cf0d081d35a92b57e39a2cecd67afbf1426
+  tests/data/glibc_2_39_tanhf.bin        12 874    59 400  8c3194962be13fc1c3d25dbbabcc0600a8493fcf19b9ccda230ce6b69e598c5e
+
+Mesures sur ce meme hote (palier 2 actif) :
+
+  expf: 0 divergence(s) out of 32878 swept inputs (24632 distinct)
+  expm1f: 0 divergence(s) out of 549204 swept inputs (532952 distinct)
+  tanhf: 0 divergence(s) out of 126112 swept inputs (120394 distinct)
+  total: 0 divergence(s) out of 708194 swept inputs (677978 distinct)
+  expf: installed libm disagrees with the pinned glibc 2.39 table on 0 of 9272 entries
+  expm1f: installed libm disagrees with the pinned glibc 2.39 table on 0 of 33752 entries
+  tanhf: installed libm disagrees with the pinned glibc 2.39 table on 0 of 12874 entries
+
+Verifications :
+
+  cargo fmt --all -- --check                                  OK (sortie vide)
+  cargo test -p claymore-model-gemma --test kernel_order_parity
+                                                              7 passes, 0 echec, 2 ignores
+  cargo clippy -p claymore-model-gemma --all-targets -- -D warnings
+                                                              0 erreur
+  replique locale du job « Format, test, and lint » (ci_local.sh,
+  stub /tmp/claymore-cuda-stub, 12 etapes)                       325 passes / 0 echec / 26 ignores, PASS
+  replique locale du job MSRV 1.86 (ci_msrv.sh, 8 etapes)         264 passes / 0 echec / 10 ignores, PASS
+
+Les repliques locales ne sont PAS la CI GitHub : la CI reelle sur la tete
+suivante doit etre observee sur Actions, et son etat consigne ici.

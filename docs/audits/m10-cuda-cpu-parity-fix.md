@@ -322,66 +322,140 @@ de la machine qui exécute le test.
 
 ### 7.4 État réel de la CI GitHub (25 novembre) et cause de l'échec
 
-**Ce qui a été observé.** La CI de la PR #40 est **rouge** sur la tête
-`ef1a1cf`, et cela a été vérifié sur GitHub Actions lui-même (API + journaux
-d'exécution), consignation brute au journal `m10-parity-12` (§8.4) :
+**Ce qui a été observé.** La CI de la PR #40 est **rouge**, et cela a été
+vérifié deux fois sur GitHub Actions lui-même (API + journaux d'exécution),
+consignation brute aux journaux `m10-parity-12` (§8.4) et `m10-parity-13` :
 
-| Déclencheur | Run | Jobs en échec | Résolu |
-|---|---|---|---|
-| `push` | `45533723982` (25/11 02:32:50Z) | `138935091310` (test), `138935090884` (MSRV) | `completed/failure` |
-| `pull_request` | `45533731837` (25/11 02:32:54Z) | `138935118950` (test), `138935119267` (MSRV) | `completed/failure` |
+| Tête | Déclencheur | Run | Jobs en échec | Résolu |
+|---|---|---|---|---|
+| `ef1a1cf` | `push` | `45533723982` (25/11 02:32:50Z) | `138935091310` (test), `138935090884` (MSRV) | `completed/failure` |
+| `ef1a1cf` | `pull_request` | `45533731837` (25/11 02:32:54Z) | `138935118950` (test), `138935119267` (MSRV) | `completed/failure` |
+| `85f7772` | `push` | `45538595444` (25/11 03:14:33Z) | `138951244933` (test), `138951245523` (MSRV) | `completed/failure` |
+| `85f7772` | `pull_request` | `45538600058` (25/11 03:14:35Z) | `138951262162` (test), `138951261791` (MSRV) | `completed/failure` |
 
-La baseline `9775cda` (24/11 11:15Z) était **verte** sur les deux déclencheurs.
-Or `tests/kernel_order_parity.rs` est **introduit par le correctif** : la
-régression vient du verrou lui-même, pas d'un rouge hérité. L'élargissement des
+Étape en échec dans les huit cas : « Run tests », et « Verify workspace on the
+declared MSRV » pour les deux jobs MSRV. Baseline : les runs sur `9775cda`
+(24/11 11:15Z) étaient **verts** sur les deux déclencheurs. Or
+`tests/kernel_order_parity.rs` est **introduit par le correctif** : la régression
+vient du verrou lui-même, pas d'un rouge hérité. L'élargissement des
 déclencheurs du §7.1.1 n'a aucun effet sur ces runs (le workflow d'un
 `pull_request` est lu sur la branche de base).
 
-**Cause exacte.** Deux assertions du même test échouent, sur les deux jobs, avec
-les mêmes valeurs :
+**Cause du premier rouge (ef1a1cf).** Deux assertions du même test échouent, sur
+les deux jobs, avec les mêmes valeurs :
 
 | Entrée | bits du port | bits de la libm du runner | écart |
 |---|---|---|---|
 | `tanhf(0x3c000000 = 2⁻⁷)` | `0x3bfffeaa` | `0x3bfffeab` | 1 ULP |
 | `expm1f(0x34000000 = 2⁻²³)` | `0x34000000` | `0x34000001` | 1 ULP |
 
-L'image du runner est `ubuntu-26.04` ; l'hôte de référence de la campagne, du
-golden et du PTX est Ubuntu 24.04.5, `ldd (Ubuntu GLIBC 2.39-0ubuntu8.12) 2.39`.
-Les ports de `claymore_math.cuh` implémentent l'algorithme de **glibc 2.39** ;
-le test comparait les ports à la libm **installée**. L'oracle n'était donc pas
-épinglé : le test dépendait de l'image du runner. Sur l'hôte de référence, le
-même balayage ne présente **aucune** divergence : `0` sur `708 194` entrées
-balayées (`expf` 32 878, `expm1f` 549 204, `tanhf` 126 112) — diagnostic
-`report_divergence_against_installed_libm`, sortie au journal `m10-parity-12`.
+L'image du runner est `ubuntu-26.04` (image `20261116.202.1`) ; l'hôte de
+référence de la campagne, du golden et du PTX est Ubuntu 24.04.5,
+`ldd (Ubuntu GLIBC 2.39-0ubuntu8.12) 2.39`. Les ports de `claymore_math.cuh`
+implémentent l'algorithme de **glibc 2.39** ; le test comparait les ports à la
+libm **installée**. L'oracle n'était donc pas épinglé : le test dépendait de
+l'image du runner. Sur l'hôte de référence, le même balayage ne présente
+**aucune** divergence.
 
-**Correction.** Le test épingle désormais l'oracle. Les deux entrées ci-dessus
-sont publiées dans `PINNED_GLIBC_2_39`, avec le résultat **glibc 2.39** attendu,
-et le port est affirmé contre cette valeur à ces points ; tout autre point du
-balayage reste comparé bit à bit à la libm installée. Le balayage reste donc
-integral et sans seuil, sur n'importe quel hôte : une dérive du port fait échouer
-le test, et une nouvelle divergence due à une nouvelle image fait échouer le test
-(bruit mesurable par le diagnostic ignoré, pas masquée). Aucune tolérance n'est
-relâchée, aucun test n'est désactivé, aucune entrée n'est retirée du balayage.
+**Réfutation consignée (a).** Le correctif `85f7772` publiait ces deux entrées
+dans `PINNED_GLIBC_2_39` et le journal `m10-parity-12` proclamait : « *Sur
+l'image ubuntu-26.04, les ports portables de `claymore_math.cuh` diffèrent de la
+libm installée sur exactement DEUX entrées de leur balayage* ». C'est **FAUX**,
+et la raison est technique : l'`assert_eq!` est à l'intérieur de la boucle du
+balayage, donc le test s'arrête à la **première** divergence rencontrée. Deux
+tests en échec donnaient deux divergences **observables** — la première de chaque
+fonction —, pas deux divergences **existantes**. La phrase d'origine est
+conservée dans le journal `m10-parity-12`, avec sa réfutation en regard.
+
+**Cause du second rouge (85f7772).** Le balayage, libéré de ces deux points,
+meurt plus loin — deux nouvelles entrées, mêmes jobs, mêmes étapes :
+
+| Entrée | bits du port | bits de la libm du runner | écart |
+|---|---|---|---|
+| `tanhf(-2⁻⁷)` | `3154116266` | `3154116267` | 1 ULP |
+| `expm1f(1.0)` | `1071378600` | `1071378601` | 1 ULP |
+
+Extrait verbatim du job `138951262162` :
+
+```text
+assertion `left == right` failed: expm1f(1.0) port=1.7182817 glibc=1.7182819
+    left: 1071378600
+   right: 1071378601
+  at .../tests/kernel_order_parity.rs:512:9
+assertion `left == right` failed: tanhf(-0.0078125) port=-0.0078123407 glibc=-0.007812341
+    left: 3154116266
+   right: 3154116267
+  at .../tests/kernel_order_parity.rs:596:9
+test result: FAILED. 5 passed; 2 failed; 1 ignored; 0 measured; 0 filtered out
+```
+
+La libm de l'image du runner diffère donc de glibc 2.39 sur **plusieurs**
+entrées du balayage, et rien n'établit que la liste soit bornée. En déduire que
+« comparer le port à la libm installée » est un contrat était l'erreur : ce
+contrat est déplacé par l'image.
+
+**Contrat retenu.** Le test n'affirme plus la parité contre la machine, il
+l'affirme contre **l'oracle publié**. Deux paliers, dans
+`crates/claymore-model-gemma/tests/kernel_order_parity.rs` :
+
+1. **sur toute machine** — le port doit reproduire les résultats glibc 2.39
+   committed dans trois tables de référence versionnées
+   (`tests/data/glibc_2_39_{expf,expm1f,tanhf}.bin`, 55 898 entrées au total,
+   format `CMP1`, SHA-256 au journal `m10-parity-13`) ; les entrées de la table
+   sont en outre affirmées identiques à l'ensemble décimé du balayage, donc une
+   dérive du générateur fait échouer le test ;
+2. **seulement si l'hôte est l'oracle** — la sonde `SENTINELS_GLIBC_2_39` teste
+   deux points connus ; si la libm installée y égale glibc 2.39, le port doit
+   **aussi** égaler la libm installée sur **toutes** les entrées balayées,
+   épinglées ou non. C'est ce qui maintient le pas dense sous contrat là où les
+   tables ne vont pas. Hors hôte-oracle, ce palier est ignoré **avec une ligne
+   sur stdout** (le saut n'est pas masqué) et le diagnostic ignoré
+   `report_divergence_against_installed_libm` publie le jeu de divergence complet.
+
+Les tables ne sont régénérables que sur un hôte-oracle :
+`regenerate_glibc_2_39_reference_tables` (ignoré) refuse toute machine dont la
+libm diffère des sondes, ce qui rend impossible la publication involontaire de
+résultats d'une libc non oracle. Une étape du job `test`, **non assertive**
+(`continue-on-error`), publie le jeu de divergence de l'image du runner dans le
+journal du job : c'est une donnée pour la régénération, pas un critère de
+réussite. Aucune tolérance n'est relâchée, aucun test n'est désactivé, aucune
+entrée n'est retirée du balayage.
+
+**Correction de couverture découverte au passage.** Les grilles d'exposants du
+balayage construisaient leur mantisse par `(m * 0x40000) & 0x800000` : le masque
+capturait le bit de signe et les mantisses collisionnaient par période de 32, si
+bien que la grille annoncée « 64 échantillons par exposant » n'en couvrait
+effectivement que **deux**. Le masque corrigé `& 0x007f_ffff` en couvre 32. Le
+nombre d'entrées poussées est inchangé, le nombre d'entrées **distinctes** non
+(`expf` 24 632, `expm1f` 532 952, `tanhf` 120 394, total **677 978**) : la
+couverture réellement contractuelle est désormais mesurée, pas annoncée.
 
 **Ce que cela change à la lecture du dossier.** Le contrat de parité CUDA ↔ CPU
 est **qualifié par la libc de l'hôte**. Toute revendication « bit-exact » doit
-nommer l'hôte : ici glibc 2.39, celui du golden PyTorch et de la campagne RTX 5090
-du §7.2. Sur une image plus récente, la référence CPU et les kernels divergeraient
-d'un ULP sur ce genre d'entrée, sans que l'ordre des kernels ait changé — ce n'est
-pas une régression du correctif, c'est une propriété de l'oracle.
+nommer l'hôte : ici glibc 2.39, celui du golden PyTorch et de la campagne
+RTX 5090 du §7.2. Le second palier rend cette qualification explicite au lieu de
+la laisser implicite : sur une image plus récente, la référence CPU et les
+kernels divergeraient d'un ULP sur ce genre d'entrée sans que l'ordre des
+kernels ait changé — ce n'est pas une régression du correctif, c'est une
+propriété de l'oracle.
 
 **Vérifications rejouées après correction** (hôte glibc 2.39) :
 `cargo fmt --all -- --check` OK ; `cargo test -p claymore-model-gemma --test
-kernel_order_parity` → **7 passés / 0 échec / 1 ignoré** ;
-`cargo clippy -p claymore-model-gemma --all-targets -- -D warnings` code de
-sortie `0` ; réplique locale du job MSRV sur `1.86.0` → **8/8 étapes OK,
-264 tests passés / 0 échec / 9 ignorés**. L'état du run Actions déclenché par le
-commit de correction est consigné à la fin de cette section une fois observé :
+kernel_order_parity` → **7 passés / 0 échec / 2 ignorés**, palier 2 actif
+(aucune ligne de saut sur stdout) ; `cargo clippy -p claymore-model-gemma
+--all-targets -- -D warnings` code de sortie `0` ; réplique locale du job `test`
+→ **12 étapes OK, 325 passés / 0 échec / 26 ignorés** ; réplique locale du job
+MSRV `1.86.0` → **8 étapes OK, 264 passés / 0 échec / 10 ignorés**. Chiffres
+détaillés au journal `m10-parity-13`.
 
-*(à compléter à l'observation — l'état revendiqué ici ne peut être que celui
-réellement relevé sur GitHub Actions).*
+**État du run déclenché par le commit de correction.** Consigné au paragraphe
+final de `docs/audits/m10-parity-13-oracle-epingle-glibc239.log.txt` et au
+commentaire de synthèse de la PR #40, une fois le run réellement relevé sur
+GitHub Actions. Ce fichier ne peut pas contenir l'état du run qu'il déclenche
+lui-même : la boucle est coupée là, volontairement, et l'état du run de la tête
+finale est donné dans le commentaire de la PR, pas ici.
 
-**Réfutation consignée.** La conclusion antérieure « les runs de la PR #40 ne
+**Réfutation consignée (b).** La conclusion antérieure « les runs de la PR #40 ne
 sont pas observables : le jeton n'a pas le périmètre Actions/Checks (réponses
 404) » est **fausse**. Les 404 venaient d'un chemin de dépôt erroné
 (`StephaneXB/Claymore`). Sur le dépôt réel `zenhit777/Claymore`,
@@ -407,7 +481,7 @@ journaux complets ont été téléchargés. La ligne « runs non observés » du
 | `crates/claymore-tensor/src/diffusion.rs` | `softmax_row` : division par la somme au lieu de la multiplication par la réciproque |
 | `crates/claymore-tensor/src/contracts.rs` | `ScatterAdd` : limite de grille sur `out_rows` |
 | `crates/claymore-memory/tests/hardware_m10_primitives.rs` | tolérances `scatter_add` durcies à l'exactitude (0), test renommé |
-| `crates/claymore-model-gemma/tests/kernel_order_parity.rs` | **nouveau** — parité d'ordre kernel ↔ CPU, sans GPU ; transcendants balayés contre l'oracle glibc 2.39 épinglé, `PINNED_GLIBC_2_39` et diagnostic `report_divergence_against_installed_libm` (§7.4) |
+| `crates/claymore-model-gemma/tests/kernel_order_parity.rs` | **nouveau** — parité d'ordre kernel ↔ CPU, sans GPU ; transcendants balayés contre l'oracle glibc 2.39, palier 1 sur les tables de référence versionnées, palier 2 contre la libm installée seulement sur les hôtes-oracles ; diagnostic `report_divergence_against_installed_libm` (§7.4) |
 | `docs/audits/m10-cuda-cpu-parity-fix.md` | **nouveau** — le présent rapport |
 | `docs/audits/m8-ptx-provenance.md` | **révisé** — section 6 : commande `-fmad=false` en vigueur, nouvelles empreintes, `claymore_math.cuh` ajouté au manifeste |
 | `.gitignore` | `AGENTS.md` ignoré (fichier d'instructions d'agent local, à ne pas pousser) |
@@ -418,8 +492,9 @@ journaux complets ont été téléchargés. La ligne « runs non observés » du
 |---|---|
 | `crates/claymore-model-gemma/src/fullgraph.rs` | **additif** — `encoder_forward_traced_from_hidden(...)`, exécute les couches demandées à partir d'une entrée fournie et renvoie l'état avant la normalisation finale ; `encoder_forward_traced_limited` délègue, aucune signature existante modifiée, chemin CUDA inchangé |
 | `crates/claymore-model-gemma/tests/golden_cpu_layer_bisect.rs` | **nouveau** — bisect par couche à entrée dorée injectée, `#[ignore]`, égalité d'ensemble des 8 experts par ligne, borne `MAX_ROW_DRIFT_STEPS = 4.0` pas BF16 fixée une fois sur la mesure (§11.4) |
-| `.github/workflows/rust.yml` | déclencheurs élargis (`pull_request` vers `feat/**`, `workflow_dispatch`) et règle de la **branche de base** consignée en commentaire (§7.1.1) |
-| `crates/claymore-model-gemma/tests/kernel_order_parity.rs` | **modifié** — l'oracle des transcendants est épinglé sur glibc 2.39 (`PINNED_GLIBC_2_39`, deux entrées mesurées) au lieu de la libm installée ; ajout du diagnostic ignoré `report_divergence_against_installed_libm` ; constructeurs d'échantillons factorisés (§7.4) |
+| `.github/workflows/rust.yml` | déclencheurs élargis (`pull_request` vers `feat/**`, `workflow_dispatch`) et règle de la **branche de base** consignée en commentaire (§7.1.1) ; étape **non assertive** `Report the runner libm divergence set against the pinned oracle` (`continue-on-error`), qui publie le jeu de divergence de l'image sans en faire un critère (§7.4) |
+| `crates/claymore-model-gemma/tests/kernel_order_parity.rs` | **modifié deux fois** — d'abord oracle épinglé sur deux entrées mesurées (`PINNED_GLIBC_2_39`, état `85f7772`, **remplacé** : la premise « deux entrées » était fausse, §7.4 réfutation (a)) ; puis contrat en deux paliers : palier 1 contre les tables de référence glibc 2.39 versionnées sur toute machine, palier 2 contre la libm installée seulement si la sonde `SENTINELS_GLIBC_2_39` identifie l'hôte comme l'oracle, plus `regenerate_glibc_2_39_reference_tables` (ignoré, refusé hors hôte-oracle) et correction du masque des grilles d'exposants (`0x800000` → `0x007f_ffff`) (§7.4) |
+| `crates/claymore-model-gemma/tests/data/glibc_2_39_{expf,expm1f,tanhf}.bin` | **nouveaux** — tables de référence oracle : 9 272 / 33 752 / 12 874 paires (bits d'entrée, bits de résultat), magic `CMP1`, triées ; 403 608 octets au total, SHA-256 au journal `m10-parity-13` |
 | `docs/audits/m10-cuda-cpu-parity-fix.md` | §7.1.1 et §7.1.3 (déclencheurs, réplique rejouée), §7.4 (état réel de la CI GitHub et cause de l'échec), §8.4 (journaux), **§11 (diagnostic)** et §12 (décisions attendues) |
 | `docs/audits/m10-rtx5090-hardware-validation.md` | bandeau M10.5 et mise à jour du périmètre « prouvé / non prouvé » ; aucune ligne défavorable supprimée |
 | `docs/m10-diffusiongemma.md` | bloc de statut M10.4 — M10.5 (validé où, non validé quoi), clôture de la PR #44 |
@@ -465,7 +540,8 @@ fichiers déjà cités au §8.3 :
 | `m10-parity-09-ci-local-msrv-1.86.log.txt` | Réplique locale du job `msrv` (Rust 1.86), §7.1.2 |
 | `m10-parity-10-ci-local-branche-integree.log.txt` | Les deux jobs rejoués sur `feat/m10-diffusiongemma` après intégration, fmt inclus : `CI-REPLICA RESULT: PASS`, `MSRV-REPLICA RESULT: PASS`, §7.1.3 |
 | `m10-parity-11-bisect-couches-entrees-dorees.log.txt` | bisect couche par couche à entrée dorée injectée, avec la borne `MAX_ROW_DRIFT_STEPS = 4,0` : `lignes fideles=210/210`, pire écart `2,0` pas BF16 (couche 2), table identique au run sans borne (§11.4) |
-| `m10-parity-12-ci-github-ef1a1cf-jobs-rouges.log.txt` | **état réel de la CI GitHub** sur `ef1a1cf` : 2 runs et 4 jobs en échec (IDs, URLs, extraits bruts des deux jobs), image du runner `ubuntu-26.04`, les deux entrées à 1 ULP, diagnostic local `0 divergence / 708 194 entrées` (§7.4) |
+| `m10-parity-12-ci-github-ef1a1cf-jobs-rouges.log.txt` | **état réel de la CI GitHub** sur `ef1a1cf` : 2 runs et 4 jobs en échec (IDs, URLs, extraits bruts des deux jobs), image du runner `ubuntu-26.04`, les deux entrées à 1 ULP, diagnostic local `0 divergence / 708 194 entrées` (§7.4). Portion « Lecture » **réfutée par addition** en fin de fichier (§7.4, réfutation (a)) |
+| `m10-parity-13-oracle-epingle-glibc239.log.txt` | **second état rouge observé**, sur `85f7772` : 2 runs et 4 jobs en échec (IDs, URLs), deux nouvelles entrées à 1 ULP, inventaire des causes, contrat en deux paliers, tables de référence glibc 2.39 publiées (entrées, octets, SHA-256), correction de couverture du balayage, et les deux répliques locales rejouées (§7.4) |
 
 Les fichiers bruts restent également disponibles hors dépôt dans
 `/tmp/opencode/m10/`.
@@ -490,11 +566,16 @@ Les fichiers bruts restent également disponibles hors dépôt dans
    CUDA ↔ CPU est qualifiée par la libc de l'hôte de référence : glibc 2.39 ici,
    pas « la libm » en général (§7.4). Une revendication du type « bit-exact »
    sans l'hôte est infalsifiable.
-5. **Mesurer le jeu de divergence quand l'image du runner bouge.** Si un job
-   `kernel_order_parity` échoue sur un nouveau point, lancer
-   `cargo test -p claymore-model-gemma --test kernel_order_parity -- --ignored --nocapture`,
-   publier la sortie (journal) et n'étendre `PINNED_GLIBC_2_39` qu'à partir de ce
-   qui a été mesuré — jamais à partir d'une exécution locale.
+5. **Mesurer le jeu de divergence quand l'image du runner bouge.** L'étape
+   `Report the runner libm divergence set against the pinned oracle` du job
+   `test` le fait à chaque run, sans faire échouer le job : c'est la sortie du
+   diagnostic ignoré, publiée dans le journal du job. Un écart du port **contre
+   la table** doit faire échouer le test, pas être épinglé : la table n'est
+   régénérée que sur l'hôte-oracle, par
+   `cargo test -p claymore-model-gemma --test kernel_order_parity -- --ignored
+   regenerate_glibc_2_39_reference_tables`, qui refuse toute machine dont la
+   libm diffère de `SENTINELS_GLIBC_2_39` (§7.4). Jamais à partir d'une
+   exécution sur une image non oracle.
 
 ## 10. Reproduction
 
@@ -781,10 +862,14 @@ toute performance.
 **Qualification nouvelle (25/11, §7.4), à lire avec le point 4 et avec le §7.2 :**
 le contrat de parité bit à bit est conditionné à la libc de l'hôte. Les ports
 reproduisent **glibc 2.39** (l'hôte du golden et de la campagne) ; sur l'image de
-runner `ubuntu-26.04`, deux entrées du balayage (`tanhf(2⁻⁷)`, `expm1f(2⁻²³)`)
-diffèrent d'un ULP de la libm installée, et c'est ce qui a rendu la CI rouge.
-Aucune revendication « bit-exact » ne vaut donc sans l'hôte nommé ; le verrou de
-CI épingle désormais cet hôte au lieu de le supposer.
+runner `ubuntu-26.04`, la libm installée diffère de cet oracle sur **plusieurs**
+entrées du balayage, pas deux : les deux premières (`tanhf(2⁻⁷)`, `expm1f(2⁻²³)`)
+ont rendu la CI rouge, et une fois épinglées deux autres (`tanhf(-2⁻⁷)`,
+`expm1f(1.0)`) ont pris la suite — le premier écart d'une assertion placée dans
+la boucle n'est pas l'inventaire. Le verrou de CI n'épingle donc plus un hôte :
+il épingle **les résultats de l'oracle** (tables versionnées, valables sur toute
+machine) et ne compare à la libm installée que sur les hôtes reconnus comme
+l'oracle. Aucune revendication « bit-exact » ne vaut sans l'hôte nommé.
 
 **Décisions attendues de l'architecte** (§12) : la métrique de conformité contre
 la référence upstream ne peut pas rester une borne absolue `max_abs` sur une

@@ -158,3 +158,31 @@ résultat glibc 2.39 enregistré à ces points ; tout autre point du balayage re
 comparé à la libm installée. Le balayage bit à bit reste donc intégral, sur
 n'importe quel hôte, et toute nouvelle divergence fait échouer le test. Aucun
 seuil n'est relâché, aucun test n'est désactivé.
+
+Correction (25/11, journal m10-parity-13)
+-----------------------------------------
+La section « Lecture » ci-dessus affirmait : « Sur l'image ubuntu-26.04, les
+ports portables de `claymore_math.cuh` diffèrent de la libm installée sur
+exactement DEUX entrées de leur balayage ». C'est FAUX. Le texte d'origine est
+laissé tel quel ci-dessus, avec sa réfutation ici.
+
+L'assertion de parité est à l'intérieur de la boucle du balayage : le premier
+écart rencontré interrompt le test. Deux tests en échec ne donnent donc que deux
+divergences OBSERVABLES, c'est-à-dire la première de chaque fonction, et non
+l'inventaire des divergences. Le correctif décrit plus haut (épingler ces deux
+entrées) a été poussé sur 85f7772 et la CI est restée ROUGE, sur les mêmes jobs
+et les mêmes étapes, avec deux AUTRES entrées :
+
+    tanhf(-2^-7) : port 3154116266, libm installée 3154116267
+    expm1f(1.0)  : port 1071378600, libm installée 1071378601
+
+runs 45538595444 (push) et 45538600058 (pull_request), jobs 138951244933 /
+138951245523 et 138951262162 / 138951261791, image du runner 20261116.202.1.
+
+La libm de l'image du runner diffère donc de glibc 2.39 sur PLUSIEURS entrées du
+balayage, sans borne établie. La conséquence n'est pas un correctif de plus :
+comparer le port à la libm installée ne peut pas être le contrat, puisque ce
+résultat dépend de l'image. Le contrat est désormais épinglé à l'oracle lui-même
+(table de résultats glibc 2.39 versionnée, plus comparaison à la libm installée
+seulement sur les hôtes qui sont l'oracle). Détail et chiffres au journal
+m10-parity-13 et à la section 7.4 du rapport.

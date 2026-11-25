@@ -42,6 +42,15 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Run tests
         run: cargo test --workspace --all-targets --locked
+      # Mesure, pas une assertion : l'image du runner n'est pas l'oracle de
+      # parite (glibc 2.39, voir crates/claymore-model-gemma/tests/
+      # kernel_order_parity.rs). Cette etape publie le jeu de divergence de
+      # l'image dans le journal du job ; `continue-on-error` parce qu'un jeu
+      # non vide n'est pas un echec du contrat, c'est la donnee qu'on attend
+      # pour regenerer les tables sur l'hote de reference.
+      - name: Report the runner libm divergence set against the pinned oracle
+        continue-on-error: true
+        run: cargo test -p claymore-model-gemma --test kernel_order_parity --locked -- --ignored --nocapture report_divergence_against_installed_libm
       - name: Build link-only CUDA Driver stub for CPU fault-injection tests
         run: |
           mkdir -p /tmp/claymore-cuda-stub
