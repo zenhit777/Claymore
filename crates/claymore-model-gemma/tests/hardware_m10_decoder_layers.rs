@@ -985,7 +985,7 @@ fn cuda_decoder_layers_match_cpu_step_by_step() {
         let mut layer_worst_steps = 0.0f32;
         let mut layer_worst_label = String::new();
         {
-            let mut one = |label: &str, idx: usize, rows: usize, width: usize, cpu: &[f32]| -> () {
+            let mut one = |label: &str, idx: usize, rows: usize, width: usize, cpu: &[f32]| {
                 let cuda = CudaGraph::f32_of(&graph.download_bf16(idx).expect("download stage"));
                 let (max_abs, rms) = stats(&cuda, cpu);
                 let steps = worst_row_steps(&cuda, cpu, rows, width);
