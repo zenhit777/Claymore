@@ -223,6 +223,40 @@ son message d'échec.
 | A/B CPU des formulations `rms_norm` / `softmax` contre la dorée | `5,539062 / 0,763049` (HEAD) → `5,828125 / 0,754065` (corrigé) |
 | Reproductibilité des PTX | les 3 PTX **byte-identiques** à `nvcc 13.0 -fmad=false` |
 
+#### 7.1.1 Réplique locale des deux jobs de CI
+
+La CI du dépôt (`ci/cuda-driver-stub.c` + `ubuntu-latest`, sans GPU) ne se
+déclenche que sur `push` vers `main` ou `feat/**`, et sur les `pull_request`
+visant `main` (`.github/workflows/rust.yml`, bloc `on:`). Une branche
+`fix/**` ciblant `feat/m10-diffusiongemma` ne déclenche donc **aucun** run : la
+preuve CI a été produite localement, en rejouant à l'identique les deux jobs.
+
+| Job `test` (stable) | Résultat |
+|---|---|
+| `cargo fmt --all -- --check` | **rouge d'abord** sur 3 fichiers touchés par le correctif, corrigé par `cargo fmt --all` ; le reste du dépôt était propre |
+| `cargo test --workspace --all-targets --locked` | **vert** — 324 tests passés, 0 échec, 23 ignorés |
+| Stub CUDA puis tests `--lib` de `claymore-memory` et `claymore-cuda` (`--features cuda-driver`) | **verts** |
+| `cargo check` des features CUDA (`claymore-cuda`, `claymore-memory`, `claymore-cli`, `claymore-model-gemma --features cuda-streaming`) | **verts** |
+| `cargo clippy` workspace + crates CUDA, avec `-D warnings` | **aucun avertissement** |
+
+Réplique du job `msrv` (Rust 1.86) : §7.1.2. Journaux bruts versionnés :
+`m10-parity-08-ci-local-stable.log.txt` et
+`m10-parity-09-ci-local-msrv-1.86.log.txt`.
+
+#### 7.1.2 Job `msrv` (Rust 1.86)
+
+Rejoué avec `rustup run 1.86.0` (cargo 1.86.0), répertoire cible séparé, même
+stub CUDA :
+
+| Étape | Résultat |
+|---|---|
+| `cargo test --workspace --all-targets --locked` | **vert** — 264 tests passés, 0 échec, 7 ignorés ; 23 crates compilées |
+| `cargo check` des quatre cibles de feature CUDA | **verts** |
+| `cargo clippy --workspace --all-targets --locked -- -D warnings` + les deux commandes CUDA | **aucun avertissement** |
+
+`kernel_order_parity` s'exécute aussi sur 1.86 : ses 7 tests passent, le
+portage glibc n'utilise donc aucune API postérieure à la MSRV déclarée.
+
 ### 7.2 GPU (RTX 5090, autorisation explicite préalable)
 
 | Campagne | Résultat |
