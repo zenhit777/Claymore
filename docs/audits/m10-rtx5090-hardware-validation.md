@@ -39,8 +39,21 @@
 > de la référence, accumulation d'arrondis, porte absolue inférieure au pas BF16) et
 > **ne le corrige pas**. Ce rapport reste donc **inchangé dans ses conclusions** :
 > `PASS PARTIEL` côté matériel, **M10 non validé** tant que la porte dorée est
-> rouge. Aucun créneau GPU n'a été relancé depuis le 24 novembre ; aucun résultat
-> défavorable n'a été retiré de ce document.
+> rouge. Aucun résultat défavorable n'a été retiré de ce document.
+
+> **Mise à jour du 25 novembre 2026 — campagne groupée après finalisation CPU.**
+> Un créneau GPU groupé a été exécuté sur la tête de finalisation CPU
+> (`feat/m10-diffusiongemma`), après autorisation explicite de l'utilisateur :
+> **6/6 étapes vertes** (5/5 driver, 17/17 mémoire, 19/19 tenseurs, 13/13
+> injections de fautes, 21/21 primitives M10 à `max_abs=0e0`, checkpoint
+> **bit-identique** au journal de référence). Ce créneau a révélé une
+> **régression réelle** des kernels CUDA M8 — une course lecture-écriture dans
+> le softmax F32 autonome, dormant pour M10 mais réelle pour le backend tensor
+> CUDA — corrigée, revalidée sur la carte et documentée. Rapport :
+> `m10-rtx5090-grouped-campaign-2026-11-25.md` ; protocole :
+> `m10-rtx5090-grouped-protocol.md`. Les §1 à §16 de ce rapport décrivent les
+> campagnes du 23 et du 24 novembre et restent inchangés ; ce bandeau ne
+> modifie aucune de leurs conclusions.
 
 > **Ce que ce rapport prouve.** Le chemin M10 de Claymore — chargement strict du checkpoint épinglé, primitives tensorielles CPU de référence, kernels CUDA M10, admission mémoire bornée et garde des buffers en vol — est réellement exécuté sur une RTX 5090 et validé contre une référence CPU déterministe, y compris sur un **sous-graphe de couche décodeur construit à partir des poids réels** du checkpoint épinglé.
 >

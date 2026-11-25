@@ -68,7 +68,13 @@ extern "C" __global__ void claymore_softmax_last_dim_bf16(
   // Same reduction order as the FP32 kernel and the CPU reference: max and sum
   // over the widened values in index order, then a division by the sum, with
   // the single narrowing to BF16 at output.
-  claymore_softmax_row_bf16(input + row * width, out + row * width, width, shared);
+  //
+  // `claymore_softmax_row_bf16` is a single-thread contract: it writes each
+  // probability from the shared scratch state. Only one thread of the block
+  // may run it.
+  if (threadIdx.x == 0) {
+    claymore_softmax_row_bf16(input + row * width, out + row * width, width, shared);
+  }
 }
 
 extern "C" __global__ void claymore_rms_norm_bf16(

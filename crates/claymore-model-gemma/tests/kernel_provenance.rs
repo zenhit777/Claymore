@@ -31,11 +31,11 @@ const MANIFEST: [(&str, &str); 7] = [
     ),
     (
         "kernels/m8_bf16.cu",
-        "42f69ab42769ec44848e08b2c803ff4259f5283ed1e4ff35c6bd60d7f6f493a6",
+        "2edac588d887e2f3ba091bd18aa8f02d645aa07993743ba9fd5d5babf2eff948",
     ),
     (
         "kernels/m8_f32.cu",
-        "7ea17e1f064849aa1d4f58cda0496f938e305e40b784fdfdab51ee4ae9c476cf",
+        "f65bd84b35ecdcdbcf2bb1c38f8e384991ba1d71e53be299d52bcbc773c19eab",
     ),
     (
         "src/kernels/m10.ptx",
@@ -43,11 +43,11 @@ const MANIFEST: [(&str, &str); 7] = [
     ),
     (
         "src/kernels/m8_bf16.ptx",
-        "89938e3d7507c08b77986d14fab8983a706dbcaec7f21676e8a7026398ca55fa",
+        "186ab2d533b517bd6922f026037054bb8004edd4872dd8d56541f4c2f88a7c29",
     ),
     (
         "src/kernels/m8_f32.ptx",
-        "f367bf2d26c490697f5d456d6a6f2afe09b50edbb75b5f202911810511d46826",
+        "55e491b6e7217180c43deb4abcb17ae6ee946a0fe60a6e5f4940dfc8429b9e15",
     ),
 ];
 

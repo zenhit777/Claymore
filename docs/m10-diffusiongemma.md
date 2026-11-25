@@ -34,10 +34,14 @@ d'architecture, pas un correctif.
 | Runs GitHub Actions de la PR #40 | **GitHub Actions, observés le 25/11** (API + journaux téléchargés) | **ROUGE, deux fois** : `ef1a1cf` (runs `45533723982` push 02:32:50Z, `45533731837` pull_request 02:32:54Z) puis `85f7772` (runs `45538595444` push 03:14:33Z, `45538600058` pull_request 03:14:35Z), 2 jobs à chaque fois (`Format, test, and lint` et `Minimum supported Rust 1.86`). Cause racine : le verrou `kernel_order_parity` comparait les ports à la libm **installée** (image du runner `ubuntu-26.04`) au lieu de glibc 2.39 ; la première correction, qui prétendait n'avoir trouvé que deux entrées divergentes, est **réfutée** — l'assertion s'arrête au premier écart, et deux autres sont apparues. Contrat remplacé : oracle épinglé par tables versionnées + comparaison à la libm installée sur les seuls hôtes-oracles. Baseline `9775cda` verte. Détail au **§7.4** du rapport, journaux `m10-parity-12` et `m10-parity-13`. Puis **VERT sur `88d3989`** : runs `45539679704` (push, 03:23:47Z → 03:24:16Z) et `45539689788` (pull_request, 03:23:52Z → 03:24:30Z), 4 jobs en succès, avec sur le runner `expf 0 / expm1f 3 242 / tanhf 890` divergences de la libm installée contre glibc 2.39 (4 132 sur 708 194 balayées) — la clôture chiffrée de la réfutation |
 | Conformité CPU ↔ dorée eager | local | **rouge documenté** : encodeur `5,828125 / 0,754065` pour une porte `0,03 / 2e-3` ; trois tests `golden_cpu` rouges |
 
-Aucune exécution GPU n'a été lancée depuis la campagne de validation du
+Aucune exécution GPU n'a été lancée **pendant** la campagne de validation du
 correctif (25 novembre, sur l'arbre rapporté par le commit `9ccbe83`) : les
 travaux M10.5 sont purement CPU et ne consomment ni VRAM ni carte. La tête
 intégrée `ef1a1cf` **n'a pas** été rejouée sur carte.
+
+La seule exécution GPU postérieure est la **campagne groupée du 25 novembre
+2026** (autorisation explicite, 6/6 étapes vertes, §« Campagne GPU groupée »
+ci-dessous), sur la tête de finalisation CPU.
 
 ### Livré et réellement exercé sur RTX 5090
 
@@ -367,6 +371,26 @@ Aucune utilisation du GPU.
 5. **Logs, hashes, commandes et rapport publiés** : `audits/m10-cpu-campaign-2026-11-25.md`
    + six journaux bruts `m10-cpu-2026-11-25-*.log.txt` + `…-logs.sha256`.
 
-Le créneau GPU groupé est **préparé, non exécuté** :
-`audits/m10-rtx5090-grouped-protocol.md`, en attente d'autorisation
-utilisateur explicite (AGENTS.md). PR #40 toujours ouverte, non fusionnée.
+### Campagne GPU groupée du 25 novembre 2026 — exécutée, six étapes vertes
+
+Après autorisation explicite de l'utilisateur, le créneau groupé a été exécuté
+sur `feat/m10-diffusiongemma` : **6/6 étapes vertes**
+(`5/5` driver, `17/17` mémoire, `19/19` tenseurs, `13/13` injections de
+fautes, `21/21` primitives M10 à `max_abs=0e0`, checkpoint vérifié
+**bit-identique** au journal de référence). Détail, diagnostic et correctif :
+`audits/m10-rtx5090-grouped-campaign-2026-11-25.md`.
+
+La campagne a révélé et permis de corriger une **régression réelle** des
+kernels CUDA M8 : `claymore_softmax_last_dim_f32` appelait la fonction
+mono-thread `claymore_softmax_row` sans garde `threadIdx.x == 0`, les 256
+threads du bloc se disputant le buffer de sortie (division multiple des
+probabilités, `exp/S⁷` au lieu de `exp/S`). Le défaut était dormant pour M10
+(le kernel d'attention garde déjà l'appel sous `if (tid == 0)`) mais réel
+pour le backend tensor CUDA. Correctif + PTX régénérés et reproductibles,
+manifeste de provenance mis à jour dans le même changement ; le test
+`hw_m8_03_softmax_is_stable_for_large_logits` passe désormais à
+`max_abs_diff=0e0` (contre 2,98e-8 le 22 novembre).
+
+Le protocole groupé reste le document de référence pour une future session :
+`audits/m10-rtx5090-grouped-protocol.md`. PR #40 toujours ouverte, non
+fusionnée.

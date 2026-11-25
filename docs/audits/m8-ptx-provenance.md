@@ -157,12 +157,20 @@ en contient 15 occurrences, contre 23 pour la version du 22 novembre.
 
 ### 6.3 Empreintes SHA-256 en vigueur
 
+> **Révisé le 25 novembre 2026** à la suite de la campagne groupée RTX 5090 :
+> le correctif de la course lecture-écriture du softmax F32 (garde
+> `threadIdx.x == 0` sur l'appel mono-thread `claymore_softmax_row`) et son
+> jumeau BF16 ont modifié `m8_f32.cu`, `m8_bf16.cu` et les deux PTX
+> correspondants. `claymore_math.cuh` est **inchangé**. Diagnostic et
+> validation matérielle :
+> [m10-rtx5090-grouped-campaign-2026-11-25.md](m10-rtx5090-grouped-campaign-2026-11-25.md) §3.
+
 ```bash
 sha256sum -c <<'EOF'
-7ea17e1f064849aa1d4f58cda0496f938e305e40b784fdfdab51ee4ae9c476cf  crates/claymore-cuda/kernels/m8_f32.cu
-42f69ab42769ec44848e08b2c803ff4259f5283ed1e4ff35c6bd60d7f6f493a6  crates/claymore-cuda/kernels/m8_bf16.cu
-f367bf2d26c490697f5d456d6a6f2afe09b50edbb75b5f202911810511d46826  crates/claymore-cuda/src/kernels/m8_f32.ptx
-89938e3d7507c08b77986d14fab8983a706dbcaec7f21676e8a7026398ca55fa  crates/claymore-cuda/src/kernels/m8_bf16.ptx
+f65bd84b35ecdcdbcf2bb1c38f8e384991ba1d71e53be299d52bcbc773c19eab  crates/claymore-cuda/kernels/m8_f32.cu
+2edac588d887e2f3ba091bd18aa8f02d645aa07993743ba9fd5d5babf2eff948  crates/claymore-cuda/kernels/m8_bf16.cu
+55e491b6e7217180c43deb4abcb17ae6ee946a0fe60a6e5f4940dfc8429b9e15  crates/claymore-cuda/src/kernels/m8_f32.ptx
+186ab2d533b517bd6922f026037054bb8004edd4872dd8d56541f4c2f88a7c29  crates/claymore-cuda/src/kernels/m8_bf16.ptx
 15efcd8a159db1a240355712bee4ee7ade61a1c435360dbde5af9ad40c2471f7  crates/claymore-cuda/kernels/claymore_math.cuh
 EOF
 ```

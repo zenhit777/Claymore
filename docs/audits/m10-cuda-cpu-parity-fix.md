@@ -532,6 +532,18 @@ journaux complets ont été téléchargés. La ligne « runs non observés » du
 
 ### 8.2 Empreintes des artefacts
 
+> **Note de révision (25 novembre 2026, campagne groupée).** Les quatre
+> empreintes `m8_f32.cu`, `m8_bf16.cu`, `m8_f32.ptx` et `m8_bf16.ptx` ont
+> changé depuis cette campagne : le correctif de la course lecture-écriture
+> du softmax F32 (garde `threadIdx.x == 0` sur l'appel mono-thread
+> `claymore_softmax_row`) et son jumeau BF16, avec PTX régénérés. Les
+> empreintes ci-dessous sont **celles de la campagne du 24 novembre** et
+> restent valides pour cette campagne ; les empreintes courantes sont celles
+> du manifeste `crates/claymore-model-gemma/tests/kernel_provenance.rs`, qui
+> est la source de vérité et est vérifié par la CI. Détail du correctif et de
+> sa validation matérielle : `m10-rtx5090-grouped-campaign-2026-11-25.md` §3.
+> `m10.cu`, `claymore_math.cuh` et `m10.ptx` sont **inchangés**.
+
 | Fichier | SHA-256 |
 |---|---|
 | `crates/claymore-cuda/kernels/m10.cu` | `afde273b9a3426f6ea62b2d3257d0a73db4d8ca4f5dc0e9c755726b91227b9f9` |

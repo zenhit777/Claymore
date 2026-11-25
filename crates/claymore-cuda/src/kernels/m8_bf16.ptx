@@ -375,9 +375,9 @@ $L__BB1_14:
 	.param .u64 claymore_softmax_last_dim_bf16_param_3
 )
 {
-	.reg .pred 	%p<69>;
+	.reg .pred 	%p<71>;
 	.reg .b16 	%rs<28>;
-	.reg .b32 	%r<32>;
+	.reg .b32 	%r<33>;
 	.reg .b32 	%f<122>;
 	.reg .b64 	%rd<128>;
 	.reg .b64 	%fd<89>;
@@ -389,17 +389,20 @@ $L__BB1_14:
 	mov.u32 	%r19, %ctaid.x;
 	cvt.u64.u32 	%rd1, %r19;
 	setp.le.u64 	%p2, %rd34, %rd1;
-	@%p2 bra 	$L__BB2_87;
+	mov.u32 	%r20, %tid.x;
+	setp.ne.s32 	%p3, %r20, 0;
+	or.pred  	%p4, %p3, %p2;
+	@%p4 bra 	$L__BB2_87;
 	cvta.to.global.u64 	%rd2, %rd31;
 	cvta.to.global.u64 	%rd3, %rd32;
 	mul.lo.s64 	%rd4, %rd33, %rd1;
 	shl.b64 	%rd35, %rd4, 1;
 	add.s64 	%rd5, %rd2, %rd35;
-	setp.eq.s64 	%p4, %rd33, 0;
-	mov.pred 	%p3, 0;
+	setp.eq.s64 	%p6, %rd33, 0;
+	mov.pred 	%p5, 0;
 	mov.f32 	%f107, 0fFF800000;
-	mov.pred 	%p68, %p3;
-	@%p4 bra 	$L__BB2_5;
+	mov.pred 	%p70, %p5;
+	@%p6 bra 	$L__BB2_5;
 	mov.f32 	%f107, 0fFF800000;
 	mov.b64 	%rd118, 0;
 $L__BB2_3:
@@ -411,32 +414,32 @@ $L__BB2_3:
 
 	// end inline asm
 	abs.f32 	%f51, %f50;
-	setp.nan.f32 	%p6, %f51, %f51;
-	mov.pred 	%p68, -1;
-	@%p6 bra 	$L__BB2_5;
+	setp.nan.f32 	%p8, %f51, %f51;
+	mov.pred 	%p70, -1;
+	@%p8 bra 	$L__BB2_5;
 	max.f32 	%f107, %f107, %f50;
 	add.s64 	%rd118, %rd118, 1;
-	setp.ne.s64 	%p8, %rd118, %rd33;
-	mov.pred 	%p68, %p3;
-	@%p8 bra 	$L__BB2_3;
+	setp.ne.s64 	%p10, %rd118, %rd33;
+	mov.pred 	%p70, %p5;
+	@%p10 bra 	$L__BB2_3;
 $L__BB2_5:
-	setp.eq.f32 	%p9, %f107, 0f7F800000;
-	or.pred  	%p10, %p68, %p9;
-	mov.b32 	%r20, 2;
+	setp.eq.f32 	%p11, %f107, 0f7F800000;
+	or.pred  	%p12, %p70, %p11;
+	mov.b32 	%r21, 2;
 	mov.f32 	%f117, 0f00000000;
-	mov.u32 	%r31, %r20;
-	@%p10 bra 	$L__BB2_51;
-	setp.eq.f32 	%p11, %f107, 0fFF800000;
-	mov.b32 	%r31, 1;
-	@%p11 bra 	$L__BB2_51;
-	setp.eq.s64 	%p12, %rd33, 0;
+	mov.u32 	%r32, %r21;
+	@%p12 bra 	$L__BB2_51;
+	setp.eq.f32 	%p13, %f107, 0fFF800000;
+	mov.b32 	%r32, 1;
+	@%p13 bra 	$L__BB2_51;
+	setp.eq.s64 	%p14, %rd33, 0;
 	mov.f32 	%f117, 0f00000000;
-	@%p12 bra 	$L__BB2_49;
+	@%p14 bra 	$L__BB2_49;
 	and.b64  	%rd122, %rd33, 3;
-	setp.lt.u64 	%p13, %rd33, 4;
+	setp.lt.u64 	%p15, %rd33, 4;
 	mov.f32 	%f117, 0f00000000;
 	mov.b64 	%rd121, 0;
-	@%p13 bra 	$L__BB2_39;
+	@%p15 bra 	$L__BB2_39;
 	and.b64  	%rd121, %rd33, -4;
 	add.s64 	%rd41, %rd35, %rd2;
 	add.s64 	%rd119, %rd41, 4;
@@ -450,25 +453,25 @@ $L__BB2_10:
 	// end inline asm
 	sub.rn.f32 	%f6, %f58, %f107;
 	mov.b32 	%r1, %f6;
-	shr.u32 	%r22, %r1, 20;
-	and.b32  	%r2, %r22, 2047;
-	setp.lt.u32 	%p14, %r2, 1067;
+	shr.u32 	%r23, %r1, 20;
+	and.b32  	%r2, %r23, 2047;
+	setp.lt.u32 	%p16, %r2, 1067;
 	mov.f32 	%f97, 0f00000000;
-	@%p14 bra 	$L__BB2_16;
-	setp.eq.s32 	%p15, %r1, -8388608;
+	@%p16 bra 	$L__BB2_16;
+	setp.eq.s32 	%p17, %r1, -8388608;
 	mov.f32 	%f109, %f97;
-	@%p15 bra 	$L__BB2_17;
-	setp.lt.u32 	%p16, %r2, 2040;
-	@%p16 bra 	$L__BB2_14;
+	@%p17 bra 	$L__BB2_17;
+	setp.lt.u32 	%p18, %r2, 2040;
+	@%p18 bra 	$L__BB2_14;
 	add.rn.f32 	%f109, %f6, %f6;
 	bra.uni 	$L__BB2_17;
 $L__BB2_14:
-	setp.gt.f32 	%p17, %f6, 0f42B17217;
+	setp.gt.f32 	%p19, %f6, 0f42B17217;
 	mov.f32 	%f109, 0f7F800000;
-	@%p17 bra 	$L__BB2_17;
-	setp.lt.f32 	%p18, %f6, 0fC2CFF1B4;
+	@%p19 bra 	$L__BB2_17;
+	setp.lt.f32 	%p20, %f6, 0fC2CFF1B4;
 	mov.f32 	%f109, %f97;
-	@%p18 bra 	$L__BB2_17;
+	@%p20 bra 	$L__BB2_17;
 $L__BB2_16:
 	cvt.f64.f32 	%fd1, %f6;
 	fma.rn.f64 	%fd2, %fd1, 0d40471547652B82FE, 0d4338000000000000;
@@ -499,22 +502,22 @@ $L__BB2_17:
 	// end inline asm
 	sub.rn.f32 	%f11, %f62, %f107;
 	mov.b32 	%r3, %f11;
-	shr.u32 	%r23, %r3, 20;
-	and.b32  	%r4, %r23, 2047;
-	setp.lt.u32 	%p19, %r4, 1067;
+	shr.u32 	%r24, %r3, 20;
+	and.b32  	%r4, %r24, 2047;
+	setp.lt.u32 	%p21, %r4, 1067;
 	mov.f32 	%f98, 0f00000000;
-	@%p19 bra 	$L__BB2_22;
-	setp.eq.s32 	%p20, %r3, -8388608;
+	@%p21 bra 	$L__BB2_22;
+	setp.eq.s32 	%p22, %r3, -8388608;
 	mov.f32 	%f110, %f98;
-	@%p20 bra 	$L__BB2_24;
-	setp.gt.u32 	%p21, %r4, 2039;
-	@%p21 bra 	$L__BB2_23;
-	setp.gt.f32 	%p22, %f11, 0f42B17217;
-	mov.f32 	%f110, 0f7F800000;
 	@%p22 bra 	$L__BB2_24;
-	setp.lt.f32 	%p23, %f11, 0fC2CFF1B4;
+	setp.gt.u32 	%p23, %r4, 2039;
+	@%p23 bra 	$L__BB2_23;
+	setp.gt.f32 	%p24, %f11, 0f42B17217;
+	mov.f32 	%f110, 0f7F800000;
+	@%p24 bra 	$L__BB2_24;
+	setp.lt.f32 	%p25, %f11, 0fC2CFF1B4;
 	mov.f32 	%f110, %f98;
-	@%p23 bra 	$L__BB2_24;
+	@%p25 bra 	$L__BB2_24;
 $L__BB2_22:
 	cvt.f64.f32 	%fd12, %f11;
 	fma.rn.f64 	%fd13, %fd12, 0d40471547652B82FE, 0d4338000000000000;
@@ -548,22 +551,22 @@ $L__BB2_24:
 	// end inline asm
 	sub.rn.f32 	%f16, %f66, %f107;
 	mov.b32 	%r5, %f16;
-	shr.u32 	%r24, %r5, 20;
-	and.b32  	%r6, %r24, 2047;
-	setp.lt.u32 	%p24, %r6, 1067;
+	shr.u32 	%r25, %r5, 20;
+	and.b32  	%r6, %r25, 2047;
+	setp.lt.u32 	%p26, %r6, 1067;
 	mov.f32 	%f99, 0f00000000;
-	@%p24 bra 	$L__BB2_29;
-	setp.eq.s32 	%p25, %r5, -8388608;
+	@%p26 bra 	$L__BB2_29;
+	setp.eq.s32 	%p27, %r5, -8388608;
 	mov.f32 	%f111, %f99;
-	@%p25 bra 	$L__BB2_31;
-	setp.gt.u32 	%p26, %r6, 2039;
-	@%p26 bra 	$L__BB2_30;
-	setp.gt.f32 	%p27, %f16, 0f42B17217;
-	mov.f32 	%f111, 0f7F800000;
 	@%p27 bra 	$L__BB2_31;
-	setp.lt.f32 	%p28, %f16, 0fC2CFF1B4;
+	setp.gt.u32 	%p28, %r6, 2039;
+	@%p28 bra 	$L__BB2_30;
+	setp.gt.f32 	%p29, %f16, 0f42B17217;
+	mov.f32 	%f111, 0f7F800000;
+	@%p29 bra 	$L__BB2_31;
+	setp.lt.f32 	%p30, %f16, 0fC2CFF1B4;
 	mov.f32 	%f111, %f99;
-	@%p28 bra 	$L__BB2_31;
+	@%p30 bra 	$L__BB2_31;
 $L__BB2_29:
 	cvt.f64.f32 	%fd23, %f16;
 	fma.rn.f64 	%fd24, %fd23, 0d40471547652B82FE, 0d4338000000000000;
@@ -597,22 +600,22 @@ $L__BB2_31:
 	// end inline asm
 	sub.rn.f32 	%f21, %f70, %f107;
 	mov.b32 	%r7, %f21;
-	shr.u32 	%r25, %r7, 20;
-	and.b32  	%r8, %r25, 2047;
-	setp.lt.u32 	%p29, %r8, 1067;
+	shr.u32 	%r26, %r7, 20;
+	and.b32  	%r8, %r26, 2047;
+	setp.lt.u32 	%p31, %r8, 1067;
 	mov.f32 	%f100, 0f00000000;
-	@%p29 bra 	$L__BB2_36;
-	setp.eq.s32 	%p30, %r7, -8388608;
+	@%p31 bra 	$L__BB2_36;
+	setp.eq.s32 	%p32, %r7, -8388608;
 	mov.f32 	%f112, %f100;
-	@%p30 bra 	$L__BB2_38;
-	setp.gt.u32 	%p31, %r8, 2039;
-	@%p31 bra 	$L__BB2_37;
-	setp.gt.f32 	%p32, %f21, 0f42B17217;
-	mov.f32 	%f112, 0f7F800000;
 	@%p32 bra 	$L__BB2_38;
-	setp.lt.f32 	%p33, %f21, 0fC2CFF1B4;
+	setp.gt.u32 	%p33, %r8, 2039;
+	@%p33 bra 	$L__BB2_37;
+	setp.gt.f32 	%p34, %f21, 0f42B17217;
+	mov.f32 	%f112, 0f7F800000;
+	@%p34 bra 	$L__BB2_38;
+	setp.lt.f32 	%p35, %f21, 0fC2CFF1B4;
 	mov.f32 	%f112, %f100;
-	@%p33 bra 	$L__BB2_38;
+	@%p35 bra 	$L__BB2_38;
 $L__BB2_36:
 	cvt.f64.f32 	%fd34, %f21;
 	fma.rn.f64 	%fd35, %fd34, 0d40471547652B82FE, 0d4338000000000000;
@@ -641,11 +644,11 @@ $L__BB2_38:
 	add.rn.f32 	%f117, %f20, %f112;
 	add.s64 	%rd120, %rd120, -4;
 	add.s64 	%rd119, %rd119, 8;
-	setp.ne.s64 	%p34, %rd120, 0;
-	@%p34 bra 	$L__BB2_10;
+	setp.ne.s64 	%p36, %rd120, 0;
+	@%p36 bra 	$L__BB2_10;
 $L__BB2_39:
-	setp.eq.s64 	%p35, %rd122, 0;
-	@%p35 bra 	$L__BB2_49;
+	setp.eq.s64 	%p37, %rd122, 0;
+	@%p37 bra 	$L__BB2_49;
 	shl.b64 	%rd75, %rd121, 1;
 	add.s64 	%rd76, %rd35, %rd75;
 	add.s64 	%rd123, %rd2, %rd76;
@@ -658,22 +661,22 @@ $L__BB2_41:
 	// end inline asm
 	sub.rn.f32 	%f29, %f74, %f107;
 	mov.b32 	%r9, %f29;
-	shr.u32 	%r26, %r9, 20;
-	and.b32  	%r10, %r26, 2047;
-	setp.lt.u32 	%p36, %r10, 1067;
+	shr.u32 	%r27, %r9, 20;
+	and.b32  	%r10, %r27, 2047;
+	setp.lt.u32 	%p38, %r10, 1067;
 	mov.f32 	%f101, 0f00000000;
-	@%p36 bra 	$L__BB2_46;
-	setp.eq.s32 	%p37, %r9, -8388608;
+	@%p38 bra 	$L__BB2_46;
+	setp.eq.s32 	%p39, %r9, -8388608;
 	mov.f32 	%f116, %f101;
-	@%p37 bra 	$L__BB2_48;
-	setp.gt.u32 	%p38, %r10, 2039;
-	@%p38 bra 	$L__BB2_47;
-	setp.gt.f32 	%p39, %f29, 0f42B17217;
-	mov.f32 	%f116, 0f7F800000;
 	@%p39 bra 	$L__BB2_48;
-	setp.lt.f32 	%p40, %f29, 0fC2CFF1B4;
+	setp.gt.u32 	%p40, %r10, 2039;
+	@%p40 bra 	$L__BB2_47;
+	setp.gt.f32 	%p41, %f29, 0f42B17217;
+	mov.f32 	%f116, 0f7F800000;
+	@%p41 bra 	$L__BB2_48;
+	setp.lt.f32 	%p42, %f29, 0fC2CFF1B4;
 	mov.f32 	%f116, %f101;
-	@%p40 bra 	$L__BB2_48;
+	@%p42 bra 	$L__BB2_48;
 $L__BB2_46:
 	cvt.f64.f32 	%fd45, %f29;
 	fma.rn.f64 	%fd46, %fd45, 0d40471547652B82FE, 0d4338000000000000;
@@ -702,21 +705,21 @@ $L__BB2_48:
 	add.rn.f32 	%f117, %f117, %f116;
 	add.s64 	%rd123, %rd123, 2;
 	add.s64 	%rd122, %rd122, -1;
-	setp.ne.s64 	%p41, %rd122, 0;
-	@%p41 bra 	$L__BB2_41;
+	setp.ne.s64 	%p43, %rd122, 0;
+	@%p43 bra 	$L__BB2_41;
 $L__BB2_49:
-	setp.leu.f32 	%p42, %f117, 0f00000000;
-	mov.u32 	%r31, %r20;
-	@%p42 bra 	$L__BB2_51;
+	setp.leu.f32 	%p44, %f117, 0f00000000;
+	mov.u32 	%r32, %r21;
+	@%p44 bra 	$L__BB2_51;
 	abs.f32 	%f78, %f117;
-	setp.equ.f32 	%p43, %f78, 0f7F800000;
-	selp.b32 	%r31, 2, 0, %p43;
+	setp.equ.f32 	%p45, %f78, 0f7F800000;
+	selp.b32 	%r32, 2, 0, %p45;
 $L__BB2_51:
 	st.shared.v2.f32 	[shared], {%f107, %f117};
-	cvt.rn.f32.u32 	%f79, %r31;
+	cvt.rn.f32.u32 	%f79, %r32;
 	st.shared.f32 	[shared+8], %f79;
-	setp.ne.s32 	%p44, %r31, 1;
-	@%p44 bra 	$L__BB2_53;
+	setp.ne.s32 	%p46, %r32, 1;
+	@%p46 bra 	$L__BB2_53;
 	mov.f32 	%f81, 0f00000000;
 	// begin inline asm
 	{  cvt.rn.bf16.f32 %rs27, %f81;}
@@ -730,11 +733,11 @@ $L__BB2_53:
 
 	// end inline asm
 $L__BB2_54:
-	setp.eq.s64 	%p45, %rd33, 0;
-	@%p45 bra 	$L__BB2_87;
-	setp.eq.s64 	%p46, %rd33, 1;
+	setp.eq.s64 	%p47, %rd33, 0;
+	@%p47 bra 	$L__BB2_87;
+	setp.eq.s64 	%p48, %rd33, 1;
 	mov.b64 	%rd127, 0;
-	@%p46 bra 	$L__BB2_76;
+	@%p48 bra 	$L__BB2_76;
 	and.b64  	%rd127, %rd33, -2;
 	shl.b64 	%rd86, %rd4, 1;
 	add.s64 	%rd87, %rd86, 2;
@@ -742,9 +745,9 @@ $L__BB2_54:
 	add.s64 	%rd124, %rd2, %rd87;
 	mov.u64 	%rd126, %rd127;
 $L__BB2_57:
-	setp.ne.s32 	%p47, %r31, 0;
+	setp.ne.s32 	%p49, %r32, 0;
 	mov.u16 	%rs25, %rs27;
-	@%p47 bra 	$L__BB2_66;
+	@%p49 bra 	$L__BB2_66;
 	ld.global.nc.u16 	%rs18, [%rd124+-2];
 	// begin inline asm
 	{ cvt.f32.bf16 %f82, %rs18;}
@@ -752,25 +755,25 @@ $L__BB2_57:
 	// end inline asm
 	sub.rn.f32 	%f36, %f82, %f107;
 	mov.b32 	%r13, %f36;
-	shr.u32 	%r28, %r13, 20;
-	and.b32  	%r14, %r28, 2047;
-	setp.lt.u32 	%p48, %r14, 1067;
+	shr.u32 	%r29, %r13, 20;
+	and.b32  	%r14, %r29, 2047;
+	setp.lt.u32 	%p50, %r14, 1067;
 	mov.f32 	%f103, 0f00000000;
-	@%p48 bra 	$L__BB2_64;
-	setp.eq.s32 	%p49, %r13, -8388608;
+	@%p50 bra 	$L__BB2_64;
+	setp.eq.s32 	%p51, %r13, -8388608;
 	mov.f32 	%f119, %f103;
-	@%p49 bra 	$L__BB2_65;
-	setp.lt.u32 	%p50, %r14, 2040;
-	@%p50 bra 	$L__BB2_62;
+	@%p51 bra 	$L__BB2_65;
+	setp.lt.u32 	%p52, %r14, 2040;
+	@%p52 bra 	$L__BB2_62;
 	add.rn.f32 	%f119, %f36, %f36;
 	bra.uni 	$L__BB2_65;
 $L__BB2_62:
-	setp.gt.f32 	%p51, %f36, 0f42B17217;
+	setp.gt.f32 	%p53, %f36, 0f42B17217;
 	mov.f32 	%f119, 0f7F800000;
-	@%p51 bra 	$L__BB2_65;
-	setp.lt.f32 	%p52, %f36, 0fC2CFF1B4;
+	@%p53 bra 	$L__BB2_65;
+	setp.lt.f32 	%p54, %f36, 0fC2CFF1B4;
 	mov.f32 	%f119, %f103;
-	@%p52 bra 	$L__BB2_65;
+	@%p54 bra 	$L__BB2_65;
 $L__BB2_64:
 	cvt.f64.f32 	%fd56, %f36;
 	fma.rn.f64 	%fd57, %fd56, 0d40471547652B82FE, 0d4338000000000000;
@@ -799,10 +802,10 @@ $L__BB2_65:
 
 	// end inline asm
 $L__BB2_66:
-	setp.ne.s32 	%p53, %r31, 0;
+	setp.ne.s32 	%p55, %r32, 0;
 	st.global.u16 	[%rd125+-2], %rs25;
 	mov.u16 	%rs26, %rs27;
-	@%p53 bra 	$L__BB2_75;
+	@%p55 bra 	$L__BB2_75;
 	ld.global.nc.u16 	%rs20, [%rd124];
 	// begin inline asm
 	{ cvt.f32.bf16 %f87, %rs20;}
@@ -810,22 +813,22 @@ $L__BB2_66:
 	// end inline asm
 	sub.rn.f32 	%f40, %f87, %f107;
 	mov.b32 	%r15, %f40;
-	shr.u32 	%r29, %r15, 20;
-	and.b32  	%r16, %r29, 2047;
-	setp.lt.u32 	%p54, %r16, 1067;
+	shr.u32 	%r30, %r15, 20;
+	and.b32  	%r16, %r30, 2047;
+	setp.lt.u32 	%p56, %r16, 1067;
 	mov.f32 	%f104, 0f00000000;
-	@%p54 bra 	$L__BB2_72;
-	setp.eq.s32 	%p55, %r15, -8388608;
+	@%p56 bra 	$L__BB2_72;
+	setp.eq.s32 	%p57, %r15, -8388608;
 	mov.f32 	%f120, %f104;
-	@%p55 bra 	$L__BB2_74;
-	setp.gt.u32 	%p56, %r16, 2039;
-	@%p56 bra 	$L__BB2_73;
-	setp.gt.f32 	%p57, %f40, 0f42B17217;
-	mov.f32 	%f120, 0f7F800000;
 	@%p57 bra 	$L__BB2_74;
-	setp.lt.f32 	%p58, %f40, 0fC2CFF1B4;
+	setp.gt.u32 	%p58, %r16, 2039;
+	@%p58 bra 	$L__BB2_73;
+	setp.gt.f32 	%p59, %f40, 0f42B17217;
+	mov.f32 	%f120, 0f7F800000;
+	@%p59 bra 	$L__BB2_74;
+	setp.lt.f32 	%p60, %f40, 0fC2CFF1B4;
 	mov.f32 	%f120, %f104;
-	@%p58 bra 	$L__BB2_74;
+	@%p60 bra 	$L__BB2_74;
 $L__BB2_72:
 	cvt.f64.f32 	%fd67, %f40;
 	fma.rn.f64 	%fd68, %fd67, 0d40471547652B82FE, 0d4338000000000000;
@@ -861,15 +864,15 @@ $L__BB2_75:
 	add.s64 	%rd126, %rd126, -2;
 	add.s64 	%rd125, %rd125, 4;
 	add.s64 	%rd124, %rd124, 4;
-	setp.ne.s64 	%p59, %rd126, 0;
-	@%p59 bra 	$L__BB2_57;
+	setp.ne.s64 	%p61, %rd126, 0;
+	@%p61 bra 	$L__BB2_57;
 $L__BB2_76:
 	and.b64  	%rd104, %rd33, 1;
-	setp.eq.b64 	%p60, %rd104, 1;
-	not.pred 	%p61, %p60;
-	@%p61 bra 	$L__BB2_87;
-	setp.ne.s32 	%p62, %r31, 0;
-	@%p62 bra 	$L__BB2_86;
+	setp.eq.b64 	%p62, %rd104, 1;
+	not.pred 	%p63, %p62;
+	@%p63 bra 	$L__BB2_87;
+	setp.ne.s32 	%p64, %r32, 0;
+	@%p64 bra 	$L__BB2_86;
 	shl.b64 	%rd105, %rd127, 1;
 	add.s64 	%rd106, %rd5, %rd105;
 	ld.global.nc.u16 	%rs22, [%rd106];
@@ -879,22 +882,22 @@ $L__BB2_76:
 	// end inline asm
 	sub.rn.f32 	%f44, %f92, %f107;
 	mov.b32 	%r17, %f44;
-	shr.u32 	%r30, %r17, 20;
-	and.b32  	%r18, %r30, 2047;
-	setp.lt.u32 	%p63, %r18, 1067;
+	shr.u32 	%r31, %r17, 20;
+	and.b32  	%r18, %r31, 2047;
+	setp.lt.u32 	%p65, %r18, 1067;
 	mov.f32 	%f105, 0f00000000;
-	@%p63 bra 	$L__BB2_83;
-	setp.eq.s32 	%p64, %r17, -8388608;
+	@%p65 bra 	$L__BB2_83;
+	setp.eq.s32 	%p66, %r17, -8388608;
 	mov.f32 	%f121, %f105;
-	@%p64 bra 	$L__BB2_85;
-	setp.gt.u32 	%p65, %r18, 2039;
-	@%p65 bra 	$L__BB2_84;
-	setp.gt.f32 	%p66, %f44, 0f42B17217;
-	mov.f32 	%f121, 0f7F800000;
 	@%p66 bra 	$L__BB2_85;
-	setp.lt.f32 	%p67, %f44, 0fC2CFF1B4;
+	setp.gt.u32 	%p67, %r18, 2039;
+	@%p67 bra 	$L__BB2_84;
+	setp.gt.f32 	%p68, %f44, 0f42B17217;
+	mov.f32 	%f121, 0f7F800000;
+	@%p68 bra 	$L__BB2_85;
+	setp.lt.f32 	%p69, %f44, 0fC2CFF1B4;
 	mov.f32 	%f121, %f105;
-	@%p67 bra 	$L__BB2_85;
+	@%p69 bra 	$L__BB2_85;
 $L__BB2_83:
 	cvt.f64.f32 	%fd78, %f44;
 	fma.rn.f64 	%fd79, %fd78, 0d40471547652B82FE, 0d4338000000000000;

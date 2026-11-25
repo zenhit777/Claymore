@@ -64,7 +64,14 @@ extern "C" __global__ void claymore_softmax_last_dim_f32(
   // reference reduces a row: max, sum, then a division by that sum. A
   // block-wide tree reduction and a reciprocal multiply each drift one ULP per
   // row, and the BF16 chain amplifies it. `shared` keeps the launch contract.
-  claymore_softmax_row(input + row * width, out + row * width, width);
+  //
+  // `claymore_softmax_row` is a single-thread contract: it stores the
+  // exponentials in `out` and reads them back to divide them by the sum. Only
+  // one thread of the block may run it; the other threads racing on `out`
+  // divide some probabilities several times.
+  if (threadIdx.x == 0) {
+    claymore_softmax_row(input + row * width, out + row * width, width);
+  }
 }
 
 extern "C" __global__ void claymore_rms_norm_f32(

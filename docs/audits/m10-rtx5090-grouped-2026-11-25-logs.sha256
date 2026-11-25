@@ -1,0 +1,6 @@
+b7a8c5c0cae024677dcee79ed8871c33a9afd35de1c0c35e4ee35881a7b4ff6a  docs/audits/m10-rtx5090-grouped-1-2026-11-25_16-34-38-cuda-driver.log.txt
+c983c1bea4dc422fa8ce2ac89ccf2eef99be6e4fdf6d9c202746e52f3c32f18e  docs/audits/m10-rtx5090-grouped-2-2026-11-25_16-34-38-cuda-memory.log.txt
+a1ffae31065a9a7c7fd9cdbb8437667083bb71c796d0a46933b6f29f852848eb  docs/audits/m10-rtx5090-grouped-3-2026-11-25_16-34-38-cuda-tensor.log.txt
+20ac7e807e2da921ba0dfdbf45e11ec62972b269d1232b393ce3a2c2b8a9d5f6  docs/audits/m10-rtx5090-grouped-4-2026-11-25_16-34-38-fault-injection.log.txt
+e53cccf9b6d288c392b3be72f9a5e204e53c89c76ecc9d83878b274fb571456c  docs/audits/m10-rtx5090-grouped-5-2026-11-25_16-34-38-m10-primitives.log.txt
+61f0e85eab0c813349097944d76773a9898fdbff4143d8d285e259b106996fab  docs/audits/m10-rtx5090-grouped-6-2026-11-25_16-34-38-verify-checkpoint.log.txt

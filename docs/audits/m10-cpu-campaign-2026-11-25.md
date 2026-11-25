@@ -167,9 +167,11 @@ dans `m10-cpu-2026-11-25-logs.sha256` :
 - La référence CPU est bit-reproductible entre comptes de threads (vérifié
   en campagne historique) ; la dérive CPU↔référence de la chaîne **complète**
   reste un suivi D2, inchangé par ce travail.
-- Rien de GPU n'a été exécuté. Le protocole de campagne groupée RTX 5090 est
-  prêt (`m10-rtx5090-grouped-protocol.md`) et **en attente d'autorisation
-  utilisateur explicite**.
+- Rien de GPU n'a été exécuté **pendant cette campagne CPU**. La campagne
+  groupée RTX 5090 a ensuite été exécutée le même jour, après autorisation
+  explicite de l'utilisateur : 6/6 étapes vertes, et une régression réelle
+  des kernels CUDA M8 y a été découverte et corrigée — voir
+  `m10-rtx5090-grouped-campaign-2026-11-25.md`.
 - PR #40 : toujours ouverte, non fusionnée (décision distincte). Issue #42 :
   mise à jour de traçabilité faite, l'issue reste ouverte jusqu'à validation
   hardware de la tête de finalisation.
