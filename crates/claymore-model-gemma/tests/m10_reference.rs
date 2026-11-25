@@ -76,9 +76,7 @@ fn committed_reference_set_matches_the_pinned_manifest() {
     assert_eq!(manifest["schema"], "claymore-m10-reference/1");
 
     // Gates recorded at generation time.
-    let artifacts = manifest["artifacts"]
-        .as_object()
-        .expect("artifacts object");
+    let artifacts = manifest["artifacts"].as_object().expect("artifacts object");
     assert_eq!(artifacts.len(), 455, "artifact count");
     assert!(
         manifest["gate_failures"]
@@ -150,7 +148,10 @@ fn committed_reference_set_matches_the_pinned_manifest() {
             .collect();
         for w in &words {
             // A non-finite F32 has an all-ones exponent field.
-            assert!((w >> 23) & 0xff != 0xff, "{name}: non-finite value {w:#010x}");
+            assert!(
+                (w >> 23) & 0xff != 0xff,
+                "{name}: non-finite value {w:#010x}"
+            );
         }
         assert_eq!(
             sha256_hex(&bytes),

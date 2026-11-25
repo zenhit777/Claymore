@@ -1,8 +1,16 @@
 //! CPU differential test against pinned-upstream golden tensors.
 //!
-//! Requires the pinned checkpoint at `/tmp/opencode/m10/checkpoint` and the
-//! golden files produced by `gen_golden.py` in `/tmp/opencode/m10/golden`.
-//! It skips cleanly when either is absent.
+//! Requires the pinned checkpoint (env `CLAYMORE_M10_CHECKPOINT`) and the
+//! historical eager golden set (env `CLAYMORE_M10_GOLDEN_DIR`, default the
+//! campaign location `/tmp/opencode/m10/golden_eager`). Both are read-only;
+//! regenerate the goldens only via `tools/m10/gen_reference.py` into a fresh
+//! directory (see `tools/m10/README.md`). It skips cleanly when either is
+//! absent. Run:
+//! ```text
+//! CLAYMORE_M10_CHECKPOINT=/path/to/checkpoint \
+//!   cargo test --release -p claymore-model-gemma --test golden_cpu \
+//!   --locked -- --ignored --test-threads=1 --nocapture
+//! ```
 
 use std::path::Path;
 
@@ -15,16 +23,22 @@ use claymore_model_gemma::graph::{
 };
 use claymore_tensor::Bf16;
 
-const ROOT: &str = "/tmp/opencode/m10/checkpoint";
-const GOLDEN: &str = "/tmp/opencode/m10/golden_eager";
-const STAGES: &str = "/tmp/opencode/m10/golden_eager";
-
-fn load(name: &str, shape: &[usize]) -> Vec<f32> {
-    load_from(GOLDEN, name, shape)
+fn checkpoint_root() -> String {
+    std::env::var("CLAYMORE_M10_CHECKPOINT")
+        .unwrap_or_else(|_| "/tmp/opencode/m10/checkpoint".into())
 }
 
-fn load_from(root: &str, name: &str, shape: &[usize]) -> Vec<f32> {
-    let path = format!("{root}/{name}.bin");
+fn golden_dir() -> String {
+    std::env::var("CLAYMORE_M10_GOLDEN_DIR")
+        .unwrap_or_else(|_| "/tmp/opencode/m10/golden_eager".into())
+}
+
+fn load(name: &str, shape: &[usize]) -> Vec<f32> {
+    load_from(&golden_dir(), name, shape)
+}
+
+fn load_from(root: &impl AsRef<Path>, name: &str, shape: &[usize]) -> Vec<f32> {
+    let path = root.as_ref().join(format!("{name}.bin"));
     let bytes = std::fs::read(&path).expect("golden file");
     let out: Vec<f32> = bytes
         .chunks_exact(4)
@@ -99,13 +113,16 @@ fn permute_kv(flat: &[f32], rows: usize, heads: usize, dim: usize) -> Vec<f32> {
 #[test]
 #[ignore = "requires the pinned checkpoint and stage golden files (release profile)"]
 fn text_embedding_matches_pinned_upstream_on_the_real_checkpoint() {
-    if !Path::new(ROOT).is_dir() || !Path::new(&format!("{STAGES}/encoder_embedding.bin")).is_file()
+    let root = checkpoint_root();
+    let stages = golden_dir();
+    if !Path::new(&root).is_dir()
+        || !Path::new(&format!("{stages}/encoder_embedding.bin")).is_file()
     {
         eprintln!("skip: checkpoint/stage golden unavailable");
         return;
     }
     let host = Host::new();
-    let ckpt = Checkpoint::open_pinned(ROOT).expect("pinned checkpoint");
+    let ckpt = Checkpoint::open_pinned(&root).expect("pinned checkpoint");
     let cfg = ckpt.config().clone();
     let hidden = cfg.text_config.as_ref().unwrap().hidden_size.unwrap();
     let ids = load("prompt_ids", &[1, 7])
@@ -115,7 +132,7 @@ fn text_embedding_matches_pinned_upstream_on_the_real_checkpoint() {
     let table = claymore_model_gemma::fullgraph::text_embedding_weight(&host, &ckpt);
     let embedding = embed_gather_scaled(&host, &ids, &table, text_embedding_scale(hidden));
     let rust = host.to_f32(&embedding);
-    let golden = load_from(STAGES, "encoder_embedding", &[1, 7, 2816]);
+    let golden = load_from(&stages, "encoder_embedding", &[1, 7, 2816]);
     let (max_abs, rms) = stats(&rust, &golden);
     eprintln!("encoder_embedding max_abs={max_abs:.9} rms={rms:.9}");
     assert_eq!(max_abs, 0.0, "encoder embedding drift {max_abs}");
@@ -125,14 +142,16 @@ fn text_embedding_matches_pinned_upstream_on_the_real_checkpoint() {
 #[test]
 #[ignore = "requires the pinned checkpoint and stage golden files (release profile)"]
 fn encoder_layer0_projections_match_pinned_upstream_on_the_real_checkpoint() {
-    if !Path::new(ROOT).is_dir()
-        || !Path::new(&format!("{STAGES}/encoder0_q_projection.bin")).is_file()
+    let root = checkpoint_root();
+    let stages = golden_dir();
+    if !Path::new(&root).is_dir()
+        || !Path::new(&format!("{stages}/encoder0_q_projection.bin")).is_file()
     {
         eprintln!("skip: checkpoint/stage golden unavailable");
         return;
     }
     let host = Host::new();
-    let ckpt = Checkpoint::open_pinned(ROOT).expect("pinned checkpoint");
+    let ckpt = Checkpoint::open_pinned(&root).expect("pinned checkpoint");
     let cfg = ckpt.config().clone();
     let hidden = cfg.text_config.as_ref().unwrap().hidden_size.unwrap();
     let eps = cfg.text_config.as_ref().unwrap().rms_norm_eps.unwrap();
@@ -176,7 +195,7 @@ fn encoder_layer0_projections_match_pinned_upstream_on_the_real_checkpoint() {
             )),
         );
         let rust = host.to_f32(&actual);
-        let golden = load_from(STAGES, golden_name, &shape);
+        let golden = load_from(&stages, golden_name, &shape);
         let (max_abs, rms) = stats(&rust, &golden);
         eprintln!("{projection} max_abs={max_abs:.6} rms={rms:.6}");
     }
@@ -185,6 +204,8 @@ fn encoder_layer0_projections_match_pinned_upstream_on_the_real_checkpoint() {
 #[test]
 #[ignore = "requires the pinned checkpoint and stage golden files (release profile)"]
 fn encoder0_router_matches_pinned_upstream_on_the_real_checkpoint() {
+    let root = checkpoint_root();
+    let golden = golden_dir();
     // Fast, focused check of the router semantics: the golden dump contains the
     // upstream's router input (`encoder0_routing_residual`), its BF16 router
     // logits (`encoder0_router_raw_scores`), the FP32 probabilities
@@ -193,14 +214,14 @@ fn encoder0_router_matches_pinned_upstream_on_the_real_checkpoint() {
     // reproduce the upstream's logits bit for bit — the BF16 tie structure of
     // the pinned checkpoint decides the selected experts, so a one-ULP drift
     // changes the model output.
-    if !Path::new(ROOT).is_dir()
-        || !Path::new(&format!("{GOLDEN}/encoder0_routing_residual.bin")).is_file()
+    if !Path::new(&root).is_dir()
+        || !Path::new(&format!("{golden}/encoder0_routing_residual.bin")).is_file()
     {
         eprintln!("skip: checkpoint/golden unavailable");
         return;
     }
     let host = Host::new();
-    let ckpt = Checkpoint::open_pinned(ROOT).expect("pinned checkpoint");
+    let ckpt = Checkpoint::open_pinned(&root).expect("pinned checkpoint");
     let cfg = ckpt.config().clone();
     let text = cfg.text_config.as_ref().unwrap();
     let hidden = text.hidden_size.unwrap();
@@ -255,12 +276,15 @@ fn encoder0_router_matches_pinned_upstream_on_the_real_checkpoint() {
 #[test]
 #[ignore = "requires the pinned checkpoint and stage golden files (release profile)"]
 fn encoder_layers_match_pinned_upstream_on_the_real_checkpoint() {
-    if !Path::new(ROOT).is_dir() || !Path::new(&format!("{STAGES}/encoder_layer_0.bin")).is_file() {
+    let root = checkpoint_root();
+    let stages = golden_dir();
+    if !Path::new(&root).is_dir() || !Path::new(&format!("{stages}/encoder_layer_0.bin")).is_file()
+    {
         eprintln!("skip: checkpoint/stage golden unavailable");
         return;
     }
     let host = Host::new();
-    let ckpt = Checkpoint::open_pinned(ROOT).expect("pinned checkpoint");
+    let ckpt = Checkpoint::open_pinned(&root).expect("pinned checkpoint");
     let cfg = ckpt.config().clone();
     let ids = load("prompt_ids", &[1, 7])
         .iter()
@@ -279,7 +303,7 @@ fn encoder_layers_match_pinned_upstream_on_the_real_checkpoint() {
     );
     for (layer, actual) in layer_trace.iter().enumerate() {
         let rust = host.to_f32(&actual.hidden);
-        let golden = load_from(STAGES, &format!("encoder_layer_{layer}"), &[1, 7, 2816]);
+        let golden = load_from(&stages, &format!("encoder_layer_{layer}"), &[1, 7, 2816]);
         let (max_abs, rms) = stats(&rust, &golden);
         eprintln!("encoder_layer_{layer} max_abs={max_abs:.6} rms={rms:.6}");
         let cache_layer = &cache.layers[layer];
@@ -299,13 +323,13 @@ fn encoder_layers_match_pinned_upstream_on_the_real_checkpoint() {
             ),
         ] {
             let flat = host.to_f32(tensor);
-            let golden_cache = load_from(STAGES, &name, &[1, heads, rows, dim]);
+            let golden_cache = load_from(&stages, &name, &[1, heads, rows, dim]);
             let permuted = permute_kv(&flat, rows, heads, dim);
             let (kmax, krms) = stats(&permuted, &golden_cache);
             eprintln!("enc_kv_{layer}_{which} max_abs={kmax:.6} rms={krms:.6}");
         }
-        let golden_indices = load_from(STAGES, &format!("encoder{layer}_router_indices"), &[7, 8]);
-        let golden_scores = load_from(STAGES, &format!("encoder{layer}_router_scores"), &[7, 128]);
+        let golden_indices = load_from(&stages, &format!("encoder{layer}_router_indices"), &[7, 8]);
+        let golden_scores = load_from(&stages, &format!("encoder{layer}_router_scores"), &[7, 128]);
         let (smax, srms) = stats(&actual.router_scores, &golden_scores);
         let exact = actual.router_indices == golden_indices;
         eprintln!(
@@ -322,7 +346,7 @@ fn encoder_layers_match_pinned_upstream_on_the_real_checkpoint() {
                 }
             }
         }
-        let golden_indices = load_from(STAGES, &format!("encoder{layer}_router_indices"), &[7, 8]);
+        let golden_indices = load_from(&stages, &format!("encoder{layer}_router_indices"), &[7, 8]);
         let exact = actual.router_indices == golden_indices;
         eprintln!("encoder{layer}_router_indices exact={exact}");
         if !exact {
@@ -351,7 +375,7 @@ fn encoder_layers_match_pinned_upstream_on_the_real_checkpoint() {
         ] {
             // The golden cache is [batch, kv_heads, seq, head_dim]; the local cache
             // is [seq, kv_heads, head_dim]. Permute before comparing.
-            let golden_cache = load_from(STAGES, &golden_name, &[1, heads, rows, dim]);
+            let golden_cache = load_from(&stages, &golden_name, &[1, heads, rows, dim]);
             let permuted = permute_kv(flat, rows, heads, dim);
             let (kmax, krms) = stats(&permuted, &golden_cache);
             eprintln!("enc_kv_{layer}_{which} max_abs={kmax:.6} rms={krms:.6}");
@@ -367,17 +391,17 @@ fn encoder_layers_match_pinned_upstream_on_the_real_checkpoint() {
                 ("experts", &actual.expert_output, "encoder0_expert_output"),
             ] {
                 let rust = host.to_f32(tensor);
-                let golden = load_from(STAGES, golden_name, &[1, 7, 2816]);
+                let golden = load_from(&stages, golden_name, &[1, 7, 2816]);
                 let (max_abs, rms) = stats(&rust, &golden);
                 eprintln!("encoder0_{name} max_abs={max_abs:.6} rms={rms:.6}");
             }
-            let golden_scores = load_from(STAGES, "encoder0_router_scores", &[7, 128]);
+            let golden_scores = load_from(&stages, "encoder0_router_scores", &[7, 128]);
             let (max_abs, rms) = stats(&actual.router_scores, &golden_scores);
             eprintln!("encoder0_router_scores max_abs={max_abs:.6} rms={rms:.6}");
-            let golden_weights = load_from(STAGES, "encoder0_router_weights", &[7, 8]);
+            let golden_weights = load_from(&stages, "encoder0_router_weights", &[7, 8]);
             let (max_abs, rms) = stats(&actual.router_weights, &golden_weights);
             eprintln!("encoder0_router_weights max_abs={max_abs:.6} rms={rms:.6}");
-            let golden_indices = load_from(STAGES, "encoder0_router_indices", &[7, 8]);
+            let golden_indices = load_from(&stages, "encoder0_router_indices", &[7, 8]);
             eprintln!(
                 "encoder0_router_indices exact={}",
                 actual.router_indices == golden_indices
@@ -398,12 +422,12 @@ fn encoder_layers_match_pinned_upstream_on_the_real_checkpoint() {
                 ("expert_input", &actual.expert_input, "encoder0_pre2"),
             ] {
                 let rust = host.to_f32(tensor);
-                let golden = load_from(STAGES, golden_name, &[7, 2816]);
+                let golden = load_from(&stages, golden_name, &[7, 2816]);
                 let (max_abs, rms) = stats(&rust, &golden);
                 eprintln!("encoder0_{name} max_abs={max_abs:.6} rms={rms:.6}");
             }
-            let golden_probabilities = load_from(STAGES, "encoder0_router_scores", &[7, 128]);
-            let golden_raw = load_from(STAGES, "encoder0_router_raw_scores", &[7, 128]);
+            let golden_probabilities = load_from(&stages, "encoder0_router_scores", &[7, 128]);
+            let golden_raw = load_from(&stages, "encoder0_router_raw_scores", &[7, 128]);
             for (token, experts) in [(0, [33usize, 68]), (2, [113, 115]), (5, [0, 127])] {
                 eprintln!("router token {token} candidates");
                 for expert in experts {
@@ -423,14 +447,16 @@ fn encoder_layers_match_pinned_upstream_on_the_real_checkpoint() {
 #[test]
 #[ignore = "requires the pinned checkpoint and venv-pinned golden files (release profile)"]
 fn encoder_chain_drift_is_tracked_against_pinned_upstream() {
-    if !Path::new(ROOT).is_dir()
-        || !Path::new(&format!("{GOLDEN}/encoder_last_hidden_direct.bin")).is_file()
+    let root = checkpoint_root();
+    let golden = golden_dir();
+    if !Path::new(&root).is_dir()
+        || !Path::new(&format!("{golden}/encoder_last_hidden_direct.bin")).is_file()
     {
         eprintln!("skip: checkpoint/golden unavailable");
         return;
     }
     let host = Host::new();
-    let ckpt = Checkpoint::open_pinned(ROOT).expect("pinned checkpoint");
+    let ckpt = Checkpoint::open_pinned(&root).expect("pinned checkpoint");
     let cfg = ckpt.config().clone();
     let ids = load("prompt_ids", &[1, 7])
         .iter()
@@ -461,14 +487,16 @@ fn encoder_chain_drift_is_tracked_against_pinned_upstream() {
 #[test]
 #[ignore = "requires the pinned checkpoint and venv-pinned golden files (release profile)"]
 fn vision_chain_drift_is_tracked_against_pinned_upstream() {
-    if !Path::new(ROOT).is_dir()
-        || !Path::new(&format!("{GOLDEN}/vision_last_hidden_direct.bin")).is_file()
+    let root = checkpoint_root();
+    let golden = golden_dir();
+    if !Path::new(&root).is_dir()
+        || !Path::new(&format!("{golden}/vision_last_hidden_direct.bin")).is_file()
     {
         eprintln!("skip: vision golden unavailable");
         return;
     }
     let host = Host::new();
-    let ckpt = Checkpoint::open_pinned(ROOT).expect("pinned checkpoint");
+    let ckpt = Checkpoint::open_pinned(&root).expect("pinned checkpoint");
     let cfg = ckpt.config().clone();
     let pixels = load("vision_pixel_values", &[1, 9, 768]);
     let pos = load("vision_pixel_position_ids", &[1, 9, 2]);
@@ -538,14 +566,16 @@ fn vision_chain_drift_is_tracked_against_pinned_upstream() {
 #[test]
 #[ignore = "requires the pinned checkpoint and venv-pinned golden files (release profile)"]
 fn decoder_chain_drift_is_tracked_against_pinned_upstream() {
-    if !Path::new(ROOT).is_dir()
-        || !Path::new(&format!("{GOLDEN}/decoder_last_hidden0_direct.bin")).is_file()
+    let root = checkpoint_root();
+    let golden = golden_dir();
+    if !Path::new(&root).is_dir()
+        || !Path::new(&format!("{golden}/decoder_last_hidden0_direct.bin")).is_file()
     {
         eprintln!("skip: decoder golden unavailable");
         return;
     }
     let host = Host::new();
-    let ckpt = Checkpoint::open_pinned(ROOT).expect("pinned checkpoint");
+    let ckpt = Checkpoint::open_pinned(&root).expect("pinned checkpoint");
     let cfg = ckpt.config().clone();
     let ids = load("prompt_ids", &[1, 7])
         .iter()
@@ -641,7 +671,7 @@ fn decoder_chain_drift_is_tracked_against_pinned_upstream() {
     {
         for (stage, tensor) in chunk.iter().enumerate() {
             let name = format!("dec{layer}_{}", DEC_STAGE_NAMES[stage]);
-            let path = format!("{GOLDEN}/{name}.bin");
+            let path = format!("{golden}/{name}.bin");
             let rust = host.to_f32(tensor);
             if dump {
                 let bytes: Vec<u8> = rust.iter().flat_map(|v| v.to_le_bytes()).collect();
