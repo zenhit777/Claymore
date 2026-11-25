@@ -1,0 +1,164 @@
+============================================================
+ÉTAPE 5: m10-primitives — 2026-11-25T21:15:04+01:00
+HEAD: 460c9ef9c2f7d3ff2d5a15c26462f25102d919ad
+------------------------------------------------------------
+Wed Nov 25 21:15:04 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+|  0%   43C    P8             45W /  575W |    1300MiB /  32607MiB |      2%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A         1427784      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+
+------------------------------------------------------------
+COMMANDE: cargo test --release -p claymore-memory --features cuda-driver --test hardware_m10_primitives --locked -- --ignored --test-threads=1 --nocapture
+------------------------------------------------------------
++ cargo test --release -p claymore-memory --features cuda-driver --test hardware_m10_primitives --locked -- --ignored --test-threads=1 --nocapture
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 0.07s
+     Running tests/hardware_m10_primitives.rs (target/release/build/claymore-memory/d1a401ee4cb6bdb4/out/hardware_m10_primitives-d1a401ee4cb6bdb4)
+
+running 21 tests
+test hw_m10_01_linear_f32_matches_cpu ... HW-M10 linear f32: n=91 max_abs=0e0
+ok
+test hw_m10_02_linear_bf16_matches_cpu_within_one_ulp ... HW-M10 linear bf16: n=45 max_ulp=0
+ok
+test hw_m10_03_rotary_f32_and_bf16_match_cpu ... HW-M10 rotary f32: n=320 max_abs=0e0
+HW-M10 rotary bf16: n=320 max_ulp=0
+ok
+test hw_m10_04_attention_f32_masked_and_unmasked_match_cpu ... HW-M10 attention f32 masked=false: n=192 max_abs=0e0
+HW-M10 attention f32 masked=true: n=192 max_abs=0e0
+ok
+test hw_m10_05_attention_bf16_within_two_ulp ... HW-M10 attention bf16: n=128 max_ulp=0
+ok
+test hw_m10_06_soft_cap_f32_and_bf16_match_cpu ... HW-M10 soft_cap f32: n=72 max_abs=0e0
+HW-M10 soft_cap bf16: n=72 max_ulp=0
+ok
+test hw_m10_07_dispatch_is_exact_on_dtype_and_signature ... ok
+test hw_m10_08_scale_f32_and_bf16_match_cpu ... HW-M10 scale f32 scalar: n=24 max_abs=0e0
+HW-M10 scale f32 column: n=24 max_abs=0e0
+HW-M10 scale bf16 scalar: n=24 max_ulp=0
+HW-M10 scale bf16 column: n=24 max_ulp=0
+ok
+test hw_m10_09_real_weight_decoder_layer_subgraph_matches_cpu ... HW-M10 real canvas token ids[:8] = [150414, 153231, 8113, 9945, 151975, 19512, 119831, 54109]
+HW-M10 real layer 0 layer_scalar = 0.068847656 (bits 0x3d8d)
+HW-M10 real layer0 canvas: n=720896 max_ulp=0
+HW-M10 real layer0 input_layernorm: n=720896 max_ulp=0
+HW-M10 real layer0 q_proj: n=1048576 max_ulp=0
+HW-M10 real layer0 q_norm: n=1048576 max_ulp=0
+HW-M10 real layer0 q_rope: n=1048576 max_ulp=0
+HW-M10 real layer0 k_proj: n=524288 max_ulp=0
+HW-M10 real layer0 k_norm: n=524288 max_ulp=0
+HW-M10 real layer0 k_rope: n=524288 max_ulp=0
+HW-M10 real layer0 v_proj: n=524288 max_ulp=0
+HW-M10 real layer0 v_norm: n=524288 max_ulp=0
+HW-M10 real layer0 attention: n=1048576 max_abs=0e0 bound=5.46875e-2 rms=0e0 max_ulp=0
+HW-M10 real layer0 o_proj: n=720896 max_ulp=0
+HW-M10 real layer0 post_attn_norm: n=720896 max_ulp=0
+HW-M10 real layer0 residual_add: n=720896 max_ulp=0
+HW-M10 real layer0 layer_scale: n=720896 max_ulp=0
+HW-M10 real layer 0 end-to-end drift (device chain vs reference chain):
+HW-M10 drift real layer0 canvas: n=720896 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 drift real layer0 input_layernorm: n=720896 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 drift real layer0 q_proj: n=1048576 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 drift real layer0 q_norm: n=1048576 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 drift real layer0 q_rope: n=1048576 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 drift real layer0 k_proj: n=524288 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 drift real layer0 k_norm: n=524288 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 drift real layer0 k_rope: n=524288 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 drift real layer0 v_proj: n=524288 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 drift real layer0 v_norm: n=524288 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 drift real layer0 attention: n=1048576 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 drift real layer0 o_proj: n=720896 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 drift real layer0 post_attn_norm: n=720896 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 drift real layer0 residual_add: n=720896 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 drift real layer0 layer_scale: n=720896 max_ulp=0 max_abs=0e0 rms=0e0 relative=0e0
+HW-M10 real layer 0 subgraph: vram_peak_bytes=26607616 (26 GiB soft, 28 GiB hard)
+ok
+test hw_m10_10_hard_budget_is_enforced_before_device_allocation ... HW-M10 in-budget linear: n=131072 max_ulp=0
+HW-M10 pressure: hard=1 MiB over_ceiling_request=refused over_ceiling_op=refused in_budget_op=ok vram_total=34162016256 vram_free=32425115648
+ok
+test hw_m10_10_widen_bf16_is_bit_exact ... HW-M10 widen bf16->f32: n=45 exact
+ok
+test hw_m10_11_in_flight_m10_launch_protects_its_allocations ... HW-M10 in-flight guard: 4 guarded allocations protected, eviction blocked while pending, allowed after completion
+ok
+test hw_m10_11_router_top_k_matches_cpu ... HW-M10 router_top_k f32: n=32 max_abs=0e0
+HW-M10 router_top_k pinned row: n=16 max_abs=0e0
+ok
+test hw_m10_12_gelu_mul_up_f32_and_bf16_match_cpu ... HW-M10 gelu_mul_up f32: n=120 max_abs=0e0
+HW-M10 gelu_mul_up bf16: n=120 max_ulp=0
+ok
+test hw_m10_12_repeated_m10_launches_are_bit_exact ... HW-M10 repeated attention 0: n=262144 max_abs=0e0 bound=3.90625e-3 rms=0e0 max_ulp=0
+HW-M10 repeated attention 1: n=262144 max_abs=0e0 bound=3.90625e-3 rms=0e0 max_ulp=0
+HW-M10 repeated attention 2: n=262144 max_abs=0e0 bound=3.90625e-3 rms=0e0 max_ulp=0
+HW-M10 repeated attention 3: n=262144 max_abs=0e0 bound=3.90625e-3 rms=0e0 max_ulp=0
+HW-M10 repeated attention 4: n=262144 max_abs=0e0 bound=3.90625e-3 rms=0e0 max_ulp=0
+HW-M10 repetition: 5 launches bit-identical, accounting returned to baseline each cycle, peak=1572864 bytes
+ok
+test hw_m10_13_gather_rows_f32_and_bf16_are_exact ... HW-M10 gather_rows: exact on f32 and bf16
+ok
+test hw_m10_14_scatter_add_f32_and_bf16_match_cpu_exactly ... HW-M10 scatter_add f32: n=30 max_abs=0e0
+HW-M10 scatter_add bf16: n=30 max_ulp=0
+ok
+test hw_m10_15_embed_gather_f32_and_bf16_match_cpu ... HW-M10 embed_gather f32: n=32 max_abs=0e0
+HW-M10 embed_gather bf16: n=32 max_ulp=0
+ok
+test hw_m10_16_row_mask_f32_and_bf16_are_exact ... HW-M10 row_mask f32: exact
+HW-M10 row_mask bf16: masked rows zeroed
+ok
+test hw_m10_17_scale_bias_f32_and_bf16_match_cpu ... HW-M10 scale_bias f32: n=35 max_abs=0e0
+HW-M10 scale_bias bf16: n=35 max_ulp=0
+ok
+test hw_m10_18_scale_scalar_f32_and_bf16_match_cpu ... HW-M10 scale_scalar f32: n=35 max_abs=0e0
+HW-M10 scale_scalar bf16: n=35 max_ulp=0
+ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 38.98s
+
++ rc=0
++ set +x
+------------------------------------------------------------
+RC: 0
+FIN: 2026-11-25T21:15:43+01:00
+Wed Nov 25 21:15:43 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+|  0%   46C    P0             86W /  575W |    1300MiB /  32607MiB |      4%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A         1427784      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+

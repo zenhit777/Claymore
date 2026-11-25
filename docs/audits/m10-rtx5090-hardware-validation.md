@@ -3,7 +3,8 @@
 - **Branche :** `feat/m10-diffusiongemma`
 - **SHA de code validé (campagne GPU finale du 24/11) :** `77e7665` (« Fix the M10 CUDA graph against the pinned upstream semantics »)
 - **SHA de code validé (campagne hardware du 23/11) :** `ea115ab337d492d81ac50f69c09cd79e050b79a6`
-- **Date de campagne :** 23 novembre 2026, 16:10–16:12 UTC (campagne du SHA `ea115ab`) ; **24 novembre 2026, créneau GPU final du §16** (campagne du SHA `77e7665`)
+- **SHA de code validé (campagne finale du 25/11, 9 étapes) :** `460c9ef9c2f7d3ff2d5a15c26462f25102d919ad`
+- **Date de campagne :** 23 novembre 2026, 16:10–16:12 UTC (campagne du SHA `ea115ab`) ; **24 novembre 2026, créneau GPU final du §16** (campagne du SHA `77e7665`) ; **25 novembre 2026, 21:10–21:53 (campagne du SHA `460c9ef`, §17)**
 - **PR :** [#40](https://github.com/zenhit777/Claymore/pull/40), cible `main`, **ouverte et non fusionnée** (voir §15)
 - **Statut :** **PASS PARTIEL** — 66/66 tests matériels verts (campagne du 23/11), CI et MSRV verts, **gate de génération réelle du graphe complet laissé OUVERT** (§11) ; **§16 : le créneau GPU final du 24/11 est exécuté, la génération réelle est VERTE, le différentiel de chaîne reste ROUGE et documenté**
 
@@ -54,6 +55,24 @@
 > `m10-rtx5090-grouped-protocol.md`. Les §1 à §16 de ce rapport décrivent les
 > campagnes du 23 et du 24 novembre et restent inchangés ; ce bandeau ne
 > modifie aucune de leurs conclusions.
+
+> **Mise à jour du 25 novembre 2026 — campagne finale, différentiel décodeur et
+> logits (§17).** Une troisième campagne GPU, après autorisation explicite de
+> l'utilisateur, a été exécutée sur le SHA `460c9ef` : **9/9 étapes vertes**
+> (les 6 étapes du protocole groupé, plus le rejeu de la génération matérielle et
+> **deux passes du différentiel CUDA ↔ CPU des 30 couches du décodeur et des
+> logits**). Ce différentiel est **bit-exact** : `max_abs = 0,000000`,
+> `rms = 0,000000`, **0,0 pas BF16** sur les **810 comparaisons d'étape**
+> (30 couches × 27 étapes), sur le routeur (scores bruts et poids, 30 couches)
+> et sur les logits ; les ensembles d'experts CUDA sont identiques à la
+> référence sur 470/480 lignes, avec les **10 échanges de frontière** déjà
+> relevés par le bisect CPU et **zéro** divergence structurelle. Aucune
+> modification de kernel, de source `src/`, de dorée ni de registre de décision
+> n'a été faite. Rapport : `m10-rtx5090-final-decoder-logits-2026-11-25.md` ;
+> journaux bruts `m10-final-<n>-2026-11-25_*.log.txt` et empreintes
+> `m10-final-2026-11-25-logs.sha256`. Les §1 à §16 décrivent les campagnes des
+> 23 et 24 novembre et restent inchangés ; ce bandeau ne modifie aucune de
+> leurs conclusions.
 
 > **Ce que ce rapport prouve.** Le chemin M10 de Claymore — chargement strict du checkpoint épinglé, primitives tensorielles CPU de référence, kernels CUDA M10, admission mémoire bornée et garde des buffers en vol — est réellement exécuté sur une RTX 5090 et validé contre une référence CPU déterministe, y compris sur un **sous-graphe de couche décodeur construit à partir des poids réels** du checkpoint épinglé.
 >
@@ -172,6 +191,19 @@ Copie de référence versionnée : `docs/audits/fixtures/diffusiongemma-config.j
 | PTX M10 | `.version 9.0`, `.target sm_120`, 10 kernels |
 
 **Aucun test matériel n'a été exécuté contre `ci/cuda-driver-stub.c`.** Le stub n'est utilisé que pour la CI logicielle sans GPU (§7.2).
+
+**Ajout du 25 novembre 2026 (campagne finale, §17).** Environnement
+identique à celui des campagnes précédentes : RTX 5090 32 607 Mio, pilote
+NVIDIA-SMI 615.65.07, KMD 616.64, CUDA UMD 13.4, hôte WSL2, `/usr/lib/wsl/lib/libcuda.so`
+comme bibliothèque driver réelle, `RUSTFLAGS="-L native=/usr/lib/wsl/lib"` et
+`LD_LIBRARY_PATH="/usr/lib/wsl/lib"`. État de la carte **avant** la session :
+1 299 Mio utilisés, 1–3 % d'utilisation, **aucun processus compute**
+(`nvidia-smi --query-compute-apps` vide) ; **après** : 1 300 Mio, aucun
+processus compute résiduel, aucune entrée Xid/NVRM. La session a duré
+**42 min 34 s** (21:10:45 → 21:53:19), en une seule occupation, neuf étapes
+séquentielles, une seule tâche GPU à la fois. Les empreintes des sources
+et artefacts (§2.1) sont **inchangées** : aucun `.cu`, `.cuh` ni PTX n'a été
+modifié pendant la campagne.
 
 ### 2.1 Empreintes des sources et artefacts
 
@@ -300,6 +332,22 @@ Le binaire relit **toute** la charge utile des 11 shards par flux de 8 Mio, calc
 | `docs/audits/m10-msrv-1.86.log` | workspace + checks CUDA + clippy sous Rust 1.86 |
 | `docs/audits/m10-rtx5090-hw-m10-real-weights.log` | première exécution du sous-graphe à poids réels (découverte de `layer_scalar`) |
 | `docs/audits/m10-rtx5090-preflight.log` | préflight initial de la campagne |
+
+**Journaux de la campagne finale du 25/11 (§17) — SHA `460c9ef`, horodatés,
+en-tête `HEAD` et `nvidia-smi` avant/après chaque étape :**
+
+| Fichier | Contenu |
+|---|---|
+| `docs/audits/m10-final-1-2026-11-25_21-10-45-cuda-driver.log.txt` | 5 tests driver |
+| `docs/audits/m10-final-2-2026-11-25_21-11-38-cuda-memory.log.txt` | 17 tests mémoire/transferts |
+| `docs/audits/m10-final-3-2026-11-25_21-13-00-cuda-tensor.log.txt` | 19 tests tenseurs M8 |
+| `docs/audits/m10-final-4-2026-11-25_21-14-18-fault-injection.log.txt` | 13 tests gestionnaire, injections B2 + B3 |
+| `docs/audits/m10-final-5-2026-11-25_21-15-04-m10-primitives.log.txt` | 21 tests M10, dont le sous-graphe à poids réels |
+| `docs/audits/m10-final-6-2026-11-25_21-16-09-verify-checkpoint.log.txt` | vérification complète des 51,6 Go de charge utile |
+| `docs/audits/m10-final-7-2026-11-25_21-22-06-m10-generation.log.txt` | 3 tests de génération matérielle (chaîne bit-égale, bloc de canvas réel, couche 0 par étape) |
+| `docs/audits/m10-final-8-2026-11-25_21-36-40-m10-decoder-diff-1.log.txt` | **différentiel CUDA ↔ CPU des 30 couches du décodeur et des logits — passe 1** (table complète) |
+| `docs/audits/m10-final-9-2026-11-25_21-45-43-m10-decoder-diff-2.log.txt` | **différentiel — passe 2** (reproductibilité, tables identiques) |
+| `docs/audits/m10-final-2026-11-25-logs.sha256` | empreintes SHA-256 des neuf journaux |
 
 ---
 
@@ -929,3 +977,54 @@ tierce, amplifié par les couches d'attention **sans scaling**).
   - tâche 3/3 `hardware_m10_generation` : **2 verts, 1 rouge documenté** — **génération réelle VERTE** (256/256 positions, pic **24,25 Gio**, 909 Gio uploadés, 605 669 lancements), **sémantique de la couche 0 VERTE** (indices du routeur 56/56 identiques), **différentiel de chaîne ROUGE** (`5,835938` / `0,711149`, tolérances conservées) ;
 - VRAM libérée après chaque tâche : **913 Mio** occupés, **aucun processus de calcul résiduel** ;
 - PR #40 et #44 : ouvertes sur `main`, **non fusionnées**.
+
+---
+
+## 17. Campagne finale du 25 novembre 2026 — différentiel décodeur et logits (SHA `460c9ef`)
+
+Cette section est **nouvelle** et ne modifie aucune conclusion des §1 à §16,
+qui décrivent les campagnes des 23 et 24 novembre.
+
+### 17.1 Objet
+
+La réserve 1 du registre de l'architecte (`m10-architect-decisions.md` §2)
+demandait la mesure CUDA ↔ CPU des **30 couches du décodeur** et des
+**logits** sur RTX 5090. La campagne groupée du 25/11 (§ bandeau « campagne
+groupée ») ne couvrait que le **sous-graphe décodeur de la couche 0**.
+
+### 17.2 Résultat
+
+| métrique | valeur | borne fixée avant campagne |
+|---|---:|---:|
+| étapes de couche comparées (30 × 27) | **810**, toutes à `max_abs = 0,000000`, `rms = 0,000000`, **0,0 pas BF16** | ≤ 20,0 pas |
+| routeur, scores bruts F32 (30 couches) | `0,000000` | ≤ 1e-3 |
+| routeur, poids post-softmax (30 couches) | `0,000000` | ≤ 1e-3 |
+| ensembles d'experts CUDA vs référence | 470/480 identiques, 10 échanges de frontière, **0 structurel** | contrat du bisect CPU |
+| logits CUDA ↔ CPU | `max_abs = 0,000000`, `rms = 0,000000`, **0,0 pas** | ≤ 2,0 / ≤ 0,1 |
+| classement (argmax / top-8), CUDA vs CPU | 16/16 et 16/16 lignes identiques | rapporté (D2) |
+| pic VRAM du différentiel | 11 889 Mio | ≤ 26 Gio (souple) / 28 Gio (dur) |
+| reproductibilité (deux passes) | tables **strictement identiques**, sorties de couche bit-identiques | — |
+
+### 17.3 Portes
+
+Neuf étapes, toutes vertes : les 6 du protocole groupé, plus le rejeu de la
+génération matérielle (3/3) et deux passes du différentiel (2/2 chacune).
+Durée d'occupation : **42 min 34 s**. VRAM avant : 1 299 Mio, aucun processus
+compute ; après : 1 300 Mio, aucun processus compute résiduel, aucune entrée
+Xid/NVRM.
+
+### 17.4 Sources
+
+Rapport complet : `m10-rtx5090-final-decoder-logits-2026-11-25.md` ; journaux
+bruts `m10-final-<n>-2026-11-25_*.log.txt` ; empreintes
+`m10-final-2026-11-25-logs.sha256`. Aucun `.cu`, `.cuh`, PTX, source `src/`,
+dorée ou décision D1/D2 n'a été modifié.
+
+### 17.5 Verdict
+
+La réserve 1 est **levée sur le plan de la mesure** : le différentiel
+CUDA ↔ CPU du décodeur et des logits est **bit-exact** sur le scénario de
+référence. Le **resserrement** des portes CUDA ↔ CPU reste une **décision
+d'architecte** : les valeurs candidates (0,0 pas, routeur et logits à
+0,000000) sont publiées, mais une égalité bit stricte serait **plus forte**
+que ce que D1 énonce (D1 mesure une dérive en pas, pas une identité).

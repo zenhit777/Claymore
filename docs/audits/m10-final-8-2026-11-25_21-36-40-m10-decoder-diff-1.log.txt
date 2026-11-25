@@ -1,0 +1,1014 @@
+============================================================
+ÉTAPE 8: m10-decoder-diff-1 — 2026-11-25T21:36:40+01:00
+HEAD: 460c9ef9c2f7d3ff2d5a15c26462f25102d919ad
+------------------------------------------------------------
+Wed Nov 25 21:36:40 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+| 30%   36C    P8             45W /  575W |    1300MiB /  32607MiB |      3%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A         1427784      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+
+------------------------------------------------------------
+COMMANDE: cargo test --release -p claymore-model-gemma --features cuda-streaming --test hardware_m10_decoder_layers --locked -- --ignored --test-threads=1 --nocapture
+------------------------------------------------------------
++ cargo test --release -p claymore-model-gemma --features cuda-streaming --test hardware_m10_decoder_layers --locked -- --ignored --test-threads=1 --nocapture
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+   Compiling claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Finished `release` profile [optimized] target(s) in 1.11s
+     Running tests/hardware_m10_decoder_layers.rs (target/release/build/claymore-model-gemma/d365cca2528734b3/out/hardware_m10_decoder_layers-d365cca2528734b3)
+
+running 2 tests
+test cuda_decoder_layers_match_cpu_step_by_step ... couche|etape|max_abs|rms|pire_ligne_pas
+layer  0 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer  0 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer  0 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer  0 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer  0 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer  0 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer  0 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer  0 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer  0 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer  0 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer  0 | attention        | 0.000000 | 0.000000 | 0.0
+layer  0 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer  0 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer  0 | residual         | 0.000000 | 0.000000 | 0.0
+layer  0 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer  0 | mlp              | 0.000000 | 0.000000 | 0.0
+layer  0 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer  0 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer  0 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer  0 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer  0 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer  0 | experts          | 0.000000 | 0.000000 | 0.0
+layer  0 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer  0 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer  0 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer  0 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer  0 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer  0 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  0 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  0 | SUIVI vs dorée   | 0.500000 | 0.005732 | 2.0 (cuda-vs-golden, D2)
+layer  0 metrics: peak=661 MiB uploaded=635 MiB downloaded=3 MiB launches=720
+layer  1 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer  1 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer  1 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer  1 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer  1 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer  1 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer  1 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer  1 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer  1 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer  1 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer  1 | attention        | 0.000000 | 0.000000 | 0.0
+layer  1 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer  1 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer  1 | residual         | 0.000000 | 0.000000 | 0.0
+layer  1 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer  1 | mlp              | 0.000000 | 0.000000 | 0.0
+layer  1 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer  1 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer  1 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer  1 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer  1 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer  1 | experts          | 0.000000 | 0.000000 | 0.0
+layer  1 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer  1 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer  1 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer  1 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer  1 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer  1 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  1 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  1 | SUIVI vs dorée   | 0.250000 | 0.003533 | 1.0 (cuda-vs-golden, D2)
+layer  1 metrics: peak=1154 MiB uploaded=1122 MiB downloaded=6 MiB launches=1258
+layer  2 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer  2 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer  2 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer  2 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer  2 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer  2 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer  2 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer  2 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer  2 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer  2 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer  2 | attention        | 0.000000 | 0.000000 | 0.0
+layer  2 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer  2 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer  2 | residual         | 0.000000 | 0.000000 | 0.0
+layer  2 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer  2 | mlp              | 0.000000 | 0.000000 | 0.0
+layer  2 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer  2 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer  2 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer  2 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer  2 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer  2 | experts          | 0.000000 | 0.000000 | 0.0
+layer  2 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer  2 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer  2 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer  2 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer  2 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer  2 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  2 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  2 | SUIVI vs dorée   | 0.414062 | 0.011604 | 3.3 (cuda-vs-golden, D2)
+layer  2 metrics: peak=1590 MiB uploaded=1553 MiB downloaded=10 MiB launches=1726
+layer  3 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer  3 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer  3 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer  3 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer  3 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer  3 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer  3 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer  3 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer  3 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer  3 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer  3 | attention        | 0.000000 | 0.000000 | 0.0
+layer  3 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer  3 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer  3 | residual         | 0.000000 | 0.000000 | 0.0
+layer  3 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer  3 | mlp              | 0.000000 | 0.000000 | 0.0
+layer  3 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer  3 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer  3 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer  3 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer  3 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer  3 | experts          | 0.000000 | 0.000000 | 0.0
+layer  3 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer  3 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer  3 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer  3 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer  3 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer  3 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  3 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  3 | SUIVI vs dorée   | 0.250000 | 0.003695 | 2.0 (cuda-vs-golden, D2)
+layer  3 metrics: peak=2075 MiB uploaded=2030 MiB downloaded=13 MiB launches=2250
+layer  4 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer  4 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer  4 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer  4 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer  4 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer  4 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer  4 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer  4 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer  4 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer  4 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer  4 | attention        | 0.000000 | 0.000000 | 0.0
+layer  4 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer  4 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer  4 | residual         | 0.000000 | 0.000000 | 0.0
+layer  4 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer  4 | mlp              | 0.000000 | 0.000000 | 0.0
+layer  4 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer  4 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer  4 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer  4 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer  4 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer  4 | experts          | 0.000000 | 0.000000 | 0.0
+layer  4 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer  4 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer  4 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer  4 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer  4 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer  4 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  4 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  4 | SUIVI vs dorée   | 0.250000 | 0.002812 | 1.0 (cuda-vs-golden, D2)
+layer  4 metrics: peak=2325 MiB uploaded=2279 MiB downloaded=17 MiB launches=2494
+layer  5 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer  5 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer  5 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer  5 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer  5 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer  5 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer  5 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer  5 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer  5 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer  5 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer  5 | attention        | 0.000000 | 0.000000 | 0.0
+layer  5 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer  5 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer  5 | residual         | 0.000000 | 0.000000 | 0.0
+layer  5 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer  5 | mlp              | 0.000000 | 0.000000 | 0.0
+layer  5 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer  5 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer  5 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer  5 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer  5 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer  5 | experts          | 0.000000 | 0.000000 | 0.0
+layer  5 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer  5 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer  5 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer  5 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer  5 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer  5 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  5 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  5 | SUIVI vs dorée   | 0.750000 | 0.013932 | 6.0 (cuda-vs-golden, D2)
+layer  5 metrics: peak=2781 MiB uploaded=2727 MiB downloaded=21 MiB launches=2946
+layer  6 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer  6 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer  6 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer  6 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer  6 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer  6 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer  6 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer  6 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer  6 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer  6 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer  6 | attention        | 0.000000 | 0.000000 | 0.0
+layer  6 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer  6 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer  6 | residual         | 0.000000 | 0.000000 | 0.0
+layer  6 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer  6 | mlp              | 0.000000 | 0.000000 | 0.0
+layer  6 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer  6 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer  6 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer  6 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer  6 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer  6 | experts          | 0.000000 | 0.000000 | 0.0
+layer  6 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer  6 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer  6 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer  6 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer  6 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer  6 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  6 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  6 | SUIVI vs dorée   | 0.250000 | 0.003127 | 2.0 (cuda-vs-golden, D2)
+layer  6 metrics: peak=3195 MiB uploaded=3135 MiB downloaded=24 MiB launches=3386
+layer  7 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer  7 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer  7 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer  7 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer  7 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer  7 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer  7 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer  7 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer  7 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer  7 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer  7 | attention        | 0.000000 | 0.000000 | 0.0
+layer  7 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer  7 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer  7 | residual         | 0.000000 | 0.000000 | 0.0
+layer  7 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer  7 | mlp              | 0.000000 | 0.000000 | 0.0
+layer  7 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer  7 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer  7 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer  7 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer  7 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer  7 | experts          | 0.000000 | 0.000000 | 0.0
+layer  7 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer  7 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer  7 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer  7 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer  7 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer  7 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  7 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  7 | SUIVI vs dorée   | 0.390625 | 0.015482 | 2.0 (cuda-vs-golden, D2)
+layer  7 metrics: peak=3656 MiB uploaded=3589 MiB downloaded=28 MiB launches=3882
+layer  8 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer  8 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer  8 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer  8 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer  8 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer  8 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer  8 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer  8 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer  8 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer  8 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer  8 | attention        | 0.000000 | 0.000000 | 0.0
+layer  8 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer  8 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer  8 | residual         | 0.000000 | 0.000000 | 0.0
+layer  8 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer  8 | mlp              | 0.000000 | 0.000000 | 0.0
+layer  8 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer  8 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer  8 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer  8 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer  8 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer  8 | experts          | 0.000000 | 0.000000 | 0.0
+layer  8 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer  8 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer  8 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer  8 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer  8 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer  8 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  8 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  8 | SUIVI vs dorée   | 0.750000 | 0.018884 | 6.0 (cuda-vs-golden, D2)
+layer  8 metrics: peak=4035 MiB uploaded=3963 MiB downloaded=31 MiB launches=4280
+layer  9 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer  9 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer  9 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer  9 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer  9 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer  9 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer  9 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer  9 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer  9 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer  9 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer  9 | attention        | 0.000000 | 0.000000 | 0.0
+layer  9 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer  9 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer  9 | residual         | 0.000000 | 0.000000 | 0.0
+layer  9 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer  9 | mlp              | 0.000000 | 0.000000 | 0.0
+layer  9 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer  9 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer  9 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer  9 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer  9 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer  9 | experts          | 0.000000 | 0.000000 | 0.0
+layer  9 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer  9 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer  9 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer  9 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer  9 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer  9 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  9 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer  9 | SUIVI vs dorée   | 0.250000 | 0.003810 | 1.0 (cuda-vs-golden, D2)
+layer  9 metrics: peak=4357 MiB uploaded=4281 MiB downloaded=35 MiB launches=4608
+layer 10 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 10 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 10 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 10 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 10 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 10 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 10 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 10 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 10 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 10 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 10 | attention        | 0.000000 | 0.000000 | 0.0
+layer 10 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 10 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 10 | residual         | 0.000000 | 0.000000 | 0.0
+layer 10 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 10 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 10 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 10 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 10 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 10 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 10 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 10 | experts          | 0.000000 | 0.000000 | 0.0
+layer 10 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 10 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 10 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 10 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 10 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 10 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 10 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 10 | SUIVI vs dorée   | 0.125000 | 0.004177 | 0.5 (cuda-vs-golden, D2)
+layer 10 metrics: peak=4691 MiB uploaded=4609 MiB downloaded=38 MiB launches=4950
+layer 11 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 11 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 11 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 11 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 11 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 11 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 11 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 11 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 11 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 11 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 11 | attention        | 0.000000 | 0.000000 | 0.0
+layer 11 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 11 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 11 | residual         | 0.000000 | 0.000000 | 0.0
+layer 11 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 11 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 11 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 11 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 11 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 11 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 11 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 11 | experts          | 0.000000 | 0.000000 | 0.0
+layer 11 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 11 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 11 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 11 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 11 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 11 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 11 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 11 | SUIVI vs dorée   | 0.250000 | 0.003990 | 0.5 (cuda-vs-golden, D2)
+layer 11 metrics: peak=5111 MiB uploaded=5023 MiB downloaded=42 MiB launches=5360
+layer 12 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 12 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 12 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 12 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 12 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 12 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 12 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 12 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 12 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 12 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 12 | attention        | 0.000000 | 0.000000 | 0.0
+layer 12 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 12 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 12 | residual         | 0.000000 | 0.000000 | 0.0
+layer 12 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 12 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 12 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 12 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 12 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 12 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 12 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 12 | experts          | 0.000000 | 0.000000 | 0.0
+layer 12 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 12 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 12 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 12 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 12 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 12 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 12 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 12 | SUIVI vs dorée   | 0.250000 | 0.004828 | 0.5 (cuda-vs-golden, D2)
+layer 12 metrics: peak=5444 MiB uploaded=5352 MiB downloaded=46 MiB launches=5702
+layer 13 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 13 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 13 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 13 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 13 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 13 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 13 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 13 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 13 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 13 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 13 | attention        | 0.000000 | 0.000000 | 0.0
+layer 13 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 13 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 13 | residual         | 0.000000 | 0.000000 | 0.0
+layer 13 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 13 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 13 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 13 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 13 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 13 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 13 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 13 | experts          | 0.000000 | 0.000000 | 0.0
+layer 13 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 13 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 13 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 13 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 13 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 13 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 13 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 13 | SUIVI vs dorée   | 0.500000 | 0.005431 | 1.0 (cuda-vs-golden, D2)
+layer 13 metrics: peak=5766 MiB uploaded=5669 MiB downloaded=49 MiB launches=6030
+layer 14 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 14 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 14 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 14 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 14 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 14 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 14 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 14 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 14 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 14 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 14 | attention        | 0.000000 | 0.000000 | 0.0
+layer 14 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 14 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 14 | residual         | 0.000000 | 0.000000 | 0.0
+layer 14 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 14 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 14 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 14 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 14 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 14 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 14 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 14 | experts          | 0.000000 | 0.000000 | 0.0
+layer 14 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 14 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 14 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 14 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 14 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 14 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 14 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 14 | SUIVI vs dorée   | 0.500000 | 0.005925 | 1.0 (cuda-vs-golden, D2)
+layer 14 metrics: peak=6077 MiB uploaded=5975 MiB downloaded=53 MiB launches=6344
+layer 15 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 15 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 15 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 15 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 15 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 15 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 15 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 15 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 15 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 15 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 15 | attention        | 0.000000 | 0.000000 | 0.0
+layer 15 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 15 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 15 | residual         | 0.000000 | 0.000000 | 0.0
+layer 15 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 15 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 15 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 15 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 15 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 15 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 15 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 15 | experts          | 0.000000 | 0.000000 | 0.0
+layer 15 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 15 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 15 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 15 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 15 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 15 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 15 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 15 | SUIVI vs dorée   | 0.500000 | 0.005240 | 1.0 (cuda-vs-golden, D2)
+layer 15 metrics: peak=6446 MiB uploaded=6338 MiB downloaded=56 MiB launches=6728
+layer 16 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 16 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 16 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 16 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 16 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 16 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 16 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 16 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 16 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 16 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 16 | attention        | 0.000000 | 0.000000 | 0.0
+layer 16 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 16 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 16 | residual         | 0.000000 | 0.000000 | 0.0
+layer 16 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 16 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 16 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 16 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 16 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 16 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 16 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 16 | experts          | 0.000000 | 0.000000 | 0.0
+layer 16 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 16 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 16 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 16 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 16 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 16 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 16 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 16 | SUIVI vs dorée   | 0.500000 | 0.005683 | 1.0 (cuda-vs-golden, D2)
+layer 16 metrics: peak=6721 MiB uploaded=6611 MiB downloaded=60 MiB launches=7000
+layer 17 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 17 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 17 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 17 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 17 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 17 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 17 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 17 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 17 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 17 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 17 | attention        | 0.000000 | 0.000000 | 0.0
+layer 17 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 17 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 17 | residual         | 0.000000 | 0.000000 | 0.0
+layer 17 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 17 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 17 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 17 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 17 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 17 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 17 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 17 | experts          | 0.000000 | 0.000000 | 0.0
+layer 17 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 17 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 17 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 17 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 17 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 17 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 17 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 17 | SUIVI vs dorée   | 1.375000 | 0.032405 | 5.5 (cuda-vs-golden, D2)
+layer 17 metrics: peak=7107 MiB uploaded=6990 MiB downloaded=64 MiB launches=7368
+layer 18 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 18 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 18 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 18 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 18 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 18 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 18 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 18 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 18 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 18 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 18 | attention        | 0.000000 | 0.000000 | 0.0
+layer 18 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 18 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 18 | residual         | 0.000000 | 0.000000 | 0.0
+layer 18 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 18 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 18 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 18 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 18 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 18 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 18 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 18 | experts          | 0.000000 | 0.000000 | 0.0
+layer 18 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 18 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 18 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 18 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 18 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 18 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 18 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 18 | SUIVI vs dorée   | 0.375000 | 0.005714 | 5.0 (cuda-vs-golden, D2)
+layer 18 metrics: peak=7463 MiB uploaded=7341 MiB downloaded=67 MiB launches=7738
+layer 19 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 19 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 19 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 19 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 19 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 19 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 19 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 19 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 19 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 19 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 19 | attention        | 0.000000 | 0.000000 | 0.0
+layer 19 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 19 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 19 | residual         | 0.000000 | 0.000000 | 0.0
+layer 19 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 19 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 19 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 19 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 19 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 19 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 19 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 19 | experts          | 0.000000 | 0.000000 | 0.0
+layer 19 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 19 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 19 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 19 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 19 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 19 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 19 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 19 | SUIVI vs dorée   | 0.500000 | 0.005398 | 2.0 (cuda-vs-golden, D2)
+layer 19 metrics: peak=7762 MiB uploaded=7636 MiB downloaded=71 MiB launches=8038
+layer 20 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 20 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 20 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 20 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 20 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 20 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 20 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 20 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 20 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 20 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 20 | attention        | 0.000000 | 0.000000 | 0.0
+layer 20 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 20 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 20 | residual         | 0.000000 | 0.000000 | 0.0
+layer 20 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 20 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 20 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 20 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 20 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 20 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 20 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 20 | experts          | 0.000000 | 0.000000 | 0.0
+layer 20 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 20 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 20 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 20 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 20 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 20 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 20 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 20 | SUIVI vs dorée   | 0.500000 | 0.005264 | 2.0 (cuda-vs-golden, D2)
+layer 20 metrics: peak=8073 MiB uploaded=7943 MiB downloaded=74 MiB launches=8352
+layer 21 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 21 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 21 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 21 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 21 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 21 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 21 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 21 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 21 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 21 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 21 | attention        | 0.000000 | 0.000000 | 0.0
+layer 21 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 21 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 21 | residual         | 0.000000 | 0.000000 | 0.0
+layer 21 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 21 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 21 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 21 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 21 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 21 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 21 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 21 | experts          | 0.000000 | 0.000000 | 0.0
+layer 21 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 21 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 21 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 21 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 21 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 21 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 21 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 21 | SUIVI vs dorée   | 0.500000 | 0.013703 | 2.0 (cuda-vs-golden, D2)
+layer 21 metrics: peak=8419 MiB uploaded=8283 MiB downloaded=78 MiB launches=8708
+layer 22 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 22 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 22 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 22 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 22 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 22 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 22 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 22 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 22 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 22 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 22 | attention        | 0.000000 | 0.000000 | 0.0
+layer 22 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 22 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 22 | residual         | 0.000000 | 0.000000 | 0.0
+layer 22 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 22 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 22 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 22 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 22 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 22 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 22 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 22 | experts          | 0.000000 | 0.000000 | 0.0
+layer 22 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 22 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 22 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 22 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 22 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 22 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 22 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 22 | SUIVI vs dorée   | 0.250000 | 0.003201 | 1.0 (cuda-vs-golden, D2)
+layer 22 metrics: peak=8694 MiB uploaded=8555 MiB downloaded=81 MiB launches=8980
+layer 23 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 23 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 23 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 23 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 23 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 23 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 23 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 23 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 23 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 23 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 23 | attention        | 0.000000 | 0.000000 | 0.0
+layer 23 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 23 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 23 | residual         | 0.000000 | 0.000000 | 0.0
+layer 23 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 23 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 23 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 23 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 23 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 23 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 23 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 23 | experts          | 0.000000 | 0.000000 | 0.0
+layer 23 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 23 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 23 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 23 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 23 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 23 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 23 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 23 | SUIVI vs dorée   | 0.452148 | 0.024566 | 1.8 (cuda-vs-golden, D2)
+layer 23 metrics: peak=9163 MiB uploaded=9014 MiB downloaded=85 MiB launches=9446
+layer 24 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 24 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 24 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 24 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 24 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 24 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 24 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 24 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 24 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 24 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 24 | attention        | 0.000000 | 0.000000 | 0.0
+layer 24 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 24 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 24 | residual         | 0.000000 | 0.000000 | 0.0
+layer 24 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 24 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 24 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 24 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 24 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 24 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 24 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 24 | experts          | 0.000000 | 0.000000 | 0.0
+layer 24 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 24 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 24 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 24 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 24 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 24 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 24 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 24 | SUIVI vs dorée   | 0.355469 | 0.023681 | 1.4 (cuda-vs-golden, D2)
+layer 24 metrics: peak=9576 MiB uploaded=9422 MiB downloaded=89 MiB launches=9886
+layer 25 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 25 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 25 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 25 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 25 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 25 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 25 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 25 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 25 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 25 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 25 | attention        | 0.000000 | 0.000000 | 0.0
+layer 25 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 25 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 25 | residual         | 0.000000 | 0.000000 | 0.0
+layer 25 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 25 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 25 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 25 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 25 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 25 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 25 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 25 | experts          | 0.000000 | 0.000000 | 0.0
+layer 25 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 25 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 25 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 25 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 25 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 25 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 25 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 25 | SUIVI vs dorée   | 0.250000 | 0.015664 | 2.0 (cuda-vs-golden, D2)
+layer 25 metrics: peak=10096 MiB uploaded=9932 MiB downloaded=92 MiB launches=10452
+layer 26 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 26 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 26 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 26 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 26 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 26 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 26 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 26 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 26 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 26 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 26 | attention        | 0.000000 | 0.000000 | 0.0
+layer 26 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 26 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 26 | residual         | 0.000000 | 0.000000 | 0.0
+layer 26 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 26 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 26 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 26 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 26 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 26 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 26 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 26 | experts          | 0.000000 | 0.000000 | 0.0
+layer 26 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 26 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 26 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 26 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 26 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 26 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 26 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 26 | SUIVI vs dorée   | 0.156250 | 0.004456 | 10.0 (cuda-vs-golden, D2)
+layer 26 metrics: peak=10555 MiB uploaded=10386 MiB downloaded=96 MiB launches=10948
+layer 27 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 27 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 27 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 27 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 27 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 27 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 27 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 27 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 27 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 27 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 27 | attention        | 0.000000 | 0.000000 | 0.0
+layer 27 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 27 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 27 | residual         | 0.000000 | 0.000000 | 0.0
+layer 27 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 27 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 27 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 27 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 27 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 27 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 27 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 27 | experts          | 0.000000 | 0.000000 | 0.0
+layer 27 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 27 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 27 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 27 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 27 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 27 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 27 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 27 | SUIVI vs dorée   | 0.125000 | 0.003963 | 1.0 (cuda-vs-golden, D2)
+layer 27 metrics: peak=10958 MiB uploaded=10783 MiB downloaded=99 MiB launches=11374
+layer 28 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 28 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 28 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 28 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 28 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 28 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 28 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 28 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 28 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 28 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 28 | attention        | 0.000000 | 0.000000 | 0.0
+layer 28 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 28 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 28 | residual         | 0.000000 | 0.000000 | 0.0
+layer 28 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 28 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 28 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 28 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 28 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 28 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 28 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 28 | experts          | 0.000000 | 0.000000 | 0.0
+layer 28 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 28 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 28 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 28 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 28 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 28 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 28 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 28 | SUIVI vs dorée   | 0.250000 | 0.004810 | 4.1 (cuda-vs-golden, D2)
+layer 28 metrics: peak=11337 MiB uploaded=11157 MiB downloaded=103 MiB launches=11772
+layer 29 | input_norm       | 0.000000 | 0.000000 | 0.0
+layer 29 | q_proj           | 0.000000 | 0.000000 | 0.0
+layer 29 | q_norm           | 0.000000 | 0.000000 | 0.0
+layer 29 | rope_q           | 0.000000 | 0.000000 | 0.0
+layer 29 | k_proj           | 0.000000 | 0.000000 | 0.0
+layer 29 | k_norm           | 0.000000 | 0.000000 | 0.0
+layer 29 | rope_k           | 0.000000 | 0.000000 | 0.0
+layer 29 | v_norm           | 0.000000 | 0.000000 | 0.0
+layer 29 | cache_keys       | 0.000000 | 0.000000 | 0.0
+layer 29 | cache_values     | 0.000000 | 0.000000 | 0.0
+layer 29 | attention        | 0.000000 | 0.000000 | 0.0
+layer 29 | o_proj           | 0.000000 | 0.000000 | 0.0
+layer 29 | post_attn_norm   | 0.000000 | 0.000000 | 0.0
+layer 29 | residual         | 0.000000 | 0.000000 | 0.0
+layer 29 | pre_ff1_norm     | 0.000000 | 0.000000 | 0.0
+layer 29 | mlp              | 0.000000 | 0.000000 | 0.0
+layer 29 | pff_norm_1       | 0.000000 | 0.000000 | 0.0
+layer 29 | pre_ff2_norm     | 0.000000 | 0.000000 | 0.0
+layer 29 | router_scale     | 0.000000 | 0.000000 | 0.0
+layer 29 | router_scaled    | 0.000000 | 0.000000 | 0.0
+layer 29 | router_proj      | 0.000000 | 0.000000 | 0.0
+layer 29 | experts          | 0.000000 | 0.000000 | 0.0
+layer 29 | pff_norm_2       | 0.000000 | 0.000000 | 0.0
+layer 29 | moe_dense_sum    | 0.000000 | 0.000000 | 0.0
+layer 29 | pff_norm         | 0.000000 | 0.000000 | 0.0
+layer 29 | pre_scalar       | 0.000000 | 0.000000 | 0.0
+layer 29 | layer_output     | 0.000000 | 0.000000 | 0.0
+layer 29 | router_scores    | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 29 | router_weights   | 0.000000 | 0.000000 | (f32, bound 0.001)
+layer 29 | SUIVI vs dorée   | 0.687500 | 0.007825 | 5.5 (cuda-vs-golden, D2)
+layer 29 metrics: peak=11687 MiB uploaded=11503 MiB downloaded=107 MiB launches=12098
+router: ensembles fideles=470/480 echanges de frontiere=10 structurels=0
+router: ensembles CUDA==CPU: 480/480 (rapporté)
+DECODER_DIFF_DONE pire_ligne=0.0 pas (couche 0 etape ) pire_scores=0.000e0 (couche 0) peak=11889 MiB uploaded=11523 MiB downloaded=125 MiB launches=18147
+ok
+test cuda_lm_logits_match_cpu_on_the_reference_hidden ... logits entrée: golden hidden re-quantifié en BF16, erreur max_abs=0.000000 (même entrée des deux têtes)
+logits CUDA vs CPU (input identique): max_abs=0.000000 rms=0.000000 pire_ligne=0.0 pas (relatif au pic de ligne CPU)
+logits CUDA vs dorée (SUIVI): max_abs=0.094659 rms=0.000362 pire_ligne=0.8 pas
+logits CPU vs dorée (SUIVI): max_abs=0.094659 rms=0.000362 pire_ligne=0.8 pas
+logits classement: argmax identiques 16/16 lignes, top-8 identiques 16/16 lignes (rapportés, D2)
+LOGITS_DIFF_DONE peak=1448 MiB uploaded=1408 MiB downloaded=16 MiB launches=3
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 453.48s
+
++ rc=0
++ set +x
+------------------------------------------------------------
+RC: 0
+FIN: 2026-11-25T21:44:15+01:00
+Wed Nov 25 21:44:15 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+|  0%   47C    P0             64W /  575W |    1300MiB /  32607MiB |      3%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A         1427784      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+
