@@ -262,19 +262,54 @@ pub fn encoder_forward_traced_limited(
     layer_count: usize,
 ) -> Tensor {
     let text = cfg.text_config.as_ref().unwrap();
-    let hidden = text.hidden_size.unwrap();
     let eps = text.rms_norm_eps.unwrap_or(1e-6);
-    let scale = text_embedding_scale(hidden);
     let embed = embed_gather_scaled(
         host,
         ids,
         &tensor_of(host, ckpt, "model.decoder.embed_tokens.weight"),
-        scale,
+        text_embedding_scale(text.hidden_size.unwrap()),
     );
-    let mut x = embed;
-    let positions: Vec<usize> = (0..ids.len()).collect();
-    let layer_count = layer_count.min(text.num_hidden_layers.unwrap());
-    for layer in 0..layer_count {
+    let x = encoder_forward_traced_from_hidden(
+        host,
+        ckpt,
+        cfg,
+        &embed,
+        cache,
+        layer_trace,
+        0..layer_count,
+    );
+    rms_norm(
+        host,
+        &x,
+        &tensor_of(host, ckpt, "model.decoder.norm.weight"),
+        eps,
+    )
+}
+
+/// Encoder forward over `layers`, started from an injected hidden state instead
+/// of the token embedding and without the trailing `model.decoder.norm`.
+///
+/// Diagnostic entry point for the CPU golden bisect: giving a layer the
+/// reference's own layer input judges that layer on its own instead of on the
+/// drift accumulated by its predecessors. Positions restart at 0 over `start`'s
+/// rows, which is what the prefill case it is used for needs. The layer math is
+/// the one [`encoder_forward`] runs; nothing here duplicates it.
+pub fn encoder_forward_traced_from_hidden(
+    host: &Host,
+    ckpt: &Checkpoint,
+    cfg: &GemmaModelConfig,
+    start: &Tensor,
+    cache: &mut crate::graph::KvCache,
+    layer_trace: &mut Vec<EncoderLayerTrace>,
+    layers: std::ops::Range<usize>,
+) -> Tensor {
+    let text = cfg.text_config.as_ref().unwrap();
+    let hidden = text.hidden_size.unwrap();
+    let eps = text.rms_norm_eps.unwrap_or(1e-6);
+    let mut x = clone_tensor(host, start);
+    let positions: Vec<usize> = (0..x.layout().shape().first().copied().unwrap_or(0)).collect();
+    let layers = layers.start..layers.end.min(text.num_hidden_layers.unwrap());
+    for layer in layers {
         let global = text
             .layer_types
             .get(layer)
@@ -458,12 +493,7 @@ pub fn encoder_forward_traced_limited(
             expert_output: clone_tensor(host, &exp),
         });
     }
-    rms_norm(
-        host,
-        &x,
-        &tensor_of(host, ckpt, "model.decoder.norm.weight"),
-        eps,
-    )
+    x
 }
 
 fn layer_scalar_mul(host: &Host, x: &Tensor, scalar: &Tensor) -> Tensor {
