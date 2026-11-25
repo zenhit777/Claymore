@@ -22,9 +22,36 @@
 > identiques CPU ↔ CUDA). Le **différentiel de chaîne** reste **rouge** et **les
 > tolérances n'ont pas été assouplies**.
 
+> **Mise à jour M10.5 (25 novembre 2026) — à lire avec le §16.3.** Le correctif de
+> parité numérique M10.4 a été **intégré à `feat/m10-diffusiongemma`** (fast-forward
+> vers `ef1a1cf`, aucun commit dupliqué, PR #40 mise à jour) puis les deux jobs de CI
+> ont été rejoués localement sur l'arbre d'intégration : **PASS** (voir
+> `m10-cuda-cpu-parity-fix.md` §7.1.3). Un diagnostic complet de la divergence
+> CPU ↔ dorée est consigné au **§11 du même rapport** : il **explique** le rouge
+> (décision de routage discontinue au voisinage d'égalités exactes dans les scores
+> de la référence, accumulation d'arrondis, porte absolue inférieure au pas BF16) et
+> **ne le corrige pas**. Ce rapport reste donc **inchangé dans ses conclusions** :
+> `PASS PARTIEL` côté matériel, **M10 non validé** tant que la porte dorée est
+> rouge. Aucun créneau GPU n'a été relancé depuis le 24 novembre ; aucun résultat
+> défavorable n'a été retiré de ce document.
+
 > **Ce que ce rapport prouve.** Le chemin M10 de Claymore — chargement strict du checkpoint épinglé, primitives tensorielles CPU de référence, kernels CUDA M10, admission mémoire bornée et garde des buffers en vol — est réellement exécuté sur une RTX 5090 et validé contre une référence CPU déterministe, y compris sur un **sous-graphe de couche décodeur construit à partir des poids réels** du checkpoint épinglé.
 >
-> **Ce que ce rapport ne prouve pas.** L'exécution du **graphe complet** de 26 milliards de paramètres. Les portes listées au §11 sont **livrées en code** dans l'incrément M10.3 (§16) mais **non validées sur la carte** : le créneau GPU final n'a pas été exécuté. Aucune génération de texte réelle n'est revendiquée. Les portes ouvertes sont des **portes de code**, pas une limite de capacité mémoire : le plafond de 28 Gio est un seuil d'admission, les poids vivent en VRAM + RAM et sont streamés couche par couche.
+> **Ce que ce rapport ne prouve pas** *(rédigé lors de la campagne du 23/11 ; la liste à jour est donnée juste en dessous — cette formulation est conservée telle quelle pour la traçabilité)*. L'exécution du **graphe complet** de 26 milliards de paramètres. Les portes listées au §11 sont **livrées en code** dans l'incrément M10.3 (§16) mais **non validées sur la carte** : le créneau GPU final n'a pas été exécuté. Aucune génération de texte réelle n'est revendiquée. Les portes ouvertes sont des **portes de code**, pas une limite de capacité mémoire : le plafond de 28 Gio est un seuil d'admission, les poids vivent en VRAM + RAM et sont streamés couche par couche.
+>
+> **Périmètre à jour après le créneau GPU final du 24/11 (§16.3) et M10.5.** Les
+> portes du §11 sont **closes à l'exception de la dernière** : exécution sur la
+> carte du graphe complet en streaming (encodeur, KV, tour de vision, MoE 128
+> experts, auto-conditionnement, cross-attention, lm-head tied), génération réelle
+> sur canvas 256 et 48 étapes, 256/256 positions acceptées, parité CUDA ↔ CPU
+> **bit-exacte** (primitives 21/21, chaîne complète), sémantique de couche validée
+> par étape. La ligne « Aucune génération de texte réelle n'a été produite » du §11
+> est donc **reprise** par le §16.3. Ce qui **reste hors périmètre** : la porte
+> **numérique** du §11 — l'**équivalence de la chaîne contre la référence eager
+> upstream** (différentiel rouge, §11 du rapport de correctif, tolérances
+> conservées) — qui demeure une **décision d'architecture** ; toute
+> **performance, débit ou latence** (matmul naïf, re-streaming des poids d'experts
+> à chaque passe).
 
 ---
 

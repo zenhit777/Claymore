@@ -13,7 +13,31 @@ Validation matérielle complète et journaux bruts : [m10-rtx5090-hardware-valid
 - Campagne du 23 novembre 2026 (sous-graphe audité) : SHA de code `ea115ab337d492d81ac50f69c09cd79e050b79a6`.
 - **Campagne GPU finale du 24 novembre 2026** (créneau GPU final, 3/3 tâches exécutées) : SHA de code **`77e7665`** (« Fix the M10 CUDA graph against the pinned upstream semantics »). Détail : §16.3 du rapport hardware.
 
-PR de la campagne : #40 (`feat/m10-diffusiongemma`, base `main`, non fusionné). PR de suivi M10.2 — M10.6 : #44 (`feat/m10-campaign-followup`, base `main`, lié à #40 et #42, non fusionné).
+PR de la campagne : #40 (`feat/m10-diffusiongemma`, base `main`, **ouverte, non fusionnée**). PR de suivi M10.2 — M10.6 : #44 (`feat/m10-campaign-followup`, base `main`) — **fermée sans fusion le 25 novembre 2026** : son contenu (correctif de parité numérique) a été intégré à #40 par fast-forward, et #44 n'a donc aucun commit qui lui soit propre.
+
+### Statut au 25 novembre 2026 (M10.4 — M10.5)
+
+**M10 n'est pas validé.** Le différentiel de chaîne CPU ↔ référence eager
+reste rouge et les tolérances n'ont **pas** été assouplies. Le correctif M10.4
+rétablit la parité **interne** CUDA ↔ CPU ; le diagnostic M10.5 (§11 du rapport
+de correctif) établit l'origine du rouge restant et ouvre une décision
+d'architecture, pas un correctif.
+
+| Validation | Exécutée où | Résultat |
+|---|---|---|
+| Primitives M10 sur carte, **arbre corrigé** | RTX 5090, 25/11, arbre de `fix/m10-numerics-divergence` — kernels, en-tête et PTX **byte-identiques** à la tête intégrée `ef1a1cf` (le commit suivant ne change que la mise en forme Rust) | **21/21 verts**, tous les écarts à `0e0` / `0` ULP, `scatter_add` inclus — journal `m10-parity-05` |
+| Parité CUDA ↔ CPU sur la chaîne complète, **arbre corrigé** | même arbre | **`0,000000 / 0,000000`** (bit-exact) — journal `m10-parity-04` |
+| Génération réelle, **arbre corrigé** | même arbre | **verte** — canvas 256, 256/256 positions acceptées, pic VRAM **24 831 Mio**, 449,74 s — journal `m10-parity-04` |
+| Campagne M10.3 **avant** correctif | RTX 5090, 24/11, SHA `77e7665` | primitives 21/21 et génération verte avec les tolérances antérieures (`scatter_add` pas encore durci à l'exactitude) ; dérive de chaîne publiée `5,835938 / 0,711149`, 3 295,94 s — journal `m10-parity-00` |
+| Reproductibilité des PTX versionnés | local (CPU) | **3/3 byte-identiques** à `nvcc 13.0 -fmad=false`, empreintes §8.2 revérifiées sur la branche intégrée |
+| Suite workspace, features CUDA, clippy `-D warnings`, MSRV 1.86 | **local uniquement** — réplique des deux jobs (`m10-cuda-cpu-parity-fix.md` §7.1) | **PASS** : 324 passés / 0 échec / 24 ignorés ; MSRV 264 / 0 / 8 |
+| Runs GitHub Actions de la PR #40 | **GitHub Actions, observés le 25/11** (API + journaux téléchargés) | **ROUGE sur `ef1a1cf`** : 2 runs en échec (`45533723982` push 02:32:50Z, `45533731837` pull_request 02:32:54Z), 2 jobs chacun (`Format, test, and lint` et `Minimum supported Rust 1.86`). Cause identifiée : l'oracle du verrou `kernel_order_parity` était la libm **installée** (image du runner `ubuntu-26.04`) et non glibc 2.39, deux entrées à 1 ULP. Baseline `9775cda` verte ; verrou corrigé (oracle épinglé) et **consigné au §7.4** du rapport. Journal `m10-parity-12` |
+| Conformité CPU ↔ dorée eager | local | **rouge documenté** : encodeur `5,828125 / 0,754065` pour une porte `0,03 / 2e-3` ; trois tests `golden_cpu` rouges |
+
+Aucune exécution GPU n'a été lancée depuis la campagne de validation du
+correctif (25 novembre, sur l'arbre rapporté par le commit `9ccbe83`) : les
+travaux M10.5 sont purement CPU et ne consomment ni VRAM ni carte. La tête
+intégrée `ef1a1cf` **n'a pas** été rejouée sur carte.
 
 ### Livré et réellement exercé sur RTX 5090
 

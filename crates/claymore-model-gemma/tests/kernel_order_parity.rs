@@ -9,11 +9,21 @@
 //! change with it and the equality must still hold; that is the point of the
 //! test.
 //!
-//! The transcendental sections sweep the portable `expf`/`expm1f`/`tanhf` ports
-//! against glibc, which Rust `f32::exp`, `f32::exp_m1` and `f32::tanh` reach
-//! through the installed libm. The ports are the glibc 2.39 algorithms; the
-//! sweep covers every exponent slot, every branch-boundary neighbourhood, the
-//! `k` boundaries of the argument reduction, subnormals and specials.
+//! The transcendental sections sweep the portable `expf`/`expm1f`/`tanhf` ports.
+//! The ports are the **glibc 2.39** algorithms, and glibc 2.39 is the oracle:
+//! that is the release the CPU reference of the RTX 5090 campaign ran on
+//! (`ldd (Ubuntu GLIBC 2.39-0ubuntu8.12) 2.39`), so it is the release the
+//! CUDA-to-CPU bit-parity was measured against. The installed libm of whatever
+//! machine runs this test is *not* the oracle: newer glibc releases differ by one
+//! ULP at a handful of inputs. Every swept input is therefore asserted against
+//! the installed libm, except the inputs enumerated in `PINNED_GLIBC_2_39`, which
+//! are asserted against the pinned glibc 2.39 result -- so the sweep stays
+//! bit-exact everywhere and a port that drifts fails, on any host.
+//! `report_divergence_against_installed_libm` (ignored) prints the full
+//! divergence set against the installed libm when a runner image moves.
+//!
+//! The sweep covers every exponent slot, every branch-boundary neighbourhood,
+//! the `k` boundaries of the argument reduction, subnormals and specials.
 
 use claymore_model_gemma::graph::Host;
 use claymore_tensor::{diffusion, ops};
@@ -343,11 +353,38 @@ fn lcg(state: &mut u64) -> f32 {
 }
 
 // ---------------------------------------------------------------------------
-// Transcendental parity against glibc
+// Transcendental parity against the pinned glibc 2.39 oracle
 // ---------------------------------------------------------------------------
 
-#[test]
-fn portable_expf_matches_glibc() {
+/// Inputs where the **installed** libm is measured to differ from glibc 2.39,
+/// whose algorithms these ports implement. Columns: function, input bits,
+/// glibc 2.39 result bits -- i.e. what the port must keep producing, which is
+/// asserted here rather than compared to the host.
+///
+/// This is a measured set, not a tolerance. On the GitHub runner image
+/// `ubuntu-26.04` (run `45533731837`, 2026-11-25T02:32:54Z, jobs
+/// `138935118950` stable and `138935119267` MSRV), these two inputs are the
+/// **only** divergences of the whole swept set: every other swept input
+/// satisfied port == installed libm == glibc 2.39 there. Any new divergence,
+/// anywhere else in the sweep, still fails the test on any host.
+const PINNED_GLIBC_2_39: [(&str, u32, u32); 2] = [
+    // expm1f(2^-23): port returns the argument exactly; glibc >= 2.4x returns
+    // one ULP higher.
+    ("expm1f", 0x3400_0000, 0x3400_0000),
+    // tanhf(2^-7): glibc >= 2.4x returns one ULP higher.
+    ("tanhf", 0x3c00_0000, 0x3bff_feaa),
+];
+
+fn pinned_glibc_2_39(name: &str, bits: u32) -> Option<u32> {
+    PINNED_GLIBC_2_39
+        .iter()
+        .find(|(entry, input, _)| *entry == name && *input == bits)
+        .map(|(_, _, expected)| *expected)
+}
+
+/// Swept inputs for `expf`: every exponent slot, the overflow/underflow window
+/// around log 2^128 and log 2^-150, and the branch-boundary neighbourhoods.
+fn expf_samples() -> Vec<u32> {
     let mut samples: Vec<u32> = Vec::new();
     for e in 0u32..=127 {
         for m in 0..64u32 {
@@ -385,7 +422,12 @@ fn portable_expf_matches_glibc() {
             samples.push(bits | 0x8000_0000);
         }
     }
-    for bits in samples {
+    samples
+}
+
+#[test]
+fn portable_expf_matches_glibc() {
+    for bits in expf_samples() {
         let x = f32::from_bits(bits);
         let port = cuda_expf(x);
         let glibc = x.exp();
@@ -397,8 +439,9 @@ fn portable_expf_matches_glibc() {
     }
 }
 
-#[test]
-fn portable_expm1f_matches_glibc() {
+/// Swept inputs for `expm1f`: exponent slots, reduction `k` boundaries, a dense
+/// pitch across the reduction range, and the underflow boundaries.
+fn expm1f_samples() -> Vec<u32> {
     let mut samples: Vec<u32> = Vec::new();
     for e in 0u32..=127 {
         for m in 0..64u32 {
@@ -447,9 +490,24 @@ fn portable_expm1f_matches_glibc() {
             samples.push(bits | 0x8000_0000);
         }
     }
-    for bits in samples {
+    samples
+}
+
+#[test]
+fn portable_expm1f_matches_glibc() {
+    let mut pinned = 0usize;
+    for bits in expm1f_samples() {
         let x = f32::from_bits(bits);
         let port = cuda_expm1f(x);
+        if let Some(expected) = pinned_glibc_2_39("expm1f", bits) {
+            pinned += 1;
+            assert_eq!(
+                bits_of(port),
+                expected,
+                "expm1f({x:?}) moved off the pinned glibc 2.39 result"
+            );
+            continue;
+        }
         let glibc = x.exp_m1();
         assert_eq!(
             bits_of(port),
@@ -457,10 +515,15 @@ fn portable_expm1f_matches_glibc() {
             "expm1f({x:?}) port={port:?} glibc={glibc:?}"
         );
     }
+    assert!(
+        pinned >= 1,
+        "the pinned glibc 2.39 divergence point for expm1f is no longer swept"
+    );
 }
 
-#[test]
-fn portable_tanhf_matches_glibc() {
+/// Swept inputs for `tanhf`: exponent slots down to 2^-60, the saturation and
+/// branch boundaries, the specials, and a dense pitch below the 22 saturation.
+fn tanhf_samples() -> Vec<u32> {
     let mut samples: Vec<u32> = Vec::new();
     for e in -60i32..=27 {
         for m in 0..64u32 {
@@ -511,9 +574,24 @@ fn portable_tanhf_matches_glibc() {
             samples.push(bits | 0x8000_0000);
         }
     }
-    for bits in samples {
+    samples
+}
+
+#[test]
+fn portable_tanhf_matches_glibc() {
+    let mut pinned = 0usize;
+    for bits in tanhf_samples() {
         let x = f32::from_bits(bits);
         let port = cuda_tanhf(x);
+        if let Some(expected) = pinned_glibc_2_39("tanhf", bits) {
+            pinned += 1;
+            assert_eq!(
+                bits_of(port),
+                expected,
+                "tanhf({x:?}) moved off the pinned glibc 2.39 result"
+            );
+            continue;
+        }
         let glibc = x.tanh();
         assert_eq!(
             bits_of(port),
@@ -521,6 +599,77 @@ fn portable_tanhf_matches_glibc() {
             "tanhf({x:?}) port={port:?} glibc={glibc:?}"
         );
     }
+    assert!(
+        pinned >= 1,
+        "the pinned glibc 2.39 divergence point for tanhf is no longer swept"
+    );
+}
+
+/// Diagnostic, not a contract: prints every swept input where the port and the
+/// **installed** libm disagree, with counts per function. Run it when the CI
+/// image or the host libc moves, publish the output, and only then extend
+/// `PINNED_GLIBC_2_39` from what was measured. It prints; it asserts nothing.
+#[test]
+#[ignore]
+fn report_divergence_against_installed_libm() {
+    fn sweep(
+        name: &str,
+        samples: &[u32],
+        installed: fn(f32) -> f32,
+        port: fn(f32) -> f32,
+    ) -> (usize, usize) {
+        let mut total = 0usize;
+        let mut diverged = 0usize;
+        for &bits in samples {
+            let x = f32::from_bits(bits);
+            let p = port(x);
+            let g = installed(x);
+            total += 1;
+            if bits_of(p) != bits_of(g) {
+                diverged += 1;
+                eprintln!(
+                    "{name}({x:?}) input=0x{bits:08x} port=0x{:08x} installed=0x{:08x}",
+                    bits_of(p),
+                    bits_of(g)
+                );
+            }
+        }
+        (total, diverged)
+    }
+
+    let expf = expf_samples();
+    let expm1f = expm1f_samples();
+    let tanhf = tanhf_samples();
+    let mut totals = (0usize, 0usize);
+    for (name, samples, installed, port) in [
+        (
+            "expf",
+            &expf,
+            f32::exp as fn(f32) -> f32,
+            cuda_expf as fn(f32) -> f32,
+        ),
+        (
+            "expm1f",
+            &expm1f,
+            f32::exp_m1 as fn(f32) -> f32,
+            cuda_expm1f as fn(f32) -> f32,
+        ),
+        (
+            "tanhf",
+            &tanhf,
+            f32::tanh as fn(f32) -> f32,
+            cuda_tanhf as fn(f32) -> f32,
+        ),
+    ] {
+        let (total, diverged) = sweep(name, samples, installed, port);
+        eprintln!("{name}: {diverged} divergence(s) out of {total} swept inputs");
+        totals.0 += total;
+        totals.1 += diverged;
+    }
+    eprintln!(
+        "total: {} divergence(s) out of {} swept inputs",
+        totals.1, totals.0
+    );
 }
 
 // ---------------------------------------------------------------------------

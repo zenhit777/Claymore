@@ -1,10 +1,23 @@
 name: Rust CI
 
+# Déclencheurs.
+#
+# Rappel sur la regle GitHub : pour un evenement `pull_request`, c'est la
+# definition du workflow presente sur la branche **de base** qui s'applique, pas
+# celle de la branche source. `pull_request: branches: ["main", "feat/**"]` ne
+# devient donc effectif pour une PR ciblant `feat/...` qu'une fois ce fichier
+# fuse sur cette branche de base. Une branche de travail seule ne peut pas
+# activer sa propre CI.
+#
+# `workflow_dispatch` complete le dispositif pour lancer les validations sur une
+# branche de travail sans ouvrir de PR. La cible doit viser une branche qui porte
+# deja ce fichier.
 on:
   push:
     branches: [main, "feat/**"]
   pull_request:
-    branches: [main]
+    branches: [main, "feat/**"]
+  workflow_dispatch:
 
 permissions:
   contents: read
