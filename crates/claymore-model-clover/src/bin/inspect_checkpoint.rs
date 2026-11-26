@@ -1,7 +1,7 @@
 //! CPU-only audit of a local Clover checkpoint directory.
 //!
 //! Usage:
-//! cargo run -p claymore-model-clover --bin inspect_checkpoint -- /path/to/Clover
+//! cargo run -p claymore-model-clover --bin inspect_checkpoint -- /path/to/Clover [--verify-sha256]
 //!
 //! This command reads config/index files and Safetensors headers only. It does
 //! not read model payloads, allocate tensors, initialize CUDA, or download data.
@@ -16,10 +16,19 @@ use claymore_model_clover::CloverCheckpointInventory;
 use claymore_model_clover::CloverConfig;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let root = std::env::args_os()
-        .nth(1)
+    let mut args = std::env::args_os().skip(1);
+    let root = args
+        .next()
         .map(PathBuf::from)
-        .ok_or("usage: inspect_checkpoint <checkpoint-directory>")?;
+        .ok_or("usage: inspect_checkpoint <checkpoint-directory> [--verify-sha256]")?;
+    let verify_hashes = match args.next() {
+        None => false,
+        Some(flag) if flag == "--verify-sha256" => true,
+        Some(_) => return Err("unknown inspect_checkpoint option".into()),
+    };
+    if args.next().is_some() {
+        return Err("too many inspect_checkpoint arguments".into());
+    }
 
     let config_path = root.join("config.json");
     let config_bytes = fs::read(&config_path)?;
@@ -39,6 +48,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("tensor_count={}", identity.tensor_count);
     println!("parameter_count={}", identity.parameter_count);
     println!("payload_bytes={}", identity.payload_bytes);
+    if verify_hashes {
+        inventory.verify_pinned_asset_hashes()?;
+        println!("artifact_sha256=verified");
+    } else {
+        println!("artifact_sha256=not_requested");
+    }
 
     for shard in inventory.shard_summaries() {
         println!(
