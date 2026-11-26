@@ -19,7 +19,8 @@
 
 use claymore_device::{DType, Device};
 
-use crate::ops::{read_numeric, write_numeric, OpError};
+use crate::activations::sigmoid;
+use crate::ops::{mul, read_numeric, write_numeric, OpError};
 use crate::Tensor;
 
 /// RoPE variants used by the pinned checkpoint.
@@ -354,6 +355,23 @@ pub fn attention(
         }
     }
     write_numeric(device, &output, query_shape.to_vec(), dtype)
+}
+
+/// Apply Clover full-attention's learned output gate: `attention * sigmoid(gate)`.
+///
+/// Both tensors must have the same shape and dtype. Sigmoid is rounded to the
+/// activation dtype before multiplication, matching the pinned PyTorch
+/// execution boundary; the product is then rounded once to that dtype.
+pub fn attention_output_gate(
+    device: &dyn Device,
+    attention_output: &Tensor,
+    gate: &Tensor,
+) -> Result<Tensor, OpError> {
+    if attention_output.layout().shape() != gate.layout().shape() {
+        return Err(OpError::ShapeMismatch);
+    }
+    let gate = sigmoid(device, gate)?;
+    mul(device, attention_output, &gate)
 }
 
 /// Stable softmax over one row, evaluated in FP32.
