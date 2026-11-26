@@ -9,7 +9,10 @@ pub use checkpoint::{
     CloverCheckpointError, CloverCheckpointInventory, CloverInventoryIdentity, CloverShardIndex,
     ShardSummary, TensorSummary,
 };
-pub use config::{CloverConfig, CloverConfigError, LayerType, CONFIG_REVISION, MODEL_ID};
+pub use config::{
+    CloverConfig, CloverConfigError, LayerType, CONFIG_REVISION, CONFIG_SHA256, INDEX_SHA256,
+    MODEL_ID,
+};
 
 /// Lifecycle marker retained until the model graph is wired to the shared
 /// diffusion executor. This is not an inference engine state machine.

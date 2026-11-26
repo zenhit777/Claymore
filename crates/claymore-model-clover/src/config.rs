@@ -12,6 +12,12 @@ pub const MODEL_ID: &str = "Diffuspace/Clover-35B-A3B-Preview";
 /// Immutable revision that introduced the audited public config.json.
 pub const CONFIG_REVISION: &str = "4b0402b65e523d0183a14c431955438714cb16ff";
 
+/// Raw SHA-256 of the pinned `config.json` release bytes.
+pub const CONFIG_SHA256: &str = "e07639edf658af63dbbb52b6eb488d72d1a2f194f15638539b02e3e94b76ecf5";
+
+/// Raw SHA-256 of the pinned `model.safetensors.index.json` release bytes.
+pub const INDEX_SHA256: &str = "6270f95c35739b2c40db0026e8683fb84544c258fa637cd88a3b4887a79fd063";
+
 pub const HIDDEN_SIZE: usize = 2048;
 pub const LAYER_COUNT: usize = 40;
 pub const EXPERT_COUNT: usize = 256;
@@ -346,6 +352,25 @@ mod tests {
     use super::*;
 
     const PINNED_CONFIG: &str = include_str!("../../../docs/audits/fixtures/clover-config.json");
+    const PUBLISHED_NONXET_SHA256: &str =
+        include_str!("../../../docs/audits/m11.1-checkpoint-2026-11-26-nonxet-sha256.txt");
+
+    #[test]
+    fn pinned_digests_match_the_published_audit_evidence() {
+        let digest_of = |name: &str| -> Option<&str> {
+            PUBLISHED_NONXET_SHA256
+                .lines()
+                .filter_map(|line| line.split_once("  "))
+                .find(|(_, file)| *file == name)
+                .map(|(digest, _)| digest)
+        };
+        assert_eq!(digest_of("config.json"), Some(CONFIG_SHA256));
+        assert_eq!(
+            digest_of("model.safetensors.index.json"),
+            Some(INDEX_SHA256),
+            "the pinned index digest drifted from the authenticated release bytes"
+        );
+    }
 
     #[test]
     fn parses_and_validates_the_pinned_architecture() {

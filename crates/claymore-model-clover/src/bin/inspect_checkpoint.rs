@@ -14,6 +14,7 @@ use std::str;
 use claymore_checkpoint::sha256::{hex, sha256};
 use claymore_model_clover::CloverCheckpointInventory;
 use claymore_model_clover::CloverConfig;
+use claymore_model_clover::{CONFIG_SHA256, INDEX_SHA256};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut args = std::env::args_os().skip(1);
@@ -32,16 +33,30 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let config_path = root.join("config.json");
     let config_bytes = fs::read(&config_path)?;
+    let config_digest = hex(&sha256(&config_bytes));
+    if config_digest != CONFIG_SHA256 {
+        return Err(format!(
+            "config.json digest mismatch: expected {CONFIG_SHA256}, got {config_digest}"
+        )
+        .into());
+    }
     let config_text = str::from_utf8(&config_bytes)?;
     let config = CloverConfig::from_json(config_text)?;
     config.validate_pinned()?;
 
     let inventory = CloverCheckpointInventory::inspect_pinned(&root, &config)?;
     let identity = inventory.identity();
+    if identity.index_sha256 != INDEX_SHA256 {
+        return Err(format!(
+            "checkpoint index digest mismatch: expected {INDEX_SHA256}, got {}",
+            identity.index_sha256
+        )
+        .into());
+    }
 
     println!("model_id={}", claymore_model_clover::MODEL_ID);
     println!("revision={}", claymore_model_clover::CONFIG_REVISION);
-    println!("config_sha256={}", hex(&sha256(&config_bytes)));
+    println!("config_sha256={config_digest}");
     println!("index_sha256={}", identity.index_sha256);
     println!("model_shards={}", identity.shard_count);
     println!("gdn_sidecars={}", identity.sidecar_count);
