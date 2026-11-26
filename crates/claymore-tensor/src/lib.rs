@@ -15,7 +15,7 @@ pub mod ops;
 pub use activations::{sigmoid, silu};
 pub use aten_topk::top_k_largest;
 pub use bf16::Bf16;
-pub use clover_gdn::{block_conv_silu, block_preview, causal_conv_silu, recurrent_commit, GdnDimensions, GdnError, GdnOutputDType};
+pub use clover_gdn::{block_conv_silu, block_preview, causal_conv_silu, full_attention_mask, gdn_gates, recurrent_commit, GdnDimensions, GdnError, GdnOutputDType};
 pub use contracts::{
     AliasRule, BackendCapabilities, BackendDecision, BackendPreference, CpuReferenceBackend,
     DispatchError, DispatchPlan, DispatchReport, ExecutionError, ExecutionRequest,
