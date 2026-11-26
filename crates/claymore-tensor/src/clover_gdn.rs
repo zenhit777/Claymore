@@ -56,6 +56,46 @@ pub enum GdnError {
 }
 
 
+/// Build Clover full-attention additive mask for one active block.
+///
+/// Prefix keys are visible only when marked valid. During preview every valid
+/// block key is visible to every valid query (bidirectional denoising). During
+/// commit, block keys are causal within the current block. Invalid query rows
+/// and invalid keys are fully masked; the attention reference maps an all-masked
+/// row to zero probabilities, matching Clover's eager backend.
+pub fn full_attention_mask(
+    prefix_valid: &[bool],
+    block_valid: &[bool],
+    preview: bool,
+) -> Result<Vec<f32>, GdnError> {
+    let query_tokens = block_valid.len();
+    let key_tokens = prefix_valid
+        .len()
+        .checked_add(query_tokens)
+        .ok_or(GdnError::SizeOverflow)?;
+    let len = query_tokens
+        .checked_mul(key_tokens)
+        .ok_or(GdnError::SizeOverflow)?;
+    let mut mask = vec![f32::NEG_INFINITY; len];
+    for query in 0..query_tokens {
+        if !block_valid[query] {
+            continue;
+        }
+        let row = query * key_tokens;
+        for (key, &valid) in prefix_valid.iter().enumerate() {
+            if valid {
+                mask[row + key] = 0.0;
+            }
+        }
+        for key in 0..query_tokens {
+            if block_valid[key] && (preview || key <= query) {
+                mask[row + prefix_valid.len() + key] = 0.0;
+            }
+        }
+    }
+    Ok(mask)
+}
+
 /// Causal depthwise convolution state transition used by committed GDN tokens.
 ///
 /// Inputs use row-major layouts: input [tokens, channels], history
@@ -476,6 +516,18 @@ mod tests {
             key_dim: 2,
             value_dim: 1,
         }
+    }
+
+    #[test]
+    fn full_attention_mask_distinguishes_bidirectional_preview_and_causal_commit() {
+        let prefix = [true, false, true];
+        let block = [true, true, false];
+        let preview = full_attention_mask(&prefix, &block, true).unwrap();
+        let commit = full_attention_mask(&prefix, &block, false).unwrap();
+        let width = prefix.len() + block.len();
+        assert_eq!(&preview[0..width], &[0.0, f32::NEG_INFINITY, 0.0, 0.0, 0.0, f32::NEG_INFINITY]);
+        assert_eq!(&commit[0..width], &[0.0, f32::NEG_INFINITY, 0.0, 0.0, f32::NEG_INFINITY, f32::NEG_INFINITY]);
+        assert!(commit[2 * width..].iter().all(|value| value.is_infinite()));
     }
 
     #[test]
