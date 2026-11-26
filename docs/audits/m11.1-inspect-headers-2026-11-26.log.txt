@@ -1,0 +1,41 @@
+model_id=Diffuspace/Clover-35B-A3B-Preview
+revision=4b0402b65e523d0183a14c431955438714cb16ff
+config_sha256=e07639edf658af63dbbb52b6eb488d72d1a2f194f15638539b02e3e94b76ecf5
+index_sha256=6270f95c35739b2c40db0026e8683fb84544c258fa637cd88a3b4887a79fd063
+model_shards=26
+gdn_sidecars=2
+tensor_count=813
+parameter_count=34661350848
+payload_bytes=69322701696
+artifact_sha256=not_requested
+file=bd_gdn_conv_right_weight.safetensors bytes=1478024 header_bytes=3456 payload_bytes=1474560 tensors=30
+file=bd_gdn_softmax_scalars.safetensors bytes=15584 header_bytes=9816 payload_bytes=5760 tensors=90
+file=model-00001-of-00026.safetensors bytes=3835692216 header_bytes=1200 payload_bytes=3835691008 tensors=10
+file=model-00002-of-00026.safetensors bytes=552234728 header_bytes=3040 payload_bytes=552231680 tensors=27
+file=model-00003-of-00026.safetensors bytes=3357897832 header_bytes=3808 payload_bytes=3357894016 tensors=33
+file=model-00004-of-00026.safetensors bytes=3370808144 header_bytes=4168 payload_bytes=3370803968 tensors=36
+file=model-00005-of-00026.safetensors bytes=3357897832 header_bytes=3808 payload_bytes=3357894016 tensors=33
+file=model-00006-of-00026.safetensors bytes=3959424664 header_bytes=1680 payload_bytes=3959422976 tensors=14
+file=model-00007-of-00026.safetensors bytes=1096787600 header_bytes=4616 payload_bytes=1096782976 tensors=40
+file=model-00008-of-00026.safetensors bytes=3946841768 header_bytes=1696 payload_bytes=3946840064 tensors=14
+file=model-00009-of-00026.safetensors bytes=1096460264 header_bytes=4320 payload_bytes=1096455936 tensors=37
+file=model-00010-of-00026.safetensors bytes=3946841752 header_bytes=1680 payload_bytes=3946840064 tensors=14
+file=model-00011-of-00026.safetensors bytes=1096460168 header_bytes=4224 payload_bytes=1096455936 tensors=37
+file=model-00012-of-00026.safetensors bytes=3409970832 header_bytes=1672 payload_bytes=3409969152 tensors=14
+file=model-00013-of-00026.safetensors bytes=1633331080 header_bytes=4224 payload_bytes=1633326848 tensors=37
+file=model-00014-of-00026.safetensors bytes=3422553648 header_bytes=1576 payload_bytes=3422552064 tensors=13
+file=model-00015-of-00026.safetensors bytes=1633658576 header_bytes=4680 payload_bytes=1633653888 tensors=41
+file=model-00016-of-00026.safetensors bytes=3946841880 header_bytes=1808 payload_bytes=3946840064 tensors=15
+file=model-00017-of-00026.safetensors bytes=1096460032 header_bytes=4088 payload_bytes=1096455936 tensors=36
+file=model-00018-of-00026.safetensors bytes=3946841752 header_bytes=1680 payload_bytes=3946840064 tensors=14
+file=model-00019-of-00026.safetensors bytes=1096460224 header_bytes=4280 payload_bytes=1096455936 tensors=37
+file=model-00020-of-00026.safetensors bytes=3409970832 header_bytes=1672 payload_bytes=3409969152 tensors=14
+file=model-00021-of-00026.safetensors bytes=1633331152 header_bytes=4296 payload_bytes=1633326848 tensors=37
+file=model-00022-of-00026.safetensors bytes=3370808176 header_bytes=4200 payload_bytes=3370803968 tensors=36
+file=model-00023-of-00026.safetensors bytes=3357897864 header_bytes=3840 payload_bytes=3357894016 tensors=33
+file=model-00024-of-00026.safetensors bytes=3370808176 header_bytes=4200 payload_bytes=3370803968 tensors=36
+file=model-00025-of-00026.safetensors bytes=2759146000 header_bytes=2184 payload_bytes=2759143808 tensors=19
+file=model-00026-of-00026.safetensors bytes=1615874872 header_bytes=1840 payload_bytes=1615873024 tensors=16
+result=PINNED_CONFIG_AND_HEADER_INVENTORY_VALID
+payloads_read=false
+cuda_initialized=false

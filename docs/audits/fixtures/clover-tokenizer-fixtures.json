@@ -1,0 +1,985 @@
+{
+ "source": {
+  "model_id": "Diffuspace/Clover-35B-A3B-Preview",
+  "revision": "4b0402b65e523d0183a14c431955438714cb16ff",
+  "tokenizer_json_sha256": "7c62ba7d8bb13291c94459896cd27537858beb58a88a037b09a150e213420988",
+  "tokenizer_config_json_sha256": "3399c8d380151f9c1bf562257c0063665b74def51735f4d0b01086e63266950e",
+  "chat_template_jinja_sha256": "01094df7cd8905d1220ea8b31e4f1086dc9bedf0305d3c2fa6578b5fa33b6815",
+  "chat_template_jinja_bytes": 7912,
+  "audit_date": "2026-11-26",
+  "environment": {
+   "python": "3.12.3",
+   "transformers": "5.19.0",
+   "tokenizers": "0.23.3",
+   "safetensors": "0.8.0",
+   "jinja2": "3.1.6",
+   "cuda_available": false,
+   "checkpoint_dir": "/home/sjteb/models/Clover-35B-A3B-Preview-4b0402b",
+   "torch": "absent"
+  }
+ },
+ "vocabulary": {
+  "tokenizer_class": "Qwen2Tokenizer",
+  "bpe_vocab_entries": 248044,
+  "bpe_merges": 247581,
+  "added_tokens": 34,
+  "tokenizer_len": 248077,
+  "bpe_vocab_size": 248044,
+  "model_config_vocab_size": 248320,
+  "unreachable_weight_rows": 243,
+  "merges_referencing_mask_or_151669": 0
+ },
+ "eos_pad_layers": {
+  "tokenizer_eos": {
+   "token": "<|im_end|>",
+   "id": 248046
+  },
+  "tokenizer_pad": {
+   "token": "<|endoftext|>",
+   "id": 248044
+  },
+  "tokenizer_all_special_ids": [
+   151669,
+   248044,
+   248046
+  ],
+  "model_config": {
+   "eos_token_id": 248044,
+   "pad_token_id": null,
+   "mask_token_id": 151669,
+   "bos_token_id": 248044
+  },
+  "generation_config": {
+   "max_new_tokens": 24576,
+   "do_sample": false,
+   "use_cache": true,
+   "eos_token_id": [
+    248046,
+    248044
+   ],
+   "pad_token_id": 248044,
+   "transformers_version": "5.19.0",
+   "bos_token_id": 248044,
+   "presence_penalty": 0.9,
+   "frequency_penalty": 0.0,
+   "repetition_penalty": 1.05,
+   "dllm_length_penalty": 10.0,
+   "dllm_length_penalty_start": 8192,
+   "dllm_length_penalty_window": 8192,
+   "dllm_think_end_bias": 10.0,
+   "dllm_think_end_start": 4096,
+   "dllm_think_end_window": 4096,
+   "dllm_think_end_token_id": 248069,
+   "temperature": 1.0,
+   "top_k": null,
+   "top_p": 1.0
+  }
+ },
+ "mask_token_registration": {
+  "in_added_tokens": true,
+  "added_entry": {
+   "id": 151669,
+   "content": "<|mask|>",
+   "single_word": false,
+   "lstrip": false,
+   "rstrip": false,
+   "normalized": false,
+   "special": true
+  },
+  "registered_as_special_in_fast": true,
+  "in_additional_special_tokens": false,
+  "vocab_index": 151669,
+  "byte_decoder_present": "ByteLevel",
+  "not_split": true,
+  "unk_id": null
+ },
+ "token_id_map": [
+  {
+   "id": 248044,
+   "expected_string": "<|endoftext|>",
+   "id->string": "<|endoftext|>",
+   "string->id": 248044,
+   "tokenize_to_single_id": true,
+   "tokenize_ids": [
+    248044
+   ],
+   "ok": true
+  },
+  {
+   "id": 248045,
+   "expected_string": "<|im_start|>",
+   "id->string": "<|im_start|>",
+   "string->id": 248045,
+   "tokenize_to_single_id": true,
+   "tokenize_ids": [
+    248045
+   ],
+   "ok": true
+  },
+  {
+   "id": 248046,
+   "expected_string": "<|im_end|>",
+   "id->string": "<|im_end|>",
+   "string->id": 248046,
+   "tokenize_to_single_id": true,
+   "tokenize_ids": [
+    248046
+   ],
+   "ok": true
+  },
+  {
+   "id": 151669,
+   "expected_string": "<|mask|>",
+   "id->string": "<|mask|>",
+   "string->id": 151669,
+   "tokenize_to_single_id": true,
+   "tokenize_ids": [
+    151669
+   ],
+   "ok": true
+  },
+  {
+   "id": 248068,
+   "expected_string": "<think>",
+   "id->string": "<think>",
+   "string->id": 248068,
+   "tokenize_to_single_id": true,
+   "tokenize_ids": [
+    248068
+   ],
+   "ok": true
+  },
+  {
+   "id": 248069,
+   "expected_string": "</think>",
+   "id->string": "</think>",
+   "string->id": 248069,
+   "tokenize_to_single_id": true,
+   "tokenize_ids": [
+    248069
+   ],
+   "ok": true
+  }
+ ],
+ "chat_template": {
+  "bytes": 7912,
+  "sha256": "01094df7cd8905d1220ea8b31e4f1086dc9bedf0305d3c2fa6578b5fa33b6815",
+  "declared_in_tokenizer_config": false,
+  "mentions_image": false,
+  "mentions_video": false,
+  "mentions_audio": false,
+  "mentions_pixels_or_patch": false,
+  "vision_special_tokens_present": [],
+  "thinking_switch_tokens": {
+   "<think>": false,
+   "</think>": false,
+   "think": true,
+   "nothink": false
+  }
+ },
+ "chat_template_fixtures": [
+  {
+   "fixture": "F1_user_genprompt",
+   "kwargs": {
+    "add_generation_prompt": true
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": "Bonjour, presente-toi en une phrase."
+    }
+   ],
+   "rendered": "<|im_start|>user\nBonjour, presente-toi en une phrase.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+   "token_ids": [
+    248045,
+    846,
+    198,
+    78768,
+    11,
+    51385,
+    4534,
+    72,
+    644,
+    5992,
+    16629,
+    13,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    248068,
+    198
+   ],
+   "n_tokens": 19,
+   "contains_vision_token": false,
+   "im_start_count": 2,
+   "im_end_count": 1,
+   "think_open_count": 1,
+   "think_close_count": 0,
+   "roundtrip_ids_stable": true,
+   "status": "OK"
+  },
+  {
+   "fixture": "F2_user_nogenprompt",
+   "kwargs": {
+    "add_generation_prompt": false
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": "Bonjour, presente-toi en une phrase."
+    }
+   ],
+   "rendered": "<|im_start|>user\nBonjour, presente-toi en une phrase.<|im_end|>\n",
+   "token_ids": [
+    248045,
+    846,
+    198,
+    78768,
+    11,
+    51385,
+    4534,
+    72,
+    644,
+    5992,
+    16629,
+    13,
+    248046,
+    198
+   ],
+   "n_tokens": 14,
+   "contains_vision_token": false,
+   "im_start_count": 1,
+   "im_end_count": 1,
+   "think_open_count": 0,
+   "think_close_count": 0,
+   "roundtrip_ids_stable": true,
+   "status": "OK"
+  },
+  {
+   "fixture": "F3_sys_user_assistant_nogenprompt",
+   "kwargs": {
+    "add_generation_prompt": false
+   },
+   "messages": [
+    {
+     "role": "system",
+     "content": "Tu reponds en francais, factuellement."
+    },
+    {
+     "role": "user",
+     "content": "Que vaut 2+2 ?"
+    },
+    {
+     "role": "assistant",
+     "content": "<think>\n\n</think>\n\n4."
+    }
+   ],
+   "rendered": "<|im_start|>system\nTu reponds en francais, factuellement.<|im_end|>\n<|im_start|>user\nQue vaut 2+2 ?<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n4.<|im_end|>\n",
+   "token_ids": [
+    248045,
+    8678,
+    198,
+    51193,
+    311,
+    3396,
+    82,
+    644,
+    48642,
+    11,
+    2029,
+    74053,
+    13,
+    248046,
+    198,
+    248045,
+    846,
+    198,
+    24955,
+    197288,
+    220,
+    17,
+    10,
+    17,
+    907,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    248068,
+    271,
+    248069,
+    271,
+    19,
+    13,
+    248046,
+    198
+   ],
+   "n_tokens": 38,
+   "contains_vision_token": false,
+   "im_start_count": 3,
+   "im_end_count": 3,
+   "think_open_count": 1,
+   "think_close_count": 1,
+   "roundtrip_ids_stable": true,
+   "status": "OK"
+  },
+  {
+   "fixture": "F4_sys_user_assistant_genprompt",
+   "kwargs": {
+    "add_generation_prompt": true
+   },
+   "messages": [
+    {
+     "role": "system",
+     "content": "Tu reponds en francais, factuellement."
+    },
+    {
+     "role": "user",
+     "content": "Que vaut 2+2 ?"
+    },
+    {
+     "role": "assistant",
+     "content": "<think>\n\n</think>\n\n4."
+    }
+   ],
+   "rendered": "<|im_start|>system\nTu reponds en francais, factuellement.<|im_end|>\n<|im_start|>user\nQue vaut 2+2 ?<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n4.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+   "token_ids": [
+    248045,
+    8678,
+    198,
+    51193,
+    311,
+    3396,
+    82,
+    644,
+    48642,
+    11,
+    2029,
+    74053,
+    13,
+    248046,
+    198,
+    248045,
+    846,
+    198,
+    24955,
+    197288,
+    220,
+    17,
+    10,
+    17,
+    907,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    248068,
+    271,
+    248069,
+    271,
+    19,
+    13,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    248068,
+    198
+   ],
+   "n_tokens": 43,
+   "contains_vision_token": false,
+   "im_start_count": 4,
+   "im_end_count": 3,
+   "think_open_count": 2,
+   "think_close_count": 1,
+   "roundtrip_ids_stable": true,
+   "status": "OK"
+  },
+  {
+   "fixture": "F5_enable_thinking_true",
+   "kwargs": {
+    "add_generation_prompt": true,
+    "enable_thinking": true
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": "Bonjour, presente-toi en une phrase."
+    }
+   ],
+   "rendered": "<|im_start|>user\nBonjour, presente-toi en une phrase.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+   "token_ids": [
+    248045,
+    846,
+    198,
+    78768,
+    11,
+    51385,
+    4534,
+    72,
+    644,
+    5992,
+    16629,
+    13,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    248068,
+    198
+   ],
+   "n_tokens": 19,
+   "contains_vision_token": false,
+   "im_start_count": 2,
+   "im_end_count": 1,
+   "think_open_count": 1,
+   "think_close_count": 0,
+   "roundtrip_ids_stable": true,
+   "status": "OK"
+  },
+  {
+   "fixture": "F6_enable_thinking_false",
+   "kwargs": {
+    "add_generation_prompt": true,
+    "enable_thinking": false
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": "Bonjour, presente-toi en une phrase."
+    }
+   ],
+   "rendered": "<|im_start|>user\nBonjour, presente-toi en une phrase.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+   "token_ids": [
+    248045,
+    846,
+    198,
+    78768,
+    11,
+    51385,
+    4534,
+    72,
+    644,
+    5992,
+    16629,
+    13,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    248068,
+    271,
+    248069,
+    271
+   ],
+   "n_tokens": 21,
+   "contains_vision_token": false,
+   "im_start_count": 2,
+   "im_end_count": 1,
+   "think_open_count": 1,
+   "think_close_count": 1,
+   "roundtrip_ids_stable": true,
+   "status": "OK"
+  },
+  {
+   "fixture": "F7_preserve_thinking_false",
+   "kwargs": {
+    "add_generation_prompt": false,
+    "preserve_thinking": false
+   },
+   "messages": [
+    {
+     "role": "system",
+     "content": "Tu reponds en francais, factuellement."
+    },
+    {
+     "role": "user",
+     "content": "Que vaut 2+2 ?"
+    },
+    {
+     "role": "assistant",
+     "content": "<think>\n\n</think>\n\n4."
+    }
+   ],
+   "rendered": "<|im_start|>system\nTu reponds en francais, factuellement.<|im_end|>\n<|im_start|>user\nQue vaut 2+2 ?<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n4.<|im_end|>\n",
+   "token_ids": [
+    248045,
+    8678,
+    198,
+    51193,
+    311,
+    3396,
+    82,
+    644,
+    48642,
+    11,
+    2029,
+    74053,
+    13,
+    248046,
+    198,
+    248045,
+    846,
+    198,
+    24955,
+    197288,
+    220,
+    17,
+    10,
+    17,
+    907,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    248068,
+    271,
+    248069,
+    271,
+    19,
+    13,
+    248046,
+    198
+   ],
+   "n_tokens": 38,
+   "contains_vision_token": false,
+   "im_start_count": 3,
+   "im_end_count": 3,
+   "think_open_count": 1,
+   "think_close_count": 1,
+   "roundtrip_ids_stable": true,
+   "status": "OK"
+  },
+  {
+   "fixture": "F8_add_non_thinking_prefix_false",
+   "kwargs": {
+    "add_generation_prompt": false,
+    "add_non_thinking_prefix": false
+   },
+   "messages": [
+    {
+     "role": "system",
+     "content": "Tu reponds en francais, factuellement."
+    },
+    {
+     "role": "user",
+     "content": "Que vaut 2+2 ?"
+    },
+    {
+     "role": "assistant",
+     "content": "<think>\n\n</think>\n\n4."
+    }
+   ],
+   "rendered": "<|im_start|>system\nTu reponds en francais, factuellement.<|im_end|>\n<|im_start|>user\nQue vaut 2+2 ?<|im_end|>\n<|im_start|>assistant\n4.<|im_end|>\n",
+   "token_ids": [
+    248045,
+    8678,
+    198,
+    51193,
+    311,
+    3396,
+    82,
+    644,
+    48642,
+    11,
+    2029,
+    74053,
+    13,
+    248046,
+    198,
+    248045,
+    846,
+    198,
+    24955,
+    197288,
+    220,
+    17,
+    10,
+    17,
+    907,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    19,
+    13,
+    248046,
+    198
+   ],
+   "n_tokens": 34,
+   "contains_vision_token": false,
+   "im_start_count": 3,
+   "im_end_count": 3,
+   "think_open_count": 0,
+   "think_close_count": 0,
+   "roundtrip_ids_stable": true,
+   "status": "OK"
+  },
+  {
+   "fixture": "F9_tools_genprompt",
+   "kwargs": {
+    "add_generation_prompt": true,
+    "tools": [
+     {
+      "type": "function",
+      "function": {
+       "name": "lookup",
+       "description": "Cherche un fait",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    ]
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": "Bonjour, presente-toi en une phrase."
+    }
+   ],
+   "rendered": "<|im_start|>system\n# Tools\n\nYou have access to the following functions:\n\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"Cherche un fait\", \"parameters\": {\"type\": \"object\", \"properties\": {\"q\": {\"type\": \"string\"}}}}}\n</tools>\n\nIf you choose to call a function ONLY reply in the following format with NO suffix:\n\n<tool_call>\n<function=example_function_name>\n<parameter=example_parameter_1>\nvalue_1\n</parameter>\n<parameter=example_parameter_2>\nThis is the value for the second parameter\nthat can span\nmultiple lines\n</parameter>\n</function>\n</tool_call>\n\n<IMPORTANT>\nReminder:\n- Function calls MUST follow the specified format: an inner <function=...></function> block must be nested within <tool_call></tool_call> XML tags\n- Required parameters MUST be specified\n- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after\n- If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls\n</IMPORTANT><|im_end|>\n<|im_start|>user\nBonjour, presente-toi en une phrase.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+   "token_ids": [
+    248045,
+    8678,
+    198,
+    2,
+    13455,
+    271,
+    2523,
+    599,
+    2528,
+    310,
+    279,
+    2614,
+    5568,
+    25,
+    271,
+    27,
+    15449,
+    29,
+    198,
+    4754,
+    1267,
+    763,
+    328,
+    1628,
+    487,
+    328,
+    1628,
+    763,
+    5046,
+    591,
+    763,
+    328,
+    20377,
+    487,
+    328,
+    4532,
+    763,
+    328,
+    1106,
+    176893,
+    632,
+    19092,
+    487,
+    328,
+    13390,
+    763,
+    5046,
+    1267,
+    763,
+    328,
+    1640,
+    487,
+    328,
+    12811,
+    763,
+    5046,
+    80,
+    763,
+    5046,
+    1267,
+    763,
+    328,
+    889,
+    29958,
+    72964,
+    198,
+    510,
+    15449,
+    29,
+    271,
+    2592,
+    488,
+    4992,
+    310,
+    1562,
+    264,
+    709,
+    25835,
+    9559,
+    303,
+    279,
+    2614,
+    3443,
+    440,
+    5486,
+    19900,
+    25,
+    271,
+    248058,
+    198,
+    27,
+    1628,
+    28,
+    8422,
+    8901,
+    1224,
+    29,
+    198,
+    27,
+    15704,
+    28,
+    8422,
+    24109,
+    62,
+    16,
+    29,
+    198,
+    927,
+    62,
+    16,
+    198,
+    510,
+    15704,
+    29,
+    198,
+    27,
+    15704,
+    28,
+    8422,
+    24109,
+    62,
+    17,
+    29,
+    198,
+    1919,
+    369,
+    279,
+    869,
+    364,
+    279,
+    2018,
+    5555,
+    198,
+    8761,
+    628,
+    9111,
+    198,
+    34493,
+    4965,
+    198,
+    510,
+    15704,
+    29,
+    198,
+    510,
+    1628,
+    29,
+    198,
+    248059,
+    271,
+    27,
+    95328,
+    29,
+    198,
+    92065,
+    25,
+    198,
+    12,
+    5534,
+    6526,
+    26834,
+    1732,
+    279,
+    5024,
+    3443,
+    25,
+    449,
+    8906,
+    361,
+    1628,
+    28,
+    1076,
+    1419,
+    1628,
+    29,
+    2424,
+    1902,
+    381,
+    23283,
+    2785,
+    220,
+    248058,
+    248059,
+    11535,
+    9212,
+    198,
+    12,
+    12296,
+    4868,
+    26834,
+    381,
+    5024,
+    198,
+    12,
+    1394,
+    1189,
+    3300,
+    9801,
+    31626,
+    364,
+    678,
+    709,
+    1562,
+    303,
+    5629,
+    3992,
+    54588,
+    279,
+    709,
+    1562,
+    11,
+    694,
+    4045,
+    1238,
+    198,
+    12,
+    1368,
+    1017,
+    369,
+    874,
+    709,
+    1562,
+    2420,
+    11,
+    4087,
+    279,
+    3296,
+    1040,
+    4472,
+    440,
+    678,
+    1428,
+    6337,
+    321,
+    635,
+    524,
+    3184,
+    279,
+    1156,
+    883,
+    709,
+    6526,
+    198,
+    510,
+    95328,
+    29,
+    248046,
+    198,
+    248045,
+    846,
+    198,
+    78768,
+    11,
+    51385,
+    4534,
+    72,
+    644,
+    5992,
+    16629,
+    13,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    248068,
+    198
+   ],
+   "n_tokens": 267,
+   "contains_vision_token": false,
+   "im_start_count": 3,
+   "im_end_count": 2,
+   "think_open_count": 1,
+   "think_close_count": 0,
+   "roundtrip_ids_stable": true,
+   "status": "OK"
+  },
+  {
+   "fixture": "F10_multimodal_content_rejet",
+   "kwargs": {
+    "add_generation_prompt": true
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image"
+      },
+      {
+       "type": "text",
+       "text": "decrit"
+      }
+     ]
+    }
+   ],
+   "status": "REJET_ATTENDU",
+   "error": "TemplateError: This model accepts text content only."
+  },
+  {
+   "fixture": "F11_role_inconnu_rejet",
+   "kwargs": {
+    "add_generation_prompt": true
+   },
+   "messages": [
+    {
+     "role": "robot",
+     "content": "x"
+    }
+   ],
+   "status": "REJET_ATTENDU",
+   "error": "TemplateError: No user query found in messages."
+  },
+  {
+   "fixture": "F12_liste_vide_rejet",
+   "kwargs": {
+    "add_generation_prompt": true
+   },
+   "messages": [],
+   "status": "REJET_ATTENDU",
+   "error": "ValueError: Cannot apply chat template to an empty conversation. Provide at least one message."
+  }
+ ],
+ "claims": {
+  "payload_tensors_loaded": false,
+  "forward_pass_run": false,
+  "cuda_initialized": false
+ }
+}
