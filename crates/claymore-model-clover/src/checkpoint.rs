@@ -1282,10 +1282,7 @@ mod tests {
 
         assert!(matches!(
             CloverCheckpointInventory::inspect(&root),
-            Err(CloverCheckpointError::UnsupportedWeightDType {
-                actual: "F32",
-                ..
-            })
+            Err(CloverCheckpointError::UnsupportedWeightDType { actual: "F32", .. })
         ));
         fs::remove_dir_all(root).unwrap();
     }
