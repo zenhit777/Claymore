@@ -413,12 +413,35 @@ mod tests {
             &[false, false],
             &[0.0; 4],
             1.0 / 2.0f32.sqrt(),
+            GdnOutputDType::F32,
             &[10.0, 10.0],
             &[5.0, 5.0],
             &[1.0, 1.0],
         )
         .unwrap();
         assert_eq!(output, vec![0.0; 4]);
+    }
+
+    #[test]
+    fn bf16_preview_output_is_rounded_once_after_fp32_accumulation() {
+        let output = block_preview(
+            dims(),
+            &[1.0, 0.25],
+            &[0.5, 1.0],
+            &[1.234567, -0.765432],
+            &[0.0, 0.0],
+            &[true],
+            &[0.1, 0.2, -0.3, 0.4],
+            1.0 / 2.0f32.sqrt(),
+            GdnOutputDType::BF16,
+            &[10.0, 10.0],
+            &[5.0, 5.0],
+            &[1.0, 1.0],
+        )
+        .unwrap();
+        assert!(output.iter().all(|value| {
+            Bf16::from_f32(*value).to_f32().to_bits() == value.to_bits()
+        }));
     }
 
     #[test]
