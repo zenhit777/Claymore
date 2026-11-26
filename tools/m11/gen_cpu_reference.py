@@ -294,7 +294,7 @@ def main() -> int:
     # 16Q/2KV GQA, causal-prefix/block mask and output sigmoid gate.
     attn_q_input = ((torch.arange(128).reshape(2, 16, 4).float() % 17) - 8) / 20
     attn_q_input = attn_q_input.to(torch.bfloat16)
-    attn_k_input = ((torch.arange(48).reshape(3, 2, 4).float() % 13) - 6) / 15
+    attn_k_input = ((torch.arange(24).reshape(3, 2, 4).float() % 13) - 6) / 15
     attn_k_input = attn_k_input.to(torch.bfloat16)
     attn_q_weight = torch.tensor([0.0, 0.1, -0.1, 0.2], dtype=torch.bfloat16)
     attn_k_weight = torch.tensor([0.1, -0.1, 0.2, 0.0], dtype=torch.bfloat16)
