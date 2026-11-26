@@ -367,7 +367,12 @@ def main() -> int:
     rust_path = out / "clover_gdn_upstream_fixtures.rs"
     rust_path.write_text("\n".join(rust_lines) + "\n")
 
+    fixture_source_sha256 = hashlib.sha256(rust_path.read_bytes()).hexdigest()
+    golden_tensors = [tensor for name, tensor in fixtures.items() if name in golden_names]
     manifest = {
+        "fixture_source_sha256": fixture_source_sha256,
+        "fixture_count": len(golden_tensors),
+        "fixture_values": sum(int(tensor.numel()) for tensor in golden_tensors),
         "source": source,
         "source_file_verified": observed_source_sha256 is not None,
         "source_file_observed_sha256": observed_source_sha256,
