@@ -512,4 +512,17 @@ mod tests {
             OpError::NonContiguous
         );
     }
+    #[test]
+    fn mul_is_elementwise_and_rejects_mixed_dtype() {
+        let device = CpuDevice::new();
+        let a = tensor(&device, vec![2, 2], &[1.0, -2.0, 3.0, 4.0]);
+        let b = tensor(&device, vec![2, 2], &[0.5, 3.0, -2.0, 0.25]);
+        assert_eq!(
+            values(&device, &mul(&device, &a, &b).unwrap()),
+            [0.5, -6.0, -6.0, 1.0]
+        );
+        let bf = bf16_tensor(&device, vec![2, 2], &bf(&[1.0, 1.0, 1.0, 1.0]));
+        assert_eq!(mul(&device, &a, &bf).unwrap_err(), OpError::MixedDType);
+    }
+
 }
