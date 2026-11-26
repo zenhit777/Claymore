@@ -115,7 +115,8 @@ def causal_conv_invalid_torch(raw, history, weight, valid):
     pieces = []
     next_history = history.clone()
     for token in range(raw.shape[1]):
-        window = torch.cat((next_history, raw[:, token, :, None]), -1)
+        current = raw[:, token] * valid[:, token, None].to(raw.dtype)
+        window = torch.cat((next_history, current[:, :, None]), -1)
         y = F.silu((window * weight[:, 0]).float().sum(-1)).to(raw.dtype)
         pieces.append(y * valid[:, token, None])
         next_history = torch.where(valid[:, token, None, None], window[..., 1:], next_history)
