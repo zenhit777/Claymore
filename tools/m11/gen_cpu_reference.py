@@ -373,6 +373,7 @@ def main() -> int:
                 "values": int(tensor.numel()),
             }
             for name, tensor in fixtures.items()
+            if name in golden_names
         },
     }
     manifest_path = out / "manifest.json"
