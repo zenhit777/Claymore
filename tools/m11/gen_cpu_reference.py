@@ -166,8 +166,9 @@ def f32_bits(value: float) -> int:
 
 def rust_const(name: str, tensor) -> str:
     values = tensor.detach().to(torch.float32).cpu().contiguous().reshape(-1).tolist()
-    entries = ", ".join(f"f32::from_bits(0x{f32_bits(value):08x})" for value in values)
-    return f"pub const {name}: &[f32] = &[{entries}];"
+    entries = [f"f32::from_bits(0x{f32_bits(value):08x})" for value in values]
+    rows = [", ".join(entries[index : index + 3]) for index in range(0, len(entries), 3)]
+    return f"pub const {name}: &[f32] = &[\\n    " + ",\\n    ".join(rows) + ",\\n];"
 
 
 def main() -> int:
