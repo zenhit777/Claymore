@@ -1,0 +1,58 @@
+# M11.1 post-correctif — environnement d'exécution (CPU-only)
+# date_debut=2026-11-26T20:09:40+01:00
+
+## Hôte
+noyau      = Linux 6.18.58.1-microsoft-standard-WSL2 x86_64
+hote       = Morpheus
+cpu        = AMD Ryzen 9 7950X3D 16-Core Processor (16 threads)
+ram        = 112Gi total, 68Gi available
+disque /   = 250G libres sur 1007G
+montee     = 9p     C:\
+
+## Git
+remote     = https://github.com/zenhit777/Claymore.git
+branche    = feat/m11-clover-foundation
+HEAD       = 443b1c4d923c1b4a33952ca4856d1bdff622025d
+suivi      = origin/feat/m11-clover-foundation = 443b1c4d923c1b4a33952ca4856d1bdff622025d
+arbre      = propre (0 entite modifiee) a la prise en main du mandat ; 1 modification ulterieure,
+               docs/audits/scripts/m11.1-chat-template-audit.py (extraction des identifiants du
+               BatchEncoding rendu par apply_chat_template(tokenize=True))
+PR #53     = open, base main, head feat/m11-clover-foundation (verifie via API GitHub, voir le rapport)
+
+## Toolchain Rust
+rustc: rustc 1.100.0 (0ef1bc386 2026-11-09)
+rustc: binary: rustc
+rustc: commit-hash: 0ef1bc386059596dada8fb65b50425aab2ea637a
+rustc: commit-date: 2026-11-09
+rustc: host: x86_64-unknown-linux-gnu
+rustc: release: 1.100.0
+rustc: LLVM version: 23.1.5
+cargo: cargo 1.100.0 (3acc79c0c 2026-11-05)
+MSRV declaree = "1.86"
+rustc_1.86: rustc 1.86.0 (05f9846f8 2025-03-31)
+rustc_1.86: binary: rustc
+
+## Python d'audit (venv dedie, sans PyTorch)
+venv        = /home/sjteb/.venvs/m11.1-clover-postfix
+python      = 3.12.3 (/usr/bin/python3.12)
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+python      = 3.12.3
+transformers= 5.19.0
+tokenizers  = 0.23.3
+jinja2      = 3.1.6
+safetensors = 0.8.0
+huggingface_hub = 2.5.0
+torch       = ABSENT (le chemin CUDA est inaccessible depuis l'audit Python)
+
+## Checkpoint
+chemin      = /mnt/c/Users/sjteb/.cache/huggingface/hub/hub/models--Diffuspace--Clover-35B-A3B-Preview/snapshots/4b0402b65e523d0183a14c431955438714cb16ff
+revision    = 4b0402b65e523d0183a14c431955438714cb16ff
+fichiers    = 41 (dont 28 Safetensors, 0 lien symbolique)
+taille      = 65G
+écart local vs API épinglée (41 tailles + 41 blob_id) : 41/41 EGAL, 0 DIFFERENT
+
+## Règle matérielle
+CUDA_VISIBLE_DEVICES a été force a la chaine vide sur chaque commande cargo et python.
+nvidia-smi n'a pas ete appele ; aucun contexte CUDA cree ; aucun tenseur de payload charge ; aucun forward pass.
+l'absence de torch dans l'environnement Python rend torch.cuda inaccessible structurellement ;
+le cote Rust consigne cuda_initialized=false.

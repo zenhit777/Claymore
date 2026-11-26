@@ -1,0 +1,8 @@
+### script digests — final replay — 2026-11-26T23:02:20+01:00
+515c07a68748f240429fd8120e935d10888e2e7000267ef78f21a9eebffc7c32  docs/audits/scripts/m11.1-build-fixtures.py
+24d0e52e5879db6d60508641d3939eea605a9752654f25ee1bd25db5b5a4e9f2  docs/audits/scripts/m11.1-chat-template-audit.py
+fd436968b1aa4ef6d95311d616fe8e57d6674ee16c6f8f25397cef2783b541c9  docs/audits/scripts/m11.1-lateral-controls.py
+b4c0f29415ce459d300e65e810fa00af06043e35307f980d23e15e9a059cb866  docs/audits/scripts/m11.1-t4-f32-sidecar.py
+326961c9a410046ebdec1f0c691bafb27416b9d5889054100e8a8959e07763f3  docs/audits/scripts/m11.1-tokenizer-audit.py
+b6f38d7b85b4266332bdf39f4e64a879a684b423ed002cef6c272cdbc29c43e2  docs/audits/scripts/m11.1-gate-negative-tests.sh
+bd20e432e963414489b041785055c3919c7d74af9c14f02727fa6a82a39473f5  docs/audits/scripts/m11.1-run-checkpoint-audit.sh

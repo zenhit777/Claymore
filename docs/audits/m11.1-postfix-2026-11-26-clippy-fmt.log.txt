@@ -1,0 +1,5 @@
+# Contrôles statiques sur le HEAD testé (CPU-only)
+commande = CUDA_VISIBLE_DEVICES="" cargo clippy --locked -p claymore-model-clover -p claymore-checkpoint --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+clippy_exit=0
+fmt_exit=0

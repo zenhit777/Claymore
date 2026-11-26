@@ -1,0 +1,10 @@
+artefacts=28
+octets_fichiers=69322795672
+prefices_longueur_u64=224 (8 o x 28 artefacts)
+octets_en_tete_json=93752
+octets_payload=69322701696
+index.metadata.total_size=69322701696
+payload==index_total=OUI
+fichier==8+en_tete+payload=OUI
+en_tetes_plus_prefices=93976
+tenseurs_total_inventaire=813

@@ -1,0 +1,6 @@
+# T4 — repertoire=/tmp/m11-t4
+# sidecar_muté=bd_gdn_conv_right_weight.safetensors dtype=F32 tensors=30 taille_octets=2952576
+# shards_et_autres_fichiers=en symlinks ; copie de payload = aucune
+$ CUDA_VISIBLE_DEVICES="" inspect_checkpoint <repertoire_sidecar_F32>
+Error: UnsupportedWeightDType { tensor: "model.layers.0.linear_attn.conv_right_weight", actual: "F32" }
+exit=1

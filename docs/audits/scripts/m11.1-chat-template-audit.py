@@ -51,9 +51,13 @@ for name, msgs, kw in CASES:
     e = {"fixture": name, "kwargs": kw, "messages": msgs}
     try:
         s = tok.apply_chat_template(msgs, return_tensors=None, tokenize=False, **kw)
-        direct_ids = list(
-            tok.apply_chat_template(msgs, return_tensors=None, tokenize=True, **kw)
-        )
+        # apply_chat_template(tokenize=True) renvoie un BatchEncoding (un Mapping,
+        # pas un dict) : list() sur ce objet produirait les cles du dictionnaire.
+        # Les identifiants sont portes par `input_ids`, parfois batches.
+        direct = tok.apply_chat_template(msgs, return_tensors=None, tokenize=True, **kw)
+        direct_ids = list(direct["input_ids"] if "input_ids" in direct else direct)
+        if direct_ids and isinstance(direct_ids[0], list):
+            direct_ids = direct_ids[0]
         rendered_ids = list(tok(s, add_special_tokens=False)["input_ids"])
         e["rendered"] = s
         e["token_ids"] = direct_ids

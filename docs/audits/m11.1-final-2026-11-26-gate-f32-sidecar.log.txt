@@ -1,0 +1,11 @@
+### T4 F32 sidecar gate replay — 2026-11-26T23:00:23+01:00
+# T4 — repertoire=/tmp/m11-t4-final
+# sidecar_muté=bd_gdn_conv_right_weight.safetensors dtype=F32 tensors=30 taille_octets=2952576
+# shards_et_autres_fichiers=en symlinks ; copie de payload = aucune
+$ CUDA_VISIBLE_DEVICES="" inspect_checkpoint <repertoire_sidecar_F32>
+Error: UnsupportedWeightDType { tensor: "model.layers.0.linear_attn.conv_right_weight", actual: "F32" }
+exit=1
+mk_rc=0
+Error: UnsupportedWeightDType { tensor: "model.layers.0.linear_attn.conv_right_weight", actual: "F32" }
+t4_exit=1
+3.0M	/tmp/m11-t4-final
