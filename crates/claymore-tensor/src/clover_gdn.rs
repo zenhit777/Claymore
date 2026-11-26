@@ -562,6 +562,37 @@ mod tests {
     }
 
     #[test]
+    fn gdn_gate_derivation_matches_softplus_decay_and_sigmoid_beta() {
+        let (decay, beta) = gdn_gates(
+            &[0.0, 1.0],
+            &[0.0, 100.0],
+            &[0.0, 0.0],
+            &[1.0, 0.0],
+            1,
+            2,
+            GdnOutputDType::F32,
+        ).unwrap();
+        let softplus_one = 1.0f32 + (-1.0f32).exp().ln_1p();
+        assert!((decay[0] + softplus_one).abs() < 1e-6);
+        assert!((decay[1] + (1.0 + (-1.0f32).exp().ln_1p())).abs() < 1e-6);
+        assert_eq!(beta, [0.5, 1.0]);
+    }
+
+    #[test]
+    fn gdn_gate_bf16_beta_is_rounded_explicitly() {
+        let (_, beta) = gdn_gates(
+            &[0.0],
+            &[0.123456],
+            &[0.0],
+            &[0.0],
+            1,
+            1,
+            GdnOutputDType::BF16,
+        ).unwrap();
+        assert_eq!(beta[0].to_bits(), Bf16::from_f32(beta[0]).to_f32().to_bits());
+    }
+
+    #[test]
     fn full_attention_mask_distinguishes_bidirectional_preview_and_causal_commit() {
         let prefix = [true, false, true];
         let block = [true, true, false];
