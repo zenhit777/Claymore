@@ -645,4 +645,64 @@ mod tests {
         assert_eq!(output[0], 0.0);
         assert_eq!(output[1].to_bits(), (-0.0f32).to_bits());
     }
+    fn bf16_values(values: &[f32]) -> Vec<Bf16> {
+        values.iter().map(|value| Bf16::from_f32(*value)).collect()
+    }
+
+    fn assert_reference_close(actual: &[f32], expected: &[f32], tolerance: f32) {
+        assert_eq!(actual.len(), expected.len());
+        for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+            assert!(
+                (actual - expected).abs() <= tolerance,
+                "reference mismatch at {index}: actual={actual:?}, expected={expected:?}, tolerance={tolerance}"
+            );
+        }
+    }
+
+    #[test]
+    fn clover_zero_centered_rms_norm_matches_pinned_upstream_cpu_fixture() {
+        let device = CpuDevice::new();
+        let input = bf16_tensor(
+            &device,
+            vec![2, 4],
+            &bf16_values(&[0.2, -0.7, 1.1, 0.3, -0.4, 0.6, 0.1, -0.9]),
+        );
+        let weight = bf16_tensor(
+            &device,
+            vec![4],
+            &bf16_values(&[-0.25, 0.5, 0.0, 0.125]),
+        );
+        let output = rms_norm_zero_centered(&device, &input, &weight, 1e-6).unwrap();
+        assert_eq!(output.layout().dtype(), DType::BF16);
+        assert_reference_close(
+            &values(&device, &output),
+            crate::clover_gdn_upstream_fixtures::NORM_ZERO_OUT,
+            1e-4,
+        );
+    }
+
+    #[test]
+    fn clover_gdn_rms_norm_gate_matches_pinned_upstream_cpu_fixture() {
+        let device = CpuDevice::new();
+        let input_values = [0.2, -0.7, 1.1, 0.3, -0.4, 0.6, 0.1, -0.9];
+        let input = bf16_tensor(&device, vec![2, 4], &bf16_values(&input_values));
+        let weight = bf16_tensor(
+            &device,
+            vec![4],
+            &bf16_values(&[0.5, 1.0, 1.5, 0.25]),
+        );
+        let gate = bf16_tensor(
+            &device,
+            vec![2, 4],
+            &bf16_values(&[-0.2, 0.4, 0.8, -1.0, 0.3, -0.5, 0.1, 0.7]),
+        );
+        let output = rms_norm_silu_gate(&device, &input, &weight, &gate, 1e-6).unwrap();
+        assert_eq!(output.layout().dtype(), DType::BF16);
+        assert_reference_close(
+            &values(&device, &output),
+            crate::clover_gdn_upstream_fixtures::NORM_GATE_OUT,
+            1e-4,
+        );
+    }
+
 }
