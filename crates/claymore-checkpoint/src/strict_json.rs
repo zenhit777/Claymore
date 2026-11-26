@@ -169,7 +169,10 @@ mod tests {
 
     #[test]
     fn accepts_exact_integral_float_metadata_without_rounding() {
-        assert_eq!(Json::parse(b"71903645408.0").unwrap().as_u64(), Some(71_903_645_408));
+        assert_eq!(
+            Json::parse(b"71903645408.0").unwrap().as_u64(),
+            Some(71_903_645_408)
+        );
         assert_eq!(Json::parse(b"1.5").unwrap().as_u64(), None);
         assert_eq!(Json::parse(b"9007199254740992.0").unwrap().as_u64(), None);
         assert_eq!(Json::parse(b"-1.0").unwrap().as_u64(), None);
