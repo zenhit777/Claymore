@@ -67,7 +67,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("load_plan_shards={}", load_plan.shards.len());
     println!(
         "load_plan_tensors={}",
-        load_plan.shards.iter().map(|shard| shard.tensors.len()).sum::<usize>()
+        load_plan
+            .shards
+            .iter()
+            .map(|shard| shard.tensors.len())
+            .sum::<usize>()
     );
     println!(
         "load_plan_chunks={}",
