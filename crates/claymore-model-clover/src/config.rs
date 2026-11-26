@@ -177,7 +177,7 @@ impl CloverConfig {
         if self.num_attention_heads % self.num_key_value_heads != 0 {
             return Err(CloverConfigError::InvalidGroupedQueryGeometry);
         }
-        if self.architectures.as_slice() != ["CloverMoeModelLM"] {
+        if self.architectures.len() != 1 || self.architectures[0] != "CloverMoeModelLM" {
             return Err(CloverConfigError::UnsupportedArchitecture);
         }
         if self.model_type != "clover_moe" {
