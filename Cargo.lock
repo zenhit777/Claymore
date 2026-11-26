@@ -56,6 +56,9 @@ name = "claymore-model-clover"
 version = "0.5.0"
 dependencies = [
  "claymore-core",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
