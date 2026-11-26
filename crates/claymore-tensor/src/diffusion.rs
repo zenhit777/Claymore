@@ -1566,4 +1566,90 @@ mod tests {
             OpError::ShapeMismatch
         );
     }
+    fn assert_reference_close(actual: &[f32], expected: &[f32], tolerance: f32) {
+        assert_eq!(actual.len(), expected.len());
+        for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+            assert!(
+                (actual - expected).abs() <= tolerance,
+                "reference mismatch at {index}: actual={actual:?}, expected={expected:?}, tolerance={tolerance}"
+            );
+        }
+    }
+
+    #[test]
+    fn partial_rope_matches_pinned_upstream_bf16_fixture() {
+        let device = CpuDevice::new();
+        let input = bf16_tensor(
+            &device,
+            vec![2, 2, 8],
+            &[
+                0.2, -0.7, 1.1, 0.3, -0.4, 0.6, 0.1, -0.9,
+                0.5, 0.2, -0.3, 0.8, 0.1, -0.6, 0.7, -0.2,
+                -0.1, 0.4, 0.6, -0.8, 0.3, 0.2, -0.5, 0.9,
+                0.7, -0.2, 0.1, 0.5, -0.8, 0.4, 0.3, -0.6,
+            ],
+        );
+        let (cos, sin) = rope_tables_partial(&[3, 7], 8, 10_000.0, 0.5).unwrap();
+        let cos = bf16_tensor(&device, vec![2, 4], &cos);
+        let sin = bf16_tensor(&device, vec![2, 4], &sin);
+        let output = rotary_embed_partial(&device, &input, &cos, &sin).unwrap();
+        assert_reference_close(
+            &values(&device, &output),
+            crate::clover_gdn_upstream_fixtures::ROPE_OUTPUT,
+            1e-4,
+        );
+    }
+
+    #[test]
+    fn clover_full_attention_pipeline_matches_pinned_upstream_cpu_fixture() {
+        let device = CpuDevice::new();
+        let q_values: Vec<f32> = (0..128)
+            .map(|index| ((index % 17) as f32 - 8.0) / 20.0)
+            .collect();
+        let k_values: Vec<f32> = (0..24)
+            .map(|index| ((index % 13) as f32 - 6.0) / 15.0)
+            .collect();
+        let v_values: Vec<f32> = (0..24)
+            .map(|index| ((index % 19) as f32 - 9.0) / 20.0)
+            .collect();
+        let gate_values: Vec<f32> = (0..128)
+            .map(|index| ((index % 11) as f32 - 5.0) / 8.0)
+            .collect();
+
+        let q = bf16_tensor(&device, vec![2, 16, 4], &q_values);
+        let k = bf16_tensor(&device, vec![3, 2, 4], &k_values);
+        let v = bf16_tensor(&device, vec![3, 2, 4], &v_values);
+        let gate = bf16_tensor(&device, vec![2, 16, 4], &gate_values);
+        let q_weight = bf16_tensor(&device, vec![4], &[0.0, 0.1, -0.1, 0.2]);
+        let k_weight = bf16_tensor(&device, vec![4], &[0.1, -0.1, 0.2, 0.0]);
+
+        let q = crate::ops::rms_norm_zero_centered(&device, &q, &q_weight, 1e-6).unwrap();
+        let k = crate::ops::rms_norm_zero_centered(&device, &k, &k_weight, 1e-6).unwrap();
+        let (q_cos, q_sin) = rope_tables_partial(&[1, 2], 4, 10_000.0, 0.5).unwrap();
+        let (k_cos, k_sin) = rope_tables_partial(&[0, 1, 2], 4, 10_000.0, 0.5).unwrap();
+        let q_cos = bf16_tensor(&device, vec![2, 2], &q_cos);
+        let q_sin = bf16_tensor(&device, vec![2, 2], &q_sin);
+        let k_cos = bf16_tensor(&device, vec![3, 2], &k_cos);
+        let k_sin = bf16_tensor(&device, vec![3, 2], &k_sin);
+        let q = rotary_embed_partial(&device, &q, &q_cos, &q_sin).unwrap();
+        let k = rotary_embed_partial(&device, &k, &k_cos, &k_sin).unwrap();
+
+        let mask_values = crate::clover_gdn::full_attention_mask(&[true], &[true, false], true)
+            .unwrap();
+        let mask = tensor(&device, vec![2, 3], &mask_values);
+        let attended = attention(&device, &q, &k, &v, Some(&mask), 0.5).unwrap();
+        let gated = attention_output_gate(&device, &attended, &gate).unwrap();
+
+        assert_reference_close(
+            &values(&device, &attended),
+            crate::clover_gdn_upstream_fixtures::ATTN_OUTPUT,
+            1e-4,
+        );
+        assert_reference_close(
+            &values(&device, &gated),
+            crate::clover_gdn_upstream_fixtures::ATTN_GATED_OUTPUT,
+            1e-4,
+        );
+    }
+
 }
