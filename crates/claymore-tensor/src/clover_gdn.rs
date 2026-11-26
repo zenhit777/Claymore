@@ -242,11 +242,9 @@ pub fn block_conv_silu(
             &clean_history[channel * (kernel_width - 1)..(channel + 1) * (kernel_width - 1)],
         );
         for token in 0..tokens {
-            joined[base + kernel_width - 1 + token] = if valid[token] {
-                input[token * channels + channel]
-            } else {
-                0.0
-            };
+            let mask = if valid[token] { 1.0 } else { 0.0 };
+            joined[base + kernel_width - 1 + token] =
+                round_product(input[token * channels + channel], mask, output_dtype);
         }
     }
     let mut output = vec![0.0f32; input.len()];
