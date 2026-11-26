@@ -328,8 +328,6 @@ pub enum CloverConfigError {
     InvalidGroupedQueryGeometry,
     #[error("unsupported model architecture")]
     UnsupportedArchitecture,
-    #[error("unknown or unsupported configuration field")]
-    UnknownOrUnsupportedField,
     #[error("unsupported model_type")]
     UnsupportedModelType,
     #[error("unsupported activation or denoising algorithm")]
@@ -387,6 +385,27 @@ mod tests {
             config.validate(),
             Err(CloverConfigError::InvalidGroupedQueryGeometry)
         ));
+    }
+
+    #[test]
+    fn rejects_unknown_fields_and_duplicate_known_fields() {
+        let mut unknown = PINNED_CONFIG.trim_end().trim_end_matches('}').to_owned();
+        unknown.push_str(",\n  \\\"unexpected_upstream_field\\\": true\n}");
+        assert!(CloverConfig::from_json(&unknown).is_err());
+
+        let duplicate = PINNED_CONFIG.replacen(\"\\\"hidden_size\\\": 2048\", \\\"\\\"hidden_size\\\": 2048, \\\"hidden_size\\\": 2048\", 1);
+        assert!(CloverConfig::from_json(&duplicate).is_err());
+    }
+
+    #[test]
+    fn rejects_pinned_auto_map_and_initializer_drift() {
+        let mut config = CloverConfig::from_json(PINNED_CONFIG).unwrap();
+        config.auto_map.auto_model_for_causal_lm = \"other.Model\".to_owned();
+        assert!(matches!(config.validate_pinned(), Err(CloverConfigError::PinnedArchitectureMismatch)));
+
+        let mut config = CloverConfig::from_json(PINNED_CONFIG).unwrap();
+        config.initializer_range = 0.0;
+        assert!(matches!(config.validate(), Err(CloverConfigError::InvalidFloat(\"initializer_range\"))));
     }
 
     #[test]
