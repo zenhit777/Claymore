@@ -9,6 +9,8 @@ pub mod activations;
 pub mod aten_topk;
 pub mod bf16;
 pub mod clover_gdn;
+#[cfg(test)]
+mod clover_gdn_upstream_fixtures;
 pub mod contracts;
 pub mod diffusion;
 pub mod ops;
