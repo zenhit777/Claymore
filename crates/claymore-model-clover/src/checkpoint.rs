@@ -374,6 +374,7 @@ impl CloverCheckpointInventory {
         config.validate_pinned()?;
         let inventory = Self::inspect(root)?;
         inventory.validate_pinned_geometry()?;
+        inventory.validate_pinned_tensor_schema()?;
         Ok(inventory)
     }
 
@@ -607,6 +608,212 @@ impl CloverCheckpointInventory {
         Ok(())
     }
 
+
+    /// Validate every model tensor against the pinned Python module structure.
+    ///
+    /// The expected names and shapes are derived from modeling_clover_moe.py at
+    /// CONFIG_REVISION. This is a metadata-only check; no tensor payload is read.
+    pub fn validate_pinned_tensor_schema(&self) -> Result<(), CloverCheckpointError> {
+        let hidden = 2048usize;
+        let vocab = 248_320usize;
+        let experts = 256usize;
+        let top_k = 8usize;
+        let moe_intermediate = 512usize;
+        let shared_intermediate = 512usize;
+        let q_heads = 16usize;
+        let kv_heads = 2usize;
+        let head_dim = 256usize;
+        let gdn_channels = 2 * GDN_KEY_HEADS * GDN_KEY_HEAD_DIM
+            + GDN_VALUE_HEADS * GDN_VALUE_HEAD_DIM;
+        let gdn_value_width = GDN_VALUE_HEADS * GDN_VALUE_HEAD_DIM;
+        let mut expected: BTreeMap<String, (Vec<usize>, Option<&'static str>)> =
+            BTreeMap::new();
+
+        let mut add = |name: String, shape: Vec<usize>, sidecar: Option<&'static str>| {
+            expected.insert(name, (shape, sidecar));
+        };
+        add("model.embed_tokens.weight".into(), vec![vocab, hidden], None);
+        add("model.norm.weight".into(), vec![hidden], None);
+        add("lm_head.weight".into(), vec![vocab, hidden], None);
+
+        for layer in 0..LAYER_COUNT {
+            let prefix = format!("model.layers.{layer}");
+            add(format!("{prefix}.input_layernorm.weight"), vec![hidden], None);
+            add(
+                format!("{prefix}.post_attention_layernorm.weight"),
+                vec![hidden],
+                None,
+            );
+
+            if layer % 4 == 3 {
+                let attn = format!("{prefix}.self_attn");
+                add(
+                    format!("{attn}.q_proj.weight"),
+                    vec![2 * q_heads * head_dim, hidden],
+                    None,
+                );
+                add(
+                    format!("{attn}.k_proj.weight"),
+                    vec![kv_heads * head_dim, hidden],
+                    None,
+                );
+                add(
+                    format!("{attn}.v_proj.weight"),
+                    vec![kv_heads * head_dim, hidden],
+                    None,
+                );
+                add(
+                    format!("{attn}.o_proj.weight"),
+                    vec![hidden, q_heads * head_dim],
+                    None,
+                );
+                add(format!("{attn}.q_norm.weight"), vec![head_dim], None);
+                add(format!("{attn}.k_norm.weight"), vec![head_dim], None);
+            } else {
+                let gdn = format!("{prefix}.linear_attn");
+                add(
+                    format!("{gdn}.conv1d.weight"),
+                    vec![gdn_channels, 1, GDN_CONV_KERNEL_DIM],
+                    None,
+                );
+                add(
+                    format!("{gdn}.in_proj_qkv.weight"),
+                    vec![gdn_channels, hidden],
+                    None,
+                );
+                add(
+                    format!("{gdn}.in_proj_z.weight"),
+                    vec![gdn_value_width, hidden],
+                    None,
+                );
+                add(
+                    format!("{gdn}.in_proj_a.weight"),
+                    vec![GDN_VALUE_HEADS, hidden],
+                    None,
+                );
+                add(
+                    format!("{gdn}.in_proj_b.weight"),
+                    vec![GDN_VALUE_HEADS, hidden],
+                    None,
+                );
+                add(format!("{gdn}.A_log"), vec![GDN_VALUE_HEADS], None);
+                add(format!("{gdn}.dt_bias"), vec![GDN_VALUE_HEADS], None);
+                add(
+                    format!("{gdn}.norm.weight"),
+                    vec![GDN_VALUE_HEAD_DIM],
+                    None,
+                );
+                add(
+                    format!("{gdn}.out_proj.weight"),
+                    vec![hidden, gdn_value_width],
+                    None,
+                );
+                add(
+                    format!("{gdn}.conv_right_weight"),
+                    vec![gdn_channels, 1, GDN_CONV_KERNEL_DIM - 1],
+                    Some(GDN_ASSETS[0]),
+                );
+                for scalar in [
+                    "bd_softmax_logit_scale",
+                    "bd_softmax_history_bias",
+                    "bd_softmax_history_c",
+                ] {
+                    add(
+                        format!("{gdn}.{scalar}"),
+                        vec![GDN_VALUE_HEADS],
+                        Some(GDN_ASSETS[1]),
+                    );
+                }
+            }
+
+            let mlp = format!("{prefix}.mlp");
+            add(
+                format!("{mlp}.gate.weight"),
+                vec![experts, hidden],
+                None,
+            );
+            add(
+                format!("{mlp}.experts.gate_up_proj"),
+                vec![experts, 2 * moe_intermediate, hidden],
+                None,
+            );
+            add(
+                format!("{mlp}.experts.down_proj"),
+                vec![experts, hidden, moe_intermediate],
+                None,
+            );
+            add(
+                format!("{mlp}.shared_expert.gate_proj.weight"),
+                vec![shared_intermediate, hidden],
+                None,
+            );
+            add(
+                format!("{mlp}.shared_expert.up_proj.weight"),
+                vec![shared_intermediate, hidden],
+                None,
+            );
+            add(
+                format!("{mlp}.shared_expert.down_proj.weight"),
+                vec![hidden, shared_intermediate],
+                None,
+            );
+            add(
+                format!("{mlp}.shared_expert_gate.weight"),
+                vec![1, hidden],
+                None,
+            );
+        }
+
+        let actual_names: BTreeSet<&str> = self.summaries.keys().map(String::as_str).collect();
+        let expected_names: BTreeSet<&str> = expected.keys().map(String::as_str).collect();
+        if actual_names != expected_names {
+            return Err(CloverCheckpointError::PinnedTensorSetMismatch {
+                missing: expected_names
+                    .difference(&actual_names)
+                    .map(|name| (*name).to_owned())
+                    .collect(),
+                unexpected: actual_names
+                    .difference(&expected_names)
+                    .map(|name| (*name).to_owned())
+                    .collect(),
+            });
+        }
+
+        for (name, (shape, expected_sidecar)) in expected {
+            let actual = self.summaries.get(&name).expect("tensor set checked above");
+            if actual.shape != shape {
+                return Err(CloverCheckpointError::PinnedTensorShapeMismatch {
+                    tensor: name,
+                    expected: shape,
+                    actual: actual.shape.clone(),
+                });
+            }
+            if let Some(sidecar) = expected_sidecar {
+                if actual.shard != sidecar {
+                    return Err(CloverCheckpointError::PinnedTensorShardMismatch {
+                        tensor: name,
+                        expected: sidecar.to_owned(),
+                        actual: actual.shard.clone(),
+                    });
+                }
+            } else if GDN_ASSETS.contains(&actual.shard.as_str()) {
+                return Err(CloverCheckpointError::PinnedTensorShardMismatch {
+                    tensor: name,
+                    expected: "one of the 26 model shards".to_owned(),
+                    actual: actual.shard.clone(),
+                });
+            } else if actual.dtype != WeightDType::BF16 {
+                return Err(CloverCheckpointError::UnsupportedWeightDType {
+                    tensor: name,
+                    actual: actual.dtype.name(),
+                });
+            }
+        }
+
+        let _ = top_k; // Top-k is a routing semantic, not a stored tensor dimension.
+        Ok(())
+    }
+
     /// Stream and verify the SHA-256 of all 26 model shards and both GDN sidecars.
     ///
     /// This reads the complete 69.3 GB checkpoint from local storage in bounded
@@ -798,6 +1005,12 @@ pub enum CloverCheckpointError {
     },
     #[error("invalid GDN sidecar tensor {tensor} in {file}")]
     InvalidSidecarTensor { file: String, tensor: String },
+    #[error("pinned model tensor set mismatch (missing={missing:?}, unexpected={unexpected:?})")]
+    PinnedTensorSetMismatch { missing: Vec<String>, unexpected: Vec<String> },
+    #[error("pinned tensor {tensor} shape mismatch: expected {expected:?}, got {actual:?}")]
+    PinnedTensorShapeMismatch { tensor: String, expected: Vec<usize>, actual: Vec<usize> },
+    #[error("pinned tensor {tensor} is in the wrong shard: expected {expected}, got {actual}")]
+    PinnedTensorShardMismatch { tensor: String, expected: String, actual: String },
     #[error("SHA-256 mismatch for {file}: expected {expected}, got {actual}")]
     HashMismatch {
         file: String,
