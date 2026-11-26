@@ -5,11 +5,13 @@
 //! released only through the backend's explicit, fallible contract.
 use claymore_device::{DType, DeviceBuffer, DeviceError};
 
+pub mod activations;
 pub mod aten_topk;
 pub mod bf16;
 pub mod contracts;
 pub mod diffusion;
 pub mod ops;
+pub use activations::silu;
 pub use aten_topk::top_k_largest;
 pub use bf16::Bf16;
 pub use contracts::{
