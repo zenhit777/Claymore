@@ -15,8 +15,8 @@ use claymore_checkpoint::strict_json::Json;
 use thiserror::Error;
 
 use crate::config::{
-    GDN_CONV_KERNEL_DIM, GDN_KEY_HEAD_DIM, GDN_KEY_HEADS, GDN_VALUE_HEAD_DIM,
-    GDN_VALUE_HEADS, LAYER_COUNT,
+    CloverConfig, CloverConfigError, GDN_CONV_KERNEL_DIM, GDN_KEY_HEAD_DIM, GDN_KEY_HEADS,
+    GDN_VALUE_HEAD_DIM, GDN_VALUE_HEADS, LAYER_COUNT,
 };
 
 pub const MAX_INDEX_BYTES: u64 = 16 * 1024 * 1024;
@@ -249,6 +249,18 @@ impl std::fmt::Debug for CloverCheckpointInventory {
 }
 
 impl CloverCheckpointInventory {
+    /// Open a pinned Clover inventory only after validating its model config,
+    /// all indexed Safetensors headers, release topology and exact GDN sidecars.
+    pub fn inspect_pinned(
+        root: impl AsRef<Path>,
+        config: &CloverConfig,
+    ) -> Result<Self, CloverCheckpointError> {
+        config.validate_pinned()?;
+        let inventory = Self::inspect(root)?;
+        inventory.validate_pinned_geometry()?;
+        Ok(inventory)
+    }
+
     /// Inspect the index and every shard header without reading tensor payloads.
     pub fn inspect(root: impl AsRef<Path>) -> Result<Self, CloverCheckpointError> {
         let root = root.as_ref().to_path_buf();
@@ -593,6 +605,8 @@ pub enum CloverCheckpointError {
     Io { path: PathBuf, message: String },
     #[error(transparent)]
     Safetensors(#[from] SafetensorsError),
+    #[error(transparent)]
+    Config(#[from] CloverConfigError),
     #[error("tensor {0} is listed more than once across shards")]
     DuplicateTensor(String),
     #[error("shard {shard} tensor inventory differs from the index (missing={missing:?}, unexpected={unexpected:?})")]
