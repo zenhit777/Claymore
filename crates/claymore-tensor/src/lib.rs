@@ -8,14 +8,17 @@ use claymore_device::{DType, DeviceBuffer, DeviceError};
 pub mod activations;
 pub mod aten_topk;
 pub mod bf16;
-pub mod contracts;
 pub mod clover_gdn;
+pub mod contracts;
 pub mod diffusion;
 pub mod ops;
 pub use activations::{sigmoid, silu};
 pub use aten_topk::top_k_largest;
 pub use bf16::Bf16;
-pub use clover_gdn::{block_conv_silu, block_preview, causal_conv_silu, full_attention_mask, gdn_gates, recurrent_commit, GdnDimensions, GdnError, GdnOutputDType};
+pub use clover_gdn::{
+    block_conv_silu, block_preview, causal_conv_silu, full_attention_mask, gdn_gates,
+    recurrent_commit, GdnDimensions, GdnError, GdnOutputDType,
+};
 pub use contracts::{
     AliasRule, BackendCapabilities, BackendDecision, BackendPreference, CpuReferenceBackend,
     DispatchError, DispatchPlan, DispatchReport, ExecutionError, ExecutionRequest,
@@ -23,10 +26,10 @@ pub use contracts::{
     TensorOp, UnsupportedReason, ValidatedOp,
 };
 pub use diffusion::{
-    attention, attention_output_gate, bidirectional_mask, causal_mask, embed_gather, gather_rows, gelu_mul_up, linear,
-    padding_mask, rope_inv_freq, rope_tables, rope_tables_partial, rotary_embed, rotary_embed_partial, router_top_k, row_mask, scale,
-    scale_bias, scale_scalar, scatter_add, sliding_window_mask, soft_cap, validate_mask, widen,
-    RopeType, MASK_BLOCKED,
+    attention, attention_output_gate, bidirectional_mask, causal_mask, embed_gather, gather_rows,
+    gelu_mul_up, linear, padding_mask, rope_inv_freq, rope_tables, rope_tables_partial,
+    rotary_embed, rotary_embed_partial, router_top_k, row_mask, scale, scale_bias, scale_scalar,
+    scatter_add, sliding_window_mask, soft_cap, validate_mask, widen, RopeType, MASK_BLOCKED,
 };
 pub use ops::{add, matmul, mul, rms_norm, softmax_last_dim, OpError};
 use thiserror::Error;
