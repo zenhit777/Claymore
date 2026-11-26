@@ -426,8 +426,7 @@ impl CloverCheckpointInventory {
             });
         }
 
-        let channels =
-            2 * GDN_KEY_HEADS * GDN_KEY_HEAD_DIM + GDN_VALUE_HEADS * GDN_VALUE_HEAD_DIM;
+        let channels = 2 * GDN_KEY_HEADS * GDN_KEY_HEAD_DIM + GDN_VALUE_HEADS * GDN_VALUE_HEAD_DIM;
         let conv_shape = vec![channels, 1, GDN_CONV_KERNEL_DIM - 1];
         let scalar_shape = vec![GDN_VALUE_HEADS];
         let mut expected_sidecars = BTreeMap::new();
