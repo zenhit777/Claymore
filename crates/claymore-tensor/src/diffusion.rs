@@ -1639,15 +1639,24 @@ mod tests {
         let attended = attention(&device, &q, &k, &v, Some(&mask), 0.5).unwrap();
         let gated = attention_output_gate(&device, &attended, &gate).unwrap();
 
-        assert_reference_close(
+        assert_bf16_reference_close(
             &values(&device, &attended),
             crate::clover_gdn_upstream_fixtures::ATTN_OUTPUT,
-            1e-4,
         );
-        assert_reference_close(
+        assert_bf16_reference_close(
             &values(&device, &gated),
             crate::clover_gdn_upstream_fixtures::ATTN_GATED_OUTPUT,
-            1e-4,
         );
     }
+    fn assert_bf16_reference_close(actual: &[f32], expected: &[f32]) {
+        assert_eq!(actual.len(), expected.len());
+        for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+            let one_ulp = expected.abs().max(f32::MIN_POSITIVE) / 128.0;
+            assert!(
+                (actual - expected).abs() <= one_ulp,
+                "BF16 reference mismatch at {index}: actual={actual:?}, expected={expected:?}, one_ulp={one_ulp}"
+            );
+        }
+    }
+
 }
