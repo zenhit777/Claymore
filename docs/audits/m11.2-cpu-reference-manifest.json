@@ -147,5 +147,10 @@
       "dtype": "BF16 widened to F32",
       "values": 128
     }
+  },
+  "tolerances": {
+    "bf16_output": "one representable BF16 ULP: max(abs(expected), 2^-126) / 128",
+    "f32_gate": "absolute 1e-6",
+    "f32_recurrent_state": "absolute 2e-6"
   }
 }
