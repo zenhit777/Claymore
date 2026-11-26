@@ -590,9 +590,8 @@ mod tests {
     }
 
     fn write_synthetic_shard(root: &Path, filename: &str, tensor: &str) {
-        let header_json = format!(
-            r#"{{"{tensor}":{{"dtype":"BF16","shape":[2],"data_offsets":[0,4]}}}}"#
-        );
+        let header_json =
+            format!(r#"{{"{tensor}":{{"dtype":"BF16","shape":[2],"data_offsets":[0,4]}}}}"#);
         let mut header = header_json.into_bytes();
         while header.len() % 8 != 0 {
             header.push(b' ');
@@ -612,11 +611,7 @@ mod tests {
         ));
         fs::create_dir_all(&root).unwrap();
 
-        write_synthetic_shard(
-            &root,
-            "model-00001-of-00001.safetensors",
-            "weight",
-        );
+        write_synthetic_shard(&root, "model-00001-of-00001.safetensors", "weight");
         write_synthetic_shard(
             &root,
             "bd_gdn_conv_right_weight.safetensors",
