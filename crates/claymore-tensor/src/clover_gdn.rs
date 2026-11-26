@@ -976,4 +976,174 @@ mod tests {
         );
         assert_eq!(result, Err(GdnError::ShapeMismatch));
     }
+    fn bf16_values(values: &[f32]) -> Vec<f32> {
+        values
+            .iter()
+            .map(|value| Bf16::from_f32(*value).to_f32())
+            .collect()
+    }
+
+    fn assert_reference_close(actual: &[f32], expected: &[f32], tolerance: f32) {
+        assert_eq!(actual.len(), expected.len());
+        for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+            assert!(
+                (actual - expected).abs() <= tolerance,
+                "reference mismatch at {index}: actual={actual:?}, expected={expected:?}, tolerance={tolerance}"
+            );
+        }
+    }
+
+    #[test]
+    fn recurrent_commit_matches_pinned_upstream_cpu_fixture() {
+        let q = bf16_values(&[0.3, -0.7, 1.1, 0.2, -0.4, 0.9]);
+        let k = bf16_values(&[-0.2, 0.8, 0.5, -0.3, 1.0, 0.4]);
+        let v = bf16_values(&[
+            0.2, 0.7, -0.5, 0.3, 0.8, -0.1, 0.4, 0.9, -0.6, 0.2, 0.1, -0.8,
+        ]);
+        let g = [-0.2, -0.1, -0.4, -0.3, -0.1, -0.25];
+        let beta = bf16_values(&[0.6, 0.4, 0.7, 0.5, 0.3, 0.8]);
+        let mut state = vec![0.1, -0.2, 0.3, 0.05, -0.15, 0.25, 0.2, -0.1];
+        let output = recurrent_commit(
+            GdnDimensions {
+                key_heads: 1,
+                value_heads: 2,
+                key_dim: 2,
+                value_dim: 2,
+            },
+            &q,
+            &k,
+            &v,
+            &g,
+            &beta,
+            &[true, false, true],
+            GdnOutputDType::BF16,
+            &mut state,
+        )
+        .unwrap();
+        assert_reference_close(
+            &output,
+            crate::clover_gdn_upstream_fixtures::REC_OUTPUT,
+            1e-4,
+        );
+        assert_reference_close(
+            &state,
+            crate::clover_gdn_upstream_fixtures::REC_STATE_OUT,
+            2e-6,
+        );
+    }
+
+    #[test]
+    fn gdn_block_preview_matches_pinned_upstream_cpu_fixture() {
+        let q = bf16_values(&[0.3, -0.7, 1.1, 0.2, -0.4, 0.9]);
+        let k = bf16_values(&[-0.2, 0.8, 0.5, -0.3, 1.0, 0.4]);
+        let v = bf16_values(&[
+            0.2, 0.7, -0.5, 0.3, 0.8, -0.1, 0.4, 0.9, -0.6, 0.2, 0.1, -0.8,
+        ]);
+        let g = [-0.2, -0.1, -0.4, -0.3, -0.1, -0.25];
+        let state = [0.1, -0.2, 0.3, 0.05, -0.15, 0.25, 0.2, -0.1];
+        let output = block_preview(
+            GdnDimensions {
+                key_heads: 1,
+                value_heads: 2,
+                key_dim: 2,
+                value_dim: 2,
+            },
+            &q,
+            &k,
+            &v,
+            &g,
+            &[true, false, true],
+            &state,
+            1.0 / 2.0f32.sqrt(),
+            GdnOutputDType::BF16,
+            &[10.0, 9.0],
+            &[5.0, 4.5],
+            &[1.0, 0.75],
+        )
+        .unwrap();
+        assert_reference_close(
+            &output,
+            crate::clover_gdn_upstream_fixtures::PREVIEW_OUTPUT,
+            1e-4,
+        );
+        assert_eq!(state, [0.1, -0.2, 0.3, 0.05, -0.15, 0.25, 0.2, -0.1]);
+    }
+
+    #[test]
+    fn causal_and_preview_convolutions_match_pinned_upstream_cpu_fixtures() {
+        let raw = bf16_values(&[0.2, -0.4, 0.0, 0.0, 0.7, 0.1, -0.3, 0.6]);
+        let history = bf16_values(&[0.1, -0.2, 0.3, -0.4, 0.2, 0.05]);
+        let weights = bf16_values(&[
+            0.2, -0.1, 0.3, 0.4, -0.2, 0.5, 0.1, -0.3,
+        ]);
+        let (causal, next_history) = causal_conv_silu(
+            &raw,
+            4,
+            2,
+            &history,
+            &weights,
+            4,
+            &[true, false, true, true],
+            GdnOutputDType::BF16,
+        )
+        .unwrap();
+        assert_reference_close(
+            &causal,
+            crate::clover_gdn_upstream_fixtures::CAUSAL_OUTPUT,
+            1e-4,
+        );
+        assert_reference_close(
+            &next_history,
+            crate::clover_gdn_upstream_fixtures::CAUSAL_STATE_OUT,
+            1e-4,
+        );
+
+        let block_raw = bf16_values(&[0.2, -0.4, 0.7, 0.1, -0.3, 0.6]);
+        let right = bf16_values(&[0.15, -0.25, 0.35, -0.1, 0.2, 0.3]);
+        let block = block_conv_silu(
+            &block_raw,
+            3,
+            2,
+            &history,
+            &weights,
+            &right,
+            4,
+            &[true, true, false],
+            GdnOutputDType::BF16,
+        )
+        .unwrap();
+        assert_reference_close(
+            &block,
+            crate::clover_gdn_upstream_fixtures::BLOCK_OUTPUT,
+            1e-4,
+        );
+        assert_eq!(history, bf16_values(&[0.1, -0.2, 0.3, -0.4, 0.2, 0.05]));
+    }
+
+    #[test]
+    fn gdn_gates_match_pinned_upstream_cpu_fixture() {
+        let a = bf16_values(&[0.2, -0.4, 0.7, 0.1, -0.3, 0.6]);
+        let b = bf16_values(&[0.3, -0.8, 0.5, 0.2, -0.1, 0.9]);
+        let (decay, beta) = gdn_gates(
+            &a,
+            &b,
+            &[0.1, -0.2],
+            &[1.0, 0.8],
+            3,
+            2,
+            GdnOutputDType::BF16,
+        )
+        .unwrap();
+        assert_reference_close(
+            &decay,
+            crate::clover_gdn_upstream_fixtures::GATE_DECAY,
+            1e-6,
+        );
+        assert_reference_close(
+            &beta,
+            crate::clover_gdn_upstream_fixtures::GATE_BETA,
+            1e-4,
+        );
+    }
+
 }
