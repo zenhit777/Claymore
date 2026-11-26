@@ -94,7 +94,9 @@ mod tests {
             .map(|value| crate::Bf16::from_f32(*value).to_ne_bytes())
             .flat_map(|bytes| bytes.into_iter())
             .collect();
-        let mut storage = device.allocate(MemoryTier::Host, bytes.len() as u64).unwrap();
+        let mut storage = device
+            .allocate(MemoryTier::Host, bytes.len() as u64)
+            .unwrap();
         device.write(storage.as_mut(), 0, &bytes).unwrap();
         Tensor::new(storage, shape, DType::BF16).unwrap()
     }
