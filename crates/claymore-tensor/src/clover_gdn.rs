@@ -56,6 +56,46 @@ pub enum GdnError {
 }
 
 
+/// Derive Clover's per-token GDN decay and update gates from the two
+/// projected gate streams. `a` and `b` are row-major [tokens, value_heads];
+/// `a_log` and `dt_bias` are [value_heads]. The decay is retained
+/// in FP32, while beta is rounded to the activation dtype before the recurrent
+/// reference widens it again, matching the pinned PyTorch path.
+pub fn gdn_gates(
+    a: &[f32],
+    b: &[f32],
+    a_log: &[f32],
+    dt_bias: &[f32],
+    tokens: usize,
+    value_heads: usize,
+    output_dtype: GdnOutputDType,
+) -> Result<(Vec<f32>, Vec<f32>), GdnError> {
+    let len = tokens
+        .checked_mul(value_heads)
+        .ok_or(GdnError::SizeOverflow)?;
+    if tokens == 0 || value_heads == 0 || a.len() != len || b.len() != len
+        || a_log.len() != value_heads || dt_bias.len() != value_heads
+    {
+        return Err(GdnError::ShapeMismatch);
+    }
+    let mut decay = vec![0.0f32; len];
+    let mut beta = vec![0.0f32; len];
+    for token in 0..tokens {
+        for head in 0..value_heads {
+            let index = token * value_heads + head;
+            let preactivation = a[index] + dt_bias[head];
+            let softplus = preactivation.max(0.0) + (-preactivation.abs()).exp().ln_1p();
+            decay[index] = -a_log[head].exp() * softplus;
+            let sigmoid = sigmoid_scalar(b[index]);
+            beta[index] = match output_dtype {
+                GdnOutputDType::F32 => sigmoid,
+                GdnOutputDType::BF16 => Bf16::from_f32(sigmoid).to_f32(),
+            };
+        }
+    }
+    Ok((decay, beta))
+}
+
 /// Build Clover full-attention additive mask for one active block.
 ///
 /// Prefix keys are visible only when marked valid. During preview every valid
