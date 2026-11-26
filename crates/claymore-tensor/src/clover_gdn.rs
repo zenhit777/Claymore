@@ -102,6 +102,7 @@ pub fn full_attention_mask(
 /// [channels, kernel_width - 1], weights [channels, kernel_width]. The state
 /// is copied and returned; the caller's cache is never mutated on error.
 /// Invalid tokens emit zeros and do not advance their channel history.
+#[allow(clippy::too_many_arguments)]
 pub fn causal_conv_silu(
     input: &[f32],
     tokens: usize,
@@ -147,6 +148,7 @@ pub fn causal_conv_silu(
 /// Bidirectional block-preview convolution. The clean causal history is read
 /// only; right-context taps are applied from future valid tokens in the same
 /// block. The returned activation is masked and rounded to the input dtype.
+#[allow(clippy::too_many_arguments)]
 pub fn block_conv_silu(
     input: &[f32],
     tokens: usize,
@@ -266,6 +268,7 @@ fn silu_scalar(value: f32) -> f32 {
 ///
 /// Invalid tokens emit zeros and leave the recurrent state unchanged. All
 /// lengths are checked before the caller's state is mutated.
+#[allow(clippy::too_many_arguments)]
 pub fn recurrent_commit(
     dims: GdnDimensions,
     q: &[f32],
