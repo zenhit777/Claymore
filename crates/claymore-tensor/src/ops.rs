@@ -524,5 +524,4 @@ mod tests {
         let bf = bf16_tensor(&device, vec![2, 2], &bf(&[1.0, 1.0, 1.0, 1.0]));
         assert_eq!(mul(&device, &a, &bf).unwrap_err(), OpError::MixedDType);
     }
-
 }
