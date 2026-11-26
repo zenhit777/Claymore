@@ -176,8 +176,10 @@ pub fn causal_conv_silu(
             }
             output[token * channels + channel] = silu_scalar(sum);
             if kernel_width > 1 {
-                next_history[hist_base..hist_base + kernel_width - 2]
-                    .copy_from_slice(&next_history[hist_base + 1..hist_base + kernel_width - 1]);
+                next_history.copy_within(
+                    hist_base + 1..hist_base + kernel_width - 1,
+                    hist_base,
+                );
                 next_history[hist_base + kernel_width - 2] = input[token * channels + channel];
             }
         }
@@ -264,7 +266,9 @@ fn validate_conv(
     let history_len = channels
         .checked_mul(kernel_width - 1)
         .ok_or(GdnError::SizeOverflow)?;
-    let weight_len = channels.checked_mul(kernel_width).ok_or(GdnError::SizeOverflow)?;
+    let weight_len = channels
+        .checked_mul(kernel_width)
+        .ok_or(GdnError::SizeOverflow)?;
     if input.len() != input_len
         || history.len() != history_len
         || weights.len() != weight_len
@@ -373,8 +377,8 @@ pub fn recurrent_commit(
                     *item *= decay;
                 }
                 let remembered = dot(row, &k_norm);
-                let value = v[(token * dims.value_heads + value_head) * dims.value_dim
-                    + value_index];
+                let value =
+                    v[(token * dims.value_heads + value_head) * dims.value_dim + value_index];
                 let delta = (value - remembered) * beta[gate_index];
                 for key_index in 0..dims.key_dim {
                     row[key_index] += delta * k_norm[key_index];
@@ -459,8 +463,7 @@ pub fn block_preview(
         let state_base = value_head * dims.value_dim * dims.key_dim;
         let state = &clean_state[state_base..state_base + dims.value_dim * dims.key_dim];
         let head_logit_scale = logit_scale[value_head];
-        let history_logit =
-            history_bias[value_head] + history_c[value_head] * block_log_ratio;
+        let history_logit = history_bias[value_head] + history_c[value_head] * block_log_ratio;
 
         for query_token in 0..tokens {
             if !valid[query_token] {
@@ -474,11 +477,8 @@ pub fn block_preview(
             let decay = g[query_token * dims.value_heads + value_head].exp();
             for value_index in 0..dims.value_dim {
                 let row_base = value_index * dims.key_dim;
-                history[value_index] = dot(
-                    &state[row_base..row_base + dims.key_dim],
-                    &q_norm,
-                ) * scale
-                    * decay;
+                history[value_index] =
+                    dot(&state[row_base..row_base + dims.key_dim], &q_norm) * scale * decay;
             }
 
             for key_token in 0..tokens {
@@ -498,8 +498,7 @@ pub fn block_preview(
                 let mut local = 0.0f32;
                 for key_token in 0..tokens {
                     if valid[key_token] {
-                        let value = v[(key_token * dims.value_heads + value_head)
-                            * dims.value_dim
+                        let value = v[(key_token * dims.value_heads + value_head) * dims.value_dim
                             + value_index];
                         local += weights[key_token] * value;
                     }
@@ -571,7 +570,8 @@ mod tests {
             1,
             2,
             GdnOutputDType::F32,
-        ).unwrap();
+        )
+        .unwrap();
         let softplus_one = 1.0f32 + (-1.0f32).exp().ln_1p();
         assert!((decay[0] + softplus_one).abs() < 1e-6);
         assert!((decay[1] + (1.0 + (-1.0f32).exp().ln_1p())).abs() < 1e-6);
@@ -599,8 +599,21 @@ mod tests {
         let preview = full_attention_mask(&prefix, &block, true).unwrap();
         let commit = full_attention_mask(&prefix, &block, false).unwrap();
         let width = prefix.len() + block.len();
-        assert_eq!(&preview[0..width], &[0.0, f32::NEG_INFINITY, 0.0, 0.0, 0.0, f32::NEG_INFINITY]);
-        assert_eq!(&commit[0..width], &[0.0, f32::NEG_INFINITY, 0.0, 0.0, f32::NEG_INFINITY, f32::NEG_INFINITY]);
+        assert_eq!(
+            &preview[0..width],
+            &[0.0, f32::NEG_INFINITY, 0.0, 0.0, 0.0, f32::NEG_INFINITY]
+        );
+        assert_eq!(
+            &commit[0..width],
+            &[
+                0.0,
+                f32::NEG_INFINITY,
+                0.0,
+                0.0,
+                f32::NEG_INFINITY,
+                f32::NEG_INFINITY
+            ]
+        );
         assert!(commit[2 * width..].iter().all(|value| value.is_infinite()));
     }
 
@@ -761,9 +774,9 @@ mod tests {
             &[1.0, 1.0],
         )
         .unwrap();
-        assert!(output.iter().all(|value| {
-            Bf16::from_f32(*value).to_f32().to_bits() == value.to_bits()
-        }));
+        assert!(output
+            .iter()
+            .all(|value| { Bf16::from_f32(*value).to_f32().to_bits() == value.to_bits() }));
     }
 
     #[test]
