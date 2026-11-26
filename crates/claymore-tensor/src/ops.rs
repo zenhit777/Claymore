@@ -178,6 +178,26 @@ pub fn add(device: &dyn Device, lhs: &Tensor, rhs: &Tensor) -> Result<Tensor, Op
     write_numeric(device, &values, lhs.layout().shape().to_vec(), a.dtype())
 }
 
+/// Elementwise multiplication. Broadcasting and implicit dtype conversion are rejected.
+pub fn mul(device: &dyn Device, lhs: &Tensor, rhs: &Tensor) -> Result<Tensor, OpError> {
+    if lhs.layout().shape() != rhs.layout().shape() {
+        return Err(OpError::ShapeMismatch);
+    }
+    let a = read_numeric(device, lhs)?;
+    let b = read_numeric(device, rhs)?;
+    if a.dtype() != b.dtype() {
+        return Err(OpError::MixedDType);
+    }
+    let dtype = a.dtype();
+    let values: Vec<f32> = a
+        .to_f32()
+        .into_iter()
+        .zip(b.to_f32())
+        .map(|(x, y)| x * y)
+        .collect();
+    write_numeric(device, &values, lhs.layout().shape().to_vec(), dtype)
+}
+
 /// Row-major matrix multiplication for rank-2 F32/BF16 tensors.
 ///
 /// Every product is accumulated in FP32 with `mul_add`, in the same index order
