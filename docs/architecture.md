@@ -2,7 +2,7 @@
 
 ## Périmètre produit
 
-Claymore cible initialement deux modèles de diffusion : DiffusionGemma et Clover. DiffusionGemma est ciblé en génération de texte uniquement ; image et vidéo sont hors périmètre initial et nécessitent une décision produit ainsi qu'une spécification multimodale avant tout développement. Claymore ne développe pas de stratégie autoregressive générique sans décision produit ultérieure.
+Claymore cible initialement deux modèles de diffusion : DiffusionGemma et Clover. Il ne développe pas de stratégie autoregressive générique sans décision produit ultérieure.
 
 ## Architecture d'exécution
 
@@ -25,14 +25,14 @@ Les adaptateurs ne constituent pas des moteurs tensoriels ou runtimes autonomes 
 - claymore-scheduler : dépendances et ordonnancement des tâches.
 - claymore-runtime : cycle de vie et orchestration des requêtes.
 - claymore-model-gemma / claymore-model-clover : adaptateurs spécialisés.
-- claymore-cuda : backend CUDA optionnel, sans propriété des sémantiques Tensor ; il charge et lance les kernels F32 M8 via la Driver API dans le contexte primaire.
+- claymore-cuda : backend CUDA optionnel, sans propriété des sémantiques Tensor ; il charge et lance les kernels F32/BF16 M8 et les **26 entrées PTX `sm_120`** de M10 (`Linear`, `RotaryEmbed`, `Attention`, `SoftCap`, `Scale`, `ScaleScalar`, `ScaleBias`, `GeluMulUp`, `GatherRows`, `ScatterAdd`, `EmbedGather`, `RowMask`, `Widen`, `RouterTopK`) via la Driver API dans le contexte primaire. Les PTX `sm_120` sont versionnés et le build n'appelle jamais `nvcc`.
 - Le dispatch tensoriel est déterministe et backend-neutre : chaque refus est typé et expliqué ; aucun fallback CPU, cast ou transfert Host implicite n'est autorisé. Les sorties CUDA passent par le memory orchestrator et des events réels, le scheduler ne possédant que des identifiants de tâches.
 
 ## Invariants de sûreté
 
 - Les budgets mémoire configurés sont des limites d'admission, pas une garantie de mémoire libre.
 - Conserver une réserve de sécurité ; ne jamais planifier la consommation de toute la VRAM.
-- Ne libérer/évincer un buffer qu'après complétion confirmée de tout travail device qui le référence.
+- Ne libérer/évincer un buffer qu'après complétion confirmée de tout travail device qui le référence. Cette règle s'applique à **tous** les chemins de lancement, y compris les primitives de diffusion M10 : un lancement pose ses gardes `IN_FLIGHT` avant l'event de complétion, et un échec de lancement prouve la quiescence du flux avant de rendre la main.
 - Les transferts asynchrones sont prouvés terminés par leurs events/tokens, jamais par le seul retour d'enqueue.
 - Le swap n'est pas un tier de poids de modèle.
 - Aucun cast, fallback CPU ou aller-retour host implicite dans le dispatch.
@@ -41,8 +41,8 @@ Les adaptateurs ne constituent pas des moteurs tensoriels ou runtimes autonomes 
 ## Jalons
 
 - M8 : socle tensoriel natif, opérations de référence, dispatch et backends.
-- M9 : cœur d'orchestration de diffusion modulaire livré par la PR #32 ; la validation CPU, les compteurs de progression, les durées d'exécution par phase et la documentation du cycle de vie sont suivis dans l'issue #31 (voir [m9-diffusion-orchestration.md](m9-diffusion-orchestration.md)).
-- M10 : intégration DiffusionGemma.
+- M9 : **livré sur `main`** par la PR #32 — orchestration de diffusion modulaire commune (plans par blocs, dépendances scheduler, annulation coopérative et propagation d'échec ; voir [m9-diffusion-orchestration.md](m9-diffusion-orchestration.md)).
+- M10 : **implémentation DiffusionGemma et génération réelle livrées ; PR #40 validée sous réserves par l'architecte** (verdict sur SHA `24cb8dd8731fb767574204b3723cbaa2ae6030b0`, CI 4/4). La finalisation CPU du 25/11 est terminée : fixtures par couche, bisects encodeur (210/210, 2,0 pas), vision (0,2 pas) et décodeur (10,0 pas ; 470/480 + 10 échanges de frontière justifiés), tests sur checkpoint, rapports et journaux. Les campagnes RTX 5090 du 25/11 sont également exécutées : groupée (6/6 étapes vertes ; primitives 21/21 bit-exactes, checkpoint intégralement vérifié, sous-graphe décodeur couche 0 bit-exact) puis finale (9/9 étapes vertes sur le SHA `460c9ef`), qui produit les mesures CUDA↔CPU des **30 couches du décodeur et des logits : bit-exactes** (`max_abs = 0,000000`, `rms = 0,000000`, 0,0 pas BF16 sur 810 comparaisons d'étape, routeur et logits ; ensembles d'experts 470/480 identiques + 10 échanges de frontière, 0 structurel ; deux passes de tables identiques). **Réserve matérielle de mesure levée.** Restent la décision d'architecte sur le resserrement des portes CUDA↔CPU (une égalité bit stricte serait plus forte que D1) et la décision de merge de #40. Les décisions D1/D2 restent normatives : la dérive de chaîne eager est suivie, pas un gate absolu. Voir [m10-diffusiongemma.md](m10-diffusiongemma.md), [registre D1/D2](audits/m10-architect-decisions.md), [rapport CPU](audits/m10-cpu-campaign-2026-11-25.md), [campagne RTX 5090 groupée](audits/m10-rtx5090-grouped-campaign-2026-11-25.md) et [campagne finale décodeur/logits](audits/m10-rtx5090-final-decoder-logits-2026-11-25.md).
 - M11 : intégration Clover.
 - M12 : optimisation et validation de performance.
 

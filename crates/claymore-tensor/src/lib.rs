@@ -5,15 +5,24 @@
 //! released only through the backend's explicit, fallible contract.
 use claymore_device::{DType, DeviceBuffer, DeviceError};
 
+pub mod aten_topk;
 pub mod bf16;
 pub mod contracts;
+pub mod diffusion;
 pub mod ops;
+pub use aten_topk::top_k_largest;
 pub use bf16::Bf16;
 pub use contracts::{
     AliasRule, BackendCapabilities, BackendDecision, BackendPreference, CpuReferenceBackend,
     DispatchError, DispatchPlan, DispatchReport, ExecutionError, ExecutionRequest,
     LayoutRequirement, OpKind, OpSupport, ShapeSignature, TensorComputeBackend, TensorDispatcher,
     TensorOp, UnsupportedReason, ValidatedOp,
+};
+pub use diffusion::{
+    attention, bidirectional_mask, causal_mask, embed_gather, gather_rows, gelu_mul_up, linear,
+    padding_mask, rope_inv_freq, rope_tables, rotary_embed, router_top_k, row_mask, scale,
+    scale_bias, scale_scalar, scatter_add, sliding_window_mask, soft_cap, validate_mask, widen,
+    RopeType, MASK_BLOCKED,
 };
 pub use ops::{add, matmul, rms_norm, softmax_last_dim, OpError};
 use thiserror::Error;

@@ -107,6 +107,24 @@ impl CudaTensorMemory {
         })
     }
 
+    /// Build a tensor memory owner on top of an existing `CudaMemoryManager`
+    /// (the streaming executor and the CUDA graph must share one admission
+    /// owner, never two parallel managers).
+    pub fn from_manager(manager: CudaMemoryManager) -> Result<Self, CudaTensorError> {
+        let device_info = manager.device_info().clone();
+        let device_id = device_info.name.clone();
+        Ok(Self {
+            inner: Rc::new(CudaTensorInner {
+                manager: RefCell::new(manager),
+                next_tick: Cell::new(0),
+                next_id: Cell::new(0),
+                device_id,
+                instance_id: DeviceInstanceId::new(),
+                device_info,
+            }),
+        })
+    }
+
     /// Next monotonic logical tick shared by this memory owner and every
     /// tensor buffer it manages. Callers driving low-level launch/wait APIs
     /// must use this clock instead of inventing ticks.
@@ -337,72 +355,54 @@ fn managed(tensor: &Tensor) -> Result<&ManagedCudaBuffer, CudaTensorError> {
         .ok_or(CudaTensorError::ForeignBuffer)
 }
 
-const CUDA_OPS: [OpSupport; 8] = [
-    OpSupport {
-        kind: OpKind::Add,
-        dtype: DType::F32,
-        input_tier: MemoryTier::Vram,
-        output_tier: MemoryTier::Vram,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-    OpSupport {
-        kind: OpKind::MatMul,
-        dtype: DType::F32,
-        input_tier: MemoryTier::Vram,
-        output_tier: MemoryTier::Vram,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-    OpSupport {
-        kind: OpKind::SoftmaxLastDim,
-        dtype: DType::F32,
-        input_tier: MemoryTier::Vram,
-        output_tier: MemoryTier::Vram,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-    OpSupport {
-        kind: OpKind::RmsNorm,
-        dtype: DType::F32,
-        input_tier: MemoryTier::Vram,
-        output_tier: MemoryTier::Vram,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-    OpSupport {
-        kind: OpKind::Add,
-        dtype: DType::BF16,
-        input_tier: MemoryTier::Vram,
-        output_tier: MemoryTier::Vram,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-    OpSupport {
-        kind: OpKind::MatMul,
-        dtype: DType::BF16,
-        input_tier: MemoryTier::Vram,
-        output_tier: MemoryTier::Vram,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-    OpSupport {
-        kind: OpKind::SoftmaxLastDim,
-        dtype: DType::BF16,
-        input_tier: MemoryTier::Vram,
-        output_tier: MemoryTier::Vram,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-    OpSupport {
-        kind: OpKind::RmsNorm,
-        dtype: DType::BF16,
-        input_tier: MemoryTier::Vram,
-        output_tier: MemoryTier::Vram,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-];
+const CUDA_OPS: [OpSupport; 34] = {
+    const fn entry(kind: OpKind, dtype: DType) -> OpSupport {
+        OpSupport {
+            kind,
+            dtype,
+            input_tier: MemoryTier::Vram,
+            output_tier: MemoryTier::Vram,
+            layout: LayoutRequirement::Contiguous,
+            alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+        }
+    }
+    [
+        entry(OpKind::Add, DType::F32),
+        entry(OpKind::Add, DType::BF16),
+        entry(OpKind::MatMul, DType::F32),
+        entry(OpKind::MatMul, DType::BF16),
+        entry(OpKind::SoftmaxLastDim, DType::F32),
+        entry(OpKind::SoftmaxLastDim, DType::BF16),
+        entry(OpKind::RmsNorm, DType::F32),
+        entry(OpKind::RmsNorm, DType::BF16),
+        entry(OpKind::Linear, DType::F32),
+        entry(OpKind::Linear, DType::BF16),
+        entry(OpKind::RotaryEmbed, DType::F32),
+        entry(OpKind::RotaryEmbed, DType::BF16),
+        entry(OpKind::Attention, DType::F32),
+        entry(OpKind::Attention, DType::BF16),
+        entry(OpKind::SoftCap, DType::F32),
+        entry(OpKind::SoftCap, DType::BF16),
+        entry(OpKind::Scale, DType::F32),
+        entry(OpKind::Scale, DType::BF16),
+        entry(OpKind::ScaleScalar, DType::F32),
+        entry(OpKind::ScaleScalar, DType::BF16),
+        entry(OpKind::Widen, DType::BF16),
+        entry(OpKind::RouterTopK, DType::F32),
+        entry(OpKind::GeluMulUp, DType::F32),
+        entry(OpKind::GeluMulUp, DType::BF16),
+        entry(OpKind::GatherRows, DType::F32),
+        entry(OpKind::GatherRows, DType::BF16),
+        entry(OpKind::ScatterAdd, DType::F32),
+        entry(OpKind::ScatterAdd, DType::BF16),
+        entry(OpKind::EmbedGather, DType::F32),
+        entry(OpKind::EmbedGather, DType::BF16),
+        entry(OpKind::RowMask, DType::F32),
+        entry(OpKind::RowMask, DType::BF16),
+        entry(OpKind::ScaleBias, DType::F32),
+        entry(OpKind::ScaleBias, DType::BF16),
+    ]
+};
 
 /// Native CUDA backend for the M8 operation set. It never reads host bytes
 /// implicitly: inputs must already be VRAM tensors from the same memory owner.
@@ -443,9 +443,11 @@ impl TensorComputeBackend for CudaTensorBackend {
             }
             input_ids.push(buffer.id.clone());
         }
+        // The output dtype is the contract's, not the input's: `Widen` is the
+        // only cross-dtype operation (BF16 in, F32 out).
         let output = self
             .memory
-            .allocate_tensor(validated.shape, validated.dtype)
+            .allocate_tensor(validated.shape, validated.output_dtype)
             .map_err(backend_error)?;
         let output_id = managed(&output).map_err(backend_error)?.id.clone();
         let input_refs: Vec<&str> = input_ids.iter().map(String::as_str).collect();
@@ -484,18 +486,41 @@ pub enum CudaTensorTask {
         scale: Tensor,
         epsilon: f32,
     },
+    Linear {
+        input: Tensor,
+        weight: Tensor,
+    },
+    RotaryEmbed {
+        input: Tensor,
+        cos: Tensor,
+        sin: Tensor,
+    },
+    Attention {
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        mask: Option<Tensor>,
+        scale: f32,
+    },
+    SoftCap {
+        input: Tensor,
+        cap: f32,
+    },
+    Scale {
+        input: Tensor,
+        factor: Tensor,
+    },
+    ScaleScalar {
+        input: Tensor,
+        factor: f32,
+    },
 }
 
 impl CudaTensorTask {
     pub fn as_op(&self) -> TensorOp<'_> {
         match self {
-            CudaTensorTask::Add { lhs, rhs } | CudaTensorTask::MatMul { lhs, rhs } => {
-                if matches!(self, CudaTensorTask::Add { .. }) {
-                    TensorOp::Add { lhs, rhs }
-                } else {
-                    TensorOp::MatMul { lhs, rhs }
-                }
-            }
+            CudaTensorTask::Add { lhs, rhs } => TensorOp::Add { lhs, rhs },
+            CudaTensorTask::MatMul { lhs, rhs } => TensorOp::MatMul { lhs, rhs },
             CudaTensorTask::SoftmaxLastDim { input } => TensorOp::SoftmaxLastDim { input },
             CudaTensorTask::RmsNorm {
                 input,
@@ -505,6 +530,29 @@ impl CudaTensorTask {
                 input,
                 scale,
                 epsilon: *epsilon,
+            },
+            CudaTensorTask::Linear { input, weight } => TensorOp::Linear { input, weight },
+            CudaTensorTask::RotaryEmbed { input, cos, sin } => {
+                TensorOp::RotaryEmbed { input, cos, sin }
+            }
+            CudaTensorTask::Attention {
+                query,
+                key,
+                value,
+                mask,
+                scale,
+            } => TensorOp::Attention {
+                query,
+                key,
+                value,
+                mask: mask.as_ref(),
+                scale: *scale,
+            },
+            CudaTensorTask::SoftCap { input, cap } => TensorOp::SoftCap { input, cap: *cap },
+            CudaTensorTask::Scale { input, factor } => TensorOp::Scale { input, factor },
+            CudaTensorTask::ScaleScalar { input, factor } => TensorOp::ScaleScalar {
+                input,
+                factor: *factor,
             },
         }
     }
@@ -581,7 +629,16 @@ mod tests {
 
     #[test]
     fn cuda_capabilities_declare_only_implemented_f32_and_bf16_vram_ops() {
-        assert_eq!(CUDA_OPS.len(), 8);
+        // Typed single-dtype exceptions fixed by the contract: `widen` is
+        // BF16 -> F32 only, and the router operates on FP32 scores only.
+        let single_dtype_ops = [
+            (OpKind::Widen, DType::BF16),
+            (OpKind::RouterTopK, DType::F32),
+        ];
+        assert_eq!(
+            CUDA_OPS.len(),
+            claymore_tensor::OpKind::ALL.len() * 2 - single_dtype_ops.len()
+        );
         for support in CUDA_OPS {
             assert!(matches!(support.dtype, DType::F32 | DType::BF16));
             assert_eq!(support.input_tier, MemoryTier::Vram);
@@ -590,20 +647,26 @@ mod tests {
             assert_eq!(support.alias_rule, AliasRule::ReadOnlyInputsFreshOutput);
         }
         for dtype in [DType::F32, DType::BF16] {
-            let kinds: Vec<OpKind> = CUDA_OPS
-                .iter()
-                .filter(|support| support.dtype == dtype)
-                .map(|support| support.kind)
-                .collect();
-            assert_eq!(
-                kinds,
-                vec![
-                    OpKind::Add,
-                    OpKind::MatMul,
-                    OpKind::SoftmaxLastDim,
-                    OpKind::RmsNorm
-                ]
-            );
+            for kind in claymore_tensor::OpKind::ALL {
+                let declared = single_dtype_ops.iter().find(|(k, _d)| *k == kind);
+                if let Some((_, d)) = declared {
+                    if dtype == *d {
+                        assert!(
+                            CUDA_OPS
+                                .iter()
+                                .any(|support| support.kind == kind && support.dtype == dtype),
+                            "missing CUDA support for {kind} / {dtype:?}"
+                        );
+                    }
+                } else {
+                    assert!(
+                        CUDA_OPS
+                            .iter()
+                            .any(|support| support.kind == kind && support.dtype == dtype),
+                        "missing CUDA support for {kind} / {dtype:?}"
+                    );
+                }
+            }
         }
         assert!(!CUDA_OPS.iter().any(|support| support.dtype == DType::F16));
     }

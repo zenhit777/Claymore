@@ -1,0 +1,45 @@
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+   Compiling claymore-cuda v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cuda)
+   Compiling claymore-tensor v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-tensor)
+   Compiling claymore-memory v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-memory)
+   Compiling claymore-runtime v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-runtime)
+   Compiling claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Finished `release` profile [optimized] target(s) in 3.09s
+     Running tests/hardware_m10_generation.rs (target/release/build/claymore-model-gemma/8d8977850df016e1/out/hardware_m10_generation-8d8977850df016e1)
+
+running 3 tests
+test cuda_graph_matches_golden_first_step ... encoder_last_hidden CUDA vs CPU: max_abs=0.000000 rms=0.000000
+encoder_last_hidden CUDA vs golden: max_abs=5.828125 rms=0.754065
+encoder_last_hidden CPU vs golden: max_abs=5.828125 rms=0.754065
+
+thread 'cuda_graph_matches_golden_first_step' (2096910) panicked at crates/claymore-model-gemma/tests/hardware_m10_generation.rs:116:5:
+encoder CUDA drift 5.828125
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test encoder_first_layer_matches_cpu_step_by_step ... layer0 input_norm: cuda-vs-cpu max_abs=0.000000 rms=0.000000 absmax_cpu=178.0000
+layer0 attention: cuda-vs-cpu max_abs=0.000000 rms=0.000000 absmax_cpu=66.0000
+layer0 residual: cuda-vs-cpu max_abs=0.000000 rms=0.000000 absmax_cpu=392.0000
+layer0 mlp: cuda-vs-cpu max_abs=0.000000 rms=0.000000 absmax_cpu=149.0000
+layer0 expert_input: cuda-vs-cpu max_abs=0.000000 rms=0.000000 absmax_cpu=3.0781
+layer0 experts: cuda-vs-cpu max_abs=0.000000 rms=0.000000 absmax_cpu=2.7188
+layer0 router: 56 expert indices identical to the CPU reference
+ok
+test real_generation_runs_one_canvas_block_on_the_card ... real generation: canvas accepted=256 positions; peak=24831 MiB uploaded=45341 MiB downloaded=2022 MiB launches=48285
+ok
+
+failures:
+
+failures:
+    cuda_graph_matches_golden_first_step
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 449.74s
+
+error: test failed, to rerun pass `-p claymore-model-gemma --test hardware_m10_generation`

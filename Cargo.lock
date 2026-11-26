@@ -45,6 +45,7 @@ dependencies = [
  "claymore-core",
  "claymore-cuda",
  "claymore-device",
+ "claymore-model-gemma",
  "claymore-scheduler",
  "claymore-tensor",
  "thiserror",
@@ -62,6 +63,14 @@ name = "claymore-model-gemma"
 version = "0.5.0"
 dependencies = [
  "claymore-core",
+ "claymore-device",
+ "claymore-memory",
+ "claymore-runtime",
+ "claymore-scheduler",
+ "claymore-tensor",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

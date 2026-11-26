@@ -1,0 +1,93 @@
+============================================================
+ÉTAPE 7: m10-generation — 2026-11-25T21:22:06+01:00
+HEAD: 460c9ef9c2f7d3ff2d5a15c26462f25102d919ad
+------------------------------------------------------------
+Wed Nov 25 21:22:06 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+|  0%   48C    P8             46W /  575W |    1300MiB /  32607MiB |      2%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A         1427784      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+
+------------------------------------------------------------
+COMMANDE: cargo test --release -p claymore-model-gemma --features cuda-streaming --test hardware_m10_generation --locked -- --ignored --test-threads=1 --nocapture
+------------------------------------------------------------
++ cargo test --release -p claymore-model-gemma --features cuda-streaming --test hardware_m10_generation --locked -- --ignored --test-threads=1 --nocapture
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+   Compiling claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Finished `release` profile [optimized] target(s) in 2.43s
+     Running tests/hardware_m10_generation.rs (target/release/build/claymore-model-gemma/8d8977850df016e1/out/hardware_m10_generation-8d8977850df016e1)
+
+running 3 tests
+test cuda_graph_chain_is_bit_equal_to_cpu_and_tracks_golden ... encoder_last_hidden CUDA vs CPU: max_abs=0.000000 rms=0.000000
+encoder_last_hidden CUDA vs golden: max_abs=5.828125 rms=0.754065
+encoder_last_hidden CPU vs golden: max_abs=5.828125 rms=0.754065
+decoder_last_hidden0 CUDA vs CPU: max_abs=0.000000 rms=0.000000
+decoder_last_hidden0 CUDA vs golden: max_abs=12.937500 rms=1.974973
+decoder_last_hidden0 CPU vs golden: max_abs=12.937500 rms=1.974973
+decoder_logits0 CUDA vs CPU: max_abs=0.000000 rms=0.000000
+decoder_logits0 CUDA vs golden: max_abs=20.145552 rms=3.566787
+decoder_logits0 CPU vs golden: max_abs=20.145552 rms=3.566787
+CUDA campaign metrics: peak=18317 MiB uploaded=18298 MiB downloaded=38 MiB launches=12071
+ok
+test encoder_first_layer_matches_cpu_step_by_step ... layer0 input_norm: cuda-vs-cpu max_abs=0.000000 rms=0.000000 absmax_cpu=178.0000
+layer0 attention: cuda-vs-cpu max_abs=0.000000 rms=0.000000 absmax_cpu=66.0000
+layer0 residual: cuda-vs-cpu max_abs=0.000000 rms=0.000000 absmax_cpu=392.0000
+layer0 mlp: cuda-vs-cpu max_abs=0.000000 rms=0.000000 absmax_cpu=149.0000
+layer0 expert_input: cuda-vs-cpu max_abs=0.000000 rms=0.000000 absmax_cpu=3.0781
+layer0 experts: cuda-vs-cpu max_abs=0.000000 rms=0.000000 absmax_cpu=2.7188
+layer0 router: 56 expert indices identical to the CPU reference
+ok
+test real_generation_runs_one_canvas_block_on_the_card ... real generation: canvas accepted=256 positions; peak=24831 MiB uploaded=45341 MiB downloaded=2022 MiB launches=48285
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 760.29s
+
++ rc=0
++ set +x
+------------------------------------------------------------
+RC: 0
+FIN: 2026-11-25T21:34:49+01:00
+Wed Nov 25 21:34:49 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+| 30%   47C    P3             65W /  575W |    1300MiB /  32607MiB |      2%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A         1427784      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+

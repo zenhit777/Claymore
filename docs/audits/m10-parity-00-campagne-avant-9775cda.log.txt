@@ -1,0 +1,42 @@
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+   Compiling claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Finished `release` profile [optimized] target(s) in 0.46s
+     Running tests/hardware_m10_generation.rs (target/release/build/claymore-model-gemma/8d8977850df016e1/out/hardware_m10_generation-8d8977850df016e1)
+
+running 3 tests
+test cuda_graph_matches_golden_first_step ... encoder_last_hidden CUDA vs CPU: max_abs=5.835938 rms=0.711149
+encoder_last_hidden CUDA vs golden: max_abs=4.875000 rms=0.752871
+encoder_last_hidden CPU vs golden: max_abs=5.539062 rms=0.763049
+
+thread 'cuda_graph_matches_golden_first_step' (1675805) panicked at crates/claymore-model-gemma/tests/hardware_m10_generation.rs:114:5:
+encoder CUDA/CPU drift 5.8359375
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test encoder_first_layer_matches_cpu_step_by_step ... layer0 input_norm: cuda-vs-cpu max_abs=0.031250 rms=0.000417 absmax_cpu=178.0000
+layer0 attention: cuda-vs-cpu max_abs=0.062500 rms=0.004747 absmax_cpu=66.0000
+layer0 residual: cuda-vs-cpu max_abs=0.500000 rms=0.011565 absmax_cpu=392.0000
+layer0 mlp: cuda-vs-cpu max_abs=1.000000 rms=0.035987 absmax_cpu=149.0000
+layer0 expert_input: cuda-vs-cpu max_abs=0.007812 rms=0.000481 absmax_cpu=3.0781
+layer0 experts: cuda-vs-cpu max_abs=0.031250 rms=0.000897 absmax_cpu=2.7188
+layer0 router: 56 expert indices identical to the CPU reference
+ok
+test real_generation_runs_one_canvas_block_on_the_card ... real generation: canvas accepted=256 positions; peak=24831 MiB uploaded=930494 MiB downloaded=24197 MiB launches=605669
+ok
+
+failures:
+
+failures:
+    cuda_graph_matches_golden_first_step
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3295.94s
+
+error: test failed, to rerun pass `-p claymore-model-gemma --test hardware_m10_generation`
+EXIT=101

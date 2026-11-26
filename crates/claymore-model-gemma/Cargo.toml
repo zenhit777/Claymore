@@ -5,5 +5,34 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+default = []
+cuda-streaming = ["claymore-memory/cuda-driver"]
+
 [dependencies]
 claymore-core = { path = "../claymore-core" }
+claymore-runtime = { path = "../claymore-runtime" }
+claymore-memory = { path = "../claymore-memory" }
+claymore-device = { path = "../claymore-device" }
+claymore-tensor = { path = "../claymore-tensor" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+claymore-scheduler = { path = "../claymore-scheduler" }
+
+[[test]]
+name = "hardware_m10_streaming"
+path = "tests/hardware_m10_streaming.rs"
+required-features = ["cuda-streaming"]
+
+[[test]]
+name = "hardware_m10_generation"
+path = "tests/hardware_m10_generation.rs"
+required-features = ["cuda-streaming"]
+
+[[test]]
+name = "hardware_m10_decoder_layers"
+path = "tests/hardware_m10_decoder_layers.rs"
+required-features = ["cuda-streaming"]

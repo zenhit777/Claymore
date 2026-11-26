@@ -1,0 +1,81 @@
+============================================================
+ÉTAPE 1: cuda-driver — 2026-11-25T21:10:45+01:00
+HEAD: 460c9ef9c2f7d3ff2d5a15c26462f25102d919ad
+------------------------------------------------------------
+Wed Nov 25 21:10:45 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+| 30%   35C    P8             45W /  575W |    1299MiB /  32607MiB |      1%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A         1427784      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+
+------------------------------------------------------------
+COMMANDE: cargo test -p claymore-cuda --features cuda-driver --test hardware_cuda_driver --locked -- --ignored --test-threads=1 --nocapture
+------------------------------------------------------------
++ cargo test -p claymore-cuda --features cuda-driver --test hardware_cuda_driver --locked -- --ignored --test-threads=1 --nocapture
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running tests/hardware_cuda_driver.rs (target/debug/build/claymore-cuda/35942b00ce8bfdf4/out/hardware_cuda_driver-35942b00ce8bfdf4)
+
+running 5 tests
+test hw_c1_01_driver_initializes_primary_context ... HW-C1-01 device=NVIDIA GeForce RTX 5090 cc=12.0 total=34162016256 free=32429309952
+ok
+test hw_c1_02_stream_and_event_lifecycle ... HW-C1-02 created/destroyed 64 streams and 64 events
+ok
+test hw_c1_03_context_interop_and_async_round_trip ... HW-C1-03 verified 1048576 bytes across two driver handles
+ok
+test hw_c2_01_allocation_sizes_and_explicit_free ... HW-C2-01 freed 1 B .. 64 MiB device buffers and 4 KiB pinned
+ok
+test hw_c2_02_zero_size_and_bounds_are_rejected ... HW-C2-02 rejected zero, overflowing and out-of-bounds requests
+ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+
++ rc=0
++ set +x
+------------------------------------------------------------
+RC: 0
+FIN: 2026-11-25T21:10:46+01:00
+Wed Nov 25 21:10:46 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+| 30%   36C    P0             70W /  575W |    1299MiB /  32607MiB |      4%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A         1427784      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+

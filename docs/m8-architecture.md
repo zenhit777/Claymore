@@ -90,11 +90,20 @@ Le code source des kernels est versionné dans `crates/claymore-cuda/kernels/m8_
 
 ```bash
 for dtype in f32 bf16; do
-  nvcc -arch=compute_120 -code=compute_120 -O3 -ptx \
+  nvcc -arch=compute_120 -code=compute_120 -O3 -ptx -fmad=false \
     -o crates/claymore-cuda/src/kernels/m8_${dtype}.ptx \
     crates/claymore-cuda/kernels/m8_${dtype}.cu
 done
 ```
+
+`-fmad=false` est requis depuis la correction de parité M10.4 : les portages
+glibc de `expf`/`expm1f`/`tanhf` de `crates/claymore-cuda/kernels/claymore_math.cuh`
+reposent sur des multiplications et additions séparées, et ne sont correctement
+arrondis que si nvcc ne contracte aucune opération implicite. Les `fmaf`
+explicites des sources, qui correspondent aux `mul_add` de la référence CPU,
+restent émis en `fma.rn.f32`. Commande, chaîne d'outils et empreintes en vigueur
+: [m8-ptx-provenance.md](audits/m8-ptx-provenance.md) §6 ; fondement de la
+décision : [m10-cuda-cpu-parity-fix.md](audits/m10-cuda-cpu-parity-fix.md) §5.2.
 
 Les kernels BF16 utilisent `__bfloat162float` pour l'élargissement, `fmaf` pour l'accumulation et `__float2bfloat16_rn` pour l'unique arrondi de sortie : le PTX généré doit contenir `cvt.rn.bf16.f32` et `fma.rn.f32`, ce que vérifie un test unitaire. La cible `sm_120` correspond à la compute capability 12.0 de la RTX 5090 (Blackwell). Le pilote doit prendre en charge le PTX 9.0 / CUDA 13+ (vérifié avec le driver 616.64 et CUDA UMD 13.4). Le JIT du driver compile le PTX à l'ouverture du module ; une incompatibilité est signalée par `CudaError::KernelModuleLoad`. Aucune architecture plus ancienne n'est revendiquée.
 
@@ -121,6 +130,18 @@ La comparaison BF16 ne porte pas sur des flottants mais sur des **pas représent
 | rms_norm | 1 pas | idem pour `sum(x²)`, `sqrt` et la division |
 
 Aucune tolérance n'a été élargie après exécution. Les écarts réellement observés (0 pas sur toutes les shapes des deux campagnes) sont consignés dans le rapport BF16. La somme par ligne de softmax après arrondi BF16 doit rester à `4e-3` près de 1.
+
+> **Note (25 novembre 2026).** Les justifications des deux tableaux ci-dessus
+> qui invoquent une « réduction en arbre CUDA » pour `softmax` et `rms_norm`
+> décrivent l'implémentation de la réalisation M8 (PR #24) et ne décrivent plus
+> le code courant : depuis la correction de parité
+> ([m10-cuda-cpu-parity-fix.md](audits/m10-cuda-cpu-parity-fix.md) §5.1), les
+> réductions `softmax` et `rms_norm` des kernels s'effectuent **sur un seul
+> thread, en ordre d'index**, à l'identique de la référence CPU, et
+> `scatter_add` est passé en accumulation FP32 déterministe sans atomique. Les
+> **valeurs** des tolérances n'ont pas été modifiées ; seule leur justification
+> a changé de nature, l'accord CPU ↔ CUDA étant désormais structurel et non plus
+> borné par un écart d'ordre d'accumulation.
 
 ## Validation requise
 

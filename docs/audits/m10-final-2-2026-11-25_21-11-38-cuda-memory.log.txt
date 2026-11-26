@@ -1,0 +1,109 @@
+============================================================
+ÉTAPE 2: cuda-memory — 2026-11-25T21:11:38+01:00
+HEAD: 460c9ef9c2f7d3ff2d5a15c26462f25102d919ad
+------------------------------------------------------------
+Wed Nov 25 21:11:38 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+|  0%   37C    P8             45W /  575W |    1299MiB /  32607MiB |      1%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A         1427784      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+
+------------------------------------------------------------
+COMMANDE: cargo test -p claymore-memory --features cuda-driver --test hardware_cuda_memory --locked -- --ignored --test-threads=1 --nocapture
+------------------------------------------------------------
++ cargo test -p claymore-memory --features cuda-driver --test hardware_cuda_memory --locked -- --ignored --test-threads=1 --nocapture
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running tests/hardware_cuda_memory.rs (target/debug/build/claymore-memory/b67ce23ed3063d16/out/hardware_cuda_memory-b67ce23ed3063d16)
+
+running 17 tests
+test hw_c2_03_manager_release_semantics ... HW-C2-03 explicit release, accounting and post-release errors verified
+ok
+test hw_c3_01_transfer_sizes_are_byte_exact ... HW-C3-01 size=1 byte_exact=yes
+HW-C3-01 size=37 byte_exact=yes
+HW-C3-01 size=4096 byte_exact=yes
+HW-C3-01 size=1048576 byte_exact=yes
+HW-C3-01 size=67108864 byte_exact=yes
+ok
+test hw_c3_02_multiple_allocations_and_successive_transfers ... HW-C3-02 two allocation pairs transferred successively and verified
+ok
+test hw_c4_01_nonblocking_polling_and_completion ... HW-C4-01 retired=0/8 before wait; pending and complete states coherent
+ok
+test hw_c4_02_wait_for_allocation_is_scoped ... HW-C4-02 wait_for_allocation retired only transfers touching its target
+ok
+test hw_c4_03_tokens_are_manager_scoped ... HW-C4-03 foreign transfer token rejected by another manager
+ok
+test hw_c5_01_in_flight_allocation_cannot_be_evicted ... HW-C5-01 protected during 0/8 completed polls; evicted after confirmed completion
+ok
+test hw_c5_02_shared_allocation_stays_protected_by_remaining_transfer ... HW-C5-02 shared allocation stayed protected until its last event completed
+ok
+test hw_c5_03_eviction_skips_protected_candidate ... HW-C5-03 eviction skipped the protected allocation and freed the idle candidate
+ok
+test hw_c6_01_polling_precedes_eviction_planning ... HW-C6-01 completed event polled before eviction after 39 queries
+ok
+test hw_c6_02_equal_priority_eviction_is_deterministic ... HW-C6-02 equal-priority eviction selected alpha in 12/12 rounds
+ok
+test hw_c6_03_accounting_and_admission_errors ... HW-C6-03 accounting stayed consistent across release and admission errors
+ok
+test hw_c7_01_repeated_allocate_transfer_free_cycles ... HW-C7-01 128 H2D/D2H cycles verified in 102.316536ms
+ok
+test hw_c7_02_tight_polling_is_idempotent ... HW-C7-02 1000 polls, retired_total=8/8, state stayed coherent
+ok
+test hw_c7_03_transfer_and_eviction_alternation ... HW-C7-03 16 transfer/eviction alternations verified
+ok
+test hw_m7_cuda_transfer_executor_runs_scheduler_tasks_after_event_completion ... M7 CUDA executor: H2D=1048576 bytes in 111482 ns; D2H=1048576 bytes in 82231 ns; event_wait=132192 ns
+ok
+test hw_m7_expert_cache_max_is_enforced_before_device_allocation ... M7 expert cache maximum enforced with deterministic idle eviction
+ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 28.29s
+
++ rc=0
++ set +x
+------------------------------------------------------------
+RC: 0
+FIN: 2026-11-25T21:12:06+01:00
+Wed Nov 25 21:12:06 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.65.07              KMD Version: 616.64        CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5090        On  |   00000000:01:00.0  On |                  N/A |
+|  0%   41C    P0             83W /  575W |    1299MiB /  32607MiB |      5%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              33      G   /Xwayland                             N/A      |
+|    0   N/A  N/A         1427784      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+

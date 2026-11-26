@@ -53,6 +53,12 @@ unsafe extern "C" {
         bytes: usize,
         stream: CuStreamRaw,
     ) -> CuResult;
+    pub(crate) fn cuMemsetD8Async(
+        dst: CuDevicePtr,
+        value: u8,
+        bytes: usize,
+        stream: CuStreamRaw,
+    ) -> CuResult;
     fn cuMemcpyDtoHAsync_v2(
         dst: *mut c_void,
         src: CuDevicePtr,
@@ -100,7 +106,7 @@ pub(crate) fn check(code: CuResult, operation: &'static str) -> Result<(), CudaE
     }
 }
 
-fn as_size(bytes: u64) -> Result<usize, CudaError> {
+pub(crate) fn as_size(bytes: u64) -> Result<usize, CudaError> {
     if bytes == 0 {
         return Err(CudaError::ZeroSizedAllocation);
     }

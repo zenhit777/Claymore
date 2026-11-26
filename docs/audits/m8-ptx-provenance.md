@@ -5,6 +5,14 @@
 > `cuModuleLoadData`. Les empreintes ci-dessous ont été recalculées avec
 > `sha256sum` sur l'arbre de travail de la branche `feat/m8-tensor-foundation`,
 > au HEAD `95460c9`, le **22 novembre 2026** (relevé `21:59:26 +01:00`).
+>
+> ⚠ **Révisé le 25 novembre 2026** à la suite de la correction de parité
+> numérique CUDA ↔ CPU (voir
+> [m10-cuda-cpu-parity-fix.md](m10-cuda-cpu-parity-fix.md)). Les sections 2 à 4
+> décrivent l'état **historique** au HEAD `95460c9` du 22 novembre 2026 ; elles
+> restent exactes pour ce commit et pour les campagnes M8 qui y sont référencées,
+> mais ne s'appliquent plus à l'arbre courant. La **section 6** donne la
+> commande et les empreintes en vigueur.
 
 ## 1. Chaîne d'outils observée
 
@@ -102,3 +110,96 @@ BF16, `cvt.rn.bf16.f32` et `fma.rn.f32` (ainsi que l'absence de `.target sm_90`)
 - Le JIT du driver compile le PTX à l'ouverture du module ; une incompatibilité
   est signalée par `CudaError::KernelModuleLoad`. La compatibilité matérielle
   est attestée par les campagnes RTX 5090 versionnées, pas par ce manifeste.
+
+## 6. Révision du 25 novembre 2026 (en vigueur)
+
+La correction de la divergence numérique CUDA ↔ CPU de la chaîne M10
+([m10-cuda-cpu-parity-fix.md](m10-cuda-cpu-parity-fix.md)) a introduit
+`crates/claymore-cuda/kernels/claymore_math.cuh`, un en-tête partagé qui porte
+les implémentations `expf`, `expm1f` et `tanhf` conformes à glibc 2.39. Ces
+implémentations reposent sur des **multiplications et additions séparées** :
+toute contraction FMA implicite en modifierait le résultat bit à bit. La
+génération des PTX exige donc `-fmad=false`.
+
+### 6.1 Contexte du relevé
+
+| Élément | Valeur |
+|---|---|
+| Date du relevé | 2026-11-25 (02:06 UTC) |
+| Dépôt / branche / HEAD de base | `zenhit777/Claymore`, `fix/m10-numerics-divergence`, base `9775cda` |
+| `nvcc` | `/usr/local/cuda-13.0/bin/nvcc`, **release 13.0, V13.0.48**, `cuda_13.0.r13.0/compiler.36260728_0` |
+| GPU de validation | NVIDIA GeForce RTX 5090, driver `616.64`, compute capability `12.0` |
+
+La chaîne d'outils est **inchangée** par rapport à la section 1 : seule la
+commande change. Les PTX générés portent le même en-tête (`.version 9.0`,
+`.target sm_120`, `.address_size 64`, `CL-36260728`).
+
+### 6.2 Commande en vigueur
+
+```bash
+nvcc -arch=compute_120 -code=compute_120 -O3 -ptx -fmad=false \
+  -o crates/claymore-cuda/src/kernels/m8_f32.ptx \
+  crates/claymore-cuda/kernels/m8_f32.cu
+
+nvcc -arch=compute_120 -code=compute_120 -O3 -ptx -fmad=false \
+  -o crates/claymore-cuda/src/kernels/m8_bf16.ptx \
+  crates/claymore-cuda/kernels/m8_bf16.cu
+```
+
+La commande est reprise à l'identique en en-tête de chaque `.cu`. Toujours
+aucun `--use_fast_math`, `-ftz=true` ni `-ffast-math`.
+
+`-fmad=false` ne supprime que la contraction **implicite** : les FMA explicites
+(`fmaf` dans les sources, correspondant aux `mul_add` de la référence CPU)
+demeurent émis en `fma.rn.f32`. Le test unitaire de `compute.rs` qui exige la
+présence de `fma.rn.f32` dans le module BF16 passe donc toujours ; le fichier
+en contient 15 occurrences, contre 23 pour la version du 22 novembre.
+
+### 6.3 Empreintes SHA-256 en vigueur
+
+> **Révisé le 25 novembre 2026** à la suite de la campagne groupée RTX 5090 :
+> le correctif de la course lecture-écriture du softmax F32 (garde
+> `threadIdx.x == 0` sur l'appel mono-thread `claymore_softmax_row`) et son
+> jumeau BF16 ont modifié `m8_f32.cu`, `m8_bf16.cu` et les deux PTX
+> correspondants. `claymore_math.cuh` est **inchangé**. Diagnostic et
+> validation matérielle :
+> [m10-rtx5090-grouped-campaign-2026-11-25.md](m10-rtx5090-grouped-campaign-2026-11-25.md) §3.
+
+```bash
+sha256sum -c <<'EOF'
+f65bd84b35ecdcdbcf2bb1c38f8e384991ba1d71e53be299d52bcbc773c19eab  crates/claymore-cuda/kernels/m8_f32.cu
+2edac588d887e2f3ba091bd18aa8f02d645aa07993743ba9fd5d5babf2eff948  crates/claymore-cuda/kernels/m8_bf16.cu
+55e491b6e7217180c43deb4abcb17ae6ee946a0fe60a6e5f4940dfc8429b9e15  crates/claymore-cuda/src/kernels/m8_f32.ptx
+186ab2d533b517bd6922f026037054bb8004edd4872dd8d56541f4c2f88a7c29  crates/claymore-cuda/src/kernels/m8_bf16.ptx
+15efcd8a159db1a240355712bee4ee7ade61a1c435360dbde5af9ad40c2471f7  crates/claymore-cuda/kernels/claymore_math.cuh
+EOF
+```
+
+`claymore_math.cuh` entre dans le manifeste : les deux `.cu` l'incluent, son
+contenu fait donc partie de la provenance des PTX.
+
+### 6.4 Vérification de reproductibilité
+
+Chaque PTX versionné a été régénéré dans un fichier temporaire avec la commande
+de la section 6.2 puis comparé par `cmp` au fichier versionné : les trois
+comparaisons (`m8_f32`, `m8_bf16`, et `m10` pour le troisième module) sortent
+en code 0, c'est-à-dire **byte-identiques**. Cette vérification a été exécutée
+après le dernier changement des sources (corrections de commentaires), qui ne
+modifie pas les PTX produits.
+
+### 6.5 Effet mesuré sur le PTX et sur le résultat
+
+| Fichier | Sites `fma.rn.f32` (22/11, sans `-fmad=false`) | Sites (25/11, avec `-fmad=false`) |
+|---|---|---|
+| `m8_f32.ptx` | 23 | 15 |
+| `m8_bf16.ptx` | 23 | 15 |
+| `m10.ptx` | 291 | 214 |
+
+Les sites restants sont les FMA explicites des sources. Sur les sources du
+25 novembre, la commande historique (sans `-fmad=false`) produirait 44 sites
+dans les modules M8 et 324 dans `m10.ptx`. Cette différence de génération n'a
+**pas** modifié le résultat mesuré sur la chaîne M10 : les deux modes donnent
+un accord CUDA ↔ CPU à `0,000000 / 0,000000` (runs 3 et 4 de la campagne du
+25 novembre). Le mode `-fmad=false` est néanmoins retenu parce qu'il rend la
+correspondance CPU ↔ CUDA structurelle plutôt que dépendante des choix de
+contraction du compilateur.

@@ -14,21 +14,67 @@ use claymore_device::{CpuDevice, DType, Device, DeviceKind};
 use crate::ops::{self, OpError};
 use crate::{Bf16, Tensor};
 
-/// The complete set of tensor operations covered by the M8 contract.
+/// The complete set of tensor operations covered by the Claymore contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OpKind {
     Add,
     MatMul,
     SoftmaxLastDim,
     RmsNorm,
+    /// Dense projection without bias: `[tokens, in] x [out, in] -> [tokens, out]`.
+    Linear,
+    /// Rotary embedding applied to `[tokens, heads, head_dim]`.
+    RotaryEmbed,
+    /// Grouped-query multi-head attention.
+    Attention,
+    /// Logit soft-capping: `cap * tanh(x / cap)`.
+    SoftCap,
+    /// Explicit broadcast multiplication by a factor tensor.
+    Scale,
+    /// Explicit multiplication by an FP32 scalar. The factor is a scalar, not
+    /// a tensor: the product is evaluated in FP32 and rounded once to the
+    /// input dtype, exactly like the upstream's `tensor * python_float`.
+    ScaleScalar,
+    /// Bit-exact BF16 widening to F32 (the only cross-dtype operation in the
+    /// contract, declared explicitly so no implicit cast path exists).
+    Widen,
+    /// Router selection: stable softmax, top-k, weight normalization and
+    /// per-expert scaling, emitted as `[tokens, 2 * top_k]` F32.
+    RouterTopK,
+    /// MoE gated activation: `gelu_pytorch_tanh(gate) * up`.
+    GeluMulUp,
+    /// Row gather by F32-encoded integer indices.
+    GatherRows,
+    /// Weighted row scatter-add into a pre-zeroed output.
+    ScatterAdd,
+    /// Embedding gather by F32-encoded token ids with explicit scale.
+    EmbedGather,
+    /// Per-row zeroing by F32 flags.
+    RowMask,
+    /// Explicit `(x * scale) - bias` over the last dimension.
+    ScaleBias,
 }
 
 impl OpKind {
-    pub const ALL: [OpKind; 4] = [
+    pub const ALL: [OpKind; 18] = [
         OpKind::Add,
         OpKind::MatMul,
         OpKind::SoftmaxLastDim,
         OpKind::RmsNorm,
+        OpKind::Linear,
+        OpKind::RotaryEmbed,
+        OpKind::Attention,
+        OpKind::SoftCap,
+        OpKind::Scale,
+        OpKind::ScaleScalar,
+        OpKind::Widen,
+        OpKind::RouterTopK,
+        OpKind::GeluMulUp,
+        OpKind::GatherRows,
+        OpKind::ScatterAdd,
+        OpKind::EmbedGather,
+        OpKind::RowMask,
+        OpKind::ScaleBias,
     ];
 
     pub fn name(self) -> &'static str {
@@ -37,6 +83,20 @@ impl OpKind {
             OpKind::MatMul => "matmul",
             OpKind::SoftmaxLastDim => "softmax_last_dim",
             OpKind::RmsNorm => "rms_norm",
+            OpKind::Linear => "linear",
+            OpKind::RotaryEmbed => "rotary_embed",
+            OpKind::Attention => "attention",
+            OpKind::SoftCap => "soft_cap",
+            OpKind::Scale => "scale",
+            OpKind::ScaleScalar => "scale_scalar",
+            OpKind::Widen => "widen",
+            OpKind::RouterTopK => "router_top_k",
+            OpKind::GeluMulUp => "gelu_mul_up",
+            OpKind::GatherRows => "gather_rows",
+            OpKind::ScatterAdd => "scatter_add",
+            OpKind::EmbedGather => "embed_gather",
+            OpKind::RowMask => "row_mask",
+            OpKind::ScaleBias => "scale_bias",
         }
     }
 }
@@ -131,6 +191,70 @@ pub enum TensorOp<'a> {
         scale: &'a Tensor,
         epsilon: f32,
     },
+    Linear {
+        input: &'a Tensor,
+        weight: &'a Tensor,
+    },
+    RotaryEmbed {
+        input: &'a Tensor,
+        cos: &'a Tensor,
+        sin: &'a Tensor,
+    },
+    Attention {
+        query: &'a Tensor,
+        key: &'a Tensor,
+        value: &'a Tensor,
+        mask: Option<&'a Tensor>,
+        scale: f32,
+    },
+    SoftCap {
+        input: &'a Tensor,
+        cap: f32,
+    },
+    Scale {
+        input: &'a Tensor,
+        factor: &'a Tensor,
+    },
+    ScaleScalar {
+        input: &'a Tensor,
+        factor: f32,
+    },
+    Widen {
+        input: &'a Tensor,
+    },
+    RouterTopK {
+        scores: &'a Tensor,
+        per_expert_scale: &'a Tensor,
+        top_k: usize,
+    },
+    GeluMulUp {
+        gate: &'a Tensor,
+        up: &'a Tensor,
+    },
+    GatherRows {
+        input: &'a Tensor,
+        indices: &'a Tensor,
+    },
+    ScatterAdd {
+        source: &'a Tensor,
+        weights: &'a Tensor,
+        rows: &'a Tensor,
+        out_rows: usize,
+    },
+    EmbedGather {
+        ids: &'a Tensor,
+        table: &'a Tensor,
+        scale: f32,
+    },
+    RowMask {
+        input: &'a Tensor,
+        flags: &'a Tensor,
+    },
+    ScaleBias {
+        input: &'a Tensor,
+        scale: &'a Tensor,
+        bias: &'a Tensor,
+    },
 }
 
 impl<'a> TensorOp<'a> {
@@ -140,6 +264,20 @@ impl<'a> TensorOp<'a> {
             TensorOp::MatMul { .. } => OpKind::MatMul,
             TensorOp::SoftmaxLastDim { .. } => OpKind::SoftmaxLastDim,
             TensorOp::RmsNorm { .. } => OpKind::RmsNorm,
+            TensorOp::Linear { .. } => OpKind::Linear,
+            TensorOp::RotaryEmbed { .. } => OpKind::RotaryEmbed,
+            TensorOp::Attention { .. } => OpKind::Attention,
+            TensorOp::SoftCap { .. } => OpKind::SoftCap,
+            TensorOp::Scale { .. } => OpKind::Scale,
+            TensorOp::ScaleScalar { .. } => OpKind::ScaleScalar,
+            TensorOp::Widen { .. } => OpKind::Widen,
+            TensorOp::RouterTopK { .. } => OpKind::RouterTopK,
+            TensorOp::GeluMulUp { .. } => OpKind::GeluMulUp,
+            TensorOp::GatherRows { .. } => OpKind::GatherRows,
+            TensorOp::ScatterAdd { .. } => OpKind::ScatterAdd,
+            TensorOp::EmbedGather { .. } => OpKind::EmbedGather,
+            TensorOp::RowMask { .. } => OpKind::RowMask,
+            TensorOp::ScaleBias { .. } => OpKind::ScaleBias,
         }
     }
 
@@ -148,6 +286,41 @@ impl<'a> TensorOp<'a> {
             TensorOp::Add { lhs, rhs } | TensorOp::MatMul { lhs, rhs } => vec![lhs, rhs],
             TensorOp::SoftmaxLastDim { input } => vec![input],
             TensorOp::RmsNorm { input, scale, .. } => vec![input, scale],
+            TensorOp::Linear { input, weight } => vec![input, weight],
+            TensorOp::RotaryEmbed { input, cos, sin } => vec![input, cos, sin],
+            TensorOp::Attention {
+                query,
+                key,
+                value,
+                mask,
+                ..
+            } => {
+                let mut inputs: Vec<&'a Tensor> = vec![query, key, value];
+                if let Some(mask) = *mask {
+                    inputs.push(mask);
+                }
+                inputs
+            }
+            TensorOp::SoftCap { input, .. } => vec![input],
+            TensorOp::Scale { input, factor } => vec![input, factor],
+            TensorOp::ScaleScalar { input, .. } => vec![input],
+            TensorOp::Widen { input } => vec![input],
+            TensorOp::RouterTopK {
+                scores,
+                per_expert_scale,
+                ..
+            } => vec![scores, per_expert_scale],
+            TensorOp::GeluMulUp { gate, up } => vec![gate, up],
+            TensorOp::GatherRows { input, indices } => vec![input, indices],
+            TensorOp::ScatterAdd {
+                source,
+                weights,
+                rows,
+                ..
+            } => vec![source, weights, rows],
+            TensorOp::EmbedGather { ids, table, .. } => vec![ids, table],
+            TensorOp::RowMask { input, flags } => vec![input, flags],
+            TensorOp::ScaleBias { input, scale, bias } => vec![input, scale, bias],
         }
     }
 
@@ -159,6 +332,30 @@ impl<'a> TensorOp<'a> {
             }
             TensorOp::SoftmaxLastDim { input } => input.layout().shape().to_vec(),
             TensorOp::RmsNorm { input, .. } => input.layout().shape().to_vec(),
+            TensorOp::Linear { input, weight } => {
+                vec![input.layout().shape()[0], weight.layout().shape()[0]]
+            }
+            TensorOp::RotaryEmbed { input, .. } => input.layout().shape().to_vec(),
+            TensorOp::Attention { query, .. } => query.layout().shape().to_vec(),
+            TensorOp::SoftCap { input, .. } => input.layout().shape().to_vec(),
+            TensorOp::Scale { input, .. } => input.layout().shape().to_vec(),
+            TensorOp::ScaleScalar { input, .. } => input.layout().shape().to_vec(),
+            TensorOp::Widen { input } => input.layout().shape().to_vec(),
+            TensorOp::RouterTopK { scores, top_k, .. } => {
+                vec![scores.layout().shape()[0], 2 * top_k]
+            }
+            TensorOp::GeluMulUp { gate, .. } => gate.layout().shape().to_vec(),
+            TensorOp::GatherRows { input, indices } => {
+                vec![indices.layout().numel(), input.layout().shape()[1]]
+            }
+            TensorOp::ScatterAdd {
+                source, out_rows, ..
+            } => vec![*out_rows, source.layout().shape()[1]],
+            TensorOp::EmbedGather { ids, table, .. } => {
+                vec![ids.layout().numel(), table.layout().shape()[1]]
+            }
+            TensorOp::RowMask { input, .. } => input.layout().shape().to_vec(),
+            TensorOp::ScaleBias { input, .. } => input.layout().shape().to_vec(),
         }
     }
 
@@ -171,21 +368,47 @@ impl<'a> TensorOp<'a> {
     /// CPU reference and CUDA execution paths.
     pub fn validate(&self) -> Result<ValidatedOp, OpError> {
         let inputs = self.inputs();
-        let first = inputs.first().ok_or(OpError::InvalidRank)?;
-        let dtype = first.layout().dtype();
+        // Input slots that carry F32-encoded integer indices, weights or flags.
+        // These are explicitly typed so no implicit cast path exists.
+        let index_slots: &[usize] = match self {
+            TensorOp::GatherRows { .. } => &[1],
+            TensorOp::ScatterAdd { .. } => &[1, 2],
+            TensorOp::EmbedGather { .. } => &[0],
+            TensorOp::RowMask { .. } => &[1],
+            TensorOp::RouterTopK { .. } => &[0, 1],
+            TensorOp::Attention { mask, .. } => {
+                if mask.is_some() {
+                    &[3]
+                } else {
+                    &[]
+                }
+            }
+            _ => &[],
+        };
+        let primary = match self {
+            TensorOp::EmbedGather { .. } => 1,
+            _ => 0,
+        };
+        let dtype = inputs[primary].layout().dtype();
         // FP16 (and every other metadata-only dtype) is explicitly refused:
         // no CPU reference, kernel or conversion path exists for it.
         if !matches!(dtype, DType::F32 | DType::BF16) {
             return Err(OpError::UnsupportedDType);
         }
-        for input in &inputs {
-            if input.layout().dtype() != dtype {
+        for (slot, input) in inputs.iter().enumerate() {
+            if index_slots.contains(&slot) {
+                if input.layout().dtype() != DType::F32 {
+                    return Err(OpError::IndexDTypeMismatch);
+                }
+            } else if input.layout().dtype() != dtype {
                 return Err(OpError::MixedDType);
             }
             if !input.layout().is_contiguous() {
                 return Err(OpError::NonContiguous);
             }
-            if input.storage().device_instance_id() != first.storage().device_instance_id() {
+            if input.storage().device_instance_id()
+                != inputs[primary].storage().device_instance_id()
+            {
                 return Err(OpError::MixedDevices);
             }
         }
@@ -223,16 +446,179 @@ impl<'a> TensorOp<'a> {
                     return Err(OpError::InvalidEpsilon);
                 }
             }
+            TensorOp::Linear { input, weight } => {
+                let input_shape = input.layout().shape();
+                let weight_shape = weight.layout().shape();
+                if input_shape.len() != 2 || weight_shape.len() != 2 {
+                    return Err(OpError::ShapeMismatch);
+                }
+                if input_shape[1] != weight_shape[1] {
+                    return Err(OpError::ShapeMismatch);
+                }
+            }
+            TensorOp::RotaryEmbed { input, cos, sin } => {
+                let shape = input.layout().shape();
+                if shape.len() != 3 || shape[2] % 2 != 0 {
+                    return Err(OpError::ShapeMismatch);
+                }
+                if cos.layout().shape() != [shape[0], shape[2]]
+                    || sin.layout().shape() != [shape[0], shape[2]]
+                {
+                    return Err(OpError::ShapeMismatch);
+                }
+            }
+            TensorOp::Attention {
+                query,
+                key,
+                value,
+                mask,
+                scale,
+            } => {
+                let query_shape = query.layout().shape();
+                let key_shape = key.layout().shape();
+                let value_shape = value.layout().shape();
+                if query_shape.len() != 3 || key_shape.len() != 3 || value_shape.len() != 3 {
+                    return Err(OpError::ShapeMismatch);
+                }
+                if key_shape != value_shape || key_shape[2] != query_shape[2] {
+                    return Err(OpError::ShapeMismatch);
+                }
+                if query_shape[1] == 0 || key_shape[1] == 0 || query_shape[1] % key_shape[1] != 0 {
+                    return Err(OpError::InvalidHeadConfiguration(format!(
+                        "heads {} must be a non-zero multiple of kv_heads {}",
+                        query_shape[1], key_shape[1]
+                    )));
+                }
+                if !scale.is_finite() || *scale == 0.0 {
+                    return Err(OpError::InvalidAttentionScale);
+                }
+                if let Some(mask) = *mask {
+                    if mask.layout().shape() != [query_shape[0], key_shape[0]] {
+                        return Err(OpError::ShapeMismatch);
+                    }
+                }
+            }
+            TensorOp::SoftCap { input, cap } => {
+                let _ = input;
+                if !cap.is_finite() || *cap <= 0.0 {
+                    return Err(OpError::InvalidSoftCap);
+                }
+            }
+            TensorOp::Scale { input, factor } => {
+                let shape = input.layout().shape();
+                if shape.is_empty() {
+                    return Err(OpError::InvalidRank);
+                }
+                let width = shape[shape.len() - 1];
+                let factor_shape = factor.layout().shape();
+                if factor_shape != [1] && factor_shape != [width] {
+                    return Err(OpError::ScaleMismatch);
+                }
+            }
+            TensorOp::ScaleScalar { factor, .. } => {
+                if !factor.is_finite() {
+                    return Err(OpError::InvalidScaleFactor);
+                }
+            }
+            TensorOp::Widen { input } => {
+                // The contract pins the only cross-dtype operation: BF16 in, F32 out.
+                if input.layout().dtype() != DType::BF16 {
+                    return Err(OpError::UnsupportedDType);
+                }
+            }
+            TensorOp::RouterTopK {
+                scores,
+                per_expert_scale,
+                top_k,
+            } => {
+                let shape = scores.layout().shape();
+                if shape.len() != 2 || shape[0] == 0 || shape[1] == 0 {
+                    return Err(OpError::ShapeMismatch);
+                }
+                if *top_k == 0 || *top_k > shape[1] {
+                    return Err(OpError::InvalidTopK(*top_k, shape[1]));
+                }
+                if per_expert_scale.layout().shape() != [shape[1]] {
+                    return Err(OpError::ScaleMismatch);
+                }
+            }
+            TensorOp::GeluMulUp { gate, up } => {
+                if gate.layout().shape() != up.layout().shape() || gate.layout().shape().len() != 2
+                {
+                    return Err(OpError::ShapeMismatch);
+                }
+            }
+            TensorOp::GatherRows { input, indices } => {
+                let shape = input.layout().shape();
+                if shape.len() != 2 || shape[1] == 0 {
+                    return Err(OpError::ShapeMismatch);
+                }
+                if indices.layout().shape().len() != 1 {
+                    return Err(OpError::ShapeMismatch);
+                }
+            }
+            TensorOp::ScatterAdd {
+                source,
+                weights,
+                rows,
+                out_rows,
+            } => {
+                let shape = source.layout().shape();
+                if shape.len() != 2 || shape[0] == 0 || shape[1] == 0 {
+                    return Err(OpError::ShapeMismatch);
+                }
+                if *out_rows == 0 {
+                    return Err(OpError::InvalidOutputRows);
+                }
+                if weights.layout().shape() != [shape[0]] || rows.layout().shape() != [shape[0]] {
+                    return Err(OpError::ScaleMismatch);
+                }
+            }
+            TensorOp::EmbedGather { ids, table, scale } => {
+                if ids.layout().shape().len() != 1 || ids.layout().numel() == 0 {
+                    return Err(OpError::ShapeMismatch);
+                }
+                let shape = table.layout().shape();
+                if shape.len() != 2 || shape[0] == 0 || shape[1] == 0 {
+                    return Err(OpError::ShapeMismatch);
+                }
+                if !scale.is_finite() {
+                    return Err(OpError::InvalidEmbedScale);
+                }
+            }
+            TensorOp::RowMask { input, flags } => {
+                let shape = input.layout().shape();
+                if shape.len() != 2 {
+                    return Err(OpError::ShapeMismatch);
+                }
+                if flags.layout().shape() != [shape[0]] {
+                    return Err(OpError::ScaleMismatch);
+                }
+            }
+            TensorOp::ScaleBias { input, scale, bias } => {
+                let width = input.layout().shape().last().copied().unwrap_or(0);
+                if input.layout().shape().len() != 2 {
+                    return Err(OpError::ShapeMismatch);
+                }
+                if scale.layout().shape() != [width] || bias.layout().shape() != [width] {
+                    return Err(OpError::ScaleMismatch);
+                }
+            }
         }
+        let output_dtype = match self {
+            TensorOp::Widen { .. } => DType::F32,
+            _ => dtype,
+        };
         Ok(ValidatedOp {
             kind: self.kind(),
             dtype,
+            output_dtype,
             shape: self.output_shape(),
-            input_tier: first.storage().tier(),
-            output_tier: first.storage().tier(),
+            input_tier: inputs[primary].storage().tier(),
+            output_tier: inputs[primary].storage().tier(),
             layout: LayoutRequirement::Contiguous,
             alias_rule: self.alias_rule(),
-            device_instance_id: first.storage().device_instance_id(),
+            device_instance_id: inputs[primary].storage().device_instance_id(),
         })
     }
 }
@@ -254,9 +640,73 @@ pub enum ShapeSignature {
         width: usize,
         epsilon: Option<f32>,
     },
+    Linear {
+        tokens: usize,
+        in_features: usize,
+        out_features: usize,
+    },
+    RotaryEmbed {
+        tokens: usize,
+        heads: usize,
+        head_dim: usize,
+    },
+    Attention {
+        query_tokens: usize,
+        key_tokens: usize,
+        heads: usize,
+        kv_heads: usize,
+        head_dim: usize,
+        masked: bool,
+    },
+    SoftCap {
+        numel: usize,
+        cap: f32,
+    },
+    Scale {
+        numel: usize,
+        width: usize,
+        factor_width: usize,
+    },
+    ScaleScalar {
+        numel: usize,
+        factor: f32,
+    },
+    Widen {
+        numel: usize,
+    },
+    RouterTopK {
+        rows: usize,
+        width: usize,
+        top_k: usize,
+    },
+    GeluMulUp {
+        numel: usize,
+    },
+    GatherRows {
+        out_rows: usize,
+        width: usize,
+    },
+    ScatterAdd {
+        out_rows: usize,
+        pairs: usize,
+        width: usize,
+    },
+    EmbedGather {
+        tokens: usize,
+        vocab: usize,
+        width: usize,
+    },
+    RowMask {
+        rows: usize,
+        width: usize,
+    },
+    ScaleBias {
+        numel: usize,
+        width: usize,
+    },
 }
 
-/// CUDA grid limits for the launch configurations used by the M8 kernels.
+/// CUDA grid limits for the launch configurations used by the Claymore kernels.
 const CUDA_GRID_X_MAX: usize = 2_147_483_647;
 const CUDA_GRID_Y_MAX: usize = 65_535;
 
@@ -265,6 +715,30 @@ fn cuda_grid_limit(signature: ShapeSignature) -> Option<UnsupportedReason> {
         ShapeSignature::Elementwise { numel } => (numel.div_ceil(256), 1),
         ShapeSignature::MatMul { m, n, .. } => (n.div_ceil(16), m.div_ceil(16)),
         ShapeSignature::LastDim { rows, .. } => (rows, 1),
+        ShapeSignature::Linear {
+            tokens,
+            out_features,
+            ..
+        } => (out_features.div_ceil(256), tokens),
+        ShapeSignature::RotaryEmbed { tokens, heads, .. } => (tokens.saturating_mul(heads), 1),
+        ShapeSignature::Attention {
+            query_tokens,
+            heads,
+            ..
+        } => (query_tokens.saturating_mul(heads), 1),
+        ShapeSignature::SoftCap { numel, .. } => (numel.div_ceil(256), 1),
+        ShapeSignature::Scale { numel, .. } => (numel.div_ceil(256), 1),
+        ShapeSignature::ScaleScalar { numel, .. } => (numel.div_ceil(256), 1),
+        ShapeSignature::Widen { numel } => (numel.div_ceil(256), 1),
+        ShapeSignature::RouterTopK { rows, .. } => (rows, 1),
+        ShapeSignature::GeluMulUp { numel } => (numel.div_ceil(256), 1),
+        ShapeSignature::GatherRows { out_rows, width } => (out_rows, width.div_ceil(256)),
+        ShapeSignature::ScatterAdd {
+            out_rows, width, ..
+        } => (out_rows, width.div_ceil(256)),
+        ShapeSignature::EmbedGather { tokens, width, .. } => (tokens, width.div_ceil(256)),
+        ShapeSignature::RowMask { rows, width } => (rows, width.div_ceil(256)),
+        ShapeSignature::ScaleBias { numel, .. } => (numel.div_ceil(256), 1),
     };
     if grid_x > CUDA_GRID_X_MAX {
         return Some(UnsupportedReason::LaunchLimit {
@@ -310,6 +784,77 @@ impl TensorOp<'_> {
                     epsilon: Some(*epsilon),
                 }
             }
+            TensorOp::Linear { input, weight } => ShapeSignature::Linear {
+                tokens: input.layout().shape()[0],
+                in_features: input.layout().shape()[1],
+                out_features: weight.layout().shape()[0],
+            },
+            TensorOp::RotaryEmbed { input, .. } => ShapeSignature::RotaryEmbed {
+                tokens: input.layout().shape()[0],
+                heads: input.layout().shape()[1],
+                head_dim: input.layout().shape()[2],
+            },
+            TensorOp::Attention {
+                query, key, mask, ..
+            } => ShapeSignature::Attention {
+                query_tokens: query.layout().shape()[0],
+                key_tokens: key.layout().shape()[0],
+                heads: query.layout().shape()[1],
+                kv_heads: key.layout().shape()[1],
+                head_dim: query.layout().shape()[2],
+                masked: mask.is_some(),
+            },
+            TensorOp::SoftCap { input, cap } => ShapeSignature::SoftCap {
+                numel: input.layout().numel(),
+                cap: *cap,
+            },
+            TensorOp::Scale { input, factor } => {
+                let width = input.layout().shape().last().copied().unwrap_or(0);
+                ShapeSignature::Scale {
+                    numel: input.layout().numel(),
+                    width,
+                    factor_width: factor.layout().numel(),
+                }
+            }
+            TensorOp::ScaleScalar { input, factor } => ShapeSignature::ScaleScalar {
+                numel: input.layout().numel(),
+                factor: *factor,
+            },
+            TensorOp::Widen { input } => ShapeSignature::Widen {
+                numel: input.layout().numel(),
+            },
+            TensorOp::RouterTopK { scores, top_k, .. } => ShapeSignature::RouterTopK {
+                rows: scores.layout().shape()[0],
+                width: scores.layout().shape()[1],
+                top_k: *top_k,
+            },
+            TensorOp::GeluMulUp { gate, .. } => ShapeSignature::GeluMulUp {
+                numel: gate.layout().numel(),
+            },
+            TensorOp::GatherRows { input, indices } => ShapeSignature::GatherRows {
+                out_rows: indices.layout().numel(),
+                width: input.layout().shape()[1],
+            },
+            TensorOp::ScatterAdd {
+                source, out_rows, ..
+            } => ShapeSignature::ScatterAdd {
+                out_rows: *out_rows,
+                pairs: source.layout().shape()[0],
+                width: source.layout().shape()[1],
+            },
+            TensorOp::EmbedGather { ids, table, .. } => ShapeSignature::EmbedGather {
+                tokens: ids.layout().numel(),
+                vocab: table.layout().shape()[0],
+                width: table.layout().shape()[1],
+            },
+            TensorOp::RowMask { input, .. } => ShapeSignature::RowMask {
+                rows: input.layout().shape()[0],
+                width: input.layout().shape()[1],
+            },
+            TensorOp::ScaleBias { input, .. } => ShapeSignature::ScaleBias {
+                numel: input.layout().numel(),
+                width: input.layout().shape()[1],
+            },
         }
     }
 }
@@ -319,6 +864,9 @@ impl TensorOp<'_> {
 pub struct ValidatedOp {
     pub kind: OpKind,
     pub dtype: DType,
+    /// Output dtype is identical to the input dtype except for `Widen`, the
+    /// one explicitly declared BF16 -> F32 operation.
+    pub output_dtype: DType,
     pub shape: Vec<usize>,
     pub input_tier: MemoryTier,
     pub output_tier: MemoryTier,
@@ -824,72 +1372,54 @@ impl CpuReferenceBackend {
     }
 }
 
-const CPU_OPS: [OpSupport; 8] = [
-    OpSupport {
-        kind: OpKind::Add,
-        dtype: DType::F32,
-        input_tier: MemoryTier::Host,
-        output_tier: MemoryTier::Host,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-    OpSupport {
-        kind: OpKind::MatMul,
-        dtype: DType::F32,
-        input_tier: MemoryTier::Host,
-        output_tier: MemoryTier::Host,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-    OpSupport {
-        kind: OpKind::SoftmaxLastDim,
-        dtype: DType::F32,
-        input_tier: MemoryTier::Host,
-        output_tier: MemoryTier::Host,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-    OpSupport {
-        kind: OpKind::RmsNorm,
-        dtype: DType::F32,
-        input_tier: MemoryTier::Host,
-        output_tier: MemoryTier::Host,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-    OpSupport {
-        kind: OpKind::Add,
-        dtype: DType::BF16,
-        input_tier: MemoryTier::Host,
-        output_tier: MemoryTier::Host,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-    OpSupport {
-        kind: OpKind::MatMul,
-        dtype: DType::BF16,
-        input_tier: MemoryTier::Host,
-        output_tier: MemoryTier::Host,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-    OpSupport {
-        kind: OpKind::SoftmaxLastDim,
-        dtype: DType::BF16,
-        input_tier: MemoryTier::Host,
-        output_tier: MemoryTier::Host,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-    OpSupport {
-        kind: OpKind::RmsNorm,
-        dtype: DType::BF16,
-        input_tier: MemoryTier::Host,
-        output_tier: MemoryTier::Host,
-        layout: LayoutRequirement::Contiguous,
-        alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
-    },
-];
+const CPU_OPS: [OpSupport; 34] = {
+    const fn entry(kind: OpKind, dtype: DType) -> OpSupport {
+        OpSupport {
+            kind,
+            dtype,
+            input_tier: MemoryTier::Host,
+            output_tier: MemoryTier::Host,
+            layout: LayoutRequirement::Contiguous,
+            alias_rule: AliasRule::ReadOnlyInputsFreshOutput,
+        }
+    }
+    [
+        entry(OpKind::Add, DType::F32),
+        entry(OpKind::Add, DType::BF16),
+        entry(OpKind::MatMul, DType::F32),
+        entry(OpKind::MatMul, DType::BF16),
+        entry(OpKind::SoftmaxLastDim, DType::F32),
+        entry(OpKind::SoftmaxLastDim, DType::BF16),
+        entry(OpKind::RmsNorm, DType::F32),
+        entry(OpKind::RmsNorm, DType::BF16),
+        entry(OpKind::Linear, DType::F32),
+        entry(OpKind::Linear, DType::BF16),
+        entry(OpKind::RotaryEmbed, DType::F32),
+        entry(OpKind::RotaryEmbed, DType::BF16),
+        entry(OpKind::Attention, DType::F32),
+        entry(OpKind::Attention, DType::BF16),
+        entry(OpKind::SoftCap, DType::F32),
+        entry(OpKind::SoftCap, DType::BF16),
+        entry(OpKind::Scale, DType::F32),
+        entry(OpKind::Scale, DType::BF16),
+        entry(OpKind::ScaleScalar, DType::F32),
+        entry(OpKind::ScaleScalar, DType::BF16),
+        entry(OpKind::Widen, DType::BF16),
+        entry(OpKind::RouterTopK, DType::F32),
+        entry(OpKind::GeluMulUp, DType::F32),
+        entry(OpKind::GeluMulUp, DType::BF16),
+        entry(OpKind::GatherRows, DType::F32),
+        entry(OpKind::GatherRows, DType::BF16),
+        entry(OpKind::ScatterAdd, DType::F32),
+        entry(OpKind::ScatterAdd, DType::BF16),
+        entry(OpKind::EmbedGather, DType::F32),
+        entry(OpKind::EmbedGather, DType::BF16),
+        entry(OpKind::RowMask, DType::F32),
+        entry(OpKind::RowMask, DType::BF16),
+        entry(OpKind::ScaleBias, DType::F32),
+        entry(OpKind::ScaleBias, DType::BF16),
+    ]
+};
 
 impl TensorComputeBackend for CpuReferenceBackend {
     fn capabilities(&self) -> BackendCapabilities {
@@ -911,6 +1441,55 @@ impl TensorComputeBackend for CpuReferenceBackend {
                 scale,
                 epsilon,
             } => ops::rms_norm(&self.device, input, scale, *epsilon),
+            TensorOp::Linear { input, weight } => {
+                crate::diffusion::linear(&self.device, input, weight)
+            }
+            TensorOp::RotaryEmbed { input, cos, sin } => {
+                crate::diffusion::rotary_embed(&self.device, input, cos, sin)
+            }
+            TensorOp::Attention {
+                query,
+                key,
+                value,
+                mask,
+                scale,
+            } => crate::diffusion::attention(&self.device, query, key, value, *mask, *scale),
+            TensorOp::SoftCap { input, cap } => {
+                crate::diffusion::soft_cap(&self.device, input, *cap)
+            }
+            TensorOp::Scale { input, factor } => {
+                crate::diffusion::scale(&self.device, input, factor)
+            }
+            TensorOp::ScaleScalar { input, factor } => {
+                crate::diffusion::scale_scalar(&self.device, input, *factor)
+            }
+            TensorOp::Widen { input } => crate::diffusion::widen(&self.device, input),
+            TensorOp::RouterTopK {
+                scores,
+                per_expert_scale,
+                top_k,
+            } => crate::diffusion::router_top_k(&self.device, scores, per_expert_scale, *top_k),
+            TensorOp::GeluMulUp { gate, up } => {
+                crate::diffusion::gelu_mul_up(&self.device, gate, up)
+            }
+            TensorOp::GatherRows { input, indices } => {
+                crate::diffusion::gather_rows(&self.device, input, indices)
+            }
+            TensorOp::ScatterAdd {
+                source,
+                weights,
+                rows,
+                out_rows,
+            } => crate::diffusion::scatter_add(&self.device, source, weights, rows, *out_rows),
+            TensorOp::EmbedGather { ids, table, scale } => {
+                crate::diffusion::embed_gather(&self.device, ids, table, *scale)
+            }
+            TensorOp::RowMask { input, flags } => {
+                crate::diffusion::row_mask(&self.device, input, flags)
+            }
+            TensorOp::ScaleBias { input, scale, bias } => {
+                crate::diffusion::scale_bias(&self.device, input, scale, bias)
+            }
         }
     }
 }
@@ -980,6 +1559,88 @@ mod tests {
             Some(UnsupportedReason::LaunchLimit {
                 axis: "x",
                 blocks: CUDA_GRID_X_MAX + 1,
+                maximum: CUDA_GRID_X_MAX,
+            })
+        );
+    }
+
+    #[test]
+    fn scale_factor_shape_is_validated_and_explained() {
+        let (dispatcher, device) = dispatcher();
+        let input = host_tensor(&device, vec![2, 3], &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        // A scalar factor is accepted and keeps the input shape.
+        let scalar = host_tensor(&device, vec![1], &[0.5]);
+        let op = TensorOp::Scale {
+            input: &input,
+            factor: &scalar,
+        };
+        assert_eq!(op.kind(), OpKind::Scale);
+        assert_eq!(op.output_shape(), vec![2, 3]);
+        assert_eq!(
+            op.shape_signature(),
+            ShapeSignature::Scale {
+                numel: 6,
+                width: 3,
+                factor_width: 1
+            }
+        );
+        let request = ExecutionRequest::new(TensorOp::Scale {
+            input: &input,
+            factor: &scalar,
+        });
+        assert_eq!(dispatcher.plan(&request).unwrap().backend, "cpu-reference");
+        let values = f32_values(&device, &dispatcher.execute(&request).unwrap());
+        assert_eq!(values, [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]);
+
+        // A per-column factor is accepted.
+        let columns = host_tensor(&device, vec![3], &[1.0, 2.0, 3.0]);
+        let request = ExecutionRequest::new(TensorOp::Scale {
+            input: &input,
+            factor: &columns,
+        });
+        let values = f32_values(&device, &dispatcher.execute(&request).unwrap());
+        assert_eq!(values, [1.0, 4.0, 9.0, 4.0, 10.0, 18.0]);
+
+        // A factor matching neither [1] nor the last dimension is refused by
+        // the contract, so no backend is ever consulted.
+        let rows = host_tensor(&device, vec![2], &[1.0, 2.0]);
+        let request = ExecutionRequest::new(TensorOp::Scale {
+            input: &input,
+            factor: &rows,
+        });
+        assert_eq!(
+            dispatcher.explain(&request).unwrap_err(),
+            DispatchError::Contract(OpError::ScaleMismatch)
+        );
+        assert!(matches!(
+            dispatcher.execute(&request),
+            Err(ExecutionError::Dispatch(DispatchError::Contract(
+                OpError::ScaleMismatch
+            )))
+        ));
+    }
+
+    #[test]
+    fn scale_uses_the_elementwise_launch_grid_rule() {
+        // The scale kernel is a strided elementwise kernel: 256 threads per
+        // block on the x axis, and the y axis stays at 1.
+        assert_eq!(
+            cuda_grid_limit(ShapeSignature::Scale {
+                numel: 6 * 256,
+                width: 3,
+                factor_width: 1
+            }),
+            None
+        );
+        assert_eq!(
+            cuda_grid_limit(ShapeSignature::Scale {
+                numel: (CUDA_GRID_X_MAX + 1) * 256,
+                width: 3,
+                factor_width: 3
+            }),
+            Some(UnsupportedReason::LaunchLimit {
+                axis: "x",
+                blocks: (CUDA_GRID_X_MAX + 1) * 256 / 256,
                 maximum: CUDA_GRID_X_MAX,
             })
         );
@@ -1146,24 +1807,42 @@ mod tests {
     }
 
     #[test]
-    fn cpu_capabilities_cover_both_dtypes_for_all_four_operations() {
+    fn cpu_capabilities_cover_both_dtypes_for_every_operation() {
+        // Every operation is declared for both F32 and BF16, with two typed
+        // exceptions fixed by the contract's shape rules: `widen` is defined
+        // for BF16 inputs only (BF16 -> F32 is the sole cross-dtype operation)
+        // and the router operates on FP32-normalized scores only.
         let capabilities = CpuReferenceBackend::new().capabilities();
-        assert_eq!(capabilities.supported_ops.len(), 8);
+        let single_dtype_ops = [
+            (OpKind::Widen, DType::BF16),
+            (OpKind::RouterTopK, DType::F32),
+        ];
+        assert_eq!(
+            capabilities.supported_ops.len(),
+            OpKind::ALL.len() * 2 - single_dtype_ops.len()
+        );
         for dtype in [DType::F32, DType::BF16] {
             for kind in OpKind::ALL {
-                assert!(
-                    capabilities
-                        .support_for(
-                            kind,
-                            dtype,
-                            MemoryTier::Host,
-                            MemoryTier::Host,
-                            LayoutRequirement::Contiguous,
-                            AliasRule::ReadOnlyInputsFreshOutput,
-                        )
-                        .is_some(),
-                    "missing support for {kind} / {dtype:?}"
+                let supports = capabilities.support_for(
+                    kind,
+                    dtype,
+                    MemoryTier::Host,
+                    MemoryTier::Host,
+                    LayoutRequirement::Contiguous,
+                    AliasRule::ReadOnlyInputsFreshOutput,
                 );
+                if let Some(declared) = single_dtype_ops.iter().find(|(k, _d)| *k == kind) {
+                    if dtype == declared.1 {
+                        assert!(supports.is_some(), "missing support for {kind} / {dtype:?}");
+                    } else {
+                        assert!(
+                            supports.is_none(),
+                            "{kind} must refuse {dtype:?}: it is a typed single-dtype operation"
+                        );
+                    }
+                } else {
+                    assert!(supports.is_some(), "missing support for {kind} / {dtype:?}");
+                }
             }
         }
     }

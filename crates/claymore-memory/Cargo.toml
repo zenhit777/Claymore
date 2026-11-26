@@ -17,6 +17,11 @@ claymore-scheduler = { path = "../claymore-scheduler" }
 claymore-tensor = { path = "../claymore-tensor" }
 thiserror.workspace = true
 
+[dev-dependencies]
+# Real-checkpoint validation is a dev-only dependency: the memory crate never
+# reads model weights on a normal build path.
+claymore-model-gemma = { path = "../claymore-model-gemma" }
+
 [[test]]
 name = "hardware_cuda_memory"
 path = "tests/hardware_cuda_memory.rs"
@@ -25,4 +30,9 @@ required-features = ["cuda-driver"]
 [[test]]
 name = "hardware_cuda_tensor"
 path = "tests/hardware_cuda_tensor.rs"
+required-features = ["cuda-driver"]
+
+[[test]]
+name = "hardware_m10_primitives"
+path = "tests/hardware_m10_primitives.rs"
 required-features = ["cuda-driver"]

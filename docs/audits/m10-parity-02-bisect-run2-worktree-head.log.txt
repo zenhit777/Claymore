@@ -1,0 +1,30 @@
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 0.10s
+     Running tests/hardware_m10_generation.rs (target/release/build/claymore-model-gemma/8d8977850df016e1/out/hardware_m10_generation-8d8977850df016e1)
+
+running 1 test
+test cuda_graph_matches_golden_first_step ... encoder_last_hidden CUDA vs CPU: max_abs=5.835938 rms=0.711149
+encoder_last_hidden CUDA vs golden: max_abs=4.875000 rms=0.752871
+encoder_last_hidden CPU vs golden: max_abs=5.539062 rms=0.763049
+
+thread 'cuda_graph_matches_golden_first_step' (2074710) panicked at crates/claymore-model-gemma/tests/hardware_m10_generation.rs:114:5:
+encoder CUDA/CPU drift 5.8359375
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    cuda_graph_matches_golden_first_step
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 262.67s
+
+error: test failed, to rerun pass `-p claymore-model-gemma --test hardware_m10_generation`

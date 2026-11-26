@@ -482,6 +482,11 @@ impl CudaMemoryManager {
         self.transfers.policy.usage_bytes(tier)
     }
 
+    /// The declared tier budgets this manager admits against.
+    pub fn budgets(&self) -> MemoryBudgets {
+        self.transfers.policy.budgets()
+    }
+
     /// Policy accounting entry for one managed allocation, if it is live.
     pub fn allocation(&self, id: &str) -> Option<&Allocation> {
         self.transfers.policy.allocation(id)
@@ -772,6 +777,61 @@ impl CudaMemoryManager {
         })
     }
 
+    /// Host-side validation of `GatherRows` indices, mirroring the CPU
+    /// primitive: any index outside `[0, input_rows)` (non-finite, negative,
+    /// non-integral or out of range) is refused with `OpError::InvalidIndex`
+    /// before any kernel is launched. The index tensor is read back
+    /// synchronously through a temporary pinned staging buffer so no device
+    /// work can observe out-of-range reads. `offset`/`count` describe the
+    /// tensor window inside its allocation.
+    fn validate_gather_indices(
+        &mut self,
+        indices_id: &str,
+        offset: usize,
+        count: usize,
+        input_rows: usize,
+        tick: u64,
+    ) -> Result<(), CudaMemoryError> {
+        self.advance_tick(tick)?;
+        let indices = self
+            .device
+            .get(indices_id)
+            .ok_or_else(|| CudaMemoryError::UnknownAllocation(indices_id.to_owned()))?;
+        let bytes = indices.len();
+        if bytes == 0 {
+            return Ok(());
+        }
+        let window = count.checked_mul(4).ok_or(CudaError::SizeOverflow)?;
+        let end = offset.checked_add(window).ok_or(CudaError::SizeOverflow)?;
+        if end > bytes {
+            return Err(CudaMemoryError::Cuda(CudaError::BufferTooSmall {
+                requested: end,
+                capacity: bytes,
+            }));
+        }
+        let mut staging = self.driver.allocate_pinned(bytes as u64)?;
+        // SAFETY: both allocations are owned by this manager; the transfer
+        // stream is synchronized before the staging pointer is read.
+        unsafe {
+            indices.copy_to_pinned_async(&mut staging, bytes, &self.transfer_stream)?;
+        }
+        let event = self.driver.create_event()?;
+        event.record(&self.transfer_stream)?;
+        event.synchronize()?;
+        let raw = unsafe { std::slice::from_raw_parts(staging.as_mut_ptr(), bytes) };
+        for chunk in raw[offset..end].chunks_exact(4) {
+            let value = f32::from_ne_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+            if !value.is_finite()
+                || value < 0.0
+                || value >= input_rows as f32
+                || (value as usize) as f32 != value
+            {
+                return Err(CudaMemoryError::Tensor(OpError::InvalidIndex));
+            }
+        }
+        Ok(())
+    }
+
     /// Enqueue one native CUDA kernel for a validated M8 tensor operation.
     ///
     /// Output allocation has already gone through `allocate_device` (and thus
@@ -802,6 +862,15 @@ impl CudaMemoryManager {
         let inputs = op.inputs();
         if input_ids.len() != inputs.len() {
             return Err(CudaMemoryError::TensorInputMismatch);
+        }
+        // `GatherRows` indices are data, not descriptors: refuse an
+        // out-of-range index on the host, exactly like the CPU primitive,
+        // before any kernel can read outside the input allocation.
+        if let TensorOp::GatherRows { input, indices } = op {
+            let input_rows = input.layout().shape()[0];
+            let offset = indices.offset_bytes();
+            let count = indices.layout().numel();
+            self.validate_gather_indices(input_ids[1], offset, count, input_rows, tick)?;
         }
         if !self.device.contains_key(output_id) {
             return Err(CudaMemoryError::ComputeOutputMissing);
@@ -842,7 +911,7 @@ impl CudaMemoryManager {
             n.checked_mul(d).ok_or(CudaError::SizeOverflow)
         })?;
         let output_bytes = output_elements
-            .checked_mul(validated.dtype.element_size_bytes())
+            .checked_mul(validated.output_dtype.element_size_bytes())
             .ok_or(CudaError::SizeOverflow)?;
         if output_bytes > output_buffer.len() {
             return Err(CudaMemoryError::Cuda(CudaError::BufferTooSmall {
@@ -860,6 +929,86 @@ impl CudaMemoryManager {
             return Err(injected_driver_error("cuEventCreate", code).into());
         }
         let event = self.driver.create_event()?;
+
+        // The M10 diffusion primitives are launched through the same manager and
+        // event tracker, but they keep their own explicit pointer bookkeeping.
+        let m10_launch = match self.launch_m10_op(op, &pointers) {
+            Ok(handled) => handled,
+            Err(error) => {
+                // A driver error may be reported after the kernel was partially
+                // submitted. Prove stream quiescence before returning control to
+                // the caller, so no allocation is left in flight unguarded.
+                return Err(recover_launch_failure(
+                    error,
+                    &allocation_ids,
+                    &[],
+                    &self.transfers.pending,
+                    &self.compute_stream,
+                    &mut self.transfers.policy,
+                    tick,
+                    &mut self.poisoned,
+                ));
+            }
+        };
+        if let Some(()) = m10_launch {
+            let launch_tick = tick;
+            // A running kernel reads its input buffers and writes its output
+            // buffer: those allocations must stay pinned until the completion
+            // event is observed, exactly like the M8 launch path. Without this
+            // guard an eviction could free a buffer the device is still using.
+            let mut guarded: Vec<String> = Vec::with_capacity(allocation_ids.len());
+            for (index, id) in allocation_ids.iter().enumerate() {
+                if let Err(error) =
+                    mark_launch_guard(&mut self.transfers.policy, id, IN_FLIGHT, index)
+                {
+                    return Err(recover_launch_failure(
+                        error.into(),
+                        &allocation_ids,
+                        &guarded,
+                        &self.transfers.pending,
+                        &self.compute_stream,
+                        &mut self.transfers.policy,
+                        launch_tick,
+                        &mut self.poisoned,
+                    ));
+                }
+                guarded.push(id.clone());
+            }
+            let record = event.record(&self.compute_stream);
+            #[cfg(test)]
+            let record = match launch_faults::current().record_code {
+                Some(code) => Err(injected_driver_error("cuEventRecord", code)),
+                None => record,
+            };
+            if let Err(error) = record {
+                return Err(recover_launch_failure(
+                    error.into(),
+                    &allocation_ids,
+                    &allocation_ids,
+                    &self.transfers.pending,
+                    &self.compute_stream,
+                    &mut self.transfers.policy,
+                    launch_tick,
+                    &mut self.poisoned,
+                ));
+            }
+            self.transfers.pending.push(PendingTransfer {
+                id: transfer_id,
+                allocation_ids: allocation_ids.clone(),
+                event,
+                completed: Arc::new(AtomicBool::new(false)),
+            });
+            let completed = Arc::clone(&self.transfers.pending.last().unwrap().completed);
+            for id in &allocation_ids {
+                self.transfers.policy.touch(id, tick)?;
+            }
+            return Ok(TransferToken {
+                manager_id: self.manager_id,
+                id: transfer_id,
+                allocation_ids,
+                completed,
+            });
+        }
 
         let engine = &self.compute_engine;
         let stream = &self.compute_stream;
@@ -1002,6 +1151,445 @@ impl CudaMemoryManager {
             allocation_ids,
             completed,
         })
+    }
+
+    /// Reports an injected `cuLaunchKernel` failure on the M10 launch path, so
+    /// fault-injection tests exercise the same recovery boundary as the M8 path.
+    /// Production builds pass the real driver result through unchanged.
+    fn honor_launch_fault(&self, result: Result<(), CudaError>) -> Result<(), CudaError> {
+        #[cfg(test)]
+        if let Some(code) = launch_faults::current().launch_code {
+            return Err(injected_driver_error("cuLaunchKernel", code));
+        }
+        result
+    }
+
+    /// Launch the M10 diffusion primitives (linear, rotary embedding,
+    /// attention, logit soft-capping) on the shared compute stream.
+    ///
+    /// Returns `Ok(true)` when the operation was handled here and the caller
+    /// must register the event and the in-flight guards, `Ok(false)` when it is
+    /// not a primitive handled by this path, and an error when the primitive is
+    /// known but the launch was refused. No implicit host copy, no fallback and
+    /// no untracked allocation happens here: every pointer comes from the
+    /// manager's own device allocations.
+    fn launch_m10_op(
+        &self,
+        op: &TensorOp<'_>,
+        pointers: &[u64],
+    ) -> Result<Option<()>, CudaMemoryError> {
+        let handled = match op {
+            TensorOp::Linear { input, weight } => {
+                let shape = input.layout().shape();
+                let out_features = weight.layout().shape()[0];
+                let launch = if input.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.linear_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            shape[0],
+                            shape[1],
+                            out_features,
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.linear(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            shape[0],
+                            shape[1],
+                            out_features,
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::RotaryEmbed { input, .. } => {
+                let shape = input.layout().shape();
+                let launch = if input.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.rotary_embed_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            pointers[3],
+                            shape[0],
+                            shape[1],
+                            shape[2],
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.rotary_embed(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            pointers[3],
+                            shape[0],
+                            shape[1],
+                            shape[2],
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::Attention {
+                query,
+                key,
+                value: _,
+                mask,
+                scale,
+            } => {
+                let query_shape = query.layout().shape();
+                let key_shape = key.layout().shape();
+                let masked = mask.is_some();
+                // With a mask the kernel reads the mask from pointer slot 3.
+                let mask_pointer = if masked { pointers[3] } else { 0 };
+                let output = pointers[pointers.len() - 1];
+                let launch = if query.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.attention_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            mask_pointer,
+                            output,
+                            *scale,
+                            query_shape[0],
+                            key_shape[0],
+                            query_shape[1],
+                            key_shape[1],
+                            query_shape[2],
+                            masked,
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.attention(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            mask_pointer,
+                            output,
+                            *scale,
+                            query_shape[0],
+                            key_shape[0],
+                            query_shape[1],
+                            key_shape[1],
+                            query_shape[2],
+                            masked,
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::SoftCap { input, cap } => {
+                let launch = if input.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.soft_cap_bf16(
+                            pointers[0],
+                            pointers[1],
+                            input.layout().numel(),
+                            *cap,
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.soft_cap(
+                            pointers[0],
+                            pointers[1],
+                            input.layout().numel(),
+                            *cap,
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::Scale { input, factor } => {
+                let width = input.layout().shape().last().copied().unwrap_or(0);
+                let launch = if input.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.scale_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            input.layout().numel(),
+                            width,
+                            factor.layout().numel(),
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.scale(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            input.layout().numel(),
+                            width,
+                            factor.layout().numel(),
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::ScaleScalar { input, factor } => {
+                let launch = if input.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.scale_scalar_bf16(
+                            pointers[0],
+                            pointers[1],
+                            input.layout().numel(),
+                            *factor,
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.scale_scalar(
+                            pointers[0],
+                            pointers[1],
+                            input.layout().numel(),
+                            *factor,
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::Widen { input } => {
+                let launch = unsafe {
+                    self.compute_engine.widen_bf16(
+                        pointers[0],
+                        pointers[1],
+                        input.layout().numel(),
+                        &self.compute_stream,
+                    )
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::RouterTopK {
+                scores,
+                per_expert_scale: _,
+                top_k,
+            } => {
+                let shape = scores.layout().shape();
+                let launch = unsafe {
+                    self.compute_engine.router_top_k(
+                        pointers[0],
+                        pointers[1],
+                        pointers[2],
+                        shape[0],
+                        shape[1],
+                        *top_k,
+                        &self.compute_stream,
+                    )
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::GeluMulUp { gate, .. } => {
+                let launch = if gate.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.gelu_mul_up_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            gate.layout().numel(),
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.gelu_mul_up(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            gate.layout().numel(),
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::GatherRows { input, indices } => {
+                let input_rows = input.layout().shape()[0];
+                let launch = if input.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.gather_rows_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            input_rows,
+                            indices.layout().numel(),
+                            input.layout().shape()[1],
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.gather_rows(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            input_rows,
+                            indices.layout().numel(),
+                            input.layout().shape()[1],
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::ScatterAdd {
+                source,
+                weights: _,
+                rows: _,
+                out_rows,
+            } => {
+                // One block per destination row; the kernel writes every cell,
+                // so no pre-zero is issued.
+                let width = source.layout().shape()[1];
+                let launch = if source.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.scatter_add_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            pointers[3],
+                            source.layout().shape()[0],
+                            width,
+                            *out_rows,
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.scatter_add(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            pointers[3],
+                            source.layout().shape()[0],
+                            width,
+                            *out_rows,
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::EmbedGather { ids, table, scale } => {
+                let launch = if table.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.embed_gather_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            ids.layout().numel(),
+                            table.layout().shape()[1],
+                            *scale,
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.embed_gather(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            ids.layout().numel(),
+                            table.layout().shape()[1],
+                            *scale,
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::RowMask { input, flags: _ } => {
+                let shape = input.layout().shape();
+                let launch = if input.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.row_mask_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            shape[0],
+                            shape[1],
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.row_mask(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            shape[0],
+                            shape[1],
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            TensorOp::ScaleBias { input, .. } => {
+                let launch = if input.layout().dtype() == DType::BF16 {
+                    unsafe {
+                        self.compute_engine.scale_bias_bf16(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            pointers[3],
+                            input.layout().numel(),
+                            input.layout().shape()[1],
+                            &self.compute_stream,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        self.compute_engine.scale_bias(
+                            pointers[0],
+                            pointers[1],
+                            pointers[2],
+                            pointers[3],
+                            input.layout().numel(),
+                            input.layout().shape()[1],
+                            &self.compute_stream,
+                        )
+                    }
+                };
+                self.honor_launch_fault(launch)?;
+                true
+            }
+            _ => false,
+        };
+        Ok(if handled { Some(()) } else { None })
     }
 
     /// Poll every pending transfer without blocking and retire only events
@@ -1255,6 +1843,43 @@ mod tests {
     ) -> Result<TransferToken, CudaMemoryError> {
         manager.launch_tensor_op(
             &TensorOp::Add { lhs, rhs },
+            &[ids[0].as_str(), ids[1].as_str()],
+            &ids[2],
+            tick,
+        )
+    }
+
+    /// Builds the three managed allocations an M10 launch-fault test needs: a
+    /// real `Linear` op (input, weight, freshly allocated output). The M10 path
+    /// installs its own guards, so it must be injected on its own boundary.
+    fn m10_launch_inputs() -> (CudaTensorMemory, Tensor, Tensor, Tensor, Vec<String>) {
+        let memory = tensor_memory();
+        let input = memory
+            .upload_f32(vec![4, 2], &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0])
+            .expect("linear input upload");
+        let weight = memory
+            .upload_f32(vec![4, 2], &[0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5])
+            .expect("linear weight upload");
+        let output = memory
+            .allocate_tensor(vec![4, 4], DType::F32)
+            .expect("linear output allocation");
+        let ids = vec![
+            memory.buffer_id(&input).unwrap(),
+            memory.buffer_id(&weight).unwrap(),
+            memory.buffer_id(&output).unwrap(),
+        ];
+        (memory, input, weight, output, ids)
+    }
+
+    fn launch_m10_linear(
+        manager: &mut CudaMemoryManager,
+        input: &Tensor,
+        weight: &Tensor,
+        ids: &[String],
+        tick: u64,
+    ) -> Result<TransferToken, CudaMemoryError> {
+        manager.launch_tensor_op(
+            &TensorOp::Linear { input, weight },
             &[ids[0].as_str(), ids[1].as_str()],
             &ids[2],
             tick,
@@ -2113,6 +2738,178 @@ mod tests {
                 Err(CudaMemoryError::ManagerPoisoned)
             ));
         }
+    }
+
+    // ---- B3: manager-level fault injection for the M10 launch path -----------
+    //
+    // The M10 diffusion primitives share `launch_tensor_op`, the event tracker
+    // and the recovery boundary, but they install their guards on their own
+    // branch. These tests inject failures on that branch and require exactly the
+    // same fail-closed behaviour as the M8 path.
+
+    #[test]
+    #[ignore = "requires a CUDA driver; fault injection targets the real manager"]
+    fn injected_m10_launch_failure_with_successful_sync_releases_every_allocation() {
+        let (memory, input, weight, _output, ids) = m10_launch_inputs();
+        let before: Vec<u64> = {
+            let manager = memory.manager();
+            ids.iter()
+                .map(|id| manager.allocation(id).unwrap().safe_after_tick)
+                .collect()
+        };
+        let tick = memory.tick();
+        let error = {
+            let _faults = FaultGuard::set(launch_faults::Faults {
+                launch_code: Some(700),
+                ..Default::default()
+            });
+            let mut manager = memory.manager_mut();
+            launch_m10_linear(&mut manager, &input, &weight, &ids, tick).err()
+        };
+        assert!(matches!(
+            error,
+            Some(CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuLaunchKernel",
+                code: 700
+            }))
+        ));
+        {
+            let manager = memory.manager();
+            assert!(!manager.poisoned);
+            assert!(manager.transfers.pending.is_empty());
+            for (id, previous) in ids.iter().zip(before) {
+                assert_eq!(manager.allocation(id).unwrap().safe_after_tick, previous);
+            }
+        }
+        let release_tick = memory.tick();
+        let mut manager = memory.manager_mut();
+        for id in &ids {
+            manager.release(id, release_tick).unwrap();
+        }
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 0);
+    }
+
+    #[test]
+    #[ignore = "requires a CUDA driver; fault injection targets the real manager"]
+    fn injected_m10_launch_failure_with_sync_error_poisons_and_pins_all_allocations() {
+        let (memory, input, weight, _output, ids) = m10_launch_inputs();
+        let used_before = memory.usage_bytes(MemoryTier::Vram);
+        let tick = memory.tick();
+        let error = {
+            let _faults = FaultGuard::set(launch_faults::Faults {
+                launch_code: Some(700),
+                stream_sync_code: Some(901),
+                ..Default::default()
+            });
+            let mut manager = memory.manager_mut();
+            launch_m10_linear(&mut manager, &input, &weight, &ids, tick).err()
+        };
+        assert!(matches!(
+            error,
+            Some(CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuStreamSynchronize",
+                code: 901
+            }))
+        ));
+        {
+            let manager = memory.manager();
+            assert!(manager.poisoned);
+            for id in &ids {
+                assert_eq!(manager.allocation(id).unwrap().safe_after_tick, IN_FLIGHT);
+            }
+            assert_eq!(manager.usage_bytes(MemoryTier::Vram), used_before);
+        }
+        let release_tick = memory.tick();
+        let mut manager = memory.manager_mut();
+        for id in &ids {
+            assert!(matches!(
+                manager.release(id, release_tick),
+                Err(CudaMemoryError::ManagerPoisoned)
+            ));
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a CUDA driver; fault injection targets the real manager"]
+    fn injected_m10_partial_guard_failure_with_successful_sync_lifts_only_installed_guards() {
+        let (memory, input, weight, _output, ids) = m10_launch_inputs();
+        let before: Vec<u64> = {
+            let manager = memory.manager();
+            ids.iter()
+                .map(|id| manager.allocation(id).unwrap().safe_after_tick)
+                .collect()
+        };
+        let tick = memory.tick();
+        let error = {
+            let _faults = FaultGuard::set(launch_faults::Faults {
+                fail_guard_at: Some(1),
+                ..Default::default()
+            });
+            let mut manager = memory.manager_mut();
+            launch_m10_linear(&mut manager, &input, &weight, &ids, tick).err()
+        };
+        assert!(matches!(
+            error,
+            Some(CudaMemoryError::Policy(MemoryError::AllocationNotFound(_)))
+        ));
+        {
+            let manager = memory.manager();
+            assert!(!manager.poisoned);
+            assert!(manager.transfers.pending.is_empty());
+            // The input guard was installed, then lifted on recovery.
+            assert_eq!(manager.allocation(&ids[0]).unwrap().safe_after_tick, tick);
+            // The failing and not-yet-installed guards keep their prior horizon.
+            assert_eq!(
+                manager.allocation(&ids[1]).unwrap().safe_after_tick,
+                before[1]
+            );
+            assert_eq!(
+                manager.allocation(&ids[2]).unwrap().safe_after_tick,
+                before[2]
+            );
+        }
+        let release_tick = memory.tick();
+        let mut manager = memory.manager_mut();
+        for id in &ids {
+            manager.release(id, release_tick).unwrap();
+        }
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 0);
+    }
+
+    #[test]
+    #[ignore = "requires a CUDA driver; fault injection targets the real manager"]
+    fn injected_m10_event_record_failure_with_successful_sync_lifts_every_guard() {
+        let (memory, input, weight, _output, ids) = m10_launch_inputs();
+        let tick = memory.tick();
+        let error = {
+            let _faults = FaultGuard::set(launch_faults::Faults {
+                record_code: Some(702),
+                ..Default::default()
+            });
+            let mut manager = memory.manager_mut();
+            launch_m10_linear(&mut manager, &input, &weight, &ids, tick).err()
+        };
+        assert!(matches!(
+            error,
+            Some(CudaMemoryError::Cuda(CudaError::Driver {
+                operation: "cuEventRecord",
+                code: 702
+            }))
+        ));
+        {
+            let manager = memory.manager();
+            assert!(!manager.poisoned);
+            assert!(manager.transfers.pending.is_empty());
+            for id in &ids {
+                assert_eq!(manager.allocation(id).unwrap().safe_after_tick, tick);
+            }
+        }
+        let release_tick = memory.tick();
+        let mut manager = memory.manager_mut();
+        for id in &ids {
+            manager.release(id, release_tick).unwrap();
+        }
+        assert_eq!(manager.usage_bytes(MemoryTier::Vram), 0);
     }
 
     #[test]

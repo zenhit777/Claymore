@@ -4,7 +4,7 @@
  * This file is the source of truth for crates/claymore-cuda/src/kernels/m8_bf16.ptx.
  * Regenerate the embedded PTX with (CUDA 13.0 or newer, Blackwell sm_120):
  *
- *   nvcc -arch=compute_120 -code=compute_120 -O3 -ptx \
+ *   nvcc -arch=compute_120 -code=compute_120 -O3 -ptx -fmad=false \
  *     -o crates/claymore-cuda/src/kernels/m8_bf16.ptx \
  *     crates/claymore-cuda/kernels/m8_bf16.cu
  *
@@ -21,17 +21,7 @@
  * RTX 5090 (compute capability 12.0).
  */
 
-#include <cuda_bf16.h>
-#include <math.h>
-#include <stdint.h>
-
-__device__ __forceinline__ float to_f32(__nv_bfloat16 value) {
-  return __bfloat162float(value);
-}
-
-__device__ __forceinline__ __nv_bfloat16 to_bf16_rn(float value) {
-  return __float2bfloat16_rn(value);
-}
+#include "claymore_math.cuh"
 
 extern "C" __global__ void claymore_add_bf16(
     const __nv_bfloat16 *__restrict__ a,
@@ -75,40 +65,15 @@ extern "C" __global__ void claymore_softmax_last_dim_bf16(
   if (row >= rows) {
     return;
   }
-  const __nv_bfloat16 *x = input + row * width;
-  __nv_bfloat16 *y = out + row * width;
-  unsigned int tid = threadIdx.x;
-
-  float local_max = -INFINITY;
-  for (uint64_t index = tid; index < width; index += blockDim.x) {
-    local_max = fmaxf(local_max, to_f32(x[index]));
-  }
-  shared[tid] = local_max;
-  __syncthreads();
-  for (unsigned int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
-    if (tid < stride) {
-      shared[tid] = fmaxf(shared[tid], shared[tid + stride]);
-    }
-    __syncthreads();
-  }
-  float max_value = shared[0];
-  __syncthreads();
-
-  float local_sum = 0.0f;
-  for (uint64_t index = tid; index < width; index += blockDim.x) {
-    local_sum += expf(to_f32(x[index]) - max_value);
-  }
-  shared[tid] = local_sum;
-  __syncthreads();
-  for (unsigned int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
-    if (tid < stride) {
-      shared[tid] += shared[tid + stride];
-    }
-    __syncthreads();
-  }
-  float inv_sum = 1.0f / shared[0];
-  for (uint64_t index = tid; index < width; index += blockDim.x) {
-    y[index] = to_bf16_rn(expf(to_f32(x[index]) - max_value) * inv_sum);
+  // Same reduction order as the FP32 kernel and the CPU reference: max and sum
+  // over the widened values in index order, then a division by the sum, with
+  // the single narrowing to BF16 at output.
+  //
+  // `claymore_softmax_row_bf16` is a single-thread contract: it writes each
+  // probability from the shared scratch state. Only one thread of the block
+  // may run it.
+  if (threadIdx.x == 0) {
+    claymore_softmax_row_bf16(input + row * width, out + row * width, width, shared);
   }
 }
 
@@ -128,19 +93,17 @@ extern "C" __global__ void claymore_rms_norm_bf16(
   __nv_bfloat16 *y = out + row * width;
   unsigned int tid = threadIdx.x;
 
-  float local_sum = 0.0f;
-  for (uint64_t index = tid; index < width; index += blockDim.x) {
-    float value = to_f32(x[index]);
-    local_sum = fmaf(value, value, local_sum);
-  }
-  shared[tid] = local_sum;
-  __syncthreads();
-  for (unsigned int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
-    if (tid < stride) {
-      shared[tid] += shared[tid + stride];
+  // Sequential row reduction on one thread, bit-exact against the CPU
+  // reference's `sum` over the widened values.
+  if (tid == 0) {
+    float local_sum = 0.0f;
+    for (uint64_t index = 0; index < width; ++index) {
+      float value = to_f32(x[index]);
+      local_sum += value * value;
     }
-    __syncthreads();
+    shared[0] = local_sum;
   }
+  __syncthreads();
   float inv_rms = 1.0f / sqrtf(shared[0] / (float)width + epsilon);
   for (uint64_t index = tid; index < width; index += blockDim.x) {
     float value = to_f32(x[index]);

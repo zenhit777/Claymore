@@ -1,0 +1,37 @@
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+   Compiling claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Finished `release` profile [optimized] target(s) in 2.06s
+     Running tests/hardware_m10_generation.rs (target/release/build/claymore-model-gemma/8d8977850df016e1/out/hardware_m10_generation-8d8977850df016e1)
+
+running 2 tests
+test cuda_graph_matches_golden_first_step ... encoder_last_hidden CUDA vs CPU: max_abs=0.000000 rms=NaN
+encoder_last_hidden CUDA vs golden: max_abs=0.000000 rms=NaN
+encoder_last_hidden CPU vs golden: max_abs=5.539062 rms=0.763049
+
+thread 'cuda_graph_matches_golden_first_step' (1636112) panicked at crates/claymore-model-gemma/tests/hardware_m10_generation.rs:115:5:
+encoder CUDA/CPU rms NaN
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test real_generation_runs_one_canvas_block_on_the_card ... 
+thread 'real_generation_runs_one_canvas_block_on_the_card' (1636776) panicked at crates/claymore-model-gemma/tests/hardware_m10_generation.rs:216:10:
+canvas block generated on the card: Execution(Dispatch(Contract(ShapeMismatch)))
+FAILED
+
+failures:
+
+failures:
+    cuda_graph_matches_golden_first_step
+    real_generation_runs_one_canvas_block_on_the_card
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 257.50s
+
+error: test failed, to rerun pass `-p claymore-model-gemma --test hardware_m10_generation`
+EXIT=101

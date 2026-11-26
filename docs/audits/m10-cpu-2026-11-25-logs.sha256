@@ -1,0 +1,7 @@
+0071f8559fce80e4594c7924e3ef9a6a5b0e96e6c1700d62e0b50f1c3d7173ff  m10-cpu-2026-11-25-01-reference-generation.log.txt
+a79b240884c12f2def1ffa34e7e93a9a257163e358d9fb58cde7ff7ce0c7dde4  m10-cpu-2026-11-25-02-chain-golden-cpu-pre-refactor.log.txt
+6e1beb672e0c86eb6a6cbdaf47d1aff2ceba09eae18b1130119a59ad213e2d38  m10-cpu-2026-11-25-03-chain-golden-cpu-post-refactor.log.txt
+80be162a4f07d5587c833c55020ad84fcff299624572c4476d82be2dc64eb735  m10-cpu-2026-11-25-04-bisect-encoder-entrees-dorees.log.txt
+19831f00faf11ae7789998ce1673e60da104a001153b48fef812f9f32752d18e  m10-cpu-2026-11-25-05-bisect-vision-27-couches.log.txt
+fe7a582ddd79031102653a8292136831edd979da382bb89ed1c10173d051d072  m10-cpu-2026-11-25-06-bisect-decodeur-30-couches.log.txt
+34b3c0045fd1823c676284834b09fb8973f7d0b7285d0d052653027a00794bec  m10-cpu-2026-11-25-07-ci-replica.log.txt

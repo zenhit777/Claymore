@@ -1,0 +1,1155 @@
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+   Compiling claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Finished `release` profile [optimized] target(s) in 3.48s
+     Running tests/golden_cpu.rs (target/release/build/claymore-model-gemma/e786979933c6a175/out/golden_cpu-e786979933c6a175)
+
+running 7 tests
+test decoder_chain_drift_is_tracked_against_pinned_upstream ... dec0_attn_out max_abs=0.125000 rms=0.006938
+dec0_post_attn_norm max_abs=0.500000 rms=0.011543
+dec0_residual_after_attn max_abs=0.500000 rms=0.011727
+dec0_mlp_out max_abs=0.500000 rms=0.031715
+dec0_post_ff1 max_abs=8.000000 rms=0.090635
+dec0_pre_ff2 max_abs=0.017578 rms=0.000615
+dec0_experts max_abs=0.218750 rms=0.006190
+dec0_post_ff2 max_abs=50.250000 rms=0.462216
+dec0_mlp_moe_sum max_abs=52.000000 rms=0.479805
+dec0_post_ff max_abs=17.000000 rms=0.243366
+dec0_out max_abs=1.125000 rms=0.017060
+dec1_attn_out max_abs=0.625000 rms=0.042478
+dec1_post_attn_norm max_abs=0.687500 rms=0.024235
+dec1_residual_after_attn max_abs=1.312500 rms=0.029223
+dec1_mlp_out max_abs=0.750000 rms=0.049432
+dec1_post_ff1 max_abs=32.000000 rms=0.532171
+dec1_pre_ff2 max_abs=0.100098 rms=0.005482
+dec1_experts max_abs=0.078125 rms=0.005007
+dec1_post_ff2 max_abs=50.000000 rms=0.536297
+dec1_mlp_moe_sum max_abs=56.000000 rms=0.770866
+dec1_post_ff max_abs=2.125000 rms=0.061000
+dec1_out max_abs=0.500000 rms=0.014151
+dec2_attn_out max_abs=0.500000 rms=0.038547
+dec2_post_attn_norm max_abs=0.203125 rms=0.014084
+dec2_residual_after_attn max_abs=0.468750 rms=0.020612
+dec2_mlp_out max_abs=0.468750 rms=0.033540
+dec2_post_ff1 max_abs=12.000000 rms=0.311578
+dec2_pre_ff2 max_abs=0.077637 rms=0.006361
+dec2_experts max_abs=0.117188 rms=0.012116
+dec2_post_ff2 max_abs=40.187500 rms=0.719829
+dec2_mlp_moe_sum max_abs=32.000000 rms=0.790443
+dec2_post_ff max_abs=4.250000 rms=0.178371
+dec2_out max_abs=0.750000 rms=0.031749
+dec3_attn_out max_abs=1.000000 rms=0.089528
+dec3_post_attn_norm max_abs=0.367188 rms=0.020784
+dec3_residual_after_attn max_abs=0.843750 rms=0.038771
+dec3_mlp_out max_abs=1.195312 rms=0.077492
+dec3_post_ff1 max_abs=84.000000 rms=0.895369
+dec3_pre_ff2 max_abs=0.183105 rms=0.018899
+dec3_experts max_abs=0.531250 rms=0.016618
+dec3_post_ff2 max_abs=32.000000 rms=0.806254
+dec3_mlp_moe_sum max_abs=104.000000 rms=1.272366
+dec3_post_ff max_abs=1.812500 rms=0.053617
+dec3_out max_abs=0.750000 rms=0.036554
+dec4_attn_out max_abs=0.500000 rms=0.068249
+dec4_post_attn_norm max_abs=0.156250 rms=0.010578
+dec4_residual_after_attn max_abs=0.750000 rms=0.039509
+dec4_mlp_out max_abs=0.312500 rms=0.025259
+dec4_post_ff1 max_abs=32.000000 rms=0.602921
+dec4_pre_ff2 max_abs=0.169922 rms=0.020965
+dec4_experts max_abs=0.064453 rms=0.002019
+dec4_post_ff2 max_abs=36.000000 rms=0.664881
+dec4_mlp_moe_sum max_abs=48.000000 rms=0.952682
+dec4_post_ff max_abs=1.000000 rms=0.023928
+dec4_out max_abs=0.875000 rms=0.032832
+dec5_attn_out max_abs=1.125000 rms=0.108105
+dec5_post_attn_norm max_abs=0.312500 rms=0.018308
+dec5_residual_after_attn max_abs=0.875000 rms=0.038875
+dec5_mlp_out max_abs=0.281250 rms=0.018264
+dec5_post_ff1 max_abs=40.000000 rms=0.534537
+dec5_pre_ff2 max_abs=0.116455 rms=0.015072
+dec5_experts max_abs=0.139160 rms=0.013062
+dec5_post_ff2 max_abs=54.000000 rms=1.580465
+dec5_mlp_moe_sum max_abs=64.000000 rms=1.687330
+dec5_post_ff max_abs=2.656250 rms=0.071347
+dec5_out max_abs=1.625000 rms=0.054157
+dec6_attn_out max_abs=1.750000 rms=0.137166
+dec6_post_attn_norm max_abs=0.375000 rms=0.021510
+dec6_residual_after_attn max_abs=1.750000 rms=0.060784
+dec6_mlp_out max_abs=0.531250 rms=0.036155
+dec6_post_ff1 max_abs=128.000000 rms=1.661081
+dec6_pre_ff2 max_abs=0.312500 rms=0.044039
+dec6_experts max_abs=0.328125 rms=0.023161
+dec6_post_ff2 max_abs=136.000000 rms=2.249016
+dec6_mlp_moe_sum max_abs=144.000000 rms=2.789121
+dec6_post_ff max_abs=1.416016 rms=0.067133
+dec6_out max_abs=1.375000 rms=0.064796
+dec7_attn_out max_abs=4.117188 rms=0.204648
+dec7_post_attn_norm max_abs=0.625000 rms=0.035817
+dec7_residual_after_attn max_abs=1.632812 rms=0.076075
+dec7_mlp_out max_abs=0.468750 rms=0.043339
+dec7_post_ff1 max_abs=88.000000 rms=1.800704
+dec7_pre_ff2 max_abs=0.329102 rms=0.039343
+dec7_experts max_abs=0.335938 rms=0.022079
+dec7_post_ff2 max_abs=118.000000 rms=2.999880
+dec7_mlp_moe_sum max_abs=144.000000 rms=3.591066
+dec7_post_ff max_abs=2.015625 rms=0.122959
+dec7_out max_abs=2.375000 rms=0.104288
+dec8_attn_out max_abs=2.875000 rms=0.283231
+dec8_post_attn_norm max_abs=0.859375 rms=0.061037
+dec8_residual_after_attn max_abs=2.125000 rms=0.123427
+dec8_mlp_out max_abs=2.125000 rms=0.128114
+dec8_post_ff1 max_abs=134.000000 rms=3.022852
+dec8_pre_ff2 max_abs=0.388672 rms=0.069262
+dec8_experts max_abs=0.375000 rms=0.024218
+dec8_post_ff2 max_abs=52.000000 rms=2.019716
+dec8_mlp_moe_sum max_abs=153.000000 rms=3.771778
+dec8_post_ff max_abs=3.875000 rms=0.130851
+dec8_out max_abs=3.500000 rms=0.137402
+dec9_attn_out max_abs=4.062500 rms=0.288781
+dec9_post_attn_norm max_abs=0.808594 rms=0.067588
+dec9_residual_after_attn max_abs=3.875000 rms=0.158575
+dec9_mlp_out max_abs=0.312500 rms=0.029356
+dec9_post_ff1 max_abs=92.000000 rms=2.114450
+dec9_pre_ff2 max_abs=0.314453 rms=0.059668
+dec9_experts max_abs=0.335938 rms=0.022951
+dec9_post_ff2 max_abs=65.500000 rms=2.074164
+dec9_mlp_moe_sum max_abs=104.000000 rms=3.134966
+dec9_post_ff max_abs=3.250000 rms=0.139803
+dec9_out max_abs=5.000000 rms=0.159934
+dec10_attn_out max_abs=1.937500 rms=0.242859
+dec10_post_attn_norm max_abs=0.984375 rms=0.079773
+dec10_residual_after_attn max_abs=5.000000 rms=0.181135
+dec10_mlp_out max_abs=0.203125 rms=0.012539
+dec10_post_ff1 max_abs=40.000000 rms=0.961153
+dec10_pre_ff2 max_abs=0.431641 rms=0.068149
+dec10_experts max_abs=0.453125 rms=0.027192
+dec10_post_ff2 max_abs=40.968750 rms=1.230027
+dec10_mlp_moe_sum max_abs=48.000000 rms=1.612855
+dec10_post_ff max_abs=4.460938 rms=0.171943
+dec10_out max_abs=4.000000 rms=0.188594
+dec11_attn_out max_abs=6.062500 rms=0.366121
+dec11_post_attn_norm max_abs=1.380615 rms=0.143652
+dec11_residual_after_attn max_abs=4.000000 rms=0.246772
+dec11_mlp_out max_abs=0.158203 rms=0.015643
+dec11_post_ff1 max_abs=48.000000 rms=1.559058
+dec11_pre_ff2 max_abs=0.452148 rms=0.072233
+dec11_experts max_abs=0.281250 rms=0.023435
+dec11_post_ff2 max_abs=42.500000 rms=1.845537
+dec11_mlp_moe_sum max_abs=48.000000 rms=2.487524
+dec11_post_ff max_abs=3.789062 rms=0.236404
+dec11_out max_abs=3.417969 rms=0.237849
+dec12_attn_out max_abs=4.062500 rms=0.299225
+dec12_post_attn_norm max_abs=2.000000 rms=0.126640
+dec12_residual_after_attn max_abs=4.000000 rms=0.265254
+dec12_mlp_out max_abs=0.136719 rms=0.014211
+dec12_post_ff1 max_abs=67.000000 rms=1.259462
+dec12_pre_ff2 max_abs=0.346191 rms=0.059131
+dec12_experts max_abs=0.203125 rms=0.017137
+dec12_post_ff2 max_abs=81.750000 rms=1.897866
+dec12_mlp_moe_sum max_abs=106.000000 rms=2.377879
+dec12_post_ff max_abs=5.250000 rms=0.221539
+dec12_out max_abs=7.500000 rms=0.259323
+dec13_attn_out max_abs=3.476562 rms=0.339634
+dec13_post_attn_norm max_abs=2.976562 rms=0.158253
+dec13_residual_after_attn max_abs=10.500000 rms=0.311615
+dec13_mlp_out max_abs=0.136719 rms=0.012317
+dec13_post_ff1 max_abs=128.000000 rms=1.291514
+dec13_pre_ff2 max_abs=0.458008 rms=0.064802
+dec13_experts max_abs=0.267578 rms=0.017160
+dec13_post_ff2 max_abs=91.500000 rms=2.951815
+dec13_mlp_moe_sum max_abs=176.000000 rms=3.341858
+dec13_post_ff max_abs=9.000000 rms=0.342019
+dec13_out max_abs=14.500000 rms=0.332305
+dec14_attn_out max_abs=4.750000 rms=0.416945
+dec14_post_attn_norm max_abs=4.500000 rms=0.233220
+dec14_residual_after_attn max_abs=18.500000 rms=0.418563
+dec14_mlp_out max_abs=0.140625 rms=0.011097
+dec14_post_ff1 max_abs=83.000000 rms=1.253044
+dec14_pre_ff2 max_abs=0.597656 rms=0.074970
+dec14_experts max_abs=0.203125 rms=0.015698
+dec14_post_ff2 max_abs=68.750000 rms=2.216038
+dec14_mlp_moe_sum max_abs=120.000000 rms=2.652013
+dec14_post_ff max_abs=6.750000 rms=0.382867
+dec14_out max_abs=15.000000 rms=0.349095
+dec15_attn_out max_abs=3.289062 rms=0.353694
+dec15_post_attn_norm max_abs=2.347656 rms=0.260733
+dec15_residual_after_attn max_abs=16.000000 rms=0.444098
+dec15_mlp_out max_abs=0.210938 rms=0.018843
+dec15_post_ff1 max_abs=93.000000 rms=1.520937
+dec15_pre_ff2 max_abs=0.410156 rms=0.065235
+dec15_experts max_abs=0.185547 rms=0.011561
+dec15_post_ff2 max_abs=51.000000 rms=1.547218
+dec15_mlp_moe_sum max_abs=144.000000 rms=2.310256
+dec15_post_ff max_abs=13.500000 rms=0.461150
+dec15_out max_abs=11.500000 rms=0.332404
+dec16_attn_out max_abs=3.250000 rms=0.343270
+dec16_post_attn_norm max_abs=3.667969 rms=0.339274
+dec16_residual_after_attn max_abs=11.500000 rms=0.487521
+dec16_mlp_out max_abs=0.050781 rms=0.005826
+dec16_post_ff1 max_abs=66.000000 rms=1.312092
+dec16_pre_ff2 max_abs=0.398438 rms=0.073101
+dec16_experts max_abs=0.367188 rms=0.016401
+dec16_post_ff2 max_abs=50.375000 rms=1.847963
+dec16_mlp_moe_sum max_abs=94.000000 rms=2.312554
+dec16_post_ff max_abs=9.500000 rms=0.504122
+dec16_out max_abs=9.500000 rms=0.356336
+dec17_attn_out max_abs=5.859375 rms=0.406912
+dec17_post_attn_norm max_abs=2.953125 rms=0.344610
+dec17_residual_after_attn max_abs=11.500000 rms=0.502463
+dec17_mlp_out max_abs=0.117188 rms=0.011569
+dec17_post_ff1 max_abs=38.000000 rms=1.589869
+dec17_pre_ff2 max_abs=1.035156 rms=0.086962
+dec17_experts max_abs=0.265625 rms=0.016983
+dec17_post_ff2 max_abs=27.500000 rms=1.815777
+dec17_mlp_moe_sum max_abs=40.750000 rms=2.438941
+dec17_post_ff max_abs=6.500000 rms=0.514468
+dec17_out max_abs=8.500000 rms=0.394673
+dec18_attn_out max_abs=5.750000 rms=0.433417
+dec18_post_attn_norm max_abs=2.562500 rms=0.243912
+dec18_residual_after_attn max_abs=10.500000 rms=0.469272
+dec18_mlp_out max_abs=0.531250 rms=0.031596
+dec18_post_ff1 max_abs=45.000000 rms=1.111987
+dec18_pre_ff2 max_abs=0.671875 rms=0.102544
+dec18_experts max_abs=0.203125 rms=0.019252
+dec18_post_ff2 max_abs=19.593750 rms=1.170452
+dec18_mlp_moe_sum max_abs=52.000000 rms=1.662442
+dec18_post_ff max_abs=7.625000 rms=0.375507
+dec18_out max_abs=8.562500 rms=0.424899
+dec19_attn_out max_abs=4.500000 rms=0.363668
+dec19_post_attn_norm max_abs=3.250000 rms=0.279252
+dec19_residual_after_attn max_abs=10.000000 rms=0.503810
+dec19_mlp_out max_abs=0.257812 rms=0.023088
+dec19_post_ff1 max_abs=46.000000 rms=1.460833
+dec19_pre_ff2 max_abs=0.507812 rms=0.101729
+dec19_experts max_abs=0.312500 rms=0.016119
+dec19_post_ff2 max_abs=39.500000 rms=1.748528
+dec19_mlp_moe_sum max_abs=47.000000 rms=2.334558
+dec19_post_ff max_abs=8.750000 rms=0.394663
+dec19_out max_abs=8.750000 rms=0.321999
+dec20_attn_out max_abs=4.125000 rms=0.409799
+dec20_post_attn_norm max_abs=2.656250 rms=0.230216
+dec20_residual_after_attn max_abs=10.250000 rms=0.425399
+dec20_mlp_out max_abs=1.031250 rms=0.109895
+dec20_post_ff1 max_abs=106.000000 rms=1.798827
+dec20_pre_ff2 max_abs=0.464844 rms=0.095796
+dec20_experts max_abs=0.343750 rms=0.017209
+dec20_post_ff2 max_abs=48.000000 rms=1.873529
+dec20_mlp_moe_sum max_abs=92.000000 rms=2.590898
+dec20_post_ff max_abs=6.750000 rms=0.317402
+dec20_out max_abs=7.750000 rms=0.356872
+dec21_attn_out max_abs=3.125000 rms=0.392001
+dec21_post_attn_norm max_abs=1.945312 rms=0.245116
+dec21_residual_after_attn max_abs=8.500000 rms=0.436540
+dec21_mlp_out max_abs=0.539062 rms=0.043476
+dec21_post_ff1 max_abs=108.000000 rms=1.825717
+dec21_pre_ff2 max_abs=0.423340 rms=0.096647
+dec21_experts max_abs=0.203125 rms=0.017647
+dec21_post_ff2 max_abs=38.000000 rms=1.789564
+dec21_mlp_moe_sum max_abs=128.000000 rms=2.627386
+dec21_post_ff max_abs=4.500000 rms=0.348815
+dec21_out max_abs=7.000000 rms=0.333250
+dec22_attn_out max_abs=3.343750 rms=0.328054
+dec22_post_attn_norm max_abs=1.355469 rms=0.222184
+dec22_residual_after_attn max_abs=7.000000 rms=0.395462
+dec22_mlp_out max_abs=0.906250 rms=0.104288
+dec22_post_ff1 max_abs=23.000000 rms=0.698347
+dec22_pre_ff2 max_abs=0.502930 rms=0.109009
+dec22_experts max_abs=0.195312 rms=0.019484
+dec22_post_ff2 max_abs=14.937500 rms=0.946168
+dec22_mlp_moe_sum max_abs=29.000000 rms=1.215234
+dec22_post_ff max_abs=5.000000 rms=0.286822
+dec22_out max_abs=4.750000 rms=0.291660
+dec23_attn_out max_abs=4.242188 rms=0.384416
+dec23_post_attn_norm max_abs=1.695312 rms=0.275871
+dec23_residual_after_attn max_abs=4.281250 rms=0.405135
+dec23_mlp_out max_abs=5.093750 rms=0.379225
+dec23_post_ff1 max_abs=60.000000 rms=1.527714
+dec23_pre_ff2 max_abs=0.588135 rms=0.121462
+dec23_experts max_abs=0.382812 rms=0.029192
+dec23_post_ff2 max_abs=82.375000 rms=2.097598
+dec23_mlp_moe_sum max_abs=68.500000 rms=2.585624
+dec23_post_ff max_abs=3.882812 rms=0.391947
+dec23_out max_abs=2.500000 rms=0.374757
+dec24_attn_out max_abs=3.562500 rms=0.386438
+dec24_post_attn_norm max_abs=1.679688 rms=0.254152
+dec24_residual_after_attn max_abs=2.789062 rms=0.455069
+dec24_mlp_out max_abs=3.687500 rms=0.469606
+dec24_post_ff1 max_abs=60.000000 rms=1.550867
+dec24_pre_ff2 max_abs=0.627686 rms=0.117128
+dec24_experts max_abs=0.390625 rms=0.026785
+dec24_post_ff2 max_abs=28.375000 rms=2.255475
+dec24_mlp_moe_sum max_abs=44.000000 rms=2.763436
+dec24_post_ff max_abs=5.031250 rms=0.406352
+dec24_out max_abs=4.250000 rms=0.406432
+dec25_attn_out max_abs=2.394531 rms=0.451125
+dec25_post_attn_norm max_abs=1.654297 rms=0.295373
+dec25_residual_after_attn max_abs=4.250000 rms=0.532624
+dec25_mlp_out max_abs=8.875000 rms=0.675348
+dec25_post_ff1 max_abs=122.000000 rms=1.854699
+dec25_pre_ff2 max_abs=0.804688 rms=0.127764
+dec25_experts max_abs=0.267578 rms=0.027058
+dec25_post_ff2 max_abs=27.000000 rms=1.963713
+dec25_mlp_moe_sum max_abs=140.000000 rms=2.782793
+dec25_post_ff max_abs=4.000000 rms=0.409454
+dec25_out max_abs=3.046875 rms=0.445849
+dec26_attn_out max_abs=3.125000 rms=0.507318
+dec26_post_attn_norm max_abs=2.220703 rms=0.393949
+dec26_residual_after_attn max_abs=4.000000 rms=0.615289
+dec26_mlp_out max_abs=12.750000 rms=1.381204
+dec26_post_ff1 max_abs=138.000000 rms=1.573523
+dec26_pre_ff2 max_abs=0.810547 rms=0.143086
+dec26_experts max_abs=0.300781 rms=0.023632
+dec26_post_ff2 max_abs=30.500000 rms=1.417027
+dec26_mlp_moe_sum max_abs=132.000000 rms=2.109926
+dec26_post_ff max_abs=4.375000 rms=0.496285
+dec26_out max_abs=2.890625 rms=0.461674
+dec27_attn_out max_abs=6.843750 rms=0.514317
+dec27_post_attn_norm max_abs=4.000000 rms=0.465544
+dec27_residual_after_attn max_abs=5.625000 rms=0.647222
+dec27_mlp_out max_abs=24.250000 rms=1.497488
+dec27_post_ff1 max_abs=116.000000 rms=1.800647
+dec27_pre_ff2 max_abs=0.446289 rms=0.098088
+dec27_experts max_abs=0.201172 rms=0.012477
+dec27_post_ff2 max_abs=26.125000 rms=1.331629
+dec27_mlp_moe_sum max_abs=112.000000 rms=2.256196
+dec27_post_ff max_abs=5.750000 rms=0.350812
+dec27_out max_abs=4.000000 rms=0.436210
+dec28_attn_out max_abs=2.632812 rms=0.313272
+dec28_post_attn_norm max_abs=6.625000 rms=0.977601
+dec28_residual_after_attn max_abs=8.250000 rms=1.092372
+dec28_mlp_out max_abs=29.500000 rms=2.099400
+dec28_post_ff1 max_abs=72.000000 rms=1.582753
+dec28_pre_ff2 max_abs=0.394531 rms=0.077978
+dec28_experts max_abs=0.255249 rms=0.009059
+dec28_post_ff2 max_abs=11.468750 rms=0.865072
+dec28_mlp_moe_sum max_abs=75.000000 rms=1.857291
+dec28_post_ff max_abs=6.750000 rms=0.498782
+dec28_out max_abs=2.789062 rms=0.572492
+dec29_attn_out max_abs=7.408203 rms=0.511480
+dec29_post_attn_norm max_abs=4.734375 rms=0.418799
+dec29_residual_after_attn max_abs=4.000000 rms=0.719415
+dec29_mlp_out max_abs=3.937500 rms=0.373887
+dec29_post_ff1 max_abs=104.312500 rms=1.595986
+dec29_pre_ff2 max_abs=0.667969 rms=0.097815
+dec29_experts max_abs=0.235352 rms=0.010428
+dec29_post_ff2 max_abs=41.125000 rms=0.699215
+dec29_mlp_moe_sum max_abs=102.750000 rms=1.664814
+dec29_post_ff max_abs=30.000000 rms=0.824534
+dec29_out max_abs=5.500000 rms=0.200407
+decoder_layer_0 max_abs=1.125000 rms=0.017060
+decoder_layer_1 max_abs=0.500000 rms=0.014151
+decoder_layer_2 max_abs=0.750000 rms=0.031749
+decoder_layer_3 max_abs=0.750000 rms=0.036554
+decoder_layer_4 max_abs=0.875000 rms=0.032832
+decoder_layer_5 max_abs=1.625000 rms=0.054157
+decoder_layer_6 max_abs=1.375000 rms=0.064796
+decoder_layer_7 max_abs=2.375000 rms=0.104288
+decoder_layer_8 max_abs=3.500000 rms=0.137402
+decoder_layer_9 max_abs=5.000000 rms=0.159934
+decoder_layer_10 max_abs=4.000000 rms=0.188594
+decoder_layer_11 max_abs=3.417969 rms=0.237849
+decoder_layer_12 max_abs=7.500000 rms=0.259323
+decoder_layer_13 max_abs=14.500000 rms=0.332305
+decoder_layer_14 max_abs=15.000000 rms=0.349095
+decoder_layer_15 max_abs=11.500000 rms=0.332404
+decoder_layer_16 max_abs=9.500000 rms=0.356336
+decoder_layer_17 max_abs=8.500000 rms=0.394673
+decoder_layer_18 max_abs=8.562500 rms=0.424899
+decoder_layer_19 max_abs=8.750000 rms=0.321999
+decoder_layer_20 max_abs=7.750000 rms=0.356872
+decoder_layer_21 max_abs=7.000000 rms=0.333250
+decoder_layer_22 max_abs=4.750000 rms=0.291660
+decoder_layer_23 max_abs=2.500000 rms=0.374757
+decoder_layer_24 max_abs=4.250000 rms=0.406432
+decoder_layer_25 max_abs=3.046875 rms=0.445849
+decoder_layer_26 max_abs=2.890625 rms=0.461674
+decoder_layer_27 max_abs=4.000000 rms=0.436210
+decoder_layer_28 max_abs=2.789062 rms=0.572492
+decoder_layer_29 max_abs=5.500000 rms=0.200407
+decoder_last_hidden0 max_abs=12.937500 rms=1.974973
+decoder_logits0 max_abs=20.145552 rms=3.566787
+moe0 router scores max_abs=0.000545 rms=0.000040
+moe0 topk weights max_abs=0.002155 rms=0.000547
+moe0 topk flip token 3 slot 4: rust=114 golden=13
+moe0 topk flip token 3 slot 5: rust=123 golden=114
+moe0 topk flip token 3 slot 6: rust=13 golden=123
+moe0 topk flip token 11 slot 1: rust=123 golden=22
+moe0 topk index flips=8/128
+moe0 router: indices_exact=false, weights rms=0.000547
+decoder_last_hidden0 worst row drift=94.9 BF16 steps of the row peak
+tracked (formerly gated): hidden 12.937500/1.974973, logits 20.145552/3.566787, router scores 0.000545, weights 0.002155, indices_exact=false
+ok
+test encoder0_router_matches_pinned_upstream_on_the_real_checkpoint ... encoder0_router raw_max_abs=0.000000000 raw_rms=0.000000000 exact=true
+encoder0_router prob_max_abs=0.000000030 prob_rms=0.000000003
+encoder0_router weight_max_abs=0.000000030 weight_rms=0.000000014
+ok
+test encoder_chain_drift_is_tracked_against_pinned_upstream ... encoder_last_hidden max_abs=5.828125 rms=0.754065
+encoder_last_hidden worst row drift=46.6 BF16 steps of the row peak
+enc_kv_0 keys max_abs=0.000977 rms=0.000032
+ok
+test encoder_layer0_projections_match_pinned_upstream_on_the_real_checkpoint ... q_proj max_abs=0.250000 rms=0.004428
+k_proj max_abs=0.250000 rms=0.004749
+v_proj max_abs=0.125000 rms=0.004615
+ok
+test encoder_layers_match_pinned_upstream_on_the_real_checkpoint ... encoder_layer_0 max_abs=0.500000 rms=0.006806
+enc_kv_0_keys max_abs=0.000977 rms=0.000032
+enc_kv_0_values max_abs=0.007812 rms=0.000356
+encoder0_router_scores max_abs=0.002429 rms=0.000089 indices_exact=true
+encoder0_router_indices exact=true
+enc_kv_0_keys max_abs=0.000977 rms=0.000032
+enc_kv_0_values max_abs=0.007812 rms=0.000356
+encoder0_attention max_abs=0.062500 rms=0.004762
+encoder0_mlp max_abs=1.000000 rms=0.036861
+encoder0_experts max_abs=0.015625 rms=0.000859
+encoder0_router_scores max_abs=0.002429 rms=0.000089
+encoder0_router_weights max_abs=0.005122 rms=0.000804
+encoder0_router_indices exact=true
+encoder0_router_indices rust=[90.0, 113.0, 68.0, 33.0, 55.0, 22.0, 126.0, 105.0, 113.0, 68.0, 33.0, 90.0, 1.0, 126.0, 77.0, 37.0, 33.0, 68.0, 75.0, 7.0, 126.0, 51.0, 77.0, 115.0, 121.0, 78.0, 90.0, 53.0, 124.0, 47.0, 31.0, 112.0, 9.0, 68.0, 33.0, 126.0, 39.0, 0.0, 112.0, 46.0, 21.0, 25.0, 90.0, 47.0, 53.0, 89.0, 41.0, 127.0, 22.0, 0.0, 33.0, 116.0, 46.0, 1.0, 126.0, 39.0]
+encoder0_router_indices golden=[90.0, 113.0, 68.0, 33.0, 55.0, 22.0, 126.0, 105.0, 113.0, 68.0, 33.0, 90.0, 1.0, 126.0, 77.0, 37.0, 33.0, 68.0, 75.0, 7.0, 126.0, 51.0, 77.0, 115.0, 121.0, 78.0, 90.0, 53.0, 124.0, 47.0, 31.0, 112.0, 9.0, 68.0, 33.0, 126.0, 39.0, 0.0, 112.0, 46.0, 21.0, 25.0, 90.0, 47.0, 53.0, 89.0, 41.0, 127.0, 22.0, 0.0, 33.0, 116.0, 46.0, 1.0, 126.0, 39.0]
+encoder0_input_normed max_abs=0.031250 rms=0.000417
+encoder0_routing_residual max_abs=0.500000 rms=0.011613
+encoder0_expert_input max_abs=0.007812 rms=0.000486
+router token 0 candidates
+  expert 33: raw_rust=4.0625 raw_golden=4.0625 prob_rust=0.04223365 prob_golden=0.042233646
+  expert 68: raw_rust=4.0625 raw_golden=4.0625 prob_rust=0.04223365 prob_golden=0.042233646
+router token 2 candidates
+  expert 113: raw_rust=3.75 raw_golden=3.75 prob_rust=0.024524136 prob_golden=0.024444241
+  expert 115: raw_rust=3.765625 raw_golden=3.765625 prob_rust=0.024910333 prob_golden=0.024829183
+router token 5 candidates
+  expert 0: raw_rust=3.203125 raw_golden=3.203125 prob_rust=0.017253585 prob_golden=0.017256746
+  expert 127: raw_rust=3.21875 raw_golden=3.21875 prob_rust=0.01752529 prob_golden=0.017528502
+encoder_layer_1 max_abs=0.500000 rms=0.009743
+enc_kv_1_keys max_abs=0.003906 rms=0.000390
+enc_kv_1_values max_abs=0.062500 rms=0.003941
+encoder1_router_scores max_abs=0.004680 rms=0.000217 indices_exact=false
+  layer 1 token 5: rust=[93.0, 89.0, 65.0, 123.0, 97.0, 47.0, 50.0, 77.0] golden=[93.0, 65.0, 89.0, 123.0, 97.0, 47.0, 50.0, 77.0]
+encoder1_router_indices exact=false
+  layer 1 token 5: rust=[93.0, 89.0, 65.0, 123.0, 97.0, 47.0, 50.0, 77.0] golden=[93.0, 65.0, 89.0, 123.0, 97.0, 47.0, 50.0, 77.0]
+enc_kv_1_keys max_abs=0.003906 rms=0.000390
+enc_kv_1_values max_abs=0.062500 rms=0.003941
+encoder_layer_2 max_abs=0.500000 rms=0.011514
+enc_kv_2_keys max_abs=0.007812 rms=0.000678
+enc_kv_2_values max_abs=0.062500 rms=0.006853
+encoder2_router_scores max_abs=0.002803 rms=0.000125 indices_exact=false
+  layer 2 token 6: rust=[24.0, 65.0, 85.0, 68.0, 71.0, 15.0, 44.0, 109.0] golden=[24.0, 65.0, 85.0, 68.0, 15.0, 71.0, 44.0, 109.0]
+encoder2_router_indices exact=false
+  layer 2 token 6: rust=[24.0, 65.0, 85.0, 68.0, 71.0, 15.0, 44.0, 109.0] golden=[24.0, 65.0, 85.0, 68.0, 15.0, 71.0, 44.0, 109.0]
+enc_kv_2_keys max_abs=0.007812 rms=0.000678
+enc_kv_2_values max_abs=0.062500 rms=0.006853
+encoder_layer_3 max_abs=0.250000 rms=0.011390
+enc_kv_3_keys max_abs=0.005859 rms=0.000824
+enc_kv_3_values max_abs=0.156250 rms=0.010269
+encoder3_router_scores max_abs=0.000659 rms=0.000061 indices_exact=false
+  layer 3 token 0: rust=[8.0, 75.0, 77.0, 123.0, 39.0, 51.0, 6.0, 15.0] golden=[8.0, 75.0, 77.0, 39.0, 123.0, 51.0, 6.0, 15.0]
+  layer 3 token 3: rust=[38.0, 15.0, 127.0, 102.0, 39.0, 92.0, 85.0, 67.0] golden=[38.0, 15.0, 127.0, 102.0, 92.0, 39.0, 85.0, 67.0]
+  layer 3 token 4: rust=[61.0, 127.0, 62.0, 38.0, 39.0, 15.0, 98.0, 13.0] golden=[61.0, 127.0, 62.0, 38.0, 15.0, 39.0, 98.0, 13.0]
+  layer 3 token 5: rust=[85.0, 69.0, 22.0, 93.0, 38.0, 92.0, 15.0, 19.0] golden=[85.0, 69.0, 93.0, 38.0, 92.0, 22.0, 15.0, 19.0]
+encoder3_router_indices exact=false
+  layer 3 token 0: rust=[8.0, 75.0, 77.0, 123.0, 39.0, 51.0, 6.0, 15.0] golden=[8.0, 75.0, 77.0, 39.0, 123.0, 51.0, 6.0, 15.0]
+  layer 3 token 3: rust=[38.0, 15.0, 127.0, 102.0, 39.0, 92.0, 85.0, 67.0] golden=[38.0, 15.0, 127.0, 102.0, 92.0, 39.0, 85.0, 67.0]
+  layer 3 token 4: rust=[61.0, 127.0, 62.0, 38.0, 39.0, 15.0, 98.0, 13.0] golden=[61.0, 127.0, 62.0, 38.0, 15.0, 39.0, 98.0, 13.0]
+  layer 3 token 5: rust=[85.0, 69.0, 22.0, 93.0, 38.0, 92.0, 15.0, 19.0] golden=[85.0, 69.0, 93.0, 38.0, 92.0, 22.0, 15.0, 19.0]
+enc_kv_3_keys max_abs=0.005859 rms=0.000824
+enc_kv_3_values max_abs=0.156250 rms=0.010269
+encoder_layer_4 max_abs=0.500000 rms=0.012108
+enc_kv_4_keys max_abs=0.004395 rms=0.000766
+enc_kv_4_values max_abs=0.082031 rms=0.009481
+encoder4_router_scores max_abs=0.001841 rms=0.000126 indices_exact=false
+  layer 4 token 1: rust=[23.0, 55.0, 119.0, 74.0, 27.0, 1.0, 8.0, 47.0] golden=[55.0, 119.0, 23.0, 74.0, 27.0, 1.0, 8.0, 47.0]
+  layer 4 token 3: rust=[124.0, 63.0, 32.0, 37.0, 125.0, 75.0, 25.0, 83.0] golden=[124.0, 63.0, 32.0, 37.0, 125.0, 75.0, 83.0, 25.0]
+  layer 4 token 5: rust=[59.0, 91.0, 63.0, 46.0, 94.0, 87.0, 125.0, 75.0] golden=[59.0, 91.0, 63.0, 46.0, 87.0, 94.0, 125.0, 75.0]
+encoder4_router_indices exact=false
+  layer 4 token 1: rust=[23.0, 55.0, 119.0, 74.0, 27.0, 1.0, 8.0, 47.0] golden=[55.0, 119.0, 23.0, 74.0, 27.0, 1.0, 8.0, 47.0]
+  layer 4 token 3: rust=[124.0, 63.0, 32.0, 37.0, 125.0, 75.0, 25.0, 83.0] golden=[124.0, 63.0, 32.0, 37.0, 125.0, 75.0, 83.0, 25.0]
+  layer 4 token 5: rust=[59.0, 91.0, 63.0, 46.0, 94.0, 87.0, 125.0, 75.0] golden=[59.0, 91.0, 63.0, 46.0, 87.0, 94.0, 125.0, 75.0]
+enc_kv_4_keys max_abs=0.004395 rms=0.000766
+enc_kv_4_values max_abs=0.082031 rms=0.009481
+encoder_layer_5 max_abs=0.375000 rms=0.013194
+enc_kv_5_keys max_abs=0.003906 rms=0.000646
+enc_kv_5_values max_abs=0.062500 rms=0.010322
+encoder5_router_scores max_abs=0.005817 rms=0.000209 indices_exact=false
+  layer 5 token 0: rust=[73.0, 126.0, 56.0, 16.0, 111.0, 58.0, 89.0, 120.0] golden=[73.0, 56.0, 126.0, 16.0, 111.0, 58.0, 89.0, 120.0]
+encoder5_router_indices exact=false
+  layer 5 token 0: rust=[73.0, 126.0, 56.0, 16.0, 111.0, 58.0, 89.0, 120.0] golden=[73.0, 56.0, 126.0, 16.0, 111.0, 58.0, 89.0, 120.0]
+enc_kv_5_keys max_abs=0.003906 rms=0.000646
+enc_kv_5_values max_abs=0.062500 rms=0.010322
+encoder_layer_6 max_abs=0.375000 rms=0.013252
+enc_kv_6_keys max_abs=0.008057 rms=0.001315
+enc_kv_6_values max_abs=0.125000 rms=0.012896
+encoder6_router_scores max_abs=0.000536 rms=0.000074 indices_exact=false
+  layer 6 token 0: rust=[9.0, 112.0, 86.0, 0.0, 20.0, 119.0, 37.0, 68.0] golden=[9.0, 0.0, 86.0, 112.0, 20.0, 119.0, 68.0, 37.0]
+  layer 6 token 3: rust=[68.0, 86.0, 122.0, 25.0, 81.0, 93.0, 57.0, 119.0] golden=[68.0, 86.0, 122.0, 25.0, 93.0, 81.0, 57.0, 119.0]
+  layer 6 token 5: rust=[120.0, 86.0, 68.0, 122.0, 125.0, 11.0, 124.0, 87.0] golden=[120.0, 86.0, 68.0, 122.0, 11.0, 125.0, 87.0, 124.0]
+  layer 6 token 6: rust=[5.0, 119.0, 0.0, 85.0, 37.0, 97.0, 120.0, 59.0] golden=[5.0, 119.0, 0.0, 85.0, 37.0, 120.0, 97.0, 59.0]
+encoder6_router_indices exact=false
+  layer 6 token 0: rust=[9.0, 112.0, 86.0, 0.0, 20.0, 119.0, 37.0, 68.0] golden=[9.0, 0.0, 86.0, 112.0, 20.0, 119.0, 68.0, 37.0]
+  layer 6 token 3: rust=[68.0, 86.0, 122.0, 25.0, 81.0, 93.0, 57.0, 119.0] golden=[68.0, 86.0, 122.0, 25.0, 93.0, 81.0, 57.0, 119.0]
+  layer 6 token 5: rust=[120.0, 86.0, 68.0, 122.0, 125.0, 11.0, 124.0, 87.0] golden=[120.0, 86.0, 68.0, 122.0, 11.0, 125.0, 87.0, 124.0]
+  layer 6 token 6: rust=[5.0, 119.0, 0.0, 85.0, 37.0, 97.0, 120.0, 59.0] golden=[5.0, 119.0, 0.0, 85.0, 37.0, 120.0, 97.0, 59.0]
+enc_kv_6_keys max_abs=0.008057 rms=0.001315
+enc_kv_6_values max_abs=0.125000 rms=0.012896
+encoder_layer_7 max_abs=0.812500 rms=0.050597
+enc_kv_7_keys max_abs=0.011719 rms=0.001381
+enc_kv_7_values max_abs=0.218750 rms=0.013058
+encoder7_router_scores max_abs=0.000495 rms=0.000067 indices_exact=false
+  layer 7 token 0: rust=[127.0, 55.0, 69.0, 7.0, 11.0, 70.0, 57.0, 34.0] golden=[127.0, 55.0, 69.0, 7.0, 11.0, 70.0, 34.0, 121.0]
+  layer 7 token 2: rust=[127.0, 37.0, 92.0, 33.0, 96.0, 55.0, 57.0, 34.0] golden=[127.0, 37.0, 33.0, 92.0, 96.0, 31.0, 57.0, 55.0]
+encoder7_router_indices exact=false
+  layer 7 token 0: rust=[127.0, 55.0, 69.0, 7.0, 11.0, 70.0, 57.0, 34.0] golden=[127.0, 55.0, 69.0, 7.0, 11.0, 70.0, 34.0, 121.0]
+  layer 7 token 2: rust=[127.0, 37.0, 92.0, 33.0, 96.0, 55.0, 57.0, 34.0] golden=[127.0, 37.0, 33.0, 92.0, 96.0, 31.0, 57.0, 55.0]
+enc_kv_7_keys max_abs=0.011719 rms=0.001381
+enc_kv_7_values max_abs=0.218750 rms=0.013058
+encoder_layer_8 max_abs=2.250000 rms=0.089484
+enc_kv_8_keys max_abs=0.078125 rms=0.005704
+enc_kv_8_values max_abs=1.468750 rms=0.071052
+encoder8_router_scores max_abs=0.001790 rms=0.000234 indices_exact=false
+  layer 8 token 0: rust=[104.0, 120.0, 14.0, 28.0, 86.0, 99.0, 117.0, 17.0] golden=[104.0, 120.0, 14.0, 86.0, 28.0, 58.0, 93.0, 17.0]
+  layer 8 token 1: rust=[120.0, 104.0, 117.0, 64.0, 28.0, 86.0, 70.0, 93.0] golden=[120.0, 104.0, 117.0, 28.0, 64.0, 86.0, 93.0, 70.0]
+  layer 8 token 2: rust=[120.0, 117.0, 54.0, 90.0, 14.0, 64.0, 6.0, 99.0] golden=[120.0, 117.0, 54.0, 14.0, 90.0, 64.0, 6.0, 99.0]
+  layer 8 token 4: rust=[50.0, 64.0, 118.0, 51.0, 104.0, 6.0, 70.0, 56.0] golden=[50.0, 64.0, 118.0, 51.0, 6.0, 104.0, 80.0, 56.0]
+  layer 8 token 5: rust=[104.0, 64.0, 80.0, 106.0, 73.0, 45.0, 100.0, 122.0] golden=[104.0, 64.0, 80.0, 106.0, 73.0, 100.0, 45.0, 122.0]
+  layer 8 token 6: rust=[12.0, 120.0, 64.0, 86.0, 117.0, 104.0, 14.0, 91.0] golden=[12.0, 120.0, 64.0, 86.0, 104.0, 117.0, 14.0, 91.0]
+encoder8_router_indices exact=false
+  layer 8 token 0: rust=[104.0, 120.0, 14.0, 28.0, 86.0, 99.0, 117.0, 17.0] golden=[104.0, 120.0, 14.0, 86.0, 28.0, 58.0, 93.0, 17.0]
+  layer 8 token 1: rust=[120.0, 104.0, 117.0, 64.0, 28.0, 86.0, 70.0, 93.0] golden=[120.0, 104.0, 117.0, 28.0, 64.0, 86.0, 93.0, 70.0]
+  layer 8 token 2: rust=[120.0, 117.0, 54.0, 90.0, 14.0, 64.0, 6.0, 99.0] golden=[120.0, 117.0, 54.0, 14.0, 90.0, 64.0, 6.0, 99.0]
+  layer 8 token 4: rust=[50.0, 64.0, 118.0, 51.0, 104.0, 6.0, 70.0, 56.0] golden=[50.0, 64.0, 118.0, 51.0, 6.0, 104.0, 80.0, 56.0]
+  layer 8 token 5: rust=[104.0, 64.0, 80.0, 106.0, 73.0, 45.0, 100.0, 122.0] golden=[104.0, 64.0, 80.0, 106.0, 73.0, 100.0, 45.0, 122.0]
+  layer 8 token 6: rust=[12.0, 120.0, 64.0, 86.0, 117.0, 104.0, 14.0, 91.0] golden=[12.0, 120.0, 64.0, 86.0, 104.0, 117.0, 14.0, 91.0]
+enc_kv_8_keys max_abs=0.078125 rms=0.005704
+enc_kv_8_values max_abs=1.468750 rms=0.071052
+encoder_layer_9 max_abs=2.500000 rms=0.134398
+enc_kv_9_keys max_abs=0.173828 rms=0.009573
+enc_kv_9_values max_abs=4.500000 rms=0.130863
+encoder9_router_scores max_abs=0.005648 rms=0.000498 indices_exact=false
+  layer 9 token 0: rust=[103.0, 66.0, 72.0, 106.0, 56.0, 101.0, 21.0, 57.0] golden=[103.0, 66.0, 21.0, 72.0, 106.0, 56.0, 101.0, 57.0]
+  layer 9 token 1: rust=[57.0, 66.0, 72.0, 103.0, 101.0, 95.0, 46.0, 48.0] golden=[57.0, 66.0, 72.0, 103.0, 95.0, 101.0, 48.0, 46.0]
+  layer 9 token 3: rust=[57.0, 103.0, 72.0, 71.0, 48.0, 66.0, 36.0, 13.0] golden=[57.0, 103.0, 72.0, 71.0, 48.0, 66.0, 68.0, 13.0]
+  layer 9 token 4: rust=[38.0, 66.0, 72.0, 57.0, 68.0, 48.0, 36.0, 56.0] golden=[38.0, 66.0, 72.0, 57.0, 68.0, 36.0, 48.0, 108.0]
+  layer 9 token 5: rust=[72.0, 66.0, 57.0, 46.0, 38.0, 113.0, 48.0, 103.0] golden=[72.0, 66.0, 57.0, 38.0, 46.0, 113.0, 48.0, 103.0]
+encoder9_router_indices exact=false
+  layer 9 token 0: rust=[103.0, 66.0, 72.0, 106.0, 56.0, 101.0, 21.0, 57.0] golden=[103.0, 66.0, 21.0, 72.0, 106.0, 56.0, 101.0, 57.0]
+  layer 9 token 1: rust=[57.0, 66.0, 72.0, 103.0, 101.0, 95.0, 46.0, 48.0] golden=[57.0, 66.0, 72.0, 103.0, 95.0, 101.0, 48.0, 46.0]
+  layer 9 token 3: rust=[57.0, 103.0, 72.0, 71.0, 48.0, 66.0, 36.0, 13.0] golden=[57.0, 103.0, 72.0, 71.0, 48.0, 66.0, 68.0, 13.0]
+  layer 9 token 4: rust=[38.0, 66.0, 72.0, 57.0, 68.0, 48.0, 36.0, 56.0] golden=[38.0, 66.0, 72.0, 57.0, 68.0, 36.0, 48.0, 108.0]
+  layer 9 token 5: rust=[72.0, 66.0, 57.0, 46.0, 38.0, 113.0, 48.0, 103.0] golden=[72.0, 66.0, 57.0, 38.0, 46.0, 113.0, 48.0, 103.0]
+enc_kv_9_keys max_abs=0.173828 rms=0.009573
+enc_kv_9_values max_abs=4.500000 rms=0.130863
+encoder_layer_10 max_abs=3.500000 rms=0.173721
+enc_kv_10_keys max_abs=0.099609 rms=0.011734
+enc_kv_10_values max_abs=1.265625 rms=0.103878
+encoder10_router_scores max_abs=0.005682 rms=0.000430 indices_exact=false
+  layer 10 token 0: rust=[79.0, 66.0, 8.0, 14.0, 92.0, 124.0, 85.0, 45.0] golden=[79.0, 66.0, 8.0, 14.0, 92.0, 124.0, 85.0, 110.0]
+  layer 10 token 1: rust=[14.0, 66.0, 57.0, 8.0, 124.0, 37.0, 45.0, 110.0] golden=[14.0, 66.0, 57.0, 8.0, 124.0, 37.0, 45.0, 79.0]
+  layer 10 token 3: rust=[79.0, 45.0, 31.0, 66.0, 124.0, 57.0, 14.0, 8.0] golden=[79.0, 124.0, 31.0, 66.0, 45.0, 57.0, 8.0, 14.0]
+  layer 10 token 4: rust=[66.0, 79.0, 31.0, 124.0, 110.0, 92.0, 14.0, 45.0] golden=[66.0, 79.0, 31.0, 124.0, 110.0, 92.0, 14.0, 57.0]
+  layer 10 token 5: rust=[31.0, 45.0, 79.0, 66.0, 14.0, 57.0, 92.0, 28.0] golden=[31.0, 45.0, 79.0, 66.0, 57.0, 14.0, 92.0, 28.0]
+  layer 10 token 6: rust=[14.0, 31.0, 45.0, 57.0, 66.0, 110.0, 124.0, 8.0] golden=[14.0, 31.0, 45.0, 57.0, 110.0, 66.0, 124.0, 8.0]
+encoder10_router_indices exact=false
+  layer 10 token 0: rust=[79.0, 66.0, 8.0, 14.0, 92.0, 124.0, 85.0, 45.0] golden=[79.0, 66.0, 8.0, 14.0, 92.0, 124.0, 85.0, 110.0]
+  layer 10 token 1: rust=[14.0, 66.0, 57.0, 8.0, 124.0, 37.0, 45.0, 110.0] golden=[14.0, 66.0, 57.0, 8.0, 124.0, 37.0, 45.0, 79.0]
+  layer 10 token 3: rust=[79.0, 45.0, 31.0, 66.0, 124.0, 57.0, 14.0, 8.0] golden=[79.0, 124.0, 31.0, 66.0, 45.0, 57.0, 8.0, 14.0]
+  layer 10 token 4: rust=[66.0, 79.0, 31.0, 124.0, 110.0, 92.0, 14.0, 45.0] golden=[66.0, 79.0, 31.0, 124.0, 110.0, 92.0, 14.0, 57.0]
+  layer 10 token 5: rust=[31.0, 45.0, 79.0, 66.0, 14.0, 57.0, 92.0, 28.0] golden=[31.0, 45.0, 79.0, 66.0, 57.0, 14.0, 92.0, 28.0]
+  layer 10 token 6: rust=[14.0, 31.0, 45.0, 57.0, 66.0, 110.0, 124.0, 8.0] golden=[14.0, 31.0, 45.0, 57.0, 110.0, 66.0, 124.0, 8.0]
+enc_kv_10_keys max_abs=0.099609 rms=0.011734
+enc_kv_10_values max_abs=1.265625 rms=0.103878
+encoder_layer_11 max_abs=5.000000 rms=0.257199
+enc_kv_11_keys max_abs=0.051758 rms=0.008306
+enc_kv_11_values max_abs=0.875000 rms=0.138253
+encoder11_router_scores max_abs=0.012028 rms=0.000596 indices_exact=false
+  layer 11 token 0: rust=[98.0, 102.0, 68.0, 66.0, 117.0, 16.0, 80.0, 111.0] golden=[98.0, 102.0, 68.0, 117.0, 66.0, 16.0, 111.0, 27.0]
+  layer 11 token 1: rust=[98.0, 68.0, 16.0, 61.0, 27.0, 102.0, 111.0, 66.0] golden=[98.0, 68.0, 16.0, 27.0, 61.0, 102.0, 66.0, 111.0]
+  layer 11 token 2: rust=[112.0, 111.0, 56.0, 27.0, 10.0, 92.0, 68.0, 18.0] golden=[112.0, 111.0, 56.0, 10.0, 68.0, 27.0, 92.0, 18.0]
+  layer 11 token 3: rust=[68.0, 10.0, 111.0, 56.0, 79.0, 92.0, 113.0, 66.0] golden=[68.0, 10.0, 56.0, 111.0, 98.0, 92.0, 79.0, 27.0]
+  layer 11 token 4: rust=[68.0, 83.0, 49.0, 43.0, 66.0, 98.0, 27.0, 10.0] golden=[68.0, 83.0, 49.0, 98.0, 43.0, 10.0, 27.0, 66.0]
+  layer 11 token 5: rust=[68.0, 111.0, 10.0, 4.0, 98.0, 61.0, 66.0, 103.0] golden=[68.0, 111.0, 10.0, 4.0, 61.0, 98.0, 66.0, 113.0]
+  layer 11 token 6: rust=[68.0, 98.0, 61.0, 16.0, 27.0, 111.0, 10.0, 18.0] golden=[98.0, 68.0, 61.0, 16.0, 27.0, 111.0, 10.0, 18.0]
+encoder11_router_indices exact=false
+  layer 11 token 0: rust=[98.0, 102.0, 68.0, 66.0, 117.0, 16.0, 80.0, 111.0] golden=[98.0, 102.0, 68.0, 117.0, 66.0, 16.0, 111.0, 27.0]
+  layer 11 token 1: rust=[98.0, 68.0, 16.0, 61.0, 27.0, 102.0, 111.0, 66.0] golden=[98.0, 68.0, 16.0, 27.0, 61.0, 102.0, 66.0, 111.0]
+  layer 11 token 2: rust=[112.0, 111.0, 56.0, 27.0, 10.0, 92.0, 68.0, 18.0] golden=[112.0, 111.0, 56.0, 10.0, 68.0, 27.0, 92.0, 18.0]
+  layer 11 token 3: rust=[68.0, 10.0, 111.0, 56.0, 79.0, 92.0, 113.0, 66.0] golden=[68.0, 10.0, 56.0, 111.0, 98.0, 92.0, 79.0, 27.0]
+  layer 11 token 4: rust=[68.0, 83.0, 49.0, 43.0, 66.0, 98.0, 27.0, 10.0] golden=[68.0, 83.0, 49.0, 98.0, 43.0, 10.0, 27.0, 66.0]
+  layer 11 token 5: rust=[68.0, 111.0, 10.0, 4.0, 98.0, 61.0, 66.0, 103.0] golden=[68.0, 111.0, 10.0, 4.0, 61.0, 98.0, 66.0, 113.0]
+  layer 11 token 6: rust=[68.0, 98.0, 61.0, 16.0, 27.0, 111.0, 10.0, 18.0] golden=[98.0, 68.0, 61.0, 16.0, 27.0, 111.0, 10.0, 18.0]
+enc_kv_11_keys max_abs=0.051758 rms=0.008306
+enc_kv_11_values max_abs=0.875000 rms=0.138253
+encoder_layer_12 max_abs=5.500000 rms=0.269540
+enc_kv_12_keys max_abs=0.224609 rms=0.019958
+enc_kv_12_values max_abs=1.644531 rms=0.231722
+encoder12_router_scores max_abs=0.013196 rms=0.000871 indices_exact=false
+  layer 12 token 0: rust=[49.0, 80.0, 108.0, 5.0, 71.0, 50.0, 86.0, 53.0] golden=[49.0, 108.0, 80.0, 71.0, 5.0, 50.0, 53.0, 86.0]
+  layer 12 token 1: rust=[50.0, 5.0, 71.0, 94.0, 108.0, 80.0, 49.0, 39.0] golden=[50.0, 5.0, 71.0, 108.0, 49.0, 94.0, 80.0, 39.0]
+  layer 12 token 2: rust=[71.0, 108.0, 53.0, 73.0, 5.0, 25.0, 45.0, 50.0] golden=[71.0, 108.0, 53.0, 73.0, 5.0, 25.0, 50.0, 45.0]
+  layer 12 token 3: rust=[108.0, 39.0, 50.0, 71.0, 21.0, 20.0, 49.0, 9.0] golden=[108.0, 50.0, 39.0, 71.0, 21.0, 94.0, 20.0, 49.0]
+  layer 12 token 4: rust=[108.0, 50.0, 5.0, 71.0, 39.0, 127.0, 18.0, 9.0] golden=[108.0, 50.0, 71.0, 5.0, 39.0, 11.0, 63.0, 9.0]
+  layer 12 token 5: rust=[108.0, 50.0, 71.0, 94.0, 39.0, 20.0, 49.0, 21.0] golden=[108.0, 50.0, 71.0, 94.0, 39.0, 20.0, 49.0, 9.0]
+  layer 12 token 6: rust=[5.0, 71.0, 50.0, 108.0, 53.0, 12.0, 94.0, 9.0] golden=[5.0, 71.0, 50.0, 108.0, 53.0, 12.0, 94.0, 116.0]
+encoder12_router_indices exact=false
+  layer 12 token 0: rust=[49.0, 80.0, 108.0, 5.0, 71.0, 50.0, 86.0, 53.0] golden=[49.0, 108.0, 80.0, 71.0, 5.0, 50.0, 53.0, 86.0]
+  layer 12 token 1: rust=[50.0, 5.0, 71.0, 94.0, 108.0, 80.0, 49.0, 39.0] golden=[50.0, 5.0, 71.0, 108.0, 49.0, 94.0, 80.0, 39.0]
+  layer 12 token 2: rust=[71.0, 108.0, 53.0, 73.0, 5.0, 25.0, 45.0, 50.0] golden=[71.0, 108.0, 53.0, 73.0, 5.0, 25.0, 50.0, 45.0]
+  layer 12 token 3: rust=[108.0, 39.0, 50.0, 71.0, 21.0, 20.0, 49.0, 9.0] golden=[108.0, 50.0, 39.0, 71.0, 21.0, 94.0, 20.0, 49.0]
+  layer 12 token 4: rust=[108.0, 50.0, 5.0, 71.0, 39.0, 127.0, 18.0, 9.0] golden=[108.0, 50.0, 71.0, 5.0, 39.0, 11.0, 63.0, 9.0]
+  layer 12 token 5: rust=[108.0, 50.0, 71.0, 94.0, 39.0, 20.0, 49.0, 21.0] golden=[108.0, 50.0, 71.0, 94.0, 39.0, 20.0, 49.0, 9.0]
+  layer 12 token 6: rust=[5.0, 71.0, 50.0, 108.0, 53.0, 12.0, 94.0, 9.0] golden=[5.0, 71.0, 50.0, 108.0, 53.0, 12.0, 94.0, 116.0]
+enc_kv_12_keys max_abs=0.224609 rms=0.019958
+enc_kv_12_values max_abs=1.644531 rms=0.231722
+encoder_layer_13 max_abs=4.570312 rms=0.275571
+enc_kv_13_keys max_abs=0.168457 rms=0.023622
+enc_kv_13_values max_abs=1.968750 rms=0.262027
+encoder13_router_scores max_abs=0.007323 rms=0.000752 indices_exact=false
+  layer 13 token 0: rust=[79.0, 121.0, 38.0, 114.0, 64.0, 45.0, 29.0, 78.0] golden=[79.0, 38.0, 121.0, 114.0, 45.0, 64.0, 78.0, 29.0]
+  layer 13 token 1: rust=[121.0, 114.0, 13.0, 45.0, 79.0, 78.0, 120.0, 29.0] golden=[121.0, 114.0, 13.0, 45.0, 120.0, 78.0, 79.0, 29.0]
+  layer 13 token 2: rust=[25.0, 31.0, 29.0, 114.0, 107.0, 126.0, 42.0, 45.0] golden=[25.0, 31.0, 29.0, 114.0, 126.0, 107.0, 45.0, 42.0]
+  layer 13 token 3: rust=[114.0, 100.0, 31.0, 120.0, 121.0, 79.0, 58.0, 29.0] golden=[114.0, 31.0, 100.0, 29.0, 121.0, 120.0, 58.0, 79.0]
+  layer 13 token 4: rust=[114.0, 121.0, 120.0, 45.0, 31.0, 29.0, 15.0, 124.0] golden=[114.0, 120.0, 121.0, 31.0, 29.0, 15.0, 45.0, 58.0]
+  layer 13 token 5: rust=[114.0, 121.0, 58.0, 29.0, 120.0, 31.0, 79.0, 100.0] golden=[114.0, 120.0, 121.0, 58.0, 29.0, 31.0, 79.0, 38.0]
+  layer 13 token 6: rust=[31.0, 114.0, 121.0, 45.0, 126.0, 85.0, 124.0, 13.0] golden=[31.0, 114.0, 121.0, 45.0, 85.0, 96.0, 126.0, 124.0]
+encoder13_router_indices exact=false
+  layer 13 token 0: rust=[79.0, 121.0, 38.0, 114.0, 64.0, 45.0, 29.0, 78.0] golden=[79.0, 38.0, 121.0, 114.0, 45.0, 64.0, 78.0, 29.0]
+  layer 13 token 1: rust=[121.0, 114.0, 13.0, 45.0, 79.0, 78.0, 120.0, 29.0] golden=[121.0, 114.0, 13.0, 45.0, 120.0, 78.0, 79.0, 29.0]
+  layer 13 token 2: rust=[25.0, 31.0, 29.0, 114.0, 107.0, 126.0, 42.0, 45.0] golden=[25.0, 31.0, 29.0, 114.0, 126.0, 107.0, 45.0, 42.0]
+  layer 13 token 3: rust=[114.0, 100.0, 31.0, 120.0, 121.0, 79.0, 58.0, 29.0] golden=[114.0, 31.0, 100.0, 29.0, 121.0, 120.0, 58.0, 79.0]
+  layer 13 token 4: rust=[114.0, 121.0, 120.0, 45.0, 31.0, 29.0, 15.0, 124.0] golden=[114.0, 120.0, 121.0, 31.0, 29.0, 15.0, 45.0, 58.0]
+  layer 13 token 5: rust=[114.0, 121.0, 58.0, 29.0, 120.0, 31.0, 79.0, 100.0] golden=[114.0, 120.0, 121.0, 58.0, 29.0, 31.0, 79.0, 38.0]
+  layer 13 token 6: rust=[31.0, 114.0, 121.0, 45.0, 126.0, 85.0, 124.0, 13.0] golden=[31.0, 114.0, 121.0, 45.0, 85.0, 96.0, 126.0, 124.0]
+enc_kv_13_keys max_abs=0.168457 rms=0.023622
+enc_kv_13_values max_abs=1.968750 rms=0.262027
+encoder_layer_14 max_abs=3.625000 rms=0.271256
+enc_kv_14_keys max_abs=0.240234 rms=0.026556
+enc_kv_14_values max_abs=1.863281 rms=0.288176
+encoder14_router_scores max_abs=0.025457 rms=0.001155 indices_exact=false
+  layer 14 token 0: rust=[59.0, 10.0, 38.0, 121.0, 26.0, 31.0, 109.0, 8.0] golden=[59.0, 10.0, 38.0, 121.0, 26.0, 109.0, 8.0, 31.0]
+  layer 14 token 1: rust=[10.0, 59.0, 121.0, 119.0, 38.0, 26.0, 31.0, 56.0] golden=[10.0, 59.0, 121.0, 119.0, 38.0, 26.0, 56.0, 31.0]
+  layer 14 token 2: rust=[86.0, 7.0, 111.0, 31.0, 89.0, 59.0, 8.0, 97.0] golden=[86.0, 7.0, 111.0, 31.0, 89.0, 8.0, 97.0, 59.0]
+  layer 14 token 3: rust=[121.0, 119.0, 38.0, 86.0, 111.0, 59.0, 26.0, 31.0] golden=[121.0, 59.0, 119.0, 26.0, 38.0, 86.0, 111.0, 31.0]
+  layer 14 token 4: rust=[119.0, 121.0, 31.0, 40.0, 111.0, 38.0, 86.0, 110.0] golden=[119.0, 111.0, 121.0, 31.0, 40.0, 38.0, 124.0, 86.0]
+  layer 14 token 5: rust=[119.0, 121.0, 38.0, 31.0, 124.0, 110.0, 10.0, 59.0] golden=[121.0, 119.0, 38.0, 31.0, 59.0, 124.0, 10.0, 26.0]
+  layer 14 token 6: rust=[119.0, 110.0, 38.0, 86.0, 10.0, 124.0, 31.0, 111.0] golden=[119.0, 110.0, 38.0, 111.0, 86.0, 10.0, 31.0, 124.0]
+encoder14_router_indices exact=false
+  layer 14 token 0: rust=[59.0, 10.0, 38.0, 121.0, 26.0, 31.0, 109.0, 8.0] golden=[59.0, 10.0, 38.0, 121.0, 26.0, 109.0, 8.0, 31.0]
+  layer 14 token 1: rust=[10.0, 59.0, 121.0, 119.0, 38.0, 26.0, 31.0, 56.0] golden=[10.0, 59.0, 121.0, 119.0, 38.0, 26.0, 56.0, 31.0]
+  layer 14 token 2: rust=[86.0, 7.0, 111.0, 31.0, 89.0, 59.0, 8.0, 97.0] golden=[86.0, 7.0, 111.0, 31.0, 89.0, 8.0, 97.0, 59.0]
+  layer 14 token 3: rust=[121.0, 119.0, 38.0, 86.0, 111.0, 59.0, 26.0, 31.0] golden=[121.0, 59.0, 119.0, 26.0, 38.0, 86.0, 111.0, 31.0]
+  layer 14 token 4: rust=[119.0, 121.0, 31.0, 40.0, 111.0, 38.0, 86.0, 110.0] golden=[119.0, 111.0, 121.0, 31.0, 40.0, 38.0, 124.0, 86.0]
+  layer 14 token 5: rust=[119.0, 121.0, 38.0, 31.0, 124.0, 110.0, 10.0, 59.0] golden=[121.0, 119.0, 38.0, 31.0, 59.0, 124.0, 10.0, 26.0]
+  layer 14 token 6: rust=[119.0, 110.0, 38.0, 86.0, 10.0, 124.0, 31.0, 111.0] golden=[119.0, 110.0, 38.0, 111.0, 86.0, 10.0, 31.0, 124.0]
+enc_kv_14_keys max_abs=0.240234 rms=0.026556
+enc_kv_14_values max_abs=1.863281 rms=0.288176
+encoder_layer_15 max_abs=3.363281 rms=0.273486
+enc_kv_15_keys max_abs=0.197144 rms=0.027451
+enc_kv_15_values max_abs=2.824219 rms=0.331489
+encoder15_router_scores max_abs=0.009074 rms=0.000934 indices_exact=false
+  layer 15 token 0: rust=[65.0, 12.0, 67.0, 6.0, 51.0, 117.0, 22.0, 82.0] golden=[65.0, 12.0, 67.0, 6.0, 51.0, 117.0, 125.0, 22.0]
+  layer 15 token 2: rust=[75.0, 67.0, 51.0, 82.0, 65.0, 12.0, 100.0, 46.0] golden=[75.0, 65.0, 82.0, 67.0, 32.0, 46.0, 51.0, 12.0]
+  layer 15 token 3: rust=[12.0, 65.0, 67.0, 51.0, 22.0, 77.0, 6.0, 32.0] golden=[12.0, 65.0, 67.0, 117.0, 51.0, 125.0, 77.0, 22.0]
+  layer 15 token 4: rust=[65.0, 12.0, 51.0, 67.0, 32.0, 2.0, 82.0, 52.0] golden=[12.0, 65.0, 67.0, 52.0, 2.0, 117.0, 116.0, 125.0]
+  layer 15 token 5: rust=[12.0, 65.0, 6.0, 67.0, 52.0, 116.0, 51.0, 2.0] golden=[12.0, 65.0, 67.0, 6.0, 52.0, 125.0, 90.0, 2.0]
+  layer 15 token 6: rust=[67.0, 2.0, 12.0, 51.0, 34.0, 9.0, 46.0, 56.0] golden=[67.0, 2.0, 12.0, 34.0, 46.0, 51.0, 125.0, 37.0]
+encoder15_router_indices exact=false
+  layer 15 token 0: rust=[65.0, 12.0, 67.0, 6.0, 51.0, 117.0, 22.0, 82.0] golden=[65.0, 12.0, 67.0, 6.0, 51.0, 117.0, 125.0, 22.0]
+  layer 15 token 2: rust=[75.0, 67.0, 51.0, 82.0, 65.0, 12.0, 100.0, 46.0] golden=[75.0, 65.0, 82.0, 67.0, 32.0, 46.0, 51.0, 12.0]
+  layer 15 token 3: rust=[12.0, 65.0, 67.0, 51.0, 22.0, 77.0, 6.0, 32.0] golden=[12.0, 65.0, 67.0, 117.0, 51.0, 125.0, 77.0, 22.0]
+  layer 15 token 4: rust=[65.0, 12.0, 51.0, 67.0, 32.0, 2.0, 82.0, 52.0] golden=[12.0, 65.0, 67.0, 52.0, 2.0, 117.0, 116.0, 125.0]
+  layer 15 token 5: rust=[12.0, 65.0, 6.0, 67.0, 52.0, 116.0, 51.0, 2.0] golden=[12.0, 65.0, 67.0, 6.0, 52.0, 125.0, 90.0, 2.0]
+  layer 15 token 6: rust=[67.0, 2.0, 12.0, 51.0, 34.0, 9.0, 46.0, 56.0] golden=[67.0, 2.0, 12.0, 34.0, 46.0, 51.0, 125.0, 37.0]
+enc_kv_15_keys max_abs=0.197144 rms=0.027451
+enc_kv_15_values max_abs=2.824219 rms=0.331489
+encoder_layer_16 max_abs=3.199219 rms=0.249819
+enc_kv_16_keys max_abs=0.178711 rms=0.022589
+enc_kv_16_values max_abs=2.007812 rms=0.254743
+encoder16_router_scores max_abs=0.007209 rms=0.000804 indices_exact=false
+  layer 16 token 0: rust=[120.0, 20.0, 99.0, 44.0, 38.0, 55.0, 4.0, 51.0] golden=[120.0, 99.0, 20.0, 44.0, 55.0, 38.0, 4.0, 46.0]
+  layer 16 token 1: rust=[20.0, 120.0, 4.0, 18.0, 51.0, 103.0, 44.0, 38.0] golden=[120.0, 20.0, 4.0, 18.0, 103.0, 38.0, 51.0, 44.0]
+  layer 16 token 2: rust=[55.0, 73.0, 46.0, 56.0, 70.0, 120.0, 109.0, 94.0] golden=[55.0, 73.0, 46.0, 56.0, 70.0, 120.0, 99.0, 94.0]
+  layer 16 token 3: rust=[120.0, 51.0, 44.0, 4.0, 39.0, 103.0, 55.0, 38.0] golden=[120.0, 51.0, 55.0, 44.0, 103.0, 20.0, 39.0, 38.0]
+  layer 16 token 4: rust=[55.0, 46.0, 39.0, 120.0, 103.0, 44.0, 51.0, 126.0] golden=[55.0, 39.0, 103.0, 120.0, 46.0, 51.0, 38.0, 44.0]
+  layer 16 token 5: rust=[44.0, 51.0, 39.0, 120.0, 4.0, 20.0, 105.0, 103.0] golden=[51.0, 44.0, 39.0, 120.0, 4.0, 103.0, 20.0, 55.0]
+  layer 16 token 6: rust=[120.0, 38.0, 92.0, 18.0, 4.0, 126.0, 84.0, 39.0] golden=[38.0, 120.0, 18.0, 92.0, 84.0, 4.0, 126.0, 39.0]
+encoder16_router_indices exact=false
+  layer 16 token 0: rust=[120.0, 20.0, 99.0, 44.0, 38.0, 55.0, 4.0, 51.0] golden=[120.0, 99.0, 20.0, 44.0, 55.0, 38.0, 4.0, 46.0]
+  layer 16 token 1: rust=[20.0, 120.0, 4.0, 18.0, 51.0, 103.0, 44.0, 38.0] golden=[120.0, 20.0, 4.0, 18.0, 103.0, 38.0, 51.0, 44.0]
+  layer 16 token 2: rust=[55.0, 73.0, 46.0, 56.0, 70.0, 120.0, 109.0, 94.0] golden=[55.0, 73.0, 46.0, 56.0, 70.0, 120.0, 99.0, 94.0]
+  layer 16 token 3: rust=[120.0, 51.0, 44.0, 4.0, 39.0, 103.0, 55.0, 38.0] golden=[120.0, 51.0, 55.0, 44.0, 103.0, 20.0, 39.0, 38.0]
+  layer 16 token 4: rust=[55.0, 46.0, 39.0, 120.0, 103.0, 44.0, 51.0, 126.0] golden=[55.0, 39.0, 103.0, 120.0, 46.0, 51.0, 38.0, 44.0]
+  layer 16 token 5: rust=[44.0, 51.0, 39.0, 120.0, 4.0, 20.0, 105.0, 103.0] golden=[51.0, 44.0, 39.0, 120.0, 4.0, 103.0, 20.0, 55.0]
+  layer 16 token 6: rust=[120.0, 38.0, 92.0, 18.0, 4.0, 126.0, 84.0, 39.0] golden=[38.0, 120.0, 18.0, 92.0, 84.0, 4.0, 126.0, 39.0]
+enc_kv_16_keys max_abs=0.178711 rms=0.022589
+enc_kv_16_values max_abs=2.007812 rms=0.254743
+encoder_layer_17 max_abs=3.500000 rms=0.258353
+enc_kv_17_keys max_abs=0.078369 rms=0.013819
+enc_kv_17_values max_abs=1.238281 rms=0.217587
+encoder17_router_scores max_abs=0.009207 rms=0.000739 indices_exact=false
+  layer 17 token 0: rust=[53.0, 4.0, 113.0, 127.0, 9.0, 51.0, 68.0, 64.0] golden=[53.0, 4.0, 113.0, 127.0, 51.0, 64.0, 33.0, 9.0]
+  layer 17 token 1: rust=[53.0, 4.0, 113.0, 23.0, 51.0, 28.0, 64.0, 81.0] golden=[53.0, 4.0, 113.0, 23.0, 51.0, 28.0, 64.0, 41.0]
+  layer 17 token 2: rust=[53.0, 112.0, 33.0, 43.0, 4.0, 52.0, 62.0, 29.0] golden=[53.0, 112.0, 33.0, 52.0, 4.0, 43.0, 29.0, 62.0]
+  layer 17 token 3: rust=[4.0, 53.0, 28.0, 23.0, 35.0, 64.0, 41.0, 125.0] golden=[4.0, 53.0, 23.0, 35.0, 28.0, 64.0, 41.0, 125.0]
+  layer 17 token 4: rust=[4.0, 53.0, 23.0, 28.0, 33.0, 41.0, 64.0, 105.0] golden=[4.0, 53.0, 23.0, 28.0, 33.0, 41.0, 29.0, 64.0]
+  layer 17 token 5: rust=[4.0, 53.0, 28.0, 23.0, 33.0, 127.0, 64.0, 113.0] golden=[4.0, 53.0, 28.0, 23.0, 35.0, 33.0, 76.0, 125.0]
+  layer 17 token 6: rust=[53.0, 4.0, 116.0, 125.0, 23.0, 90.0, 33.0, 105.0] golden=[53.0, 4.0, 116.0, 125.0, 23.0, 90.0, 33.0, 29.0]
+encoder17_router_indices exact=false
+  layer 17 token 0: rust=[53.0, 4.0, 113.0, 127.0, 9.0, 51.0, 68.0, 64.0] golden=[53.0, 4.0, 113.0, 127.0, 51.0, 64.0, 33.0, 9.0]
+  layer 17 token 1: rust=[53.0, 4.0, 113.0, 23.0, 51.0, 28.0, 64.0, 81.0] golden=[53.0, 4.0, 113.0, 23.0, 51.0, 28.0, 64.0, 41.0]
+  layer 17 token 2: rust=[53.0, 112.0, 33.0, 43.0, 4.0, 52.0, 62.0, 29.0] golden=[53.0, 112.0, 33.0, 52.0, 4.0, 43.0, 29.0, 62.0]
+  layer 17 token 3: rust=[4.0, 53.0, 28.0, 23.0, 35.0, 64.0, 41.0, 125.0] golden=[4.0, 53.0, 23.0, 35.0, 28.0, 64.0, 41.0, 125.0]
+  layer 17 token 4: rust=[4.0, 53.0, 23.0, 28.0, 33.0, 41.0, 64.0, 105.0] golden=[4.0, 53.0, 23.0, 28.0, 33.0, 41.0, 29.0, 64.0]
+  layer 17 token 5: rust=[4.0, 53.0, 28.0, 23.0, 33.0, 127.0, 64.0, 113.0] golden=[4.0, 53.0, 28.0, 23.0, 35.0, 33.0, 76.0, 125.0]
+  layer 17 token 6: rust=[53.0, 4.0, 116.0, 125.0, 23.0, 90.0, 33.0, 105.0] golden=[53.0, 4.0, 116.0, 125.0, 23.0, 90.0, 33.0, 29.0]
+enc_kv_17_keys max_abs=0.078369 rms=0.013819
+enc_kv_17_values max_abs=1.238281 rms=0.217587
+encoder_layer_18 max_abs=3.000000 rms=0.256530
+enc_kv_18_keys max_abs=0.177246 rms=0.022468
+enc_kv_18_values max_abs=1.250000 rms=0.217042
+encoder18_router_scores max_abs=0.006752 rms=0.000886 indices_exact=false
+  layer 18 token 1: rust=[123.0, 75.0, 53.0, 40.0, 4.0, 46.0, 13.0, 68.0] golden=[123.0, 75.0, 53.0, 40.0, 4.0, 46.0, 100.0, 13.0]
+  layer 18 token 2: rust=[105.0, 40.0, 4.0, 93.0, 122.0, 123.0, 125.0, 19.0] golden=[40.0, 4.0, 105.0, 93.0, 123.0, 109.0, 19.0, 73.0]
+  layer 18 token 3: rust=[46.0, 53.0, 123.0, 93.0, 77.0, 9.0, 122.0, 103.0] golden=[46.0, 123.0, 53.0, 93.0, 122.0, 103.0, 77.0, 13.0]
+  layer 18 token 4: rust=[122.0, 123.0, 68.0, 4.0, 109.0, 73.0, 93.0, 40.0] golden=[123.0, 122.0, 68.0, 40.0, 93.0, 4.0, 73.0, 13.0]
+  layer 18 token 5: rust=[53.0, 123.0, 122.0, 46.0, 13.0, 75.0, 9.0, 77.0] golden=[123.0, 53.0, 122.0, 75.0, 46.0, 13.0, 4.0, 77.0]
+  layer 18 token 6: rust=[123.0, 4.0, 100.0, 40.0, 96.0, 75.0, 105.0, 59.0] golden=[123.0, 100.0, 40.0, 4.0, 96.0, 105.0, 93.0, 75.0]
+encoder18_router_indices exact=false
+  layer 18 token 1: rust=[123.0, 75.0, 53.0, 40.0, 4.0, 46.0, 13.0, 68.0] golden=[123.0, 75.0, 53.0, 40.0, 4.0, 46.0, 100.0, 13.0]
+  layer 18 token 2: rust=[105.0, 40.0, 4.0, 93.0, 122.0, 123.0, 125.0, 19.0] golden=[40.0, 4.0, 105.0, 93.0, 123.0, 109.0, 19.0, 73.0]
+  layer 18 token 3: rust=[46.0, 53.0, 123.0, 93.0, 77.0, 9.0, 122.0, 103.0] golden=[46.0, 123.0, 53.0, 93.0, 122.0, 103.0, 77.0, 13.0]
+  layer 18 token 4: rust=[122.0, 123.0, 68.0, 4.0, 109.0, 73.0, 93.0, 40.0] golden=[123.0, 122.0, 68.0, 40.0, 93.0, 4.0, 73.0, 13.0]
+  layer 18 token 5: rust=[53.0, 123.0, 122.0, 46.0, 13.0, 75.0, 9.0, 77.0] golden=[123.0, 53.0, 122.0, 75.0, 46.0, 13.0, 4.0, 77.0]
+  layer 18 token 6: rust=[123.0, 4.0, 100.0, 40.0, 96.0, 75.0, 105.0, 59.0] golden=[123.0, 100.0, 40.0, 4.0, 96.0, 105.0, 93.0, 75.0]
+enc_kv_18_keys max_abs=0.177246 rms=0.022468
+enc_kv_18_values max_abs=1.250000 rms=0.217042
+encoder_layer_19 max_abs=2.000000 rms=0.201407
+enc_kv_19_keys max_abs=0.153076 rms=0.023539
+enc_kv_19_values max_abs=1.031250 rms=0.198182
+encoder19_router_scores max_abs=0.007351 rms=0.000902 indices_exact=false
+  layer 19 token 0: rust=[90.0, 82.0, 47.0, 51.0, 73.0, 72.0, 124.0, 106.0] golden=[90.0, 82.0, 47.0, 51.0, 124.0, 72.0, 73.0, 81.0]
+  layer 19 token 1: rust=[90.0, 82.0, 51.0, 47.0, 81.0, 72.0, 73.0, 38.0] golden=[90.0, 82.0, 81.0, 51.0, 47.0, 72.0, 38.0, 73.0]
+  layer 19 token 2: rust=[82.0, 90.0, 124.0, 72.0, 120.0, 47.0, 19.0, 24.0] golden=[82.0, 90.0, 124.0, 24.0, 120.0, 72.0, 125.0, 19.0]
+  layer 19 token 3: rust=[90.0, 82.0, 47.0, 38.0, 5.0, 101.0, 121.0, 81.0] golden=[90.0, 82.0, 38.0, 5.0, 47.0, 121.0, 19.0, 27.0]
+  layer 19 token 4: rust=[90.0, 38.0, 82.0, 72.0, 121.0, 58.0, 36.0, 101.0] golden=[90.0, 38.0, 82.0, 72.0, 52.0, 121.0, 51.0, 63.0]
+  layer 19 token 5: rust=[38.0, 90.0, 47.0, 82.0, 5.0, 58.0, 51.0, 72.0] golden=[38.0, 90.0, 82.0, 47.0, 5.0, 51.0, 72.0, 81.0]
+  layer 19 token 6: rust=[38.0, 24.0, 90.0, 58.0, 37.0, 72.0, 82.0, 63.0] golden=[38.0, 24.0, 90.0, 58.0, 72.0, 120.0, 82.0, 63.0]
+encoder19_router_indices exact=false
+  layer 19 token 0: rust=[90.0, 82.0, 47.0, 51.0, 73.0, 72.0, 124.0, 106.0] golden=[90.0, 82.0, 47.0, 51.0, 124.0, 72.0, 73.0, 81.0]
+  layer 19 token 1: rust=[90.0, 82.0, 51.0, 47.0, 81.0, 72.0, 73.0, 38.0] golden=[90.0, 82.0, 81.0, 51.0, 47.0, 72.0, 38.0, 73.0]
+  layer 19 token 2: rust=[82.0, 90.0, 124.0, 72.0, 120.0, 47.0, 19.0, 24.0] golden=[82.0, 90.0, 124.0, 24.0, 120.0, 72.0, 125.0, 19.0]
+  layer 19 token 3: rust=[90.0, 82.0, 47.0, 38.0, 5.0, 101.0, 121.0, 81.0] golden=[90.0, 82.0, 38.0, 5.0, 47.0, 121.0, 19.0, 27.0]
+  layer 19 token 4: rust=[90.0, 38.0, 82.0, 72.0, 121.0, 58.0, 36.0, 101.0] golden=[90.0, 38.0, 82.0, 72.0, 52.0, 121.0, 51.0, 63.0]
+  layer 19 token 5: rust=[38.0, 90.0, 47.0, 82.0, 5.0, 58.0, 51.0, 72.0] golden=[38.0, 90.0, 82.0, 47.0, 5.0, 51.0, 72.0, 81.0]
+  layer 19 token 6: rust=[38.0, 24.0, 90.0, 58.0, 37.0, 72.0, 82.0, 63.0] golden=[38.0, 24.0, 90.0, 58.0, 72.0, 120.0, 82.0, 63.0]
+enc_kv_19_keys max_abs=0.153076 rms=0.023539
+enc_kv_19_values max_abs=1.031250 rms=0.198182
+encoder_layer_20 max_abs=1.500000 rms=0.193897
+enc_kv_20_keys max_abs=0.278320 rms=0.024806
+enc_kv_20_values max_abs=1.468750 rms=0.222537
+encoder20_router_scores max_abs=0.006179 rms=0.000786 indices_exact=false
+  layer 20 token 0: rust=[78.0, 114.0, 97.0, 106.0, 90.0, 56.0, 87.0, 19.0] golden=[78.0, 114.0, 106.0, 97.0, 90.0, 19.0, 62.0, 56.0]
+  layer 20 token 1: rust=[97.0, 114.0, 78.0, 90.0, 106.0, 87.0, 11.0, 19.0] golden=[97.0, 114.0, 78.0, 106.0, 90.0, 11.0, 87.0, 19.0]
+  layer 20 token 2: rust=[1.0, 97.0, 73.0, 106.0, 11.0, 62.0, 19.0, 84.0] golden=[1.0, 73.0, 62.0, 11.0, 97.0, 106.0, 19.0, 84.0]
+  layer 20 token 3: rust=[78.0, 17.0, 106.0, 32.0, 97.0, 114.0, 11.0, 115.0] golden=[78.0, 17.0, 97.0, 106.0, 114.0, 32.0, 11.0, 69.0]
+  layer 20 token 4: rust=[11.0, 97.0, 33.0, 114.0, 69.0, 62.0, 5.0, 78.0] golden=[97.0, 11.0, 114.0, 5.0, 33.0, 69.0, 68.0, 62.0]
+  layer 20 token 5: rust=[32.0, 38.0, 114.0, 78.0, 103.0, 106.0, 97.0, 1.0] golden=[38.0, 114.0, 32.0, 78.0, 103.0, 106.0, 97.0, 90.0]
+  layer 20 token 6: rust=[11.0, 114.0, 33.0, 97.0, 5.0, 69.0, 66.0, 62.0] golden=[11.0, 114.0, 33.0, 97.0, 5.0, 66.0, 85.0, 62.0]
+encoder20_router_indices exact=false
+  layer 20 token 0: rust=[78.0, 114.0, 97.0, 106.0, 90.0, 56.0, 87.0, 19.0] golden=[78.0, 114.0, 106.0, 97.0, 90.0, 19.0, 62.0, 56.0]
+  layer 20 token 1: rust=[97.0, 114.0, 78.0, 90.0, 106.0, 87.0, 11.0, 19.0] golden=[97.0, 114.0, 78.0, 106.0, 90.0, 11.0, 87.0, 19.0]
+  layer 20 token 2: rust=[1.0, 97.0, 73.0, 106.0, 11.0, 62.0, 19.0, 84.0] golden=[1.0, 73.0, 62.0, 11.0, 97.0, 106.0, 19.0, 84.0]
+  layer 20 token 3: rust=[78.0, 17.0, 106.0, 32.0, 97.0, 114.0, 11.0, 115.0] golden=[78.0, 17.0, 97.0, 106.0, 114.0, 32.0, 11.0, 69.0]
+  layer 20 token 4: rust=[11.0, 97.0, 33.0, 114.0, 69.0, 62.0, 5.0, 78.0] golden=[97.0, 11.0, 114.0, 5.0, 33.0, 69.0, 68.0, 62.0]
+  layer 20 token 5: rust=[32.0, 38.0, 114.0, 78.0, 103.0, 106.0, 97.0, 1.0] golden=[38.0, 114.0, 32.0, 78.0, 103.0, 106.0, 97.0, 90.0]
+  layer 20 token 6: rust=[11.0, 114.0, 33.0, 97.0, 5.0, 69.0, 66.0, 62.0] golden=[11.0, 114.0, 33.0, 97.0, 5.0, 66.0, 85.0, 62.0]
+enc_kv_20_keys max_abs=0.278320 rms=0.024806
+enc_kv_20_values max_abs=1.468750 rms=0.222537
+encoder_layer_21 max_abs=1.750000 rms=0.177348
+enc_kv_21_keys max_abs=0.138672 rms=0.022431
+enc_kv_21_values max_abs=1.437500 rms=0.219458
+encoder21_router_scores max_abs=0.003890 rms=0.000744 indices_exact=false
+  layer 21 token 0: rust=[95.0, 83.0, 34.0, 45.0, 32.0, 118.0, 47.0, 96.0] golden=[95.0, 83.0, 34.0, 45.0, 118.0, 65.0, 32.0, 96.0]
+  layer 21 token 1: rust=[95.0, 83.0, 47.0, 65.0, 118.0, 17.0, 82.0, 34.0] golden=[95.0, 83.0, 47.0, 65.0, 118.0, 17.0, 123.0, 82.0]
+  layer 21 token 2: rust=[83.0, 97.0, 95.0, 72.0, 30.0, 34.0, 22.0, 17.0] golden=[83.0, 97.0, 95.0, 72.0, 34.0, 30.0, 22.0, 59.0]
+  layer 21 token 3: rust=[95.0, 65.0, 67.0, 22.0, 47.0, 17.0, 98.0, 118.0] golden=[95.0, 65.0, 67.0, 22.0, 47.0, 98.0, 17.0, 40.0]
+  layer 21 token 4: rust=[47.0, 24.0, 17.0, 73.0, 97.0, 61.0, 65.0, 98.0] golden=[24.0, 47.0, 73.0, 17.0, 97.0, 65.0, 61.0, 98.0]
+  layer 21 token 5: rust=[95.0, 40.0, 65.0, 118.0, 93.0, 123.0, 38.0, 22.0] golden=[95.0, 40.0, 65.0, 93.0, 118.0, 38.0, 98.0, 22.0]
+  layer 21 token 6: rust=[65.0, 95.0, 17.0, 83.0, 47.0, 118.0, 105.0, 98.0] golden=[17.0, 65.0, 95.0, 47.0, 83.0, 105.0, 79.0, 85.0]
+encoder21_router_indices exact=false
+  layer 21 token 0: rust=[95.0, 83.0, 34.0, 45.0, 32.0, 118.0, 47.0, 96.0] golden=[95.0, 83.0, 34.0, 45.0, 118.0, 65.0, 32.0, 96.0]
+  layer 21 token 1: rust=[95.0, 83.0, 47.0, 65.0, 118.0, 17.0, 82.0, 34.0] golden=[95.0, 83.0, 47.0, 65.0, 118.0, 17.0, 123.0, 82.0]
+  layer 21 token 2: rust=[83.0, 97.0, 95.0, 72.0, 30.0, 34.0, 22.0, 17.0] golden=[83.0, 97.0, 95.0, 72.0, 34.0, 30.0, 22.0, 59.0]
+  layer 21 token 3: rust=[95.0, 65.0, 67.0, 22.0, 47.0, 17.0, 98.0, 118.0] golden=[95.0, 65.0, 67.0, 22.0, 47.0, 98.0, 17.0, 40.0]
+  layer 21 token 4: rust=[47.0, 24.0, 17.0, 73.0, 97.0, 61.0, 65.0, 98.0] golden=[24.0, 47.0, 73.0, 17.0, 97.0, 65.0, 61.0, 98.0]
+  layer 21 token 5: rust=[95.0, 40.0, 65.0, 118.0, 93.0, 123.0, 38.0, 22.0] golden=[95.0, 40.0, 65.0, 93.0, 118.0, 38.0, 98.0, 22.0]
+  layer 21 token 6: rust=[65.0, 95.0, 17.0, 83.0, 47.0, 118.0, 105.0, 98.0] golden=[17.0, 65.0, 95.0, 47.0, 83.0, 105.0, 79.0, 85.0]
+enc_kv_21_keys max_abs=0.138672 rms=0.022431
+enc_kv_21_values max_abs=1.437500 rms=0.219458
+encoder_layer_22 max_abs=1.460938 rms=0.151775
+enc_kv_22_keys max_abs=0.211914 rms=0.021028
+enc_kv_22_values max_abs=1.500000 rms=0.183294
+encoder22_router_scores max_abs=0.008846 rms=0.000895 indices_exact=false
+  layer 22 token 0: rust=[37.0, 103.0, 57.0, 16.0, 47.0, 92.0, 77.0, 90.0] golden=[37.0, 103.0, 57.0, 47.0, 16.0, 90.0, 61.0, 92.0]
+  layer 22 token 1: rust=[37.0, 47.0, 103.0, 90.0, 80.0, 61.0, 92.0, 16.0] golden=[37.0, 47.0, 103.0, 61.0, 90.0, 80.0, 16.0, 92.0]
+  layer 22 token 2: rust=[37.0, 16.0, 61.0, 103.0, 57.0, 92.0, 77.0, 112.0] golden=[37.0, 16.0, 61.0, 103.0, 92.0, 57.0, 77.0, 112.0]
+  layer 22 token 3: rust=[37.0, 47.0, 0.0, 107.0, 80.0, 103.0, 92.0, 90.0] golden=[37.0, 47.0, 0.0, 80.0, 107.0, 103.0, 92.0, 90.0]
+  layer 22 token 4: rust=[37.0, 47.0, 103.0, 80.0, 92.0, 29.0, 16.0, 112.0] golden=[37.0, 47.0, 103.0, 80.0, 92.0, 16.0, 112.0, 61.0]
+  layer 22 token 5: rust=[39.0, 37.0, 47.0, 107.0, 90.0, 80.0, 103.0, 16.0] golden=[37.0, 39.0, 47.0, 80.0, 107.0, 90.0, 103.0, 16.0]
+  layer 22 token 6: rust=[103.0, 37.0, 47.0, 16.0, 61.0, 77.0, 3.0, 112.0] golden=[103.0, 37.0, 77.0, 54.0, 16.0, 47.0, 61.0, 35.0]
+encoder22_router_indices exact=false
+  layer 22 token 0: rust=[37.0, 103.0, 57.0, 16.0, 47.0, 92.0, 77.0, 90.0] golden=[37.0, 103.0, 57.0, 47.0, 16.0, 90.0, 61.0, 92.0]
+  layer 22 token 1: rust=[37.0, 47.0, 103.0, 90.0, 80.0, 61.0, 92.0, 16.0] golden=[37.0, 47.0, 103.0, 61.0, 90.0, 80.0, 16.0, 92.0]
+  layer 22 token 2: rust=[37.0, 16.0, 61.0, 103.0, 57.0, 92.0, 77.0, 112.0] golden=[37.0, 16.0, 61.0, 103.0, 92.0, 57.0, 77.0, 112.0]
+  layer 22 token 3: rust=[37.0, 47.0, 0.0, 107.0, 80.0, 103.0, 92.0, 90.0] golden=[37.0, 47.0, 0.0, 80.0, 107.0, 103.0, 92.0, 90.0]
+  layer 22 token 4: rust=[37.0, 47.0, 103.0, 80.0, 92.0, 29.0, 16.0, 112.0] golden=[37.0, 47.0, 103.0, 80.0, 92.0, 16.0, 112.0, 61.0]
+  layer 22 token 5: rust=[39.0, 37.0, 47.0, 107.0, 90.0, 80.0, 103.0, 16.0] golden=[37.0, 39.0, 47.0, 80.0, 107.0, 90.0, 103.0, 16.0]
+  layer 22 token 6: rust=[103.0, 37.0, 47.0, 16.0, 61.0, 77.0, 3.0, 112.0] golden=[103.0, 37.0, 77.0, 54.0, 16.0, 47.0, 61.0, 35.0]
+enc_kv_22_keys max_abs=0.211914 rms=0.021028
+enc_kv_22_values max_abs=1.500000 rms=0.183294
+encoder_layer_23 max_abs=1.750000 rms=0.203689
+enc_kv_23_keys max_abs=0.062500 rms=0.010434
+enc_kv_23_values max_abs=0.984375 rms=0.164394
+encoder23_router_scores max_abs=0.003931 rms=0.000667 indices_exact=false
+  layer 23 token 0: rust=[77.0, 51.0, 38.0, 50.0, 98.0, 13.0, 33.0, 49.0] golden=[77.0, 51.0, 98.0, 13.0, 38.0, 50.0, 49.0, 59.0]
+  layer 23 token 1: rust=[51.0, 50.0, 91.0, 38.0, 33.0, 77.0, 13.0, 63.0] golden=[51.0, 91.0, 38.0, 50.0, 13.0, 77.0, 33.0, 79.0]
+  layer 23 token 2: rust=[51.0, 38.0, 98.0, 33.0, 50.0, 91.0, 25.0, 85.0] golden=[51.0, 38.0, 33.0, 98.0, 91.0, 50.0, 13.0, 78.0]
+  layer 23 token 3: rust=[13.0, 114.0, 83.0, 82.0, 41.0, 63.0, 51.0, 120.0] golden=[114.0, 13.0, 82.0, 83.0, 41.0, 51.0, 105.0, 77.0]
+  layer 23 token 4: rust=[63.0, 45.0, 21.0, 0.0, 41.0, 82.0, 83.0, 13.0] golden=[63.0, 21.0, 41.0, 45.0, 0.0, 13.0, 50.0, 82.0]
+  layer 23 token 5: rust=[51.0, 63.0, 73.0, 107.0, 78.0, 25.0, 21.0, 83.0] golden=[51.0, 63.0, 107.0, 78.0, 60.0, 73.0, 21.0, 59.0]
+  layer 23 token 6: rust=[21.0, 51.0, 44.0, 33.0, 49.0, 117.0, 50.0, 38.0] golden=[21.0, 44.0, 33.0, 51.0, 50.0, 49.0, 77.0, 117.0]
+encoder23_router_indices exact=false
+  layer 23 token 0: rust=[77.0, 51.0, 38.0, 50.0, 98.0, 13.0, 33.0, 49.0] golden=[77.0, 51.0, 98.0, 13.0, 38.0, 50.0, 49.0, 59.0]
+  layer 23 token 1: rust=[51.0, 50.0, 91.0, 38.0, 33.0, 77.0, 13.0, 63.0] golden=[51.0, 91.0, 38.0, 50.0, 13.0, 77.0, 33.0, 79.0]
+  layer 23 token 2: rust=[51.0, 38.0, 98.0, 33.0, 50.0, 91.0, 25.0, 85.0] golden=[51.0, 38.0, 33.0, 98.0, 91.0, 50.0, 13.0, 78.0]
+  layer 23 token 3: rust=[13.0, 114.0, 83.0, 82.0, 41.0, 63.0, 51.0, 120.0] golden=[114.0, 13.0, 82.0, 83.0, 41.0, 51.0, 105.0, 77.0]
+  layer 23 token 4: rust=[63.0, 45.0, 21.0, 0.0, 41.0, 82.0, 83.0, 13.0] golden=[63.0, 21.0, 41.0, 45.0, 0.0, 13.0, 50.0, 82.0]
+  layer 23 token 5: rust=[51.0, 63.0, 73.0, 107.0, 78.0, 25.0, 21.0, 83.0] golden=[51.0, 63.0, 107.0, 78.0, 60.0, 73.0, 21.0, 59.0]
+  layer 23 token 6: rust=[21.0, 51.0, 44.0, 33.0, 49.0, 117.0, 50.0, 38.0] golden=[21.0, 44.0, 33.0, 51.0, 50.0, 49.0, 77.0, 117.0]
+enc_kv_23_keys max_abs=0.062500 rms=0.010434
+enc_kv_23_values max_abs=0.984375 rms=0.164394
+encoder_layer_24 max_abs=2.250000 rms=0.178120
+enc_kv_24_keys max_abs=0.137695 rms=0.023035
+enc_kv_24_values max_abs=3.468750 rms=0.243352
+encoder24_router_scores max_abs=0.005397 rms=0.000981 indices_exact=false
+  layer 24 token 0: rust=[0.0, 7.0, 16.0, 127.0, 14.0, 102.0, 32.0, 63.0] golden=[0.0, 16.0, 7.0, 127.0, 14.0, 102.0, 32.0, 124.0]
+  layer 24 token 1: rust=[0.0, 127.0, 66.0, 7.0, 16.0, 14.0, 121.0, 50.0] golden=[0.0, 127.0, 7.0, 16.0, 66.0, 14.0, 106.0, 4.0]
+  layer 24 token 2: rust=[0.0, 24.0, 102.0, 37.0, 7.0, 100.0, 66.0, 127.0] golden=[0.0, 100.0, 102.0, 24.0, 7.0, 14.0, 37.0, 127.0]
+  layer 24 token 3: rust=[72.0, 7.0, 71.0, 111.0, 63.0, 8.0, 124.0, 94.0] golden=[72.0, 63.0, 71.0, 111.0, 7.0, 8.0, 80.0, 124.0]
+  layer 24 token 4: rust=[83.0, 50.0, 24.0, 121.0, 54.0, 71.0, 7.0, 80.0] golden=[83.0, 50.0, 121.0, 54.0, 7.0, 24.0, 71.0, 127.0]
+  layer 24 token 5: rust=[71.0, 127.0, 66.0, 7.0, 15.0, 117.0, 124.0, 0.0] golden=[15.0, 14.0, 117.0, 7.0, 71.0, 127.0, 66.0, 57.0]
+  layer 24 token 6: rust=[105.0, 71.0, 70.0, 74.0, 66.0, 34.0, 23.0, 110.0] golden=[105.0, 71.0, 70.0, 74.0, 66.0, 34.0, 23.0, 14.0]
+encoder24_router_indices exact=false
+  layer 24 token 0: rust=[0.0, 7.0, 16.0, 127.0, 14.0, 102.0, 32.0, 63.0] golden=[0.0, 16.0, 7.0, 127.0, 14.0, 102.0, 32.0, 124.0]
+  layer 24 token 1: rust=[0.0, 127.0, 66.0, 7.0, 16.0, 14.0, 121.0, 50.0] golden=[0.0, 127.0, 7.0, 16.0, 66.0, 14.0, 106.0, 4.0]
+  layer 24 token 2: rust=[0.0, 24.0, 102.0, 37.0, 7.0, 100.0, 66.0, 127.0] golden=[0.0, 100.0, 102.0, 24.0, 7.0, 14.0, 37.0, 127.0]
+  layer 24 token 3: rust=[72.0, 7.0, 71.0, 111.0, 63.0, 8.0, 124.0, 94.0] golden=[72.0, 63.0, 71.0, 111.0, 7.0, 8.0, 80.0, 124.0]
+  layer 24 token 4: rust=[83.0, 50.0, 24.0, 121.0, 54.0, 71.0, 7.0, 80.0] golden=[83.0, 50.0, 121.0, 54.0, 7.0, 24.0, 71.0, 127.0]
+  layer 24 token 5: rust=[71.0, 127.0, 66.0, 7.0, 15.0, 117.0, 124.0, 0.0] golden=[15.0, 14.0, 117.0, 7.0, 71.0, 127.0, 66.0, 57.0]
+  layer 24 token 6: rust=[105.0, 71.0, 70.0, 74.0, 66.0, 34.0, 23.0, 110.0] golden=[105.0, 71.0, 70.0, 74.0, 66.0, 34.0, 23.0, 14.0]
+enc_kv_24_keys max_abs=0.137695 rms=0.023035
+enc_kv_24_values max_abs=3.468750 rms=0.243352
+encoder_layer_25 max_abs=1.375000 rms=0.162921
+enc_kv_25_keys max_abs=0.148438 rms=0.025887
+enc_kv_25_values max_abs=1.156250 rms=0.204710
+encoder25_router_scores max_abs=0.006119 rms=0.001105 indices_exact=false
+  layer 25 token 0: rust=[60.0, 63.0, 90.0, 61.0, 66.0, 118.0, 48.0, 17.0] golden=[60.0, 90.0, 63.0, 66.0, 22.0, 48.0, 17.0, 61.0]
+  layer 25 token 1: rust=[118.0, 48.0, 60.0, 63.0, 16.0, 61.0, 90.0, 29.0] golden=[118.0, 60.0, 48.0, 16.0, 90.0, 63.0, 29.0, 28.0]
+  layer 25 token 2: rust=[63.0, 48.0, 60.0, 25.0, 56.0, 29.0, 9.0, 34.0] golden=[63.0, 60.0, 25.0, 22.0, 48.0, 37.0, 56.0, 9.0]
+  layer 25 token 3: rust=[62.0, 88.0, 90.0, 0.0, 28.0, 18.0, 25.0, 112.0] golden=[88.0, 28.0, 62.0, 18.0, 0.0, 90.0, 25.0, 50.0]
+  layer 25 token 4: rust=[63.0, 118.0, 28.0, 90.0, 112.0, 62.0, 40.0, 88.0] golden=[118.0, 28.0, 63.0, 62.0, 90.0, 109.0, 112.0, 48.0]
+  layer 25 token 5: rust=[28.0, 61.0, 50.0, 63.0, 115.0, 35.0, 90.0, 29.0] golden=[28.0, 50.0, 90.0, 61.0, 74.0, 115.0, 63.0, 29.0]
+  layer 25 token 6: rust=[42.0, 26.0, 63.0, 100.0, 36.0, 7.0, 18.0, 48.0] golden=[42.0, 100.0, 36.0, 7.0, 63.0, 18.0, 26.0, 28.0]
+encoder25_router_indices exact=false
+  layer 25 token 0: rust=[60.0, 63.0, 90.0, 61.0, 66.0, 118.0, 48.0, 17.0] golden=[60.0, 90.0, 63.0, 66.0, 22.0, 48.0, 17.0, 61.0]
+  layer 25 token 1: rust=[118.0, 48.0, 60.0, 63.0, 16.0, 61.0, 90.0, 29.0] golden=[118.0, 60.0, 48.0, 16.0, 90.0, 63.0, 29.0, 28.0]
+  layer 25 token 2: rust=[63.0, 48.0, 60.0, 25.0, 56.0, 29.0, 9.0, 34.0] golden=[63.0, 60.0, 25.0, 22.0, 48.0, 37.0, 56.0, 9.0]
+  layer 25 token 3: rust=[62.0, 88.0, 90.0, 0.0, 28.0, 18.0, 25.0, 112.0] golden=[88.0, 28.0, 62.0, 18.0, 0.0, 90.0, 25.0, 50.0]
+  layer 25 token 4: rust=[63.0, 118.0, 28.0, 90.0, 112.0, 62.0, 40.0, 88.0] golden=[118.0, 28.0, 63.0, 62.0, 90.0, 109.0, 112.0, 48.0]
+  layer 25 token 5: rust=[28.0, 61.0, 50.0, 63.0, 115.0, 35.0, 90.0, 29.0] golden=[28.0, 50.0, 90.0, 61.0, 74.0, 115.0, 63.0, 29.0]
+  layer 25 token 6: rust=[42.0, 26.0, 63.0, 100.0, 36.0, 7.0, 18.0, 48.0] golden=[42.0, 100.0, 36.0, 7.0, 63.0, 18.0, 26.0, 28.0]
+enc_kv_25_keys max_abs=0.148438 rms=0.025887
+enc_kv_25_values max_abs=1.156250 rms=0.204710
+encoder_layer_26 max_abs=0.598633 rms=0.128779
+enc_kv_26_keys max_abs=0.122894 rms=0.021528
+enc_kv_26_values max_abs=1.265625 rms=0.204027
+encoder26_router_scores max_abs=0.005937 rms=0.000918 indices_exact=false
+  layer 26 token 0: rust=[55.0, 101.0, 106.0, 97.0, 47.0, 73.0, 95.0, 26.0] golden=[101.0, 55.0, 106.0, 95.0, 47.0, 123.0, 73.0, 61.0]
+  layer 26 token 1: rust=[106.0, 55.0, 95.0, 123.0, 48.0, 100.0, 101.0, 67.0] golden=[106.0, 55.0, 95.0, 101.0, 123.0, 67.0, 100.0, 105.0]
+  layer 26 token 2: rust=[106.0, 7.0, 55.0, 105.0, 47.0, 95.0, 73.0, 39.0] golden=[7.0, 106.0, 67.0, 47.0, 95.0, 105.0, 55.0, 15.0]
+  layer 26 token 3: rust=[106.0, 20.0, 81.0, 67.0, 53.0, 100.0, 47.0, 93.0] golden=[106.0, 20.0, 81.0, 67.0, 53.0, 92.0, 44.0, 15.0]
+  layer 26 token 4: rust=[106.0, 53.0, 51.0, 67.0, 61.0, 13.0, 47.0, 54.0] golden=[106.0, 53.0, 51.0, 67.0, 61.0, 123.0, 47.0, 13.0]
+  layer 26 token 5: rust=[92.0, 106.0, 53.0, 47.0, 112.0, 46.0, 67.0, 66.0] golden=[92.0, 106.0, 47.0, 53.0, 46.0, 67.0, 112.0, 123.0]
+  layer 26 token 6: rust=[55.0, 36.0, 106.0, 67.0, 48.0, 15.0, 14.0, 94.0] golden=[36.0, 55.0, 106.0, 67.0, 15.0, 100.0, 48.0, 0.0]
+encoder26_router_indices exact=false
+  layer 26 token 0: rust=[55.0, 101.0, 106.0, 97.0, 47.0, 73.0, 95.0, 26.0] golden=[101.0, 55.0, 106.0, 95.0, 47.0, 123.0, 73.0, 61.0]
+  layer 26 token 1: rust=[106.0, 55.0, 95.0, 123.0, 48.0, 100.0, 101.0, 67.0] golden=[106.0, 55.0, 95.0, 101.0, 123.0, 67.0, 100.0, 105.0]
+  layer 26 token 2: rust=[106.0, 7.0, 55.0, 105.0, 47.0, 95.0, 73.0, 39.0] golden=[7.0, 106.0, 67.0, 47.0, 95.0, 105.0, 55.0, 15.0]
+  layer 26 token 3: rust=[106.0, 20.0, 81.0, 67.0, 53.0, 100.0, 47.0, 93.0] golden=[106.0, 20.0, 81.0, 67.0, 53.0, 92.0, 44.0, 15.0]
+  layer 26 token 4: rust=[106.0, 53.0, 51.0, 67.0, 61.0, 13.0, 47.0, 54.0] golden=[106.0, 53.0, 51.0, 67.0, 61.0, 123.0, 47.0, 13.0]
+  layer 26 token 5: rust=[92.0, 106.0, 53.0, 47.0, 112.0, 46.0, 67.0, 66.0] golden=[92.0, 106.0, 47.0, 53.0, 46.0, 67.0, 112.0, 123.0]
+  layer 26 token 6: rust=[55.0, 36.0, 106.0, 67.0, 48.0, 15.0, 14.0, 94.0] golden=[36.0, 55.0, 106.0, 67.0, 15.0, 100.0, 48.0, 0.0]
+enc_kv_26_keys max_abs=0.122894 rms=0.021528
+enc_kv_26_values max_abs=1.265625 rms=0.204027
+encoder_layer_27 max_abs=1.125000 rms=0.112404
+enc_kv_27_keys max_abs=0.163086 rms=0.020661
+enc_kv_27_values max_abs=2.062500 rms=0.213618
+encoder27_router_scores max_abs=0.007760 rms=0.001113 indices_exact=false
+  layer 27 token 0: rust=[81.0, 7.0, 38.0, 110.0, 2.0, 47.0, 89.0, 5.0] golden=[38.0, 81.0, 7.0, 2.0, 110.0, 89.0, 120.0, 47.0]
+  layer 27 token 1: rust=[38.0, 81.0, 7.0, 2.0, 113.0, 47.0, 89.0, 110.0] golden=[38.0, 7.0, 81.0, 2.0, 113.0, 47.0, 36.0, 120.0]
+  layer 27 token 2: rust=[38.0, 110.0, 81.0, 36.0, 7.0, 68.0, 2.0, 92.0] golden=[38.0, 110.0, 36.0, 7.0, 81.0, 90.0, 68.0, 2.0]
+  layer 27 token 3: rust=[38.0, 22.0, 36.0, 109.0, 81.0, 64.0, 101.0, 87.0] golden=[22.0, 38.0, 109.0, 101.0, 81.0, 36.0, 30.0, 79.0]
+  layer 27 token 4: rust=[7.0, 38.0, 74.0, 127.0, 77.0, 47.0, 64.0, 81.0] golden=[7.0, 38.0, 74.0, 47.0, 127.0, 77.0, 64.0, 110.0]
+  layer 27 token 5: rust=[22.0, 38.0, 113.0, 109.0, 64.0, 81.0, 55.0, 20.0] golden=[38.0, 22.0, 113.0, 109.0, 55.0, 81.0, 47.0, 79.0]
+  layer 27 token 6: rust=[16.0, 25.0, 86.0, 111.0, 20.0, 38.0, 37.0, 64.0] golden=[16.0, 25.0, 86.0, 37.0, 38.0, 111.0, 0.0, 53.0]
+encoder27_router_indices exact=false
+  layer 27 token 0: rust=[81.0, 7.0, 38.0, 110.0, 2.0, 47.0, 89.0, 5.0] golden=[38.0, 81.0, 7.0, 2.0, 110.0, 89.0, 120.0, 47.0]
+  layer 27 token 1: rust=[38.0, 81.0, 7.0, 2.0, 113.0, 47.0, 89.0, 110.0] golden=[38.0, 7.0, 81.0, 2.0, 113.0, 47.0, 36.0, 120.0]
+  layer 27 token 2: rust=[38.0, 110.0, 81.0, 36.0, 7.0, 68.0, 2.0, 92.0] golden=[38.0, 110.0, 36.0, 7.0, 81.0, 90.0, 68.0, 2.0]
+  layer 27 token 3: rust=[38.0, 22.0, 36.0, 109.0, 81.0, 64.0, 101.0, 87.0] golden=[22.0, 38.0, 109.0, 101.0, 81.0, 36.0, 30.0, 79.0]
+  layer 27 token 4: rust=[7.0, 38.0, 74.0, 127.0, 77.0, 47.0, 64.0, 81.0] golden=[7.0, 38.0, 74.0, 47.0, 127.0, 77.0, 64.0, 110.0]
+  layer 27 token 5: rust=[22.0, 38.0, 113.0, 109.0, 64.0, 81.0, 55.0, 20.0] golden=[38.0, 22.0, 113.0, 109.0, 55.0, 81.0, 47.0, 79.0]
+  layer 27 token 6: rust=[16.0, 25.0, 86.0, 111.0, 20.0, 38.0, 37.0, 64.0] golden=[16.0, 25.0, 86.0, 37.0, 38.0, 111.0, 0.0, 53.0]
+enc_kv_27_keys max_abs=0.163086 rms=0.020661
+enc_kv_27_values max_abs=2.062500 rms=0.213618
+encoder_layer_28 max_abs=0.500000 rms=0.097463
+enc_kv_28_keys max_abs=0.120117 rms=0.018759
+enc_kv_28_values max_abs=1.312500 rms=0.207559
+encoder28_router_scores max_abs=0.006780 rms=0.001125 indices_exact=false
+  layer 28 token 0: rust=[59.0, 117.0, 107.0, 1.0, 2.0, 90.0, 50.0, 44.0] golden=[59.0, 117.0, 90.0, 50.0, 2.0, 62.0, 44.0, 1.0]
+  layer 28 token 1: rust=[59.0, 77.0, 90.0, 9.0, 117.0, 50.0, 107.0, 69.0] golden=[77.0, 59.0, 90.0, 9.0, 69.0, 44.0, 50.0, 107.0]
+  layer 28 token 2: rust=[107.0, 90.0, 2.0, 59.0, 9.0, 77.0, 92.0, 14.0] golden=[107.0, 90.0, 2.0, 59.0, 92.0, 77.0, 9.0, 63.0]
+  layer 28 token 3: rust=[107.0, 115.0, 102.0, 13.0, 49.0, 18.0, 91.0, 84.0] golden=[56.0, 107.0, 115.0, 64.0, 13.0, 102.0, 91.0, 59.0]
+  layer 28 token 4: rust=[104.0, 94.0, 60.0, 77.0, 59.0, 64.0, 90.0, 107.0] golden=[77.0, 104.0, 103.0, 94.0, 64.0, 9.0, 59.0, 90.0]
+  layer 28 token 5: rust=[115.0, 40.0, 49.0, 56.0, 102.0, 64.0, 84.0, 50.0] golden=[115.0, 49.0, 64.0, 50.0, 40.0, 56.0, 84.0, 90.0]
+  layer 28 token 6: rust=[63.0, 116.0, 88.0, 50.0, 24.0, 82.0, 59.0, 85.0] golden=[116.0, 63.0, 88.0, 59.0, 24.0, 50.0, 82.0, 35.0]
+encoder28_router_indices exact=false
+  layer 28 token 0: rust=[59.0, 117.0, 107.0, 1.0, 2.0, 90.0, 50.0, 44.0] golden=[59.0, 117.0, 90.0, 50.0, 2.0, 62.0, 44.0, 1.0]
+  layer 28 token 1: rust=[59.0, 77.0, 90.0, 9.0, 117.0, 50.0, 107.0, 69.0] golden=[77.0, 59.0, 90.0, 9.0, 69.0, 44.0, 50.0, 107.0]
+  layer 28 token 2: rust=[107.0, 90.0, 2.0, 59.0, 9.0, 77.0, 92.0, 14.0] golden=[107.0, 90.0, 2.0, 59.0, 92.0, 77.0, 9.0, 63.0]
+  layer 28 token 3: rust=[107.0, 115.0, 102.0, 13.0, 49.0, 18.0, 91.0, 84.0] golden=[56.0, 107.0, 115.0, 64.0, 13.0, 102.0, 91.0, 59.0]
+  layer 28 token 4: rust=[104.0, 94.0, 60.0, 77.0, 59.0, 64.0, 90.0, 107.0] golden=[77.0, 104.0, 103.0, 94.0, 64.0, 9.0, 59.0, 90.0]
+  layer 28 token 5: rust=[115.0, 40.0, 49.0, 56.0, 102.0, 64.0, 84.0, 50.0] golden=[115.0, 49.0, 64.0, 50.0, 40.0, 56.0, 84.0, 90.0]
+  layer 28 token 6: rust=[63.0, 116.0, 88.0, 50.0, 24.0, 82.0, 59.0, 85.0] golden=[116.0, 63.0, 88.0, 59.0, 24.0, 50.0, 82.0, 35.0]
+enc_kv_28_keys max_abs=0.120117 rms=0.018759
+enc_kv_28_values max_abs=1.312500 rms=0.207559
+encoder_layer_29 max_abs=2.687500 rms=0.056977
+enc_kv_29_keys max_abs=0.054688 rms=0.011999
+enc_kv_29_values max_abs=0.882812 rms=0.195111
+encoder29_router_scores max_abs=0.015473 rms=0.001346 indices_exact=false
+  layer 29 token 0: rust=[35.0, 99.0, 70.0, 63.0, 58.0, 37.0, 61.0, 36.0] golden=[35.0, 99.0, 70.0, 58.0, 37.0, 61.0, 36.0, 87.0]
+  layer 29 token 1: rust=[35.0, 63.0, 99.0, 114.0, 58.0, 70.0, 4.0, 111.0] golden=[35.0, 70.0, 58.0, 63.0, 99.0, 113.0, 114.0, 111.0]
+  layer 29 token 2: rust=[35.0, 63.0, 58.0, 87.0, 113.0, 99.0, 110.0, 111.0] golden=[35.0, 58.0, 87.0, 63.0, 113.0, 99.0, 110.0, 111.0]
+  layer 29 token 3: rust=[12.0, 63.0, 79.0, 35.0, 58.0, 87.0, 61.0, 118.0] golden=[35.0, 58.0, 12.0, 63.0, 79.0, 87.0, 111.0, 114.0]
+  layer 29 token 4: rust=[107.0, 114.0, 70.0, 11.0, 61.0, 35.0, 99.0, 12.0] golden=[107.0, 70.0, 114.0, 58.0, 35.0, 99.0, 61.0, 4.0]
+  layer 29 token 5: rust=[63.0, 58.0, 99.0, 35.0, 87.0, 17.0, 4.0, 40.0] golden=[63.0, 58.0, 87.0, 99.0, 35.0, 119.0, 4.0, 17.0]
+  layer 29 token 6: rust=[4.0, 87.0, 70.0, 63.0, 93.0, 12.0, 61.0, 79.0] golden=[4.0, 87.0, 70.0, 63.0, 119.0, 12.0, 114.0, 61.0]
+encoder29_router_indices exact=false
+  layer 29 token 0: rust=[35.0, 99.0, 70.0, 63.0, 58.0, 37.0, 61.0, 36.0] golden=[35.0, 99.0, 70.0, 58.0, 37.0, 61.0, 36.0, 87.0]
+  layer 29 token 1: rust=[35.0, 63.0, 99.0, 114.0, 58.0, 70.0, 4.0, 111.0] golden=[35.0, 70.0, 58.0, 63.0, 99.0, 113.0, 114.0, 111.0]
+  layer 29 token 2: rust=[35.0, 63.0, 58.0, 87.0, 113.0, 99.0, 110.0, 111.0] golden=[35.0, 58.0, 87.0, 63.0, 113.0, 99.0, 110.0, 111.0]
+  layer 29 token 3: rust=[12.0, 63.0, 79.0, 35.0, 58.0, 87.0, 61.0, 118.0] golden=[35.0, 58.0, 12.0, 63.0, 79.0, 87.0, 111.0, 114.0]
+  layer 29 token 4: rust=[107.0, 114.0, 70.0, 11.0, 61.0, 35.0, 99.0, 12.0] golden=[107.0, 70.0, 114.0, 58.0, 35.0, 99.0, 61.0, 4.0]
+  layer 29 token 5: rust=[63.0, 58.0, 99.0, 35.0, 87.0, 17.0, 4.0, 40.0] golden=[63.0, 58.0, 87.0, 99.0, 35.0, 119.0, 4.0, 17.0]
+  layer 29 token 6: rust=[4.0, 87.0, 70.0, 63.0, 93.0, 12.0, 61.0, 79.0] golden=[4.0, 87.0, 70.0, 63.0, 119.0, 12.0, 114.0, 61.0]
+enc_kv_29_keys max_abs=0.054688 rms=0.011999
+enc_kv_29_values max_abs=0.882812 rms=0.195111
+ok
+test text_embedding_matches_pinned_upstream_on_the_real_checkpoint ... encoder_embedding max_abs=0.000000000 rms=0.000000000
+ok
+test vision_chain_drift_is_tracked_against_pinned_upstream ... v0_input_norm max_abs=0.000977 rms=0.000010
+v0_attn_out max_abs=0.007812 rms=0.000163
+v0_post_attn_norm max_abs=0.001953 rms=0.000042
+v0_pre_ff_norm max_abs=0.000732 rms=0.000009
+v0_mlp_out max_abs=0.500000 rms=0.006035
+v0_post_ff_norm max_abs=0.031250 rms=0.000424
+vision_layer_0 max_abs=0.031250 rms=0.000427
+v1_input_norm max_abs=0.007812 rms=0.000131
+v1_attn_out max_abs=0.125000 rms=0.006334
+v1_post_attn_norm max_abs=0.062500 rms=0.001257
+v1_pre_ff_norm max_abs=0.007812 rms=0.000386
+v1_mlp_out max_abs=0.031250 rms=0.001076
+v1_post_ff_norm max_abs=0.250000 rms=0.002715
+vision_layer_1 max_abs=0.125000 rms=0.002899
+v2_input_norm max_abs=0.011719 rms=0.000647
+v2_attn_out max_abs=0.187500 rms=0.013852
+v2_post_attn_norm max_abs=0.125000 rms=0.003325
+v2_pre_ff_norm max_abs=0.015625 rms=0.001366
+v2_mlp_out max_abs=0.062500 rms=0.003221
+v2_post_ff_norm max_abs=0.125000 rms=0.003091
+vision_layer_2 max_abs=0.250000 rms=0.007169
+v3_input_norm max_abs=0.031250 rms=0.001554
+v3_attn_out max_abs=0.250000 rms=0.023016
+v3_post_attn_norm max_abs=0.117188 rms=0.006099
+v3_pre_ff_norm max_abs=0.026367 rms=0.002570
+v3_mlp_out max_abs=0.062500 rms=0.004436
+v3_post_ff_norm max_abs=0.101562 rms=0.003974
+vision_layer_3 max_abs=2.000000 rms=0.023343
+v4_input_norm max_abs=0.046875 rms=0.003189
+v4_attn_out max_abs=0.250000 rms=0.024604
+v4_post_attn_norm max_abs=0.140625 rms=0.007776
+v4_pre_ff_norm max_abs=0.031250 rms=0.003659
+v4_mlp_out max_abs=0.125000 rms=0.007418
+v4_post_ff_norm max_abs=0.250000 rms=0.006848
+vision_layer_4 max_abs=2.000000 rms=0.029241
+v5_input_norm max_abs=0.046875 rms=0.003539
+v5_attn_out max_abs=0.250000 rms=0.021527
+v5_post_attn_norm max_abs=0.143066 rms=0.006730
+v5_pre_ff_norm max_abs=0.031250 rms=0.003891
+v5_mlp_out max_abs=0.062500 rms=0.005656
+v5_post_ff_norm max_abs=0.250000 rms=0.009079
+vision_layer_5 max_abs=4.000000 rms=0.049018
+v6_input_norm max_abs=0.125000 rms=0.003932
+v6_attn_out max_abs=0.250000 rms=0.014986
+v6_post_attn_norm max_abs=0.125000 rms=0.005322
+v6_pre_ff_norm max_abs=0.046875 rms=0.003176
+v6_mlp_out max_abs=0.062500 rms=0.003669
+v6_post_ff_norm max_abs=0.250000 rms=0.007251
+vision_layer_6 max_abs=4.000000 rms=0.049746
+v7_input_norm max_abs=0.062500 rms=0.002708
+v7_attn_out max_abs=0.125000 rms=0.018551
+v7_post_attn_norm max_abs=0.250000 rms=0.006717
+v7_pre_ff_norm max_abs=0.019531 rms=0.002472
+v7_mlp_out max_abs=0.031250 rms=0.001631
+v7_post_ff_norm max_abs=0.500000 rms=0.008508
+vision_layer_7 max_abs=4.000000 rms=0.058121
+v8_input_norm max_abs=0.062500 rms=0.002353
+v8_attn_out max_abs=0.125000 rms=0.020480
+v8_post_attn_norm max_abs=0.250000 rms=0.009856
+v8_pre_ff_norm max_abs=0.017578 rms=0.002951
+v8_mlp_out max_abs=0.031250 rms=0.001887
+v8_post_ff_norm max_abs=0.500000 rms=0.012712
+vision_layer_8 max_abs=4.000000 rms=0.074638
+v9_input_norm max_abs=0.031250 rms=0.002743
+v9_attn_out max_abs=0.156250 rms=0.023010
+v9_post_attn_norm max_abs=0.156250 rms=0.010120
+v9_pre_ff_norm max_abs=0.017578 rms=0.003162
+v9_mlp_out max_abs=0.007812 rms=0.001549
+v9_post_ff_norm max_abs=0.500000 rms=0.017849
+vision_layer_9 max_abs=4.000000 rms=0.073730
+v10_input_norm max_abs=0.031250 rms=0.002648
+v10_attn_out max_abs=0.250000 rms=0.022783
+v10_post_attn_norm max_abs=0.375000 rms=0.020391
+v10_pre_ff_norm max_abs=0.021576 rms=0.003135
+v10_mlp_out max_abs=0.007812 rms=0.001109
+v10_post_ff_norm max_abs=0.500000 rms=0.020225
+vision_layer_10 max_abs=4.000000 rms=0.097054
+v11_input_norm max_abs=0.062500 rms=0.002952
+v11_attn_out max_abs=0.156250 rms=0.023674
+v11_post_attn_norm max_abs=0.375000 rms=0.017287
+v11_pre_ff_norm max_abs=0.019531 rms=0.003379
+v11_mlp_out max_abs=0.006836 rms=0.000992
+v11_post_ff_norm max_abs=0.500000 rms=0.028029
+vision_layer_11 max_abs=8.000000 rms=0.124758
+v12_input_norm max_abs=0.027344 rms=0.003665
+v12_attn_out max_abs=0.375000 rms=0.034240
+v12_post_attn_norm max_abs=0.750000 rms=0.038193
+v12_pre_ff_norm max_abs=0.021484 rms=0.003848
+v12_mlp_out max_abs=0.006348 rms=0.000968
+v12_post_ff_norm max_abs=0.750000 rms=0.036085
+vision_layer_12 max_abs=8.000000 rms=0.170990
+v13_input_norm max_abs=0.035156 rms=0.004524
+v13_attn_out max_abs=0.386719 rms=0.032319
+v13_post_attn_norm max_abs=0.375000 rms=0.034527
+v13_pre_ff_norm max_abs=0.039062 rms=0.004761
+v13_mlp_out max_abs=0.015137 rms=0.001303
+v13_post_ff_norm max_abs=0.750000 rms=0.051540
+vision_layer_13 max_abs=8.000000 rms=0.195240
+v14_input_norm max_abs=0.035156 rms=0.005657
+v14_attn_out max_abs=0.156250 rms=0.030345
+v14_post_attn_norm max_abs=0.390625 rms=0.037410
+v14_pre_ff_norm max_abs=0.033203 rms=0.005657
+v14_mlp_out max_abs=0.015625 rms=0.001756
+v14_post_ff_norm max_abs=1.500000 rms=0.069854
+vision_layer_14 max_abs=8.000000 rms=0.221660
+v15_input_norm max_abs=0.050781 rms=0.007786
+v15_attn_out max_abs=0.437500 rms=0.035974
+v15_post_attn_norm max_abs=0.750000 rms=0.053884
+v15_pre_ff_norm max_abs=0.035156 rms=0.006562
+v15_mlp_out max_abs=0.037598 rms=0.002061
+v15_post_ff_norm max_abs=1.250000 rms=0.101745
+vision_layer_15 max_abs=8.000000 rms=0.255435
+v16_input_norm max_abs=0.055664 rms=0.009844
+v16_attn_out max_abs=0.152344 rms=0.035167
+v16_post_attn_norm max_abs=0.625000 rms=0.077030
+v16_pre_ff_norm max_abs=0.041016 rms=0.008217
+v16_mlp_out max_abs=0.024780 rms=0.002534
+v16_post_ff_norm max_abs=1.031250 rms=0.117540
+vision_layer_16 max_abs=8.000000 rms=0.306834
+v17_input_norm max_abs=0.076172 rms=0.011714
+v17_attn_out max_abs=0.218750 rms=0.037869
+v17_post_attn_norm max_abs=1.187500 rms=0.083922
+v17_pre_ff_norm max_abs=0.056641 rms=0.010091
+v17_mlp_out max_abs=0.022461 rms=0.002939
+v17_post_ff_norm max_abs=2.750000 rms=0.146327
+vision_layer_17 max_abs=8.000000 rms=0.347830
+v18_input_norm max_abs=0.132812 rms=0.013730
+v18_attn_out max_abs=0.218750 rms=0.036542
+v18_post_attn_norm max_abs=0.660156 rms=0.091441
+v18_pre_ff_norm max_abs=0.074219 rms=0.011266
+v18_mlp_out max_abs=0.023438 rms=0.003312
+v18_post_ff_norm max_abs=2.500000 rms=0.172303
+vision_layer_18 max_abs=8.000000 rms=0.383522
+v19_input_norm max_abs=0.125000 rms=0.016704
+v19_attn_out max_abs=0.812500 rms=0.055602
+v19_post_attn_norm max_abs=1.375000 rms=0.126313
+v19_pre_ff_norm max_abs=0.059570 rms=0.011589
+v19_mlp_out max_abs=0.019775 rms=0.003111
+v19_post_ff_norm max_abs=2.500000 rms=0.231349
+vision_layer_19 max_abs=16.000000 rms=0.488422
+v20_input_norm max_abs=0.101562 rms=0.018445
+v20_attn_out max_abs=0.220703 rms=0.040459
+v20_post_attn_norm max_abs=1.453125 rms=0.126965
+v20_pre_ff_norm max_abs=0.078125 rms=0.014363
+v20_mlp_out max_abs=0.027344 rms=0.004331
+v20_post_ff_norm max_abs=3.125000 rms=0.282664
+vision_layer_20 max_abs=24.000000 rms=0.595129
+v21_input_norm max_abs=0.125000 rms=0.026483
+v21_attn_out max_abs=0.328125 rms=0.041891
+v21_post_attn_norm max_abs=0.921875 rms=0.132407
+v21_pre_ff_norm max_abs=0.070312 rms=0.016114
+v21_mlp_out max_abs=0.031738 rms=0.004990
+v21_post_ff_norm max_abs=2.750000 rms=0.360160
+vision_layer_21 max_abs=24.000000 rms=0.693333
+v22_input_norm max_abs=0.250000 rms=0.037956
+v22_attn_out max_abs=0.300293 rms=0.037895
+v22_post_attn_norm max_abs=1.250000 rms=0.172992
+v22_pre_ff_norm max_abs=0.108643 rms=0.018334
+v22_mlp_out max_abs=0.028809 rms=0.005556
+v22_post_ff_norm max_abs=2.562500 rms=0.430051
+vision_layer_22 max_abs=24.000000 rms=0.799052
+v23_input_norm max_abs=0.265625 rms=0.034575
+v23_attn_out max_abs=0.375000 rms=0.045240
+v23_post_attn_norm max_abs=2.500000 rms=0.259350
+v23_pre_ff_norm max_abs=0.117188 rms=0.019852
+v23_mlp_out max_abs=0.041992 rms=0.006736
+v23_post_ff_norm max_abs=3.585938 rms=0.631702
+vision_layer_23 max_abs=32.000000 rms=1.055358
+v24_input_norm max_abs=0.296875 rms=0.050497
+v24_attn_out max_abs=0.281250 rms=0.047617
+v24_post_attn_norm max_abs=4.000000 rms=0.380962
+v24_pre_ff_norm max_abs=0.132812 rms=0.024530
+v24_mlp_out max_abs=0.056641 rms=0.009431
+v24_post_ff_norm max_abs=4.875000 rms=0.848696
+vision_layer_24 max_abs=32.000000 rms=1.416834
+v25_input_norm max_abs=0.328125 rms=0.056297
+v25_attn_out max_abs=0.437500 rms=0.050434
+v25_post_attn_norm max_abs=8.000000 rms=0.694187
+v25_pre_ff_norm max_abs=0.161133 rms=0.030052
+v25_mlp_out max_abs=0.062500 rms=0.010880
+v25_post_ff_norm max_abs=7.000000 rms=1.232318
+vision_layer_25 max_abs=32.000000 rms=1.909789
+v26_input_norm max_abs=0.765625 rms=0.099145
+v26_attn_out max_abs=1.390625 rms=0.063905
+v26_post_attn_norm max_abs=40.000000 rms=1.048348
+v26_pre_ff_norm max_abs=0.187500 rms=0.028053
+v26_mlp_out max_abs=0.406250 rms=0.013924
+v26_post_ff_norm max_abs=79.750000 rms=3.379972
+vision_layer_26 max_abs=60.000000 rms=3.914907
+vision_pooled_standardized max_abs=0.195312 rms=0.050843
+embed_vision max_abs=0.242188 rms=0.055644
+ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1092.91s
+

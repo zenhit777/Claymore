@@ -1,0 +1,195 @@
+M10 / journal 12 - État réel de la CI GitHub sur la tête ef1a1cf (25/11/2026)
+==============================================================================
+
+Objet
+-----
+Consigner l'état réellement observé de la CI GitHub Actions de la PR #40 sur la
+tête ef1a1cf, qui est ROUGE, avec sa cause. Ce journal remplace et réfute toute
+affirmation antérieure du type « runs non observés » ou « jeton sans périmètre
+Actions ».
+
+Dépôt et références
+-------------------
+Dépôt           : zenhit777/Claymore
+Branche         : feat/m10-diffusiongemma
+Tête observée   : ef1a1cfe26ff87f289f1c94a67726797474455dc
+Workflow        : Rust CI (.github/workflows/rust.yml)
+
+Runs Rust CI sur ef1a1cf, tous deux completed/failure :
+
+  run_id       déclencheur     créé          lien
+  45533723982  push            02:32:50Z    https://github.com/zenhit777/Claymore/actions/runs/45533723982
+  45533731837  pull_request    02:32:54Z    https://github.com/zenhit777/Claymore/actions/runs/45533731837
+
+Jobs en échec (deux par run, les deux étapes de test) :
+
+  run 45533723982 (push)
+    138935091310  Format, test, and lint         02:32:52Z -> 02:33:12Z  failure
+                  https://github.com/zenhit777/Claymore/actions/runs/45533723982/job/138935091310
+    138935090884  Minimum supported Rust 1.86    02:32:52Z -> 02:33:29Z  failure
+                  https://github.com/zenhit777/Claymore/actions/runs/45533723982/job/138935090884
+  run 45533731837 (pull_request)
+    138935118950  Format, test, and lint                                  failure
+                  https://github.com/zenhit777/Claymore/actions/runs/45533731837/job/138935118950
+    138935119267  Minimum supported Rust 1.86                             failure
+                  https://github.com/zenhit777/Claymore/actions/runs/45533731837/job/138935119267
+
+Baseline : les runs précédents sur 9775cda (24/11 11:15:00Z push et 11:15:03Z
+pull_request) étaient completed/success sur les deux déclencheurs. Le fichier
+tests/kernel_order_parity.rs est INTRODUIT par le correctif : la régression de
+CI vient du verrou lui-même, pas d'un état rouge hérité.
+
+Image du runner (extrait brut du job 138935118950)
+---------------------------------------------------
+    Current runner version: '2.338.2'
+    ##[group]Runner Image Provisioner
+     Hosted Compute Agent
+     Version: 20261111.635
+     Commit: b8a594ea514ff44cadb5342986c68b1eac6e22ed
+     Build Date: 2026-11-11T01:49:01Z
+     Region: centralus
+     Cloud: Azure
+    ##[endgroup]
+    ##[group]Operating System
+     Ubuntu
+     26.04.1
+     LTS
+    ##[endgroup]
+    ##[group]Runner Image
+     Image: ubuntu-26.04
+     Version: 20261116.202.1
+    ##[endgroup]
+
+Hôte local de référence (celui de la campagne et du golden) :
+
+    Ubuntu 24.04.5 LTS
+    ldd (Ubuntu GLIBC 2.39-0ubuntu8.12) 2.39
+    AMD Ryzen 9 7950X3D 16-Core Processor
+
+Échec du job 138935118950 (Format, test, and lint) - extrait brut
+-----------------------------------------------------------------
+          Running tests/kernel_order_parity.rs (target/debug/build/claymore-model-gemma/c0aef2655e0e87ab/out/kernel_order_parity-c0aef2655e0e87ab)
+
+     running 7 tests
+     test masked_rows_keep_the_reference_conventions ... ok
+     test portable_tanhf_matches_glibc ... FAILED
+     test portable_expf_matches_glibc ... ok
+     test rms_norm_kernel_order_matches_the_reference_bit_for_bit ... ok
+     test portable_expm1f_matches_glibc ... FAILED
+     test softmax_kernel_order_matches_the_reference_bit_for_bit ... ok
+     test scatter_add_kernel_order_matches_the_reference_bit_for_bit ... ok
+
+     failures:
+
+     ---- portable_tanhf_matches_glibc stdout ----
+     thread 'portable_tanhf_matches_glibc' (3069) panicked at crates/claymore-model-gemma/tests/kernel_order_parity.rs:518:9:
+     assertion `left == right` failed: tanhf(0.0078125) port=0.0078123407 glibc=0.007812341
+       left: 1006632618
+      right: 1006632619
+
+     ---- portable_expm1f_matches_glibc stdout ----
+     thread 'portable_expm1f_matches_glibc' (3068) panicked at crates/claymore-model-gemma/tests/kernel_order_parity.rs:454:9:
+     assertion `left == right` failed: expm1f(1.1920929e-7) port=1.1920929e-7 glibc=1.192093e-7
+       left: 872415232
+      right: 872415233
+
+     test result: FAILED. 5 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     error: test failed, to rerun pass `-p claymore-model-gemma --test kernel_order_parity`
+     ##[error]Process completed with exit code 101.
+
+Échec du job 138935119267 (Minimum supported Rust 1.86) - extrait brut
+----------------------------------------------------------------------
+          Running tests/kernel_order_parity.rs (target/debug/deps/kernel_order_parity-0fa3107150bf2341)
+
+     running 7 tests
+     test masked_rows_keep_the_reference_conventions ... ok
+     test portable_expf_matches_glibc ... ok
+     test portable_tanhf_matches_glibc ... FAILED
+     test portable_expm1f_matches_glibc ... FAILED
+     test rms_norm_kernel_order_matches_the_reference_bit_for_bit ... ok
+     test softmax_kernel_order_matches_the_reference_bit_for_bit ... ok
+     test scatter_add_kernel_order_matches_the_reference_bit_for_bit ... ok
+
+     thread 'portable_tanhf_matches_glibc' panicked at crates/claymore-model-gemma/tests/kernel_order_parity.rs:518:9:
+     assertion `left == right` failed: tanhf(0.0078125) port=0.0078123407 glibc=0.007812341
+       left: 1006632618
+      right: 1006632619
+
+     thread 'portable_expm1f_matches_glibc' panicked at crates/claymore-model-gemma/tests/kernel_order_parity.rs:454:9:
+     assertion `left == right` failed: expm1f(1.1920929e-7) port=1.1920929e-7 glibc=1.192093e-7
+       left: 872415232
+      right: 872415233
+
+     test result: FAILED. 5 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     ##[error]Process completed with exit code 101.
+
+Lecture
+-------
+Sur l'image ubuntu-26.04, les ports portables de `claymore_math.cuh` diffèrent
+de la libm installée sur exactement DEUX entrées de leur balayage, d'un seul ULP
+(mot de bits consécutif) :
+
+    tanhf(0x3c000000 = 2^-7)   : port 0x3bfffeaa, libm installée 0x3bfffeab
+    expm1f(0x34000000 = 2^-23) : port 0x34000000, libm installée 0x34000001
+
+Sur l'hôte de référence glibc 2.39, le même balayage ne présente AUCUNE
+divergence (diagnostic ci-dessous). Les ports implémentent donc l'algorithme de
+glibc 2.39 ; le test comparait les ports à la libm de la machine hôte : l'oracle
+n'était pas épinglé, le test dépendait de l'image du runner.
+
+Diagnostic local, même balayage, hôte glibc 2.39
+------------------------------------------------
+Commande :
+
+    cargo test -p claymore-model-gemma --test kernel_order_parity -- --ignored --nocapture
+
+Sortie du test non bloquant `report_divergence_against_installed_libm` :
+
+    expf: 0 divergence(s) out of 32878 swept inputs
+    expm1f: 0 divergence(s) out of 549204 swept inputs
+    tanhf: 0 divergence(s) out of 126112 swept inputs
+    total: 0 divergence(s) out of 708194 swept inputs
+
+Correction apportée
+-------------------
+`kernel_order_parity.rs` épingle désormais l'oracle glibc 2.39 : les deux entrées
+ci-dessus figurent dans `PINNED_GLIBC_2_39` et le port est affirmé contre le
+résultat glibc 2.39 enregistré à ces points ; tout autre point du balayage reste
+comparé à la libm installée. Le balayage bit à bit reste donc intégral, sur
+n'importe quel hôte, et toute nouvelle divergence fait échouer le test. Aucun
+seuil n'est relâché, aucun test n'est désactivé.
+
+Correction (25/11, journal m10-parity-13)
+-----------------------------------------
+La section « Lecture » ci-dessus affirmait : « Sur l'image ubuntu-26.04, les
+ports portables de `claymore_math.cuh` diffèrent de la libm installée sur
+exactement DEUX entrées de leur balayage ». C'est FAUX. Le texte d'origine est
+laissé tel quel ci-dessus, avec sa réfutation ici.
+
+L'assertion de parité est à l'intérieur de la boucle du balayage : le premier
+écart rencontré interrompt le test. Deux tests en échec ne donnent donc que deux
+divergences OBSERVABLES, c'est-à-dire la première de chaque fonction, et non
+l'inventaire des divergences. Le correctif décrit plus haut (épingler ces deux
+entrées) a été poussé sur 85f7772 et la CI est restée ROUGE, sur les mêmes jobs
+et les mêmes étapes, avec deux AUTRES entrées :
+
+    tanhf(-2^-7) : port 3154116266, libm installée 3154116267
+    expm1f(1.0)  : port 1071378600, libm installée 1071378601
+
+runs 45538595444 (push) et 45538600058 (pull_request), jobs 138951244933 /
+138951245523 et 138951262162 / 138951261791, image du runner 20261116.202.1.
+
+La libm de l'image du runner diffère donc de glibc 2.39 sur PLUSIEURS entrées du
+balayage, sans borne établie. La conséquence n'est pas un correctif de plus :
+comparer le port à la libm installée ne peut pas être le contrat, puisque ce
+résultat dépend de l'image. Le contrat est désormais épinglé à l'oracle lui-même
+(table de résultats glibc 2.39 versionnée, plus comparaison à la libm installée
+seulement sur les hôtes qui sont l'oracle). Détail et chiffres au journal
+m10-parity-13 et à la section 7.4 du rapport.
+
+La borne est établie depuis, par mesure sur le runner lui-même (etape de mesure
+du job `Format, test, and lint` du run 45539689788, tete 88d3989) : **4 132**
+entrees balayees divergentes sur 708 194 (expf 0, expm1f 3 242, tanhf 890), dont
+**657** des entrees des tables epinglees (expm1f 211 / 33 752, tanhf 446 / 12 874,
+expf 0 / 9 272). Le contrat epingle, lui, passe sur cette image : les deux runs de
+la tete 88d3989 sont **verts**.

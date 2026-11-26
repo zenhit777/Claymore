@@ -1,0 +1,460 @@
+loading model on CPU with eager attention and eager experts
+Loading weights:   0%|          | 0/1047 [00:00<?, ?it/s]Loading weights:  19%|█▊        | 194/1047 [00:00<00:00, 1934.09it/s]Loading weights:  37%|███▋      | 388/1047 [00:00<00:00, 1925.66it/s]Loading weights:  57%|█████▋    | 592/1047 [00:00<00:00, 1973.95it/s]Loading weights:  78%|███████▊  | 814/1047 [00:00<00:00, 2067.78it/s]Loading weights: 100%|██████████| 1047/1047 [00:00<00:00, 2375.05it/s]
+attn=eager experts=eager
+saved prompt_ids [1, 7] 237534e64705a51c
+saved vision_pixel_values [1, 9, 768] d25d1265dc485e73
+saved vision_pixel_position_ids [1, 9, 2] b1a325b1069bd1ee
+saved canvas0_direct [1, 16] e430dd5f9f1749a2
+saved vision_in_0 [1, 9, 1152] 454093796cd8d4e0
+saved vision_in_1 [1, 9, 1152] 3fb1817f21ef18df
+saved vision_in_2 [1, 9, 1152] 153d1a2685d9357f
+saved vision_in_3 [1, 9, 1152] 841240f4fe7e7431
+saved vision_in_4 [1, 9, 1152] 8a3dd7228383b033
+saved vision_in_5 [1, 9, 1152] 1ad35d72449b8f1c
+saved vision_in_6 [1, 9, 1152] a7d75011396da5c2
+saved vision_in_7 [1, 9, 1152] ca36ac227545724d
+saved vision_in_8 [1, 9, 1152] 393a92fe6ccbfa8e
+saved vision_in_9 [1, 9, 1152] 3fb87770db0252e3
+saved vision_in_10 [1, 9, 1152] 51654db76b8ffa87
+saved vision_in_11 [1, 9, 1152] abf3512670433495
+saved vision_in_12 [1, 9, 1152] 7c431be4be9586f2
+saved vision_in_13 [1, 9, 1152] 4247f930846e72cf
+saved vision_in_14 [1, 9, 1152] fe47d4c3ded8c38a
+saved vision_in_15 [1, 9, 1152] 7ae26b91a5971f0c
+saved vision_in_16 [1, 9, 1152] ec7fae2bec93cf28
+saved vision_in_17 [1, 9, 1152] 46f02ebf763180d4
+saved vision_in_18 [1, 9, 1152] c571d0420283aa3a
+saved vision_in_19 [1, 9, 1152] a230bb0dc4fe6b03
+saved vision_in_20 [1, 9, 1152] 9b051c11c31d0430
+saved vision_in_21 [1, 9, 1152] 20fbc67aa4c2a729
+saved vision_in_22 [1, 9, 1152] a3e3bdb2ea935aa1
+saved vision_in_23 [1, 9, 1152] 1ca40e2093cce554
+saved vision_in_24 [1, 9, 1152] 1f924a6a78531b30
+saved vision_in_25 [1, 9, 1152] 1192dbe80d5f4902
+saved vision_in_26 [1, 9, 1152] 957d97f7af3782bd
+saved vision_last_hidden_direct [1, 1152] 16b06a60e81117f9
+saved embed_vision_output_direct [1, 2816] 9ef004236b535c1d
+saved vision_layer_0 [1, 9, 1152] 3fb1817f21ef18df
+saved vision_layer_1 [1, 9, 1152] 153d1a2685d9357f
+saved vision_layer_2 [1, 9, 1152] 841240f4fe7e7431
+saved vision_layer_3 [1, 9, 1152] 8a3dd7228383b033
+saved vision_layer_4 [1, 9, 1152] 1ad35d72449b8f1c
+saved vision_layer_5 [1, 9, 1152] a7d75011396da5c2
+saved vision_layer_6 [1, 9, 1152] ca36ac227545724d
+saved vision_layer_7 [1, 9, 1152] 393a92fe6ccbfa8e
+saved vision_layer_8 [1, 9, 1152] 3fb87770db0252e3
+saved vision_layer_9 [1, 9, 1152] 51654db76b8ffa87
+saved vision_layer_10 [1, 9, 1152] abf3512670433495
+saved vision_layer_11 [1, 9, 1152] 7c431be4be9586f2
+saved vision_layer_12 [1, 9, 1152] 4247f930846e72cf
+saved vision_layer_13 [1, 9, 1152] fe47d4c3ded8c38a
+saved vision_layer_14 [1, 9, 1152] 7ae26b91a5971f0c
+saved vision_layer_15 [1, 9, 1152] ec7fae2bec93cf28
+saved vision_layer_16 [1, 9, 1152] 46f02ebf763180d4
+saved vision_layer_17 [1, 9, 1152] c571d0420283aa3a
+saved vision_layer_18 [1, 9, 1152] a230bb0dc4fe6b03
+saved vision_layer_19 [1, 9, 1152] 9b051c11c31d0430
+saved vision_layer_20 [1, 9, 1152] 20fbc67aa4c2a729
+saved vision_layer_21 [1, 9, 1152] a3e3bdb2ea935aa1
+saved vision_layer_22 [1, 9, 1152] 1ca40e2093cce554
+saved vision_layer_23 [1, 9, 1152] 1f924a6a78531b30
+saved vision_layer_24 [1, 9, 1152] 1192dbe80d5f4902
+saved vision_layer_25 [1, 9, 1152] 957d97f7af3782bd
+saved vision_layer_26 [1, 9, 1152] 59f21ada21cd236d
+saved enc_in_0 [1, 7, 2816] 3a764f9ab5b3ef6d
+saved encoder0_router_scores [7, 128] eaf2db18debe44bc
+saved encoder0_router_weights [7, 8] 9c4d41cf65eee461
+saved encoder0_router_indices [7, 8] 1e472943890e6154
+saved encoder0_expert_output [7, 2816] 367f44e6d3cc770d
+saved enc_in_1 [1, 7, 2816] 24e4dc0319bb109b
+saved encoder1_router_scores [7, 128] fb146574d6f0072c
+saved encoder1_router_weights [7, 8] 67cc0126b001a6a1
+saved encoder1_router_indices [7, 8] e3c1288dcf6f2108
+saved encoder1_expert_output [7, 2816] 5dfd24bcb81b2b3f
+saved enc_in_2 [1, 7, 2816] 5cacaddb139b549e
+saved encoder2_router_scores [7, 128] 89176389467a83fe
+saved encoder2_router_weights [7, 8] 19ba5a577abc5ecf
+saved encoder2_router_indices [7, 8] a18126fa73300876
+saved encoder2_expert_output [7, 2816] 71a2f577a6fafe76
+saved enc_in_3 [1, 7, 2816] 7d81b79786881658
+saved encoder3_router_scores [7, 128] f96c6ebb035c5ddc
+saved encoder3_router_weights [7, 8] 2620ba8b5086f108
+saved encoder3_router_indices [7, 8] 7ec7f8df8cc99de8
+saved encoder3_expert_output [7, 2816] da5eaa9b21f227a7
+saved enc_in_4 [1, 7, 2816] 660e950c8c4604a0
+saved encoder4_router_scores [7, 128] aa78e61ae807ebc9
+saved encoder4_router_weights [7, 8] a192b6c261a9fbe6
+saved encoder4_router_indices [7, 8] 998a2e5c0c8bf0c5
+saved encoder4_expert_output [7, 2816] 4d6fe863d3b39993
+saved enc_in_5 [1, 7, 2816] 5eb4cb68fe6e3efd
+saved encoder5_router_scores [7, 128] b435acaa6f3de7da
+saved encoder5_router_weights [7, 8] 88eea8a709ce4cd0
+saved encoder5_router_indices [7, 8] 9c8a5eabd948f985
+saved encoder5_expert_output [7, 2816] a73dfe683fa25c91
+saved enc_in_6 [1, 7, 2816] 5c6f34f6bde7a497
+saved encoder6_router_scores [7, 128] 6b36f4c22936a1f8
+saved encoder6_router_weights [7, 8] a69f96b4681c717b
+saved encoder6_router_indices [7, 8] 714c492ed4aac0ce
+saved encoder6_expert_output [7, 2816] 3716cc65592e69c8
+saved enc_in_7 [1, 7, 2816] 4fd5b04aa05eb39c
+saved encoder7_router_scores [7, 128] eecf952a503d3e17
+saved encoder7_router_weights [7, 8] 85a870183bed80e9
+saved encoder7_router_indices [7, 8] 11adba02baa8cd05
+saved encoder7_expert_output [7, 2816] 0ee0d64e8c434b0c
+saved enc_in_8 [1, 7, 2816] b93a685dc765088f
+saved encoder8_router_scores [7, 128] 86922c39c5a6df0e
+saved encoder8_router_weights [7, 8] fc3e14557d2506bf
+saved encoder8_router_indices [7, 8] 8299693c8d9912b9
+saved encoder8_expert_output [7, 2816] 439247fd2e9771dd
+saved enc_in_9 [1, 7, 2816] 7241cd662a20e1fe
+saved encoder9_router_scores [7, 128] 3a4c111e679175da
+saved encoder9_router_weights [7, 8] ff72a6093096cee0
+saved encoder9_router_indices [7, 8] 51e8c0fc95559f06
+saved encoder9_expert_output [7, 2816] 39f9608a8229ed89
+saved enc_in_10 [1, 7, 2816] 3699e00d7a99aba2
+saved encoder10_router_scores [7, 128] 0e3d55fce8b0d5f5
+saved encoder10_router_weights [7, 8] 47c4f518bc1fe2f8
+saved encoder10_router_indices [7, 8] 9177e2873c6238c7
+saved encoder10_expert_output [7, 2816] ba7b0d0ccbbfe308
+saved enc_in_11 [1, 7, 2816] 90b9f5bd1217e196
+saved encoder11_router_scores [7, 128] 408b723c0e0aff83
+saved encoder11_router_weights [7, 8] 0dafdd61fd84fccd
+saved encoder11_router_indices [7, 8] 1a74145aa63c706b
+saved encoder11_expert_output [7, 2816] 171df8533438f66f
+saved enc_in_12 [1, 7, 2816] 38af370b8b255519
+saved encoder12_router_scores [7, 128] 6202d5859c0b543e
+saved encoder12_router_weights [7, 8] 911d5b48ed3e7579
+saved encoder12_router_indices [7, 8] 5d395f29b7ee2ecd
+saved encoder12_expert_output [7, 2816] 816e7466d83d9565
+saved enc_in_13 [1, 7, 2816] a3f6a7068a78bc15
+saved encoder13_router_scores [7, 128] d3f4a8914aa9929c
+saved encoder13_router_weights [7, 8] 905fec830b95971b
+saved encoder13_router_indices [7, 8] 886b70d7ade957a5
+saved encoder13_expert_output [7, 2816] bc24a08fe202e9cf
+saved enc_in_14 [1, 7, 2816] 1aa74718872d34b9
+saved encoder14_router_scores [7, 128] b8823d5f37619d18
+saved encoder14_router_weights [7, 8] 526c592871b9489a
+saved encoder14_router_indices [7, 8] fdedd411e59f0c80
+saved encoder14_expert_output [7, 2816] 3e7e8358a5854593
+saved enc_in_15 [1, 7, 2816] dd178e316eef0634
+saved encoder15_router_scores [7, 128] 145808a4c90a0f4d
+saved encoder15_router_weights [7, 8] 7a147135874dd226
+saved encoder15_router_indices [7, 8] 6d4812b9001a309d
+saved encoder15_expert_output [7, 2816] 6b1a4daf783ede3a
+saved enc_in_16 [1, 7, 2816] a34a31a2112b1485
+saved encoder16_router_scores [7, 128] 0e9bf095508a33d2
+saved encoder16_router_weights [7, 8] 16fb8f32d11f431c
+saved encoder16_router_indices [7, 8] 4927410ef0385689
+saved encoder16_expert_output [7, 2816] ff022e4ae325b971
+saved enc_in_17 [1, 7, 2816] 4fa652df82065768
+saved encoder17_router_scores [7, 128] 46b91ef1d1c607d6
+saved encoder17_router_weights [7, 8] 096c3f77677de916
+saved encoder17_router_indices [7, 8] 6bcf558b294651e9
+saved encoder17_expert_output [7, 2816] e939d8488759fa7b
+saved enc_in_18 [1, 7, 2816] 3b4d95a0d543d269
+saved encoder18_router_scores [7, 128] a18cf152215e35ea
+saved encoder18_router_weights [7, 8] ef93f4eab5765d1d
+saved encoder18_router_indices [7, 8] 6bdbef3a7bacf00d
+saved encoder18_expert_output [7, 2816] 771b1390d2551090
+saved enc_in_19 [1, 7, 2816] dbe25fd3a1ca1996
+saved encoder19_router_scores [7, 128] 38785aac90b67b10
+saved encoder19_router_weights [7, 8] 3391d3f9a232dfa7
+saved encoder19_router_indices [7, 8] 1e8a2aa87fe1be1c
+saved encoder19_expert_output [7, 2816] 6deff50654e15c43
+saved enc_in_20 [1, 7, 2816] e5e11f442d14719d
+saved encoder20_router_scores [7, 128] ecb183ca9bbfe22d
+saved encoder20_router_weights [7, 8] 36c8407d96574bd5
+saved encoder20_router_indices [7, 8] d9fa6c7eadb094f3
+saved encoder20_expert_output [7, 2816] 38c0c45ed256c013
+saved enc_in_21 [1, 7, 2816] 7c6ed03dc35da0cf
+saved encoder21_router_scores [7, 128] f396d597328146e9
+saved encoder21_router_weights [7, 8] d75becbe0becdbc1
+saved encoder21_router_indices [7, 8] 6390aff1f41a6d28
+saved encoder21_expert_output [7, 2816] 6023bba5fe3e70c2
+saved enc_in_22 [1, 7, 2816] 9ad5093269843b66
+saved encoder22_router_scores [7, 128] 1d77c0308f82fd56
+saved encoder22_router_weights [7, 8] 0259f107f27c9903
+saved encoder22_router_indices [7, 8] be97f528cfa5747b
+saved encoder22_expert_output [7, 2816] 01d9098e0e1103d0
+saved enc_in_23 [1, 7, 2816] 2483e857febba9a4
+saved encoder23_router_scores [7, 128] fc13c73aa0e5ff1b
+saved encoder23_router_weights [7, 8] f4da5a76a1f69b64
+saved encoder23_router_indices [7, 8] 07850190e04cd06c
+saved encoder23_expert_output [7, 2816] b02b7011ae851cf0
+saved enc_in_24 [1, 7, 2816] b2f2454894758bbf
+saved encoder24_router_scores [7, 128] 243f614d6410e9c9
+saved encoder24_router_weights [7, 8] 3bf606bae4ca4b61
+saved encoder24_router_indices [7, 8] cd83d23ef437f8c8
+saved encoder24_expert_output [7, 2816] 4281a04c713f583f
+saved enc_in_25 [1, 7, 2816] 8eddfc252c36e7bc
+saved encoder25_router_scores [7, 128] 242c6dcf6528d0e0
+saved encoder25_router_weights [7, 8] 1e94705a35bd2b1f
+saved encoder25_router_indices [7, 8] fb8a65046bcb8728
+saved encoder25_expert_output [7, 2816] 7f586a0be5372429
+saved enc_in_26 [1, 7, 2816] 6b884de707e72706
+saved encoder26_router_scores [7, 128] 93de76da74a91ae4
+saved encoder26_router_weights [7, 8] 86aae7163bc10bb1
+saved encoder26_router_indices [7, 8] 8b2ebcad970d1dcc
+saved encoder26_expert_output [7, 2816] 16349557ce143cd8
+saved enc_in_27 [1, 7, 2816] 6bda20603cbe7e42
+saved encoder27_router_scores [7, 128] c955dab366d198c6
+saved encoder27_router_weights [7, 8] aa841db580330009
+saved encoder27_router_indices [7, 8] 084223d7cc1bedb2
+saved encoder27_expert_output [7, 2816] 5640d1411c414893
+saved enc_in_28 [1, 7, 2816] 852cf4dc018f2d3b
+saved encoder28_router_scores [7, 128] 178d09f4af3ea224
+saved encoder28_router_weights [7, 8] 3ad8a3db73631fa6
+saved encoder28_router_indices [7, 8] 297aa48961c32bbc
+saved encoder28_expert_output [7, 2816] a11f69a783ecd6a6
+saved enc_in_29 [1, 7, 2816] 11ed925364363ba1
+saved encoder29_router_scores [7, 128] 54508e299e080e1a
+saved encoder29_router_weights [7, 8] 8eb05675d28a2d3f
+saved encoder29_router_indices [7, 8] 5ce3552a444d1a38
+saved encoder29_expert_output [7, 2816] ee8d4babde0a93f0
+saved encoder_last_hidden_direct [1, 7, 2816] e9c1f9606abfc13d
+saved encoder_embedding [1, 7, 2816] 3a764f9ab5b3ef6d
+saved enc_kv_0_keys [1, 8, 7, 256] 9ac28f7a6c3851ea
+saved enc_kv_0_values [1, 8, 7, 256] 8c7467abb7a478e7
+saved enc_kv_1_keys [1, 8, 7, 256] ffa0085ac30c1e56
+saved enc_kv_1_values [1, 8, 7, 256] dd3c5c4797beb646
+saved enc_kv_2_keys [1, 8, 7, 256] a3ffed40ce62e62a
+saved enc_kv_2_values [1, 8, 7, 256] 28a267355955f832
+saved enc_kv_3_keys [1, 8, 7, 256] 87a3d02fa979a1e0
+saved enc_kv_3_values [1, 8, 7, 256] 6221aa8da513ad64
+saved enc_kv_4_keys [1, 8, 7, 256] 9329ae901dad087a
+saved enc_kv_4_values [1, 8, 7, 256] 9f0bcaf7ba60ad29
+saved enc_kv_5_keys [1, 2, 7, 512] 4becf0bc755f2500
+saved enc_kv_5_values [1, 2, 7, 512] 1b30eb39a92ac1d6
+saved enc_kv_6_keys [1, 8, 7, 256] c611a929e4cdc40b
+saved enc_kv_6_values [1, 8, 7, 256] e3772a8674e5bcdf
+saved enc_kv_7_keys [1, 8, 7, 256] f1e0343764b91e13
+saved enc_kv_7_values [1, 8, 7, 256] f59122461c1e9750
+saved enc_kv_8_keys [1, 8, 7, 256] 6c7bc4504108c91e
+saved enc_kv_8_values [1, 8, 7, 256] fa7b6adcd2aa5225
+saved enc_kv_9_keys [1, 8, 7, 256] d1a83df1548dc1e4
+saved enc_kv_9_values [1, 8, 7, 256] 83e919886aafcf7e
+saved enc_kv_10_keys [1, 8, 7, 256] 5e4621308a432ba6
+saved enc_kv_10_values [1, 8, 7, 256] d52c6233d9285495
+saved enc_kv_11_keys [1, 2, 7, 512] 7c1f5f6c416ba2f0
+saved enc_kv_11_values [1, 2, 7, 512] ae0ced3357a625d1
+saved enc_kv_12_keys [1, 8, 7, 256] 46b500772a45bcac
+saved enc_kv_12_values [1, 8, 7, 256] 7078c398f17fcfd6
+saved enc_kv_13_keys [1, 8, 7, 256] 8d681d7a9fdfe484
+saved enc_kv_13_values [1, 8, 7, 256] 521821978312f2a4
+saved enc_kv_14_keys [1, 8, 7, 256] 12650dd38bca82c3
+saved enc_kv_14_values [1, 8, 7, 256] 4ada6e3280c2a4e3
+saved enc_kv_15_keys [1, 8, 7, 256] 156cc9a016ca0199
+saved enc_kv_15_values [1, 8, 7, 256] 60730020c74fc16e
+saved enc_kv_16_keys [1, 8, 7, 256] e719f84e3e835cc6
+saved enc_kv_16_values [1, 8, 7, 256] 2fb925adadfd43ee
+saved enc_kv_17_keys [1, 2, 7, 512] ca4fbe1e5d2a3232
+saved enc_kv_17_values [1, 2, 7, 512] ccc2cfbef6c3e6e1
+saved enc_kv_18_keys [1, 8, 7, 256] 08e5fc3e82d76b5e
+saved enc_kv_18_values [1, 8, 7, 256] 8ac86262164beb4f
+saved enc_kv_19_keys [1, 8, 7, 256] d8ff228de74c5418
+saved enc_kv_19_values [1, 8, 7, 256] f5db7bb4a9dd886c
+saved enc_kv_20_keys [1, 8, 7, 256] c6ca13597f453669
+saved enc_kv_20_values [1, 8, 7, 256] 11d93d9092781feb
+saved enc_kv_21_keys [1, 8, 7, 256] 8d57733c13075dde
+saved enc_kv_21_values [1, 8, 7, 256] 8a09147455aca3bb
+saved enc_kv_22_keys [1, 8, 7, 256] da23298fa55f8b52
+saved enc_kv_22_values [1, 8, 7, 256] 3f21cfbb2f699c49
+saved enc_kv_23_keys [1, 2, 7, 512] 392181489255e5ea
+saved enc_kv_23_values [1, 2, 7, 512] daa13c6e0ec6bb26
+saved enc_kv_24_keys [1, 8, 7, 256] b3946921ef1ae5ab
+saved enc_kv_24_values [1, 8, 7, 256] 7be5dede83b99d28
+saved enc_kv_25_keys [1, 8, 7, 256] bbe96f9bca050234
+saved enc_kv_25_values [1, 8, 7, 256] 99bb4f0a4fd467d5
+saved enc_kv_26_keys [1, 8, 7, 256] 8094da342cb2edee
+saved enc_kv_26_values [1, 8, 7, 256] 6bdcaf95ff4aa0ff
+saved enc_kv_27_keys [1, 8, 7, 256] 0181af651ef8810e
+saved enc_kv_27_values [1, 8, 7, 256] f55d6c3958dc6d3d
+saved enc_kv_28_keys [1, 8, 7, 256] 270590e21b43bed4
+saved enc_kv_28_values [1, 8, 7, 256] 93644caffa5d6eca
+saved enc_kv_29_keys [1, 2, 7, 512] 83f4323e60a4bf3a
+saved enc_kv_29_values [1, 2, 7, 512] 0c2b2977fffa0ed9
+saved encoder_layer_0 [1, 7, 2816] 24e4dc0319bb109b
+saved encoder_layer_1 [1, 7, 2816] 5cacaddb139b549e
+saved encoder_layer_2 [1, 7, 2816] 7d81b79786881658
+saved encoder_layer_3 [1, 7, 2816] 660e950c8c4604a0
+saved encoder_layer_4 [1, 7, 2816] 5eb4cb68fe6e3efd
+saved encoder_layer_5 [1, 7, 2816] 5c6f34f6bde7a497
+saved encoder_layer_6 [1, 7, 2816] 4fd5b04aa05eb39c
+saved encoder_layer_7 [1, 7, 2816] b93a685dc765088f
+saved encoder_layer_8 [1, 7, 2816] 7241cd662a20e1fe
+saved encoder_layer_9 [1, 7, 2816] 3699e00d7a99aba2
+saved encoder_layer_10 [1, 7, 2816] 90b9f5bd1217e196
+saved encoder_layer_11 [1, 7, 2816] 38af370b8b255519
+saved encoder_layer_12 [1, 7, 2816] a3f6a7068a78bc15
+saved encoder_layer_13 [1, 7, 2816] 1aa74718872d34b9
+saved encoder_layer_14 [1, 7, 2816] dd178e316eef0634
+saved encoder_layer_15 [1, 7, 2816] a34a31a2112b1485
+saved encoder_layer_16 [1, 7, 2816] 4fa652df82065768
+saved encoder_layer_17 [1, 7, 2816] 3b4d95a0d543d269
+saved encoder_layer_18 [1, 7, 2816] dbe25fd3a1ca1996
+saved encoder_layer_19 [1, 7, 2816] e5e11f442d14719d
+saved encoder_layer_20 [1, 7, 2816] 7c6ed03dc35da0cf
+saved encoder_layer_21 [1, 7, 2816] 9ad5093269843b66
+saved encoder_layer_22 [1, 7, 2816] 2483e857febba9a4
+saved encoder_layer_23 [1, 7, 2816] b2f2454894758bbf
+saved encoder_layer_24 [1, 7, 2816] 8eddfc252c36e7bc
+saved encoder_layer_25 [1, 7, 2816] 6b884de707e72706
+saved encoder_layer_26 [1, 7, 2816] 6bda20603cbe7e42
+saved encoder_layer_27 [1, 7, 2816] 852cf4dc018f2d3b
+saved encoder_layer_28 [1, 7, 2816] 11ed925364363ba1
+saved encoder_layer_29 [1, 7, 2816] 305c0cfb0cae66eb
+saved dec_in_0 [1, 16, 2816] f54e99ce9db4bbde
+saved moe0_router_scores [16, 128] f32bd0c3470e088f
+saved moe0_router_weights [16, 8] aa6f7733baf9a376
+saved moe0_router_indices [16, 8] 5d119c6951030848
+saved dec_in_1 [1, 16, 2816] 49b93a05f54c590e
+saved moe1_router_scores [16, 128] 98eeb56e3906d2fd
+saved moe1_router_weights [16, 8] aab21925f65d8e1c
+saved moe1_router_indices [16, 8] 90cf70afb76a5c1a
+saved dec_in_2 [1, 16, 2816] 6c40d32839767a45
+saved moe2_router_scores [16, 128] 97caffc1b9bd034c
+saved moe2_router_weights [16, 8] 9f4efb78885abe75
+saved moe2_router_indices [16, 8] c9717b6110a11285
+saved dec_in_3 [1, 16, 2816] 4e320ab6480f98ae
+saved moe3_router_scores [16, 128] 5bfffcfb704e6d2f
+saved moe3_router_weights [16, 8] d6d3b9a76a3916c6
+saved moe3_router_indices [16, 8] 10a2905a9b358f49
+saved dec_in_4 [1, 16, 2816] 6fe7190705e12209
+saved moe4_router_scores [16, 128] 5af11cae7efabde7
+saved moe4_router_weights [16, 8] e7bdbf13dbcf1329
+saved moe4_router_indices [16, 8] 41a88425a3d22658
+saved dec_in_5 [1, 16, 2816] 5b656c24c2abfa46
+saved moe5_router_scores [16, 128] b35e138902e339a7
+saved moe5_router_weights [16, 8] 8acaa85d70d3fa95
+saved moe5_router_indices [16, 8] ced11fd71960825c
+saved dec_in_6 [1, 16, 2816] 783c44f749d71ce4
+saved moe6_router_scores [16, 128] 08c675d8cca2d22e
+saved moe6_router_weights [16, 8] 3637a46706edb959
+saved moe6_router_indices [16, 8] 45ed4fb9609d60e3
+saved dec_in_7 [1, 16, 2816] 95724ba239ddcb4b
+saved moe7_router_scores [16, 128] 04cd4d31ace14e45
+saved moe7_router_weights [16, 8] b4c75514fbdd7588
+saved moe7_router_indices [16, 8] f4ccae031967ab99
+saved dec_in_8 [1, 16, 2816] a6ab0a2081bd730a
+saved moe8_router_scores [16, 128] ea9e6b1f264127e8
+saved moe8_router_weights [16, 8] 280d6636bd1b87c0
+saved moe8_router_indices [16, 8] cc910e34c5ced395
+saved dec_in_9 [1, 16, 2816] 26c86592bca7d69c
+saved moe9_router_scores [16, 128] 4dc987989b4dbefc
+saved moe9_router_weights [16, 8] 4f91b1c701928fd1
+saved moe9_router_indices [16, 8] daebff8e04f700a1
+saved dec_in_10 [1, 16, 2816] b5c27be9a619e563
+saved moe10_router_scores [16, 128] 06b1fe788830f2a9
+saved moe10_router_weights [16, 8] 2bd69cf64fe34c6e
+saved moe10_router_indices [16, 8] d11a7100ecdc784c
+saved dec_in_11 [1, 16, 2816] 7e6af0c133175604
+saved moe11_router_scores [16, 128] 76adfa9493f5db95
+saved moe11_router_weights [16, 8] 819b60bab75b1f06
+saved moe11_router_indices [16, 8] c6ebf94998a2c613
+saved dec_in_12 [1, 16, 2816] 6ffffc056118b22b
+saved moe12_router_scores [16, 128] 232f650d3969f769
+saved moe12_router_weights [16, 8] d68fabae44955b8e
+saved moe12_router_indices [16, 8] 6ccec39afba110cb
+saved dec_in_13 [1, 16, 2816] 423d1431e30f8a12
+saved moe13_router_scores [16, 128] b21330a97fe177e2
+saved moe13_router_weights [16, 8] fa7d3ba1d208f419
+saved moe13_router_indices [16, 8] dfb122f7eae2aec9
+saved dec_in_14 [1, 16, 2816] 277e1f56808bc8d8
+saved moe14_router_scores [16, 128] fb6bd21494819846
+saved moe14_router_weights [16, 8] 62b402eef8213a5d
+saved moe14_router_indices [16, 8] 7f218ed7ba5f785e
+saved dec_in_15 [1, 16, 2816] d32ee5decf0bad78
+saved moe15_router_scores [16, 128] ae8bac4599e95c8d
+saved moe15_router_weights [16, 8] 6d104d3c8f53caed
+saved moe15_router_indices [16, 8] 96144d38091b09da
+saved dec_in_16 [1, 16, 2816] 3c87bb1efbb578ac
+saved moe16_router_scores [16, 128] 8fceebd9d70c8456
+saved moe16_router_weights [16, 8] f267dfcf70f8d3b9
+saved moe16_router_indices [16, 8] 3443dde69d0057d6
+saved dec_in_17 [1, 16, 2816] 31b79daf6d8921aa
+saved moe17_router_scores [16, 128] 88eec0d68b8d0363
+saved moe17_router_weights [16, 8] 8bcfafd2f634592e
+saved moe17_router_indices [16, 8] 1b35276b1d2bd940
+saved dec_in_18 [1, 16, 2816] 97d559ac4059e379
+saved moe18_router_scores [16, 128] 35bd675e89aea56c
+saved moe18_router_weights [16, 8] 78d619373515db87
+saved moe18_router_indices [16, 8] 6545e07c6a1fc34f
+saved dec_in_19 [1, 16, 2816] f9940ae103c09035
+saved moe19_router_scores [16, 128] b596716962a66236
+saved moe19_router_weights [16, 8] ef1c0205a701c9b0
+saved moe19_router_indices [16, 8] dc8bc06867a4e721
+saved dec_in_20 [1, 16, 2816] cb13beac13ab0f31
+saved moe20_router_scores [16, 128] 33b9b754ef9c352b
+saved moe20_router_weights [16, 8] 63b19f00c9ed46bf
+saved moe20_router_indices [16, 8] cd283805f3fa689f
+saved dec_in_21 [1, 16, 2816] f9f8261ec6a2afe8
+saved moe21_router_scores [16, 128] 94c7778fdf5ce905
+saved moe21_router_weights [16, 8] 4f5dd888ec72bf8a
+saved moe21_router_indices [16, 8] 78831e9537d1c07b
+saved dec_in_22 [1, 16, 2816] 225db52c3f26cbe5
+saved moe22_router_scores [16, 128] 9b2cee6bdfd3c3f2
+saved moe22_router_weights [16, 8] bd6ec676228047ea
+saved moe22_router_indices [16, 8] e9104bf9393d1732
+saved dec_in_23 [1, 16, 2816] b307fd043aee1617
+saved moe23_router_scores [16, 128] 983e329ce19e1784
+saved moe23_router_weights [16, 8] b84b2f71d0190fc1
+saved moe23_router_indices [16, 8] 15c2d58cd79bc4b2
+saved dec_in_24 [1, 16, 2816] c59c4db90cba49d0
+saved moe24_router_scores [16, 128] 3084b59810850588
+saved moe24_router_weights [16, 8] 4824a7f3519779ee
+saved moe24_router_indices [16, 8] 33482b67c91c3974
+saved dec_in_25 [1, 16, 2816] 6e2e7ccf13b21709
+saved moe25_router_scores [16, 128] d33f81792b4d41cf
+saved moe25_router_weights [16, 8] 94e9b84e23814815
+saved moe25_router_indices [16, 8] 82a24da9e850828c
+saved dec_in_26 [1, 16, 2816] 7ad27cee3772f1e8
+saved moe26_router_scores [16, 128] 5f172c1fc2b328b3
+saved moe26_router_weights [16, 8] 80fc06e13db4a1c3
+saved moe26_router_indices [16, 8] a5736122c786bce7
+saved dec_in_27 [1, 16, 2816] 54e84e32f3c46b0c
+saved moe27_router_scores [16, 128] 93531c4f5d12138b
+saved moe27_router_weights [16, 8] 5f6037098f464387
+saved moe27_router_indices [16, 8] a616188b77524fe5
+saved dec_in_28 [1, 16, 2816] 4e3c85c30622b393
+saved moe28_router_scores [16, 128] e1899654982c723b
+saved moe28_router_weights [16, 8] bce0ad9cc2a9f542
+saved moe28_router_indices [16, 8] 205852ac927759ba
+saved dec_in_29 [1, 16, 2816] dbed46d8cbc51216
+saved moe29_router_scores [16, 128] 83b8bfa808280a9d
+saved moe29_router_weights [16, 8] 2b05ed8f45302bda
+saved moe29_router_indices [16, 8] b002337f778973bc
+saved decoder_last_hidden0_direct [1, 16, 2816] 092998eaaa13209c
+saved decoder_embedding [1, 16, 2816] 473c1152b9eb79e5
+saved decoder_layer_0 [1, 16, 2816] 49b93a05f54c590e
+saved decoder_layer_1 [1, 16, 2816] 6c40d32839767a45
+saved decoder_layer_2 [1, 16, 2816] 4e320ab6480f98ae
+saved decoder_layer_3 [1, 16, 2816] 6fe7190705e12209
+saved decoder_layer_4 [1, 16, 2816] 5b656c24c2abfa46
+saved decoder_layer_5 [1, 16, 2816] 783c44f749d71ce4
+saved decoder_layer_6 [1, 16, 2816] 95724ba239ddcb4b
+saved decoder_layer_7 [1, 16, 2816] a6ab0a2081bd730a
+saved decoder_layer_8 [1, 16, 2816] 26c86592bca7d69c
+saved decoder_layer_9 [1, 16, 2816] b5c27be9a619e563
+saved decoder_layer_10 [1, 16, 2816] 7e6af0c133175604
+saved decoder_layer_11 [1, 16, 2816] 6ffffc056118b22b
+saved decoder_layer_12 [1, 16, 2816] 423d1431e30f8a12
+saved decoder_layer_13 [1, 16, 2816] 277e1f56808bc8d8
+saved decoder_layer_14 [1, 16, 2816] d32ee5decf0bad78
+saved decoder_layer_15 [1, 16, 2816] 3c87bb1efbb578ac
+saved decoder_layer_16 [1, 16, 2816] 31b79daf6d8921aa
+saved decoder_layer_17 [1, 16, 2816] 97d559ac4059e379
+saved decoder_layer_18 [1, 16, 2816] f9940ae103c09035
+saved decoder_layer_19 [1, 16, 2816] cb13beac13ab0f31
+saved decoder_layer_20 [1, 16, 2816] f9f8261ec6a2afe8
+saved decoder_layer_21 [1, 16, 2816] 225db52c3f26cbe5
+saved decoder_layer_22 [1, 16, 2816] b307fd043aee1617
+saved decoder_layer_23 [1, 16, 2816] c59c4db90cba49d0
+saved decoder_layer_24 [1, 16, 2816] 6e2e7ccf13b21709
+saved decoder_layer_25 [1, 16, 2816] 7ad27cee3772f1e8
+saved decoder_layer_26 [1, 16, 2816] 54e84e32f3c46b0c
+saved decoder_layer_27 [1, 16, 2816] 4e3c85c30622b393
+saved decoder_layer_28 [1, 16, 2816] dbed46d8cbc51216
+saved decoder_layer_29 [1, 16, 2816] f5e1e6ebc645aaaa
+saved decoder_logits0_direct [1, 16, 262144] 3e2226df50d705eb
+artifacts=455 internal_ok=85/85 golden_gates=311
+DONE_REFERENCE

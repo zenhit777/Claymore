@@ -2,3 +2,6 @@
 *.log
 .env
 .DS_Store
+AGENTS.md
+
+__pycache__/

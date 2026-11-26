@@ -34,6 +34,26 @@ pub enum OpError {
     CpuReferenceRequiresHostBuffers,
     #[error("epsilon must be finite and non-negative")]
     InvalidEpsilon,
+    #[error("attention scale must be finite and non-zero")]
+    InvalidAttentionScale,
+    #[error("soft cap must be finite and strictly positive")]
+    InvalidSoftCap,
+    #[error("index tensors must encode exact integer rows")]
+    InvalidIndex,
+    #[error("top-k selection is invalid: top_k {0} for {1} experts")]
+    InvalidTopK(usize, usize),
+    #[error("scatter-add requires a non-zero output row count")]
+    InvalidOutputRows,
+    #[error("index/weight/flag tensors must be F32")]
+    IndexDTypeMismatch,
+    #[error("embedding scale must be finite")]
+    InvalidEmbedScale,
+    #[error("scale factor must be finite")]
+    InvalidScaleFactor,
+    #[error("RoPE parameters are invalid: {0}")]
+    InvalidRopeParameter(String),
+    #[error("attention head configuration is invalid: {0}")]
+    InvalidHeadConfiguration(String),
     #[error("backend {backend} refused execution: {reason}")]
     Backend {
         backend: &'static str,
@@ -46,13 +66,13 @@ pub enum OpError {
 }
 
 /// Host-side scalar buffer with the exact stored representation preserved.
-enum Numeric {
+pub(crate) enum Numeric {
     F32(Vec<f32>),
     BF16(Vec<Bf16>),
 }
 
 impl Numeric {
-    fn dtype(&self) -> DType {
+    pub(crate) fn dtype(&self) -> DType {
         match self {
             Numeric::F32(_) => DType::F32,
             Numeric::BF16(_) => DType::BF16,
@@ -60,7 +80,7 @@ impl Numeric {
     }
 
     /// Exact widening to FP32. BF16 -> FP32 is bit-exact for every pattern.
-    fn to_f32(&self) -> Vec<f32> {
+    pub(crate) fn to_f32(&self) -> Vec<f32> {
         match self {
             Numeric::F32(values) => values.clone(),
             Numeric::BF16(values) => values.iter().map(|value| value.to_f32()).collect(),
@@ -68,11 +88,11 @@ impl Numeric {
     }
 }
 
-fn supported_dtype(dtype: DType) -> bool {
+pub(crate) fn supported_dtype(dtype: DType) -> bool {
     matches!(dtype, DType::F32 | DType::BF16)
 }
 
-fn read_numeric(device: &dyn Device, tensor: &Tensor) -> Result<Numeric, OpError> {
+pub(crate) fn read_numeric(device: &dyn Device, tensor: &Tensor) -> Result<Numeric, OpError> {
     if device.info().kind != DeviceKind::Cpu || tensor.storage().tier() != MemoryTier::Host {
         return Err(OpError::CpuReferenceRequiresHostBuffers);
     }
@@ -105,7 +125,7 @@ fn read_numeric(device: &dyn Device, tensor: &Tensor) -> Result<Numeric, OpError
     }
 }
 
-fn write_numeric(
+pub(crate) fn write_numeric(
     device: &dyn Device,
     values: &[f32],
     shape: Vec<usize>,
@@ -249,7 +269,7 @@ pub fn rms_norm(
         .zip(output.chunks_exact_mut(width))
     {
         let mean_square = src.iter().map(|x| x * x).sum::<f32>() / width as f32;
-        let inv_rms = (mean_square + epsilon).sqrt().recip();
+        let inv_rms = 1.0f32 / (mean_square + epsilon).sqrt();
         for index in 0..width {
             dst[index] = src[index] * inv_rms * weights[index];
         }

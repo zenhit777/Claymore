@@ -1,0 +1,1107 @@
+=== CI job1: fmt ===
+rc=0
+=== CI job1: workspace tests (full log) ===
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+warning: unused dependency `claymore-cuda`
+  --> crates/claymore-cli/Cargo.toml:13:1
+   |
+13 | claymore-cuda = { path = "../claymore-cuda" }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-cuda`
+warning: `claymore-cli` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/main.rs (target/debug/build/claymore-cli/2818a9aa83d3346f/out/claymore_cli-2818a9aa83d3346f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-core/a6ef2af87d040140/out/claymore_core-a6ef2af87d040140)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-cuda/da0b72b105677d72/out/claymore_cuda-da0b72b105677d72)
+
+running 1 test
+test tests::disabled_backend_reports_actionable_error ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-device/9ef719dc041b696a/out/claymore_device-9ef719dc041b696a)
+
+running 14 tests
+test tests::allocation_failure_is_reported_as_out_of_memory ... ok
+test tests::borrowed_completion_token_keeps_buffers_borrowed_until_drop ... ok
+test tests::cloned_device_handle_shares_instance_identity ... ok
+test tests::completion_token_exposes_query_and_wait_semantics ... ok
+test tests::cpu_buffer_explicit_release_is_checked_and_blocks_access ... ok
+test tests::cpu_capabilities_match_supported_operations_and_memory_tiers ... ok
+test tests::cpu_device_allocates_and_roundtrips_bytes ... ok
+test tests::cpu_device_copies_between_owned_buffers ... ok
+test tests::cpu_device_rejects_async_copy_when_capability_is_absent ... ok
+test tests::cpu_device_rejects_out_of_bounds_access ... ok
+test tests::cpu_device_rejects_unsupported_pinned_memory ... ok
+test tests::independent_devices_reject_each_others_buffers_for_all_operations ... ok
+test tests::size_overflow_is_distinct_from_allocation_failure ... ok
+test tests::zero_sized_allocation_is_rejected ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-memory/7463492405b475dc/out/claymore_memory-7463492405b475dc)
+
+running 34 tests
+test device::tests::aliased_copy_is_rejected_without_mutating_the_buffer ... ok
+test device::tests::completion_horizon_cannot_be_moved_backwards ... ok
+test device::tests::cpu_adapter_allocates_copies_and_releases_buffers ... ok
+test device::tests::cpu_adapter_rejects_duplicate_ids_and_non_monotonic_ticks ... ok
+test device::tests::device_capabilities_are_reported_consistently_by_manager ... ok
+test device::tests::cpu_adapter_uses_memory_policy_for_deterministic_eviction ... ok
+test device::tests::expert_cache_max_is_enforced_by_cpu_device_manager ... ok
+test device::tests::expert_allocations_must_use_vram ... ok
+test device::tests::failed_backend_release_keeps_buffer_and_accounting_for_retry ... ok
+test device::tests::in_flight_guard_prevents_release_and_eviction_until_horizon ... ok
+test device::tests::release_confirms_backend_release_before_removing_accounting ... ok
+test device::tests::zero_sized_allocation_is_rejected_without_accounting ... ok
+test executor::tests::executor_rejects_compute_queue_without_consuming_operation ... ok
+test executor::tests::failed_prerequisite_discards_cancelled_memory_payloads ... ok
+test executor::tests::scheduler_drives_cpu_memory_operations_in_dependency_order ... ok
+test executor::tests::memory_executor_reports_operation_counts_and_bytes ... ok
+test lifecycle::tests::monotonic_tick_accepts_equal_and_forward_transitions ... ok
+test lifecycle::tests::monotonic_tick_rejects_backward_transition ... ok
+test lifecycle::tests::release_horizon_is_inclusive_and_never_early ... ok
+test tests::adaptive_eviction_prefers_the_lower_reload_cost ... ok
+test tests::adaptive_eviction_prioritizes_coldness_before_reload_cost ... ok
+test tests::adaptive_eviction_treats_unknown_reload_cost_as_zero_only_after_heat_and_recency ... ok
+test tests::admission_succeeds_without_eviction_when_under_limit ... ok
+test tests::confirm_eviction_releases_accounted_capacity ... ok
+test tests::detects_duplicate_allocations ... ok
+test tests::equal_priority_evictions_use_lexicographic_allocation_id ... ok
+test tests::expert_cache_admission_enforces_max_and_selects_only_idle_experts ... ok
+test tests::in_flight_allocations_are_never_selected ... ok
+test tests::joint_expert_admission_prioritizes_expert_victim_over_older_general_allocation ... ok
+test tests::joint_expert_admission_uses_one_minimal_vram_victim_set ... ok
+test tests::lru_plan_selects_oldest_idle_allocation ... ok
+test tests::rejects_invalid_budget_relationships ... ok
+test tests::vram_soft_budget_triggers_proactive_eviction_before_hard_ceiling ... ok
+test tests::vram_soft_target_is_best_effort_but_hard_ceiling_is_mandatory ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-model-clover/6828df77cf44b3cc/out/claymore_model_clover-6828df77cf44b3cc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-model-gemma/e43d11d461f68aba/out/claymore_model_gemma-e43d11d461f68aba)
+
+running 64 tests
+test canvas::tests::default_canvas_has_audited_length_and_starts_masked ... ok
+test canvas::tests::committed_positions_cannot_be_overwritten ... ok
+test canvas::tests::invalid_batch_is_rejected_without_partial_mutation ... ok
+test canvas::tests::invalid_confidence_and_threshold_are_rejected ... ok
+test canvas::tests::iteration_commits_only_confident_positions ... ok
+test config::tests::accepts_exactly_the_pinned_configuration ... ok
+test config::tests::pinned_validation_refuses_any_material_change ... ok
+test config::tests::rejects_unknown_layer_types_and_bad_rope_parameters ... ok
+test config::tests::parses_bf16_config_without_assuming_optional_fields ... ok
+test checkpoint::tests::expected_inventory_for_the_pinned_configuration_has_1047_entries ... ok
+test executor::tests::backend_failures_are_typed_and_recorded ... ok
+test executor::tests::denoising_commits_the_entropy_bound_prefix_and_renoises_the_rest ... ok
+test config::tests::layer_geometry_matches_the_weight_shapes ... ok
+test config::tests::rejects_inconsistent_layer_geometry ... ok
+test config::tests::rejects_implicit_or_unsupported_precision ... ok
+test config::tests::rejects_zero_dimensions ... ok
+test executor::tests::cancellation_is_observed_at_the_step_boundary ... ok
+test executor::tests::steps_out_of_order_are_refused_with_typed_errors ... ok
+test checkpoint::tests::rejects_total_size_mismatch_and_mixed_dtypes ... ok
+test checkpoint::tests::opens_a_consistent_synthetic_checkpoint_and_reads_tensors ... ok
+test checkpoint::tests::structural_open_does_not_claim_pin_compliance ... ok
+test checkpoint::tests::rejects_duplicate_tensor_across_shards ... ok
+test executor::tests::the_reference_emits_the_argmax_canvas ... ok
+test generation::tests::accepts_and_pins_the_audited_generation_config ... ok
+test executor::tests::the_whole_block_runs_through_the_m9_orchestrator ... ok
+test generation::tests::missing_fields_are_not_silently_defaulted ... ok
+test generation::tests::rejects_invalid_policies_and_pin_drift ... ok
+test generation_loop::tests::acceptance_keeps_low_entropy_positions_and_renoises_the_rest ... ok
+test generation_loop::tests::entropy_of_a_peaked_distribution_is_below_the_bound ... ok
+test generation_loop::tests::entropy_of_a_uniform_distribution_is_high ... ok
+test generation_loop::tests::pinned_policy_matches_the_audited_generation_config ... ok
+test generation_loop::tests::policy_validation_rejects_broken_bounds ... ok
+test generation_loop::tests::stability_and_confidence_stop_the_loop ... ok
+test rng::tests::is_deterministic_and_bounded ... ok
+test rng::tests::known_sequence_is_pinned ... ok
+test rng::tests::single_value_bound_is_zero ... ok
+test sampling::tests::acceptance_always_accepts_the_lowest_entropy_token ... ok
+test sampling::tests::acceptance_is_the_reference_entropy_bound_prefix ... ok
+test sampling::tests::argmax_uses_first_index_on_ties_and_rejects_nan ... ok
+test sampling::tests::acceptance_rejects_invalid_entropy_and_shapes ... ok
+test sampling::tests::policy_builders_produce_the_pinned_sampler_values ... ok
+test sampling::tests::renoise_only_replaces_non_accepted_positions ... ok
+test sampling::tests::entropy_of_uniform_and_peaked_rows_matches_definition ... ok
+test sampling::tests::sampling_is_deterministic_for_a_fixed_seed ... ok
+test sampling::tests::stability_requires_the_reference_history_window ... ok
+test sha256::tests::matches_fips_vectors ... ok
+test sha256::tests::handles_block_boundaries ... ok
+test sampling::tests::temperature_scaling_is_applied_before_sampling ... ok
+test stream::tests::decoder_plan_matches_the_pinned_inventory_shape_rules ... ok
+test safetensors::tests::rejects_malformed_json_duplicate_names_and_empty_names ... ok
+test checkpoint::tests::rejects_missing_shard_unexpected_tensor_wrong_shard_and_missing_tensor ... ok
+test checkpoint::tests::rejects_missing_directory_config_and_generation_config ... ok
+test strict_json::tests::rejects_duplicate_keys_at_every_level ... ok
+test stream::tests::lru_victims_free_the_oldest_first_and_stop_at_the_soft_budget ... ok
+test strict_json::tests::preserves_order_and_types ... ok
+test safetensors::tests::rejects_unsupported_dtypes_and_bad_entries ... ok
+test checkpoint::tests::rejects_malformed_indexes_and_unsafe_shard_names ... ok
+test sampling::tests::entropy_rejects_nan_infinite_and_empty_inputs ... ok
+test safetensors::tests::reads_valid_bf16_and_f32_tensors_without_whole_shard_copy ... ok
+test safetensors::tests::reads_a_tensor_range_relative_to_the_payload_not_to_the_file ... ok
+test safetensors::tests::rejects_truncated_and_oversized_headers ... ok
+test safetensors::tests::detects_a_file_truncated_after_open ... ok
+test safetensors::tests::rejects_metadata_that_is_not_a_string_map ... ok
+test safetensors::tests::rejects_shape_mismatch_alignment_overlap_gap_and_bounds ... ok
+
+test result: ok. 64 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/bin/verify_checkpoint.rs (target/debug/build/claymore-model-gemma/6ddb54af782fa005/out/verify_checkpoint-6ddb54af782fa005)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/decoder_layer_bisect.rs (target/debug/build/claymore-model-gemma/13fb3e895f2d81d2/out/decoder_layer_bisect-13fb3e895f2d81d2)
+
+running 1 test
+test decoder_layers_reproduce_the_reference_when_fed_reference_inputs_and_caches ... ignored, requires the pinned checkpoint (release profile)
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/golden_cpu.rs (target/debug/build/claymore-model-gemma/0ff5d3ea98331b75/out/golden_cpu-0ff5d3ea98331b75)
+
+running 7 tests
+test decoder_chain_drift_is_tracked_against_pinned_upstream ... ignored, requires the pinned checkpoint and venv-pinned golden files (release profile)
+test encoder0_router_matches_pinned_upstream_on_the_real_checkpoint ... ignored, requires the pinned checkpoint and stage golden files (release profile)
+test encoder_chain_drift_is_tracked_against_pinned_upstream ... ignored, requires the pinned checkpoint and venv-pinned golden files (release profile)
+test encoder_layer0_projections_match_pinned_upstream_on_the_real_checkpoint ... ignored, requires the pinned checkpoint and stage golden files (release profile)
+test encoder_layers_match_pinned_upstream_on_the_real_checkpoint ... ignored, requires the pinned checkpoint and stage golden files (release profile)
+test text_embedding_matches_pinned_upstream_on_the_real_checkpoint ... ignored, requires the pinned checkpoint and stage golden files (release profile)
+test vision_chain_drift_is_tracked_against_pinned_upstream ... ignored, requires the pinned checkpoint and venv-pinned golden files (release profile)
+
+test result: ok. 0 passed; 0 failed; 7 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/golden_cpu_layer_bisect.rs (target/debug/build/claymore-model-gemma/5298b2cafa07d91c/out/golden_cpu_layer_bisect-5298b2cafa07d91c)
+
+running 1 test
+test encoder_layers_reproduce_the_reference_when_fed_reference_inputs ... ignored, requires the pinned checkpoint (release profile)
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/kernel_order_parity.rs (target/debug/build/claymore-model-gemma/c0aef2655e0e87ab/out/kernel_order_parity-c0aef2655e0e87ab)
+
+running 9 tests
+test masked_rows_keep_the_reference_conventions ... ok
+test regenerate_glibc_2_39_reference_tables ... ignored, rewrites the committed reference tables; only sound on the glibc 2.39 reference host
+test report_divergence_against_installed_libm ... ignored
+test rms_norm_kernel_order_matches_the_reference_bit_for_bit ... ok
+test softmax_kernel_order_matches_the_reference_bit_for_bit ... ok
+test portable_expf_matches_glibc ... ok
+test portable_tanhf_matches_glibc ... ok
+test scatter_add_kernel_order_matches_the_reference_bit_for_bit ... ok
+test portable_expm1f_matches_glibc ... ok
+
+test result: ok. 7 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/kernel_provenance.rs (target/debug/build/claymore-model-gemma/62c74b96acfc9f30/out/kernel_provenance-62c74b96acfc9f30)
+
+running 2 tests
+test every_versioned_ptx_and_cuda_source_is_in_the_manifest ... ok
+test cuda_sources_and_ptx_match_the_committed_provenance_manifest ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/m10_reference.rs (target/debug/build/claymore-model-gemma/d5afa1dcabd04e65/out/m10_reference-d5afa1dcabd04e65)
+
+running 2 tests
+test every_bisect_fixture_family_is_present ... ok
+test committed_reference_set_matches_the_pinned_manifest ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.50s
+
+     Running tests/real_checkpoint.rs (target/debug/build/claymore-model-gemma/4420429ed6601ee8/out/real_checkpoint-4420429ed6601ee8)
+
+running 3 tests
+test pinned_checkpoint_matches_the_audited_inventory ... ok
+test pinned_checkpoint_reads_bounded_real_weight_payloads ... ok
+test pinned_checkpoint_rejects_a_missing_shard ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/vision_layer_bisect.rs (target/debug/build/claymore-model-gemma/4a0a7fd3c331dfdb/out/vision_layer_bisect-4a0a7fd3c331dfdb)
+
+running 1 test
+test vision_layers_reproduce_the_reference_when_fed_reference_inputs ... ignored, requires the pinned checkpoint (release profile)
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-runtime/9d24593c5ba927b1/out/claymore_runtime-9d24593c5ba927b1)
+
+running 41 tests
+test diffusion::tests::cancellation_during_successful_step_counts_effect_before_cancel ... ok
+test diffusion::tests::cancellation_is_observed_at_step_boundary ... ok
+test diffusion::tests::equal_priority_sessions_are_fifo_and_not_interleaved ... ok
+test diffusion::tests::executes_multiple_blocks_in_deterministic_order ... ok
+test diffusion::tests::failure_cancels_remaining_dependent_steps ... ok
+test diffusion::tests::failure_does_not_cancel_an_independent_session ... ok
+test diffusion::tests::invalid_plans_reject_empty_wrong_block_and_missing_validation ... ok
+test diffusion::tests::plan_rejects_missing_validation_and_non_contiguous_denoising ... ok
+test diffusion::tests::pre_cancelled_session_is_terminal_without_scheduler_tasks ... ok
+test diffusion::tests::queued_session_can_be_cancelled_before_execution ... ok
+test diffusion::tests::token_cancellation_after_admission_prevents_step_execution ... ok
+test profile::tests::profile_rejects_expert_cache_outside_model_working_set ... ok
+test profile::tests::profile_rejects_host_working_set_plus_pinned_over_budget ... ok
+test profile::tests::profile_rejects_pinned_budget_that_overcommits_disjoint_host_envelopes ... ok
+test profile::tests::profile_rejects_unsupported_stream_topology ... ok
+test profile::tests::profile_rejects_working_set_over_soft_vram_budget ... ok
+test profile::tests::reference_rtx5090_profile_loads_and_converts_to_runtime_budgets ... ok
+test scheduled::tests::dependent_request_waits_for_predecessor_completion ... ok
+test scheduled::tests::failed_request_cancels_dependent_request ... ok
+test scheduled::tests::failed_transfer_discards_dependent_request_payload ... ok
+test scheduled::tests::hardware_profile_supplies_scheduler_configuration ... ok
+test scheduled::tests::pre_cancelled_request_cancels_scheduler_task ... ok
+test scheduled::tests::queued_cancellation_prevents_strategy_execution ... ok
+test scheduled::tests::request_submitted_after_cancelled_dependency_is_cancelled_and_payload_pruned ... ok
+test scheduled::tests::request_submitted_after_failed_dependency_is_cancelled_and_payload_pruned ... ok
+test scheduled::tests::scheduled_runtime_collects_compute_request_metrics ... ok
+test scheduled::tests::scheduled_runtime_facade_drives_diffusion_sessions ... ok
+test scheduled::tests::scheduled_runtime_reserves_compute_queue_for_request_payloads ... ok
+test scheduled::tests::strategy_panic_fails_request_and_cancels_dependent_work ... ok
+test scheduled::tests::transfer_task_and_compute_request_share_one_dependency_graph ... ok
+test tests::cancellation_during_strategy_discards_output ... ok
+test tests::cancellation_takes_precedence_over_a_simultaneous_strategy_error ... ok
+test tests::invalid_runtime_configuration_is_rejected ... ok
+test tests::oversized_input_is_rejected_before_request_id_is_consumed ... ok
+test tests::pre_cancelled_request_never_enters_strategy ... ok
+test tests::request_id_exhaustion_is_reported_without_wrapping ... ok
+test tests::request_ids_are_monotonic_and_runtime_state_is_reused ... ok
+test tests::runtime_executes_a_model_neutral_request_end_to_end ... ok
+test tests::strategy_failure_is_reported_as_failed_request ... ok
+test tests::strategy_panic_propagates_and_consumes_the_request_id ... ok
+test tests::strategy_receives_its_own_request_id_and_metadata ... ok
+
+test result: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/diffusion_orchestration.rs (target/debug/build/claymore-runtime/3fc6772d7b7a9fbe/out/diffusion_orchestration-3fc6772d7b7a9fbe)
+
+running 5 tests
+test pre_cancelled_plan_is_visible_but_never_scheduled ... ok
+test retry_uses_a_new_session_instead_of_resuming_terminal_state ... ok
+test synthetic_cancellation_is_observed_at_a_safe_boundary ... ok
+test synthetic_failure_isolated_and_reported_without_gpu ... ok
+test synthetic_multiblock_session_reports_progress_and_phase_metrics ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-scheduler/c3838fc0abceb3ce/out/claymore_scheduler-c3838fc0abceb3ce)
+
+running 20 tests
+test executor::tests::each_runner_drives_only_its_own_queue ... ok
+test executor::tests::executor_failure_fails_task_and_cancels_dependents ... ok
+test executor::tests::queue_runner_metrics_are_scoped_to_its_logical_queue ... ok
+test executor::tests::runner_executes_on_caller_and_releases_dependents_only_after_success ... ok
+test executor::tests::runner_reports_idle_without_invoking_executor ... ok
+test tests::cancellation_cursor_returns_only_new_events ... ok
+test tests::cancellation_index_tracks_direct_and_transitive_cancellations ... ok
+test tests::cancelling_prefetch_releases_lookahead_capacity ... ok
+test tests::cancelling_running_prefetch_releases_concurrency_slot ... ok
+test tests::dependent_task_becomes_ready_only_after_completion ... ok
+test tests::dispatches_by_priority_then_fifo_within_each_queue ... ok
+test tests::duplicate_and_unknown_dependencies_are_rejected ... ok
+test tests::failed_dependency_cancels_descendants_but_not_unrelated_work ... ok
+test tests::invalid_configuration_is_rejected ... ok
+test tests::prefetch_concurrency_and_lookahead_are_bounded ... ok
+test tests::queues_are_independent ... ok
+test tests::running_tasks_cannot_be_cancelled_or_completed_twice ... ok
+test tests::submission_cancels_tasks_with_already_failed_or_cancelled_dependencies ... ok
+test tests::terminal_records_are_compacted_and_remain_inspectable_as_dependencies ... ok
+test tests::zero_prefetch_concurrency_disables_prefetch_admission ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-tensor/11d21412b717d594/out/claymore_tensor-11d21412b717d594)
+
+running 75 tests
+test aten_topk::tests::keeps_every_expert_of_a_tied_group ... ok
+test aten_topk::tests::reproduces_the_pinned_upstream_tie_order ... ok
+test aten_topk::tests::reproduces_the_pinned_upstream_tie_order_from_the_raw_logits ... ok
+test aten_topk::tests::selects_the_largest_values ... ok
+test bf16::tests::equality_compares_raw_bits_not_numeric_value ... ok
+test bf16::tests::exact_values_convert_in_both_directions ... ok
+test bf16::tests::round_to_nearest_even_ties_and_neighbours ... ok
+test bf16::tests::special_values_and_limits_are_defined ... ok
+test bf16::tests::fp32_grid_rounds_monotonically ... ok
+test bf16::tests::subnormal_rounding_and_halfway_to_zero ... ok
+test contracts::tests::bf16_is_dispatched_and_executed_by_the_cpu_reference ... ok
+test contracts::tests::contract_rejects_non_contiguous_and_mixed_devices ... ok
+test contracts::tests::cpu_capabilities_cover_both_dtypes_for_every_operation ... ok
+test contracts::tests::cpu_dispatch_refuses_vram_inputs_without_implicit_transfer ... ok
+test contracts::tests::cuda_launch_grid_limits_are_axis_specific_and_typed ... ok
+test contracts::tests::dispatch_executes_through_the_cpu_reference_backend ... ok
+test contracts::tests::dispatch_explains_an_exact_match ... ok
+test contracts::tests::dispatch_rejects_unknown_and_unsupported_backends_without_fallback ... ok
+test bf16::tests::widening_is_monotonic_in_magnitude_for_all_non_nan_patterns ... ok
+test contracts::tests::fp16_is_not_claimed_as_supported ... ok
+test contracts::tests::scale_factor_shape_is_validated_and_explained ... ok
+test contracts::tests::scale_uses_the_elementwise_launch_grid_rule ... ok
+test contracts::tests::shape_signature_is_backend_neutral_and_checked_without_gpu ... ok
+test bf16::tests::nan_widening_quiets_and_from_f32_canonicalizes_for_every_pattern ... ok
+test diffusion::tests::attention_applies_the_additive_mask ... ok
+test diffusion::tests::attention_maps_grouped_query_heads_to_the_right_kv_head ... ok
+test diffusion::tests::attention_matches_a_hand_computed_single_head_case ... ok
+test bf16::tests::every_bf16_value_roundtrips_through_fp32 ... ok
+test diffusion::tests::attention_propagates_nan_without_sanitising_it ... ok
+test bf16::tests::bitwise_roundtrip_is_exact_for_every_16_bit_pattern ... ok
+test diffusion::tests::canvas_prefix_mask_keeps_encoder_and_canvas_visible ... ok
+test bf16::tests::widening_is_exactly_sign_symmetric_for_every_pattern ... ok
+test diffusion::tests::default_rope_matches_the_upstream_formula ... ok
+test diffusion::tests::embed_gather_scales_rows_by_the_explicit_factor ... ok
+test diffusion::tests::attention_rejects_invalid_shapes_scales_and_head_counts ... ok
+test diffusion::tests::gather_rows_rejects_index_dtype_and_fractional_indices ... ok
+test diffusion::tests::linear_rejects_shape_and_dtype_mismatches ... ok
+test diffusion::tests::gather_rows_and_scatter_add_round_trip_indices ... ok
+test diffusion::tests::mask_validation_rejects_fully_masked_rows ... ok
+test diffusion::tests::gelu_mul_up_matches_the_pinned_activation ... ok
+test diffusion::tests::masks_describe_causal_sliding_and_padding_visibility ... ok
+test diffusion::tests::proportional_rope_keeps_the_full_frequency_vector_and_zeroes_the_tail ... ok
+test diffusion::tests::rope_parameters_are_validated ... ok
+test diffusion::tests::linear_matches_the_explicit_projection ... ok
+test diffusion::tests::rope_tables_repeat_the_frequencies_and_are_identity_at_position_zero ... ok
+test diffusion::tests::fully_masked_rows_produce_zeros_instead_of_nan ... ok
+test diffusion::tests::router_top_k_applies_per_expert_scale_and_rejects_bad_top_k ... ok
+test diffusion::tests::row_mask_zeroes_flagged_rows ... ok
+test diffusion::tests::rotary_embedding_rejects_mismatched_tables ... ok
+test diffusion::tests::scale_bias_applies_explicit_vectors ... ok
+test diffusion::tests::rotary_embedding_is_identity_at_position_zero_and_rotates_pairs ... ok
+test diffusion::tests::soft_cap_saturates_at_the_cap ... ok
+test diffusion::tests::scale_broadcasts_an_explicit_factor ... ok
+test diffusion::tests::widening_is_the_only_cross_dtype_operation_and_is_exact ... ok
+test diffusion::tests::router_top_k_selects_normalized_top_weights ... ok
+test ops::tests::bf16_add_rounds_only_the_output ... ok
+test ops::tests::add_is_elementwise_and_rejects_implicit_broadcast ... ok
+test ops::tests::bf16_matmul_accumulates_in_fp32 ... ok
+test ops::tests::bf16_shape_scale_layout_and_epsilon_errors_are_typed ... ok
+test diffusion::tests::scale_scalar_rounds_once_and_keeps_the_scalar_in_fp32 ... ok
+test ops::tests::bf16_softmax_is_stable_and_normalized_after_rounding ... ok
+test ops::tests::matmul_matches_reference_result ... ok
+test ops::tests::rms_norm_applies_explicit_scale ... ok
+test ops::tests::bf16_ops_reject_mixed_dtype_and_unsupported_dtype ... ok
+test ops::tests::softmax_is_stable_for_large_logits ... ok
+test tests::bf16_storage_uses_two_bytes_per_element_and_releases_explicitly ... ok
+test tests::contiguous_layout_uses_checked_element_strides ... ok
+test tests::tensor_rejects_misaligned_byte_offsets ... ok
+test tests::rejects_rank_mismatch_zero_dimensions_and_overflow ... ok
+test ops::tests::bf16_rms_norm_uses_bf16_scale_and_fp32_reduction ... ok
+test tests::storage_capacity_is_checked_including_offset ... ok
+test tests::strided_view_checks_byte_span_and_borrows_storage ... ok
+test tests::tensor_accepts_aligned_nonzero_byte_offsets ... ok
+test tests::non_contiguous_layout_is_not_misreported_as_contiguous ... ok
+test tests::view_cannot_escape_parent_tensor_span ... ok
+
+test result: ok. 75 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+rc=0
+=== CI job1: libm divergence report (continue-on-error) ===
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running tests/kernel_order_parity.rs (target/debug/build/claymore-model-gemma/c0aef2655e0e87ab/out/kernel_order_parity-c0aef2655e0e87ab)
+
+running 1 test
+expf: 0 divergence(s) out of 32878 swept inputs (24632 distinct)
+expm1f: 0 divergence(s) out of 549204 swept inputs (532952 distinct)
+tanhf: 0 divergence(s) out of 126112 swept inputs (120394 distinct)
+total: 0 divergence(s) out of 708194 swept inputs (677978 distinct)
+expf: installed libm disagrees with the pinned glibc 2.39 table on 0 of 9272 entries
+expm1f: installed libm disagrees with the pinned glibc 2.39 table on 0 of 33752 entries
+tanhf: installed libm disagrees with the pinned glibc 2.39 table on 0 of 12874 entries
+test report_divergence_against_installed_libm ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.27s
+
+rc=0
+=== CI job1: cuda stub build ===
+rc=0
+=== CI job1: memory fault-injection (stub) ===
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+   Compiling claymore-core v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-core)
+   Compiling claymore-scheduler v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-scheduler)
+   Compiling claymore-device v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-device)
+   Compiling claymore-cuda v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cuda)
+   Compiling claymore-tensor v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-tensor)
+   Compiling claymore-memory v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-memory)
+   Compiling claymore-runtime v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-runtime)
+   Compiling claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.38s
+     Running unittests src/lib.rs (target/debug/build/claymore-memory/abdce906ce8ef0f8/out/claymore_memory-abdce906ce8ef0f8)
+
+running 65 tests
+test cuda::tests::cuda_manager_reports_device_memory ... ignored, requires a CUDA driver and a usable NVIDIA device
+test cuda::tests::hardware_poll_retires_completed_transfer_before_admission_without_wait ... ignored, requires a CUDA driver and a usable NVIDIA device
+test cuda::tests::injected_create_event_failure_leaves_every_allocation_releasable ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_event_record_failure_with_successful_sync_lifts_every_guard ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_event_record_failure_with_sync_error_preserves_gpu_guards ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_launch_failure_with_successful_sync_releases_every_allocation ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_launch_failure_with_sync_error_poisons_and_pins_all_allocations ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_m10_event_record_failure_with_successful_sync_lifts_every_guard ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_m10_launch_failure_with_successful_sync_releases_every_allocation ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_m10_launch_failure_with_sync_error_poisons_and_pins_all_allocations ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_m10_partial_guard_failure_with_successful_sync_lifts_only_installed_guards ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::failed_backend_release_retains_policy_ownership_until_retry_succeeds ... ok
+test cuda::tests::injected_partial_guard_failure_with_successful_sync_lifts_only_installed_guards ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_partial_guard_failure_with_sync_error_poisons_and_pins_all_allocations ... ignored, requires a CUDA driver; fault injection targets the real manager
+test cuda::tests::injected_not_ready_event_keeps_event_and_allocation_guard ... ok
+test cuda::tests::injected_event_synchronization_failure_preserves_pending_event_and_guards ... ok
+test cuda::tests::injected_query_failure_preserves_pending_event_and_every_guard ... ok
+test cuda::tests::injected_stream_synchronization_error_is_not_treated_as_success ... ok
+test cuda::tests::launch_recovery_keeps_guard_while_another_pending_transfer_uses_allocation ... ok
+test cuda::tests::launch_recovery_poisons_and_pins_every_touched_allocation_when_sync_fails ... ok
+test cuda::tests::logical_ticks_must_be_monotonic ... ok
+test cuda::tests::manager_tracker_poll_and_admission_share_the_production_state ... ok
+test cuda::tests::manager_tracker_wait_and_shared_event_retirement_preserve_guards ... ok
+test cuda::tests::manager_tracker_wait_failure_keeps_event_and_every_guard ... ok
+test cuda::tests::release_guard_rejects_tick_before_safe_horizon ... ok
+test cuda::tests::successful_event_retirement_lifts_guards_only_after_last_shared_event ... ok
+test cuda::tests::transfer_token_clones_share_completion_state ... ok
+test cuda::tests::unrelated_event_query_error_fails_closed_before_admission_planning ... ok
+test cuda_executor::tests::taking_read_result_transfers_ownership_and_removes_retained_bytes ... ok
+test cuda_tensor::tests::cuda_backend_uses_the_dtype_neutral_name ... ok
+test cuda_tensor::tests::cuda_capabilities_declare_only_implemented_f32_and_bf16_vram_ops ... ok
+test device::tests::aliased_copy_is_rejected_without_mutating_the_buffer ... ok
+test device::tests::completion_horizon_cannot_be_moved_backwards ... ok
+test device::tests::cpu_adapter_allocates_copies_and_releases_buffers ... ok
+test device::tests::cpu_adapter_rejects_duplicate_ids_and_non_monotonic_ticks ... ok
+test device::tests::cpu_adapter_uses_memory_policy_for_deterministic_eviction ... ok
+test device::tests::device_capabilities_are_reported_consistently_by_manager ... ok
+test device::tests::expert_allocations_must_use_vram ... ok
+test device::tests::expert_cache_max_is_enforced_by_cpu_device_manager ... ok
+test device::tests::failed_backend_release_keeps_buffer_and_accounting_for_retry ... ok
+test device::tests::in_flight_guard_prevents_release_and_eviction_until_horizon ... ok
+test device::tests::release_confirms_backend_release_before_removing_accounting ... ok
+test device::tests::zero_sized_allocation_is_rejected_without_accounting ... ok
+test executor::tests::executor_rejects_compute_queue_without_consuming_operation ... ok
+test executor::tests::failed_prerequisite_discards_cancelled_memory_payloads ... ok
+test executor::tests::memory_executor_reports_operation_counts_and_bytes ... ok
+test executor::tests::scheduler_drives_cpu_memory_operations_in_dependency_order ... ok
+test lifecycle::tests::monotonic_tick_accepts_equal_and_forward_transitions ... ok
+test lifecycle::tests::monotonic_tick_rejects_backward_transition ... ok
+test lifecycle::tests::release_horizon_is_inclusive_and_never_early ... ok
+test tests::adaptive_eviction_prefers_the_lower_reload_cost ... ok
+test tests::adaptive_eviction_prioritizes_coldness_before_reload_cost ... ok
+test tests::adaptive_eviction_treats_unknown_reload_cost_as_zero_only_after_heat_and_recency ... ok
+test tests::admission_succeeds_without_eviction_when_under_limit ... ok
+test tests::confirm_eviction_releases_accounted_capacity ... ok
+test tests::detects_duplicate_allocations ... ok
+test tests::equal_priority_evictions_use_lexicographic_allocation_id ... ok
+test tests::expert_cache_admission_enforces_max_and_selects_only_idle_experts ... ok
+test tests::in_flight_allocations_are_never_selected ... ok
+test tests::joint_expert_admission_prioritizes_expert_victim_over_older_general_allocation ... ok
+test tests::joint_expert_admission_uses_one_minimal_vram_victim_set ... ok
+test tests::lru_plan_selects_oldest_idle_allocation ... ok
+test tests::rejects_invalid_budget_relationships ... ok
+test tests::vram_soft_budget_triggers_proactive_eviction_before_hard_ceiling ... ok
+test tests::vram_soft_target_is_best_effort_but_hard_ceiling_is_mandatory ... ok
+
+test result: ok. 52 passed; 0 failed; 13 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+rc=0
+=== CI job1: cuda unit tests (stub) ===
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+   Compiling claymore-cuda v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cuda)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.36s
+     Running unittests src/lib.rs (target/debug/build/claymore-cuda/acefa3b772ab5f48/out/claymore_cuda-acefa3b772ab5f48)
+
+running 11 tests
+test compute::tests::bf16_ptx_declares_round_to_nearest_even_and_fp32_accumulation ... ok
+test compute::tests::grid_rounding_and_axis_limits_are_explicit ... ok
+test driver::tests::driver_error_conversion_preserves_operation_and_code ... ok
+test driver::tests::hardware_device_buffer_free_is_explicit_and_idempotent ... ignored, requires a CUDA driver and a usable NVIDIA device
+test driver::tests::hardware_stream_synchronize_completes_async_copy ... ignored, requires a CUDA driver and a usable NVIDIA device
+test driver::tests::hardware_streams_are_explicitly_non_blocking ... ignored, requires a CUDA driver and a usable NVIDIA device
+test driver::tests::event_query_status_conversion_distinguishes_complete_pending_and_driver_failure ... ok
+test driver::tests::resources_must_share_the_same_context ... ok
+test driver::tests::zero_sized_allocations_are_rejected_before_driver_calls ... ok
+test tests::disabled_backend_reports_actionable_error ... ok
+test compute::tests::embedded_ptx_targets_blackwell_sm_120 ... ok
+
+test result: ok. 8 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+rc=0
+=== CI job1: cuda feature checks ===
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Checking claymore-cuda v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cuda)
+warning: unused dependency `claymore-core`
+  --> crates/claymore-cuda/Cargo.toml:13:1
+   |
+13 | claymore-core = { path = "../claymore-core" }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-cuda` (manifest) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+rc1=0
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Checking claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Checking claymore-memory v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-memory)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.49s
+rc2=0
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+rc3=0
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Checking claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.33s
+rc4=0
+=== CI job1: clippy cuda feature ===
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Checking claymore-cli v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cli)
+warning: unused dependency `claymore-core`
+  --> crates/claymore-cuda/Cargo.toml:13:1
+   |
+13 | claymore-core = { path = "../claymore-core" }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-cuda` (manifest) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+rc1=0
+warning: unused field `repository` in `workspace.package`
+  --> Cargo.toml:21:1
+   |
+21 | repository = "https://github.com/zenhit777/Claymore"
+   | ^^^^^^^^^^
+   |
+   = note: `cargo::unused_workspace_package_fields` is set to `warn` by default
+help: consider removing the field `workspace.package.repository`
+warning: workspace (manifest) generated 1 warning
+    Checking claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.35s
+rc2=0
+=== CI job2 MSRV: workspace tests ===
+   Compiling claymore-tensor v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-tensor)
+   Compiling claymore-memory v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-memory)
+   Compiling claymore-runtime v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-runtime)
+   Compiling claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+   Compiling claymore-cli v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.14s
+     Running unittests src/main.rs (target/debug/deps/claymore_cli-84135de545918584)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_core-31c25e8176766056)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_cuda-7465ef25c84f863e)
+
+running 1 test
+test tests::disabled_backend_reports_actionable_error ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_device-f4d58bd8342d77fe)
+
+running 14 tests
+test tests::allocation_failure_is_reported_as_out_of_memory ... ok
+test tests::borrowed_completion_token_keeps_buffers_borrowed_until_drop ... ok
+test tests::cpu_buffer_explicit_release_is_checked_and_blocks_access ... ok
+test tests::completion_token_exposes_query_and_wait_semantics ... ok
+test tests::cloned_device_handle_shares_instance_identity ... ok
+test tests::cpu_capabilities_match_supported_operations_and_memory_tiers ... ok
+test tests::cpu_device_allocates_and_roundtrips_bytes ... ok
+test tests::cpu_device_copies_between_owned_buffers ... ok
+test tests::cpu_device_rejects_async_copy_when_capability_is_absent ... ok
+test tests::cpu_device_rejects_out_of_bounds_access ... ok
+test tests::cpu_device_rejects_unsupported_pinned_memory ... ok
+test tests::independent_devices_reject_each_others_buffers_for_all_operations ... ok
+test tests::size_overflow_is_distinct_from_allocation_failure ... ok
+test tests::zero_sized_allocation_is_rejected ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_memory-d25b555a6d84165c)
+
+running 34 tests
+test device::tests::aliased_copy_is_rejected_without_mutating_the_buffer ... ok
+test device::tests::completion_horizon_cannot_be_moved_backwards ... ok
+test device::tests::cpu_adapter_allocates_copies_and_releases_buffers ... ok
+test device::tests::cpu_adapter_rejects_duplicate_ids_and_non_monotonic_ticks ... ok
+test device::tests::cpu_adapter_uses_memory_policy_for_deterministic_eviction ... ok
+test device::tests::device_capabilities_are_reported_consistently_by_manager ... ok
+test device::tests::expert_cache_max_is_enforced_by_cpu_device_manager ... ok
+test device::tests::failed_backend_release_keeps_buffer_and_accounting_for_retry ... ok
+test device::tests::expert_allocations_must_use_vram ... ok
+test device::tests::release_confirms_backend_release_before_removing_accounting ... ok
+test device::tests::in_flight_guard_prevents_release_and_eviction_until_horizon ... ok
+test device::tests::zero_sized_allocation_is_rejected_without_accounting ... ok
+test executor::tests::executor_rejects_compute_queue_without_consuming_operation ... ok
+test executor::tests::failed_prerequisite_discards_cancelled_memory_payloads ... ok
+test executor::tests::memory_executor_reports_operation_counts_and_bytes ... ok
+test executor::tests::scheduler_drives_cpu_memory_operations_in_dependency_order ... ok
+test lifecycle::tests::monotonic_tick_rejects_backward_transition ... ok
+test lifecycle::tests::release_horizon_is_inclusive_and_never_early ... ok
+test lifecycle::tests::monotonic_tick_accepts_equal_and_forward_transitions ... ok
+test tests::adaptive_eviction_prefers_the_lower_reload_cost ... ok
+test tests::adaptive_eviction_prioritizes_coldness_before_reload_cost ... ok
+test tests::detects_duplicate_allocations ... ok
+test tests::equal_priority_evictions_use_lexicographic_allocation_id ... ok
+test tests::lru_plan_selects_oldest_idle_allocation ... ok
+test tests::expert_cache_admission_enforces_max_and_selects_only_idle_experts ... ok
+test tests::rejects_invalid_budget_relationships ... ok
+test tests::vram_soft_budget_triggers_proactive_eviction_before_hard_ceiling ... ok
+test tests::vram_soft_target_is_best_effort_but_hard_ceiling_is_mandatory ... ok
+test tests::in_flight_allocations_are_never_selected ... ok
+test tests::joint_expert_admission_prioritizes_expert_victim_over_older_general_allocation ... ok
+test tests::adaptive_eviction_treats_unknown_reload_cost_as_zero_only_after_heat_and_recency ... ok
+test tests::joint_expert_admission_uses_one_minimal_vram_victim_set ... ok
+test tests::admission_succeeds_without_eviction_when_under_limit ... ok
+test tests::confirm_eviction_releases_accounted_capacity ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_model_clover-4a71ad0a167233fb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_model_gemma-984bd4cb55858c41)
+
+running 64 tests
+test canvas::tests::default_canvas_has_audited_length_and_starts_masked ... ok
+test canvas::tests::invalid_confidence_and_threshold_are_rejected ... ok
+test canvas::tests::committed_positions_cannot_be_overwritten ... ok
+test canvas::tests::invalid_batch_is_rejected_without_partial_mutation ... ok
+test canvas::tests::iteration_commits_only_confident_positions ... ok
+test config::tests::layer_geometry_matches_the_weight_shapes ... ok
+test config::tests::accepts_exactly_the_pinned_configuration ... ok
+test config::tests::parses_bf16_config_without_assuming_optional_fields ... ok
+test config::tests::rejects_implicit_or_unsupported_precision ... ok
+test config::tests::rejects_inconsistent_layer_geometry ... ok
+test config::tests::rejects_unknown_layer_types_and_bad_rope_parameters ... ok
+test executor::tests::cancellation_is_observed_at_the_step_boundary ... ok
+test executor::tests::backend_failures_are_typed_and_recorded ... ok
+test config::tests::pinned_validation_refuses_any_material_change ... ok
+test executor::tests::denoising_commits_the_entropy_bound_prefix_and_renoises_the_rest ... ok
+test generation::tests::accepts_and_pins_the_audited_generation_config ... ok
+test generation::tests::rejects_invalid_policies_and_pin_drift ... ok
+test executor::tests::the_reference_emits_the_argmax_canvas ... ok
+test config::tests::rejects_zero_dimensions ... ok
+test checkpoint::tests::expected_inventory_for_the_pinned_configuration_has_1047_entries ... ok
+test executor::tests::steps_out_of_order_are_refused_with_typed_errors ... ok
+test generation_loop::tests::acceptance_keeps_low_entropy_positions_and_renoises_the_rest ... ok
+test generation_loop::tests::entropy_of_a_uniform_distribution_is_high ... ok
+test generation::tests::missing_fields_are_not_silently_defaulted ... ok
+test executor::tests::the_whole_block_runs_through_the_m9_orchestrator ... ok
+test generation_loop::tests::stability_and_confidence_stop_the_loop ... ok
+test rng::tests::is_deterministic_and_bounded ... ok
+test rng::tests::known_sequence_is_pinned ... ok
+test rng::tests::single_value_bound_is_zero ... ok
+test generation_loop::tests::entropy_of_a_peaked_distribution_is_below_the_bound ... ok
+test generation_loop::tests::pinned_policy_matches_the_audited_generation_config ... ok
+test checkpoint::tests::opens_a_consistent_synthetic_checkpoint_and_reads_tensors ... ok
+test generation_loop::tests::policy_validation_rejects_broken_bounds ... ok
+test sampling::tests::acceptance_always_accepts_the_lowest_entropy_token ... ok
+test sampling::tests::acceptance_is_the_reference_entropy_bound_prefix ... ok
+test sampling::tests::acceptance_rejects_invalid_entropy_and_shapes ... ok
+test sampling::tests::argmax_uses_first_index_on_ties_and_rejects_nan ... ok
+test sampling::tests::entropy_of_uniform_and_peaked_rows_matches_definition ... ok
+test sampling::tests::entropy_rejects_nan_infinite_and_empty_inputs ... ok
+test sampling::tests::policy_builders_produce_the_pinned_sampler_values ... ok
+test sampling::tests::renoise_only_replaces_non_accepted_positions ... ok
+test sampling::tests::sampling_is_deterministic_for_a_fixed_seed ... ok
+test sampling::tests::stability_requires_the_reference_history_window ... ok
+test sampling::tests::temperature_scaling_is_applied_before_sampling ... ok
+test sha256::tests::handles_block_boundaries ... ok
+test sha256::tests::matches_fips_vectors ... ok
+test stream::tests::decoder_plan_matches_the_pinned_inventory_shape_rules ... ok
+test stream::tests::lru_victims_free_the_oldest_first_and_stop_at_the_soft_budget ... ok
+test strict_json::tests::preserves_order_and_types ... ok
+test strict_json::tests::rejects_duplicate_keys_at_every_level ... ok
+test checkpoint::tests::rejects_missing_directory_config_and_generation_config ... ok
+test checkpoint::tests::rejects_total_size_mismatch_and_mixed_dtypes ... ok
+test checkpoint::tests::structural_open_does_not_claim_pin_compliance ... ok
+test checkpoint::tests::rejects_duplicate_tensor_across_shards ... ok
+test safetensors::tests::rejects_truncated_and_oversized_headers ... ok
+test safetensors::tests::detects_a_file_truncated_after_open ... ok
+test checkpoint::tests::rejects_missing_shard_unexpected_tensor_wrong_shard_and_missing_tensor ... ok
+test safetensors::tests::reads_a_tensor_range_relative_to_the_payload_not_to_the_file ... ok
+test safetensors::tests::rejects_malformed_json_duplicate_names_and_empty_names ... ok
+test safetensors::tests::reads_valid_bf16_and_f32_tensors_without_whole_shard_copy ... ok
+test checkpoint::tests::rejects_malformed_indexes_and_unsafe_shard_names ... ok
+test safetensors::tests::rejects_unsupported_dtypes_and_bad_entries ... ok
+test safetensors::tests::rejects_metadata_that_is_not_a_string_map ... ok
+test safetensors::tests::rejects_shape_mismatch_alignment_overlap_gap_and_bounds ... ok
+
+test result: ok. 64 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/bin/verify_checkpoint.rs (target/debug/deps/verify_checkpoint-97fb2c8892de61cd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/decoder_layer_bisect.rs (target/debug/deps/decoder_layer_bisect-760de0d7a8c1b1b8)
+
+running 1 test
+test decoder_layers_reproduce_the_reference_when_fed_reference_inputs_and_caches ... ignored, requires the pinned checkpoint (release profile)
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/golden_cpu.rs (target/debug/deps/golden_cpu-b51410299f0b7e9c)
+
+running 7 tests
+test decoder_chain_drift_is_tracked_against_pinned_upstream ... ignored, requires the pinned checkpoint and venv-pinned golden files (release profile)
+test encoder0_router_matches_pinned_upstream_on_the_real_checkpoint ... ignored, requires the pinned checkpoint and stage golden files (release profile)
+test encoder_chain_drift_is_tracked_against_pinned_upstream ... ignored, requires the pinned checkpoint and venv-pinned golden files (release profile)
+test encoder_layer0_projections_match_pinned_upstream_on_the_real_checkpoint ... ignored, requires the pinned checkpoint and stage golden files (release profile)
+test encoder_layers_match_pinned_upstream_on_the_real_checkpoint ... ignored, requires the pinned checkpoint and stage golden files (release profile)
+test text_embedding_matches_pinned_upstream_on_the_real_checkpoint ... ignored, requires the pinned checkpoint and stage golden files (release profile)
+test vision_chain_drift_is_tracked_against_pinned_upstream ... ignored, requires the pinned checkpoint and venv-pinned golden files (release profile)
+
+test result: ok. 0 passed; 0 failed; 7 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/golden_cpu_layer_bisect.rs (target/debug/deps/golden_cpu_layer_bisect-19a15018b84873aa)
+
+running 1 test
+test encoder_layers_reproduce_the_reference_when_fed_reference_inputs ... ignored, requires the pinned checkpoint (release profile)
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/kernel_order_parity.rs (target/debug/deps/kernel_order_parity-a1fe97b89fa2f026)
+
+running 9 tests
+test masked_rows_keep_the_reference_conventions ... ok
+test regenerate_glibc_2_39_reference_tables ... ignored, rewrites the committed reference tables; only sound on the glibc 2.39 reference host
+test report_divergence_against_installed_libm ... ignored
+test softmax_kernel_order_matches_the_reference_bit_for_bit ... ok
+test rms_norm_kernel_order_matches_the_reference_bit_for_bit ... ok
+test portable_expf_matches_glibc ... ok
+test portable_tanhf_matches_glibc ... ok
+test scatter_add_kernel_order_matches_the_reference_bit_for_bit ... ok
+test portable_expm1f_matches_glibc ... ok
+
+test result: ok. 7 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/kernel_provenance.rs (target/debug/deps/kernel_provenance-838d86c88aae6e4a)
+
+running 2 tests
+test every_versioned_ptx_and_cuda_source_is_in_the_manifest ... ok
+test cuda_sources_and_ptx_match_the_committed_provenance_manifest ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/m10_reference.rs (target/debug/deps/m10_reference-58f359a093c4a306)
+
+running 2 tests
+test every_bisect_fixture_family_is_present ... ok
+test committed_reference_set_matches_the_pinned_manifest ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.11s
+
+     Running tests/real_checkpoint.rs (target/debug/deps/real_checkpoint-cbdbb7a919eb34dc)
+
+running 3 tests
+test pinned_checkpoint_matches_the_audited_inventory ... ok
+test pinned_checkpoint_reads_bounded_real_weight_payloads ... ok
+test pinned_checkpoint_rejects_a_missing_shard ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/vision_layer_bisect.rs (target/debug/deps/vision_layer_bisect-7dc0509bf337f73b)
+
+running 1 test
+test vision_layers_reproduce_the_reference_when_fed_reference_inputs ... ignored, requires the pinned checkpoint (release profile)
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_runtime-9f34018b9dba445f)
+
+running 41 tests
+test diffusion::tests::cancellation_during_successful_step_counts_effect_before_cancel ... ok
+test diffusion::tests::cancellation_is_observed_at_step_boundary ... ok
+test diffusion::tests::equal_priority_sessions_are_fifo_and_not_interleaved ... ok
+test diffusion::tests::executes_multiple_blocks_in_deterministic_order ... ok
+test diffusion::tests::failure_cancels_remaining_dependent_steps ... ok
+test diffusion::tests::failure_does_not_cancel_an_independent_session ... ok
+test diffusion::tests::invalid_plans_reject_empty_wrong_block_and_missing_validation ... ok
+test diffusion::tests::plan_rejects_missing_validation_and_non_contiguous_denoising ... ok
+test diffusion::tests::pre_cancelled_session_is_terminal_without_scheduler_tasks ... ok
+test diffusion::tests::queued_session_can_be_cancelled_before_execution ... ok
+test diffusion::tests::token_cancellation_after_admission_prevents_step_execution ... ok
+test profile::tests::profile_rejects_expert_cache_outside_model_working_set ... ok
+test profile::tests::profile_rejects_host_working_set_plus_pinned_over_budget ... ok
+test profile::tests::profile_rejects_pinned_budget_that_overcommits_disjoint_host_envelopes ... ok
+test profile::tests::profile_rejects_unsupported_stream_topology ... ok
+test profile::tests::profile_rejects_working_set_over_soft_vram_budget ... ok
+test profile::tests::reference_rtx5090_profile_loads_and_converts_to_runtime_budgets ... ok
+test scheduled::tests::dependent_request_waits_for_predecessor_completion ... ok
+test scheduled::tests::failed_request_cancels_dependent_request ... ok
+test scheduled::tests::failed_transfer_discards_dependent_request_payload ... ok
+test scheduled::tests::hardware_profile_supplies_scheduler_configuration ... ok
+test scheduled::tests::pre_cancelled_request_cancels_scheduler_task ... ok
+test scheduled::tests::queued_cancellation_prevents_strategy_execution ... ok
+test scheduled::tests::request_submitted_after_cancelled_dependency_is_cancelled_and_payload_pruned ... ok
+test scheduled::tests::request_submitted_after_failed_dependency_is_cancelled_and_payload_pruned ... ok
+test scheduled::tests::scheduled_runtime_collects_compute_request_metrics ... ok
+test scheduled::tests::scheduled_runtime_facade_drives_diffusion_sessions ... ok
+test scheduled::tests::scheduled_runtime_reserves_compute_queue_for_request_payloads ... ok
+test scheduled::tests::strategy_panic_fails_request_and_cancels_dependent_work ... ok
+test scheduled::tests::transfer_task_and_compute_request_share_one_dependency_graph ... ok
+test tests::cancellation_during_strategy_discards_output ... ok
+test tests::cancellation_takes_precedence_over_a_simultaneous_strategy_error ... ok
+test tests::invalid_runtime_configuration_is_rejected ... ok
+test tests::oversized_input_is_rejected_before_request_id_is_consumed ... ok
+test tests::pre_cancelled_request_never_enters_strategy ... ok
+test tests::request_id_exhaustion_is_reported_without_wrapping ... ok
+test tests::request_ids_are_monotonic_and_runtime_state_is_reused ... ok
+test tests::runtime_executes_a_model_neutral_request_end_to_end ... ok
+test tests::strategy_failure_is_reported_as_failed_request ... ok
+test tests::strategy_panic_propagates_and_consumes_the_request_id ... ok
+test tests::strategy_receives_its_own_request_id_and_metadata ... ok
+
+test result: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/diffusion_orchestration.rs (target/debug/deps/diffusion_orchestration-49e97d074c385d8b)
+
+running 5 tests
+test pre_cancelled_plan_is_visible_but_never_scheduled ... ok
+test retry_uses_a_new_session_instead_of_resuming_terminal_state ... ok
+test synthetic_cancellation_is_observed_at_a_safe_boundary ... ok
+test synthetic_multiblock_session_reports_progress_and_phase_metrics ... ok
+test synthetic_failure_isolated_and_reported_without_gpu ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_scheduler-4a032853b2b0c9a5)
+
+running 20 tests
+test executor::tests::each_runner_drives_only_its_own_queue ... ok
+test executor::tests::executor_failure_fails_task_and_cancels_dependents ... ok
+test executor::tests::queue_runner_metrics_are_scoped_to_its_logical_queue ... ok
+test executor::tests::runner_executes_on_caller_and_releases_dependents_only_after_success ... ok
+test executor::tests::runner_reports_idle_without_invoking_executor ... ok
+test tests::cancellation_cursor_returns_only_new_events ... ok
+test tests::cancellation_index_tracks_direct_and_transitive_cancellations ... ok
+test tests::cancelling_prefetch_releases_lookahead_capacity ... ok
+test tests::dependent_task_becomes_ready_only_after_completion ... ok
+test tests::cancelling_running_prefetch_releases_concurrency_slot ... ok
+test tests::dispatches_by_priority_then_fifo_within_each_queue ... ok
+test tests::duplicate_and_unknown_dependencies_are_rejected ... ok
+test tests::failed_dependency_cancels_descendants_but_not_unrelated_work ... ok
+test tests::invalid_configuration_is_rejected ... ok
+test tests::prefetch_concurrency_and_lookahead_are_bounded ... ok
+test tests::queues_are_independent ... ok
+test tests::running_tasks_cannot_be_cancelled_or_completed_twice ... ok
+test tests::submission_cancels_tasks_with_already_failed_or_cancelled_dependencies ... ok
+test tests::terminal_records_are_compacted_and_remain_inspectable_as_dependencies ... ok
+test tests::zero_prefetch_concurrency_disables_prefetch_admission ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/claymore_tensor-5786f0040597a12c)
+
+running 75 tests
+test aten_topk::tests::keeps_every_expert_of_a_tied_group ... ok
+test aten_topk::tests::reproduces_the_pinned_upstream_tie_order ... ok
+test aten_topk::tests::reproduces_the_pinned_upstream_tie_order_from_the_raw_logits ... ok
+test aten_topk::tests::selects_the_largest_values ... ok
+test bf16::tests::equality_compares_raw_bits_not_numeric_value ... ok
+test bf16::tests::exact_values_convert_in_both_directions ... ok
+test bf16::tests::fp32_grid_rounds_monotonically ... ok
+test bf16::tests::round_to_nearest_even_ties_and_neighbours ... ok
+test bf16::tests::special_values_and_limits_are_defined ... ok
+test bf16::tests::subnormal_rounding_and_halfway_to_zero ... ok
+test contracts::tests::contract_rejects_non_contiguous_and_mixed_devices ... ok
+test contracts::tests::bf16_is_dispatched_and_executed_by_the_cpu_reference ... ok
+test contracts::tests::cpu_capabilities_cover_both_dtypes_for_every_operation ... ok
+test contracts::tests::cpu_dispatch_refuses_vram_inputs_without_implicit_transfer ... ok
+test contracts::tests::cuda_launch_grid_limits_are_axis_specific_and_typed ... ok
+test contracts::tests::dispatch_executes_through_the_cpu_reference_backend ... ok
+test contracts::tests::dispatch_rejects_unknown_and_unsupported_backends_without_fallback ... ok
+test contracts::tests::dispatch_explains_an_exact_match ... ok
+test contracts::tests::scale_factor_shape_is_validated_and_explained ... ok
+test bf16::tests::nan_widening_quiets_and_from_f32_canonicalizes_for_every_pattern ... ok
+test contracts::tests::scale_uses_the_elementwise_launch_grid_rule ... ok
+test bf16::tests::widening_is_monotonic_in_magnitude_for_all_non_nan_patterns ... ok
+test contracts::tests::shape_signature_is_backend_neutral_and_checked_without_gpu ... ok
+test contracts::tests::fp16_is_not_claimed_as_supported ... ok
+test diffusion::tests::attention_matches_a_hand_computed_single_head_case ... ok
+test bf16::tests::every_bf16_value_roundtrips_through_fp32 ... ok
+test diffusion::tests::attention_applies_the_additive_mask ... ok
+test bf16::tests::bitwise_roundtrip_is_exact_for_every_16_bit_pattern ... ok
+test diffusion::tests::attention_rejects_invalid_shapes_scales_and_head_counts ... ok
+test bf16::tests::widening_is_exactly_sign_symmetric_for_every_pattern ... ok
+test diffusion::tests::canvas_prefix_mask_keeps_encoder_and_canvas_visible ... ok
+test diffusion::tests::default_rope_matches_the_upstream_formula ... ok
+test diffusion::tests::embed_gather_scales_rows_by_the_explicit_factor ... ok
+test diffusion::tests::gelu_mul_up_matches_the_pinned_activation ... ok
+test diffusion::tests::linear_matches_the_explicit_projection ... ok
+test diffusion::tests::linear_rejects_shape_and_dtype_mismatches ... ok
+test diffusion::tests::gather_rows_and_scatter_add_round_trip_indices ... ok
+test diffusion::tests::gather_rows_rejects_index_dtype_and_fractional_indices ... ok
+test diffusion::tests::attention_maps_grouped_query_heads_to_the_right_kv_head ... ok
+test diffusion::tests::mask_validation_rejects_fully_masked_rows ... ok
+test diffusion::tests::masks_describe_causal_sliding_and_padding_visibility ... ok
+test diffusion::tests::rope_parameters_are_validated ... ok
+test diffusion::tests::proportional_rope_keeps_the_full_frequency_vector_and_zeroes_the_tail ... ok
+test diffusion::tests::fully_masked_rows_produce_zeros_instead_of_nan ... ok
+test diffusion::tests::router_top_k_applies_per_expert_scale_and_rejects_bad_top_k ... ok
+test diffusion::tests::scale_bias_applies_explicit_vectors ... ok
+test diffusion::tests::scale_broadcasts_an_explicit_factor ... ok
+test diffusion::tests::rotary_embedding_is_identity_at_position_zero_and_rotates_pairs ... ok
+test diffusion::tests::attention_propagates_nan_without_sanitising_it ... ok
+test diffusion::tests::scale_scalar_rounds_once_and_keeps_the_scalar_in_fp32 ... ok
+test diffusion::tests::soft_cap_saturates_at_the_cap ... ok
+test diffusion::tests::rotary_embedding_rejects_mismatched_tables ... ok
+test diffusion::tests::widening_is_the_only_cross_dtype_operation_and_is_exact ... ok
+test ops::tests::add_is_elementwise_and_rejects_implicit_broadcast ... ok
+test diffusion::tests::router_top_k_selects_normalized_top_weights ... ok
+test ops::tests::bf16_add_rounds_only_the_output ... ok
+test ops::tests::bf16_matmul_accumulates_in_fp32 ... ok
+test ops::tests::bf16_ops_reject_mixed_dtype_and_unsupported_dtype ... ok
+test diffusion::tests::row_mask_zeroes_flagged_rows ... ok
+test diffusion::tests::rope_tables_repeat_the_frequencies_and_are_identity_at_position_zero ... ok
+test ops::tests::rms_norm_applies_explicit_scale ... ok
+test ops::tests::bf16_rms_norm_uses_bf16_scale_and_fp32_reduction ... ok
+test ops::tests::softmax_is_stable_for_large_logits ... ok
+test ops::tests::bf16_shape_scale_layout_and_epsilon_errors_are_typed ... ok
+test tests::bf16_storage_uses_two_bytes_per_element_and_releases_explicitly ... ok
+test tests::contiguous_layout_uses_checked_element_strides ... ok
+test ops::tests::bf16_softmax_is_stable_and_normalized_after_rounding ... ok
+test tests::non_contiguous_layout_is_not_misreported_as_contiguous ... ok
+test tests::rejects_rank_mismatch_zero_dimensions_and_overflow ... ok
+test tests::storage_capacity_is_checked_including_offset ... ok
+test tests::tensor_accepts_aligned_nonzero_byte_offsets ... ok
+test ops::tests::matmul_matches_reference_result ... ok
+test tests::tensor_rejects_misaligned_byte_offsets ... ok
+test tests::view_cannot_escape_parent_tensor_span ... ok
+test tests::strided_view_checks_byte_span_and_borrows_storage ... ok
+
+test result: ok. 75 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+rc=0
+=== CI job2 MSRV: cuda checks ===
+    Checking claymore-cuda v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cuda)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+rc1=0
+    Checking claymore-tensor v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-tensor)
+    Checking claymore-memory v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-memory)
+    Checking claymore-runtime v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-runtime)
+    Checking claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.97s
+rc2=0
+    Checking claymore-cli v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+rc3=0
+    Checking claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.48s
+rc4=0
+=== CI job2 MSRV: clippy ===
+    Checking claymore-tensor v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-tensor)
+    Checking claymore-memory v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-memory)
+    Checking claymore-runtime v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-runtime)
+    Checking claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Checking claymore-cli v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.95s
+rc1=0
+    Checking claymore-cuda v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cuda)
+    Checking claymore-memory v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-memory)
+    Checking claymore-runtime v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-runtime)
+    Checking claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Checking claymore-cli v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.52s
+rc2=0
+    Checking claymore-model-gemma v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-gemma)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.50s
+rc3=0
+CIREPLICA_DONE

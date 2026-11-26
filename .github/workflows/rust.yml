@@ -1,10 +1,23 @@
 name: Rust CI
 
+# Déclencheurs.
+#
+# Rappel sur la regle GitHub : pour un evenement `pull_request`, c'est la
+# definition du workflow presente sur la branche **de base** qui s'applique, pas
+# celle de la branche source. `pull_request: branches: ["main", "feat/**"]` ne
+# devient donc effectif pour une PR ciblant `feat/...` qu'une fois ce fichier
+# fuse sur cette branche de base. Une branche de travail seule ne peut pas
+# activer sa propre CI.
+#
+# `workflow_dispatch` complete le dispositif pour lancer les validations sur une
+# branche de travail sans ouvrir de PR. La cible doit viser une branche qui porte
+# deja ce fichier.
 on:
   push:
     branches: [main, "feat/**"]
   pull_request:
-    branches: [main]
+    branches: [main, "feat/**"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -29,6 +42,15 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Run tests
         run: cargo test --workspace --all-targets --locked
+      # Mesure, pas une assertion : l'image du runner n'est pas l'oracle de
+      # parite (glibc 2.39, voir crates/claymore-model-gemma/tests/
+      # kernel_order_parity.rs). Cette etape publie le jeu de divergence de
+      # l'image dans le journal du job ; `continue-on-error` parce qu'un jeu
+      # non vide n'est pas un echec du contrat, c'est la donnee qu'on attend
+      # pour regenerer les tables sur l'hote de reference.
+      - name: Report the runner libm divergence set against the pinned oracle
+        continue-on-error: true
+        run: cargo test -p claymore-model-gemma --test kernel_order_parity --locked -- --ignored --nocapture report_divergence_against_installed_libm
       - name: Build link-only CUDA Driver stub for CPU fault-injection tests
         run: |
           mkdir -p /tmp/claymore-cuda-stub
@@ -48,10 +70,13 @@ jobs:
           cargo check -p claymore-cuda --features cuda-driver --all-targets --locked
           cargo check -p claymore-memory --features cuda-driver --all-targets --locked
           cargo check -p claymore-cli --features cuda-driver --locked
+          cargo check -p claymore-model-gemma --features cuda-streaming --all-targets --locked
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Run Clippy with optional CUDA feature
-        run: cargo clippy -p claymore-cuda -p claymore-memory -p claymore-cli --features cuda-driver --all-targets --locked -- -D warnings
+        run: |
+          cargo clippy -p claymore-cuda -p claymore-memory -p claymore-cli --features cuda-driver --all-targets --locked -- -D warnings
+          cargo clippy -p claymore-model-gemma --features cuda-streaming --all-targets --locked -- -D warnings
 
   msrv:
     name: Minimum supported Rust 1.86
@@ -59,6 +84,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.86.0
+        with:
+          components: clippy
       - uses: Swatinem/rust-cache@v2
       - name: Verify workspace on the declared MSRV
         run: cargo test --workspace --all-targets --locked
@@ -67,3 +94,9 @@ jobs:
           cargo check -p claymore-cuda --features cuda-driver --all-targets --locked
           cargo check -p claymore-memory --features cuda-driver --all-targets --locked
           cargo check -p claymore-cli --features cuda-driver --locked
+          cargo check -p claymore-model-gemma --features cuda-streaming --all-targets --locked
+      - name: Run Clippy with optional CUDA feature on the declared MSRV
+        run: |
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo clippy -p claymore-cuda -p claymore-memory -p claymore-cli --features cuda-driver --all-targets --locked -- -D warnings
+          cargo clippy -p claymore-model-gemma --features cuda-streaming --all-targets --locked -- -D warnings

@@ -6,7 +6,7 @@
 > **Dépôt :** https://github.com/zenhit777/Claymore  
 > **Version de référence du workspace :** 0.5.0  
 > **État du document :** référence vivante, à mettre à jour à chaque jalon  
-> **Dernière mise à jour :** 23 novembre 2026
+> **Dernière mise à jour :** 22 novembre 2026
 
 ---
 
@@ -98,7 +98,7 @@ Les deux cibles fonctionnelles initiales sont indépendantes et disposent chacun
 
 **Modèle cible exact :** `google/diffusiongemma-26B-A4B-it` (identifiant Hugging Face).
 
-Objectif : construire un chemin d'exécution adapté à ce modèle de diffusion de texte. **Décision de périmètre initial : texte uniquement.** Les entrées image et vidéo, leur prétraitement et les chemins multimodaux associés sont hors périmètre de la première intégration Claymore ; aucune interface ni compatibilité image/vidéo n'est revendiquée. Une extension multimodale nécessitera une décision produit et une spécification dédiées (formats d'entrée, prétraitement, interfaces modèle, ressources et validation) avant développement. Les mentions de « Gemma » seules désignent la famille ou le backbone architectural, jamais une cible modèle interchangeable.
+Objectif : construire un chemin d'exécution adapté à ce modèle de diffusion de texte. Les mentions de « Gemma » seules désignent la famille ou le backbone architectural, jamais une cible modèle interchangeable.
 
 Les travaux spécifiques prévus comprennent :
 
@@ -144,7 +144,7 @@ La première cible de développement et de validation est la machine suivante :
 | RAM système | 128 Gio |
 | Environnement | WSL2 sous Windows |
 | Langage | Rust, édition 2021 |
-| Backend de tenseurs visé | Moteur tensoriel natif Claymore (socle M8 livré sur `main` par la PR #24 ; extensions modèles M10/M11 et optimisations M12) |
+| Backend de tenseurs visé | Moteur tensoriel natif Claymore (socle implémenté en M8 dans la PR #24 non fusionnée, extensions M9-M12) |
 | Politique numérique | précision mixte, BF16 et FP32 supportés dans les primitives M8 ; FP16 non implémenté |
 
 Cette configuration est le profil de référence, pas une limite architecturale du projet. Les paramètres matériels doivent rester configurables.
@@ -425,14 +425,6 @@ Périmètre de livraison :
 
 La préparation architecturale de M8 fait également partie de M7.1 : [docs/m8-architecture.md](m8-architecture.md) fixe les frontières Tensor / Device / Operations / Kernel dispatch / Runtime / Model adapters, les invariants d'ownership et les validations CPU/CI et RTX 5090. Ce document ne signifie pas que le code M8 est déjà implémenté.
 
-#### M8 — Socle tensoriel natif Claymore (PR #24)
-
-**État : livré sur `main` par la PR #24.** `claymore-tensor` possède les types Tensor/Layout/Vues canoniques, les opérations de référence CPU F32/BF16 et les contrats de dispatch explicites. Les kernels CUDA F32/BF16 et leur intégration au gestionnaire mémoire sont décrits dans [m8-architecture.md](m8-architecture.md) et les audits matériels versionnés. Cette livraison fournit le socle de calcul ; elle ne signifie pas que les graphes complets de DiffusionGemma ou Clover sont exécutables.
-
-#### M9 — Orchestration de diffusion commune (PR #32)
-
-**État : cœur livré sur `main` par la PR #32 ; couverture CPU et documentation de finalisation suivies dans l'issue #31.** Le runtime expose des plans validés par blocs, une chaîne de dépendances par session, une exécution bornée par étape, l'annulation coopérative et la propagation des échecs. Les données de modèle et les tenseurs restent hors des payloads du scheduler. Les métriques M9 sont des compteurs d'orchestration CPU ; aucune télémétrie GPU n'est déduite ou simulée.
-
 Les lots logiciels sont validés par la CI CPU, y compris les tests de fault injection avec la feature CUDA activée mais sans GPU. Le chemin de production `CudaMemoryManager` refactoré a également été revalidé sur la RTX 5090 au SHA de code `c16e9254994f24b6c7442c610332baf010352b1e` : les 17 tests matériels ciblés ont réussi lors de deux campagnes consécutives (34/34), et les 27 tests matériels découverts par la commande workspace ont également réussi lors de chacune des deux campagnes (54/54). Le vrai driver NVIDIA WSL2 a été utilisé, sans stub ; le rapport, les logs et leurs empreintes SHA-256 sont versionnés dans `docs/audits/m7.1-rtx5090-hardware-validation.md` et les fichiers associés. Cette validation ne couvre pas les kernels tensoriels ni les performances M8 ; ces gates restent distincts.
 
 #### Limites CUDA explicitement suivies après la revue M7.1
@@ -459,19 +451,18 @@ La limite `max_payload_bytes` porte explicitement sur les seuls octets du payloa
 
 La tranche M6 n'ouvre aucun contexte ni ressource CUDA, ne planifie pas de tâches, ne charge pas de modèle et n'effectue aucun calcul tensoriel. Elle est validée par des tests CPU.
 
- - exécution concurrente/asynchrone des requêtes et stratégie de génération concrète (extensions futures du runtime) ;
+ - exécution concurrente/asynchrone des requêtes, stratégie de génération concrète et intégration de modèles dans le runtime (extensions futures de M6/M8+) ;
 - pool allocator VRAM, réutilisation de blocs et défragmentation (hors périmètre M7.1) ;
 - intégration des tâches Transfer/Prefetch au scheduler M7 : livrée dans la première tranche, avec exécution synchrone sur le thread propriétaire ;
 - prefetch prédictif intégré au cache d'experts ;
 - télémétrie consolidée CPU/RAM/VRAM/transferts ;
-- graphes complets et chemins d'inférence effectifs des modèles ;
+- moteur tensoriel natif et chemin d'inférence effectif ;
 - chargement et exécution réels de DiffusionGemma ;
 - chargement et exécution réels de Clover-35B-A3B-preview ;
-- kernels CUDA spécialisés propres aux graphes complets des modèles et optimisations non encore livrées ;
-- extensions post-M9 : équité round-robin, hooks de stratégie/retry, rétention/purge des sessions et convergence des schedulers (issues #33 à #38) ;
+- kernels CUDA spécialisés et kernel dispatcher opérationnel ;
 - validation de performance et de qualité sur la RTX 5090 cible.
 
-Les crates modèles et adaptateurs ne constituent pas à eux seuls la preuve que les modèles sont exécutables. La PR #40 a livré une première tranche DiffusionGemma (chargeur strict, primitives et sous-graphe partiel), mais elle déclare explicitement ouverts le streaming complet, les chemins MoE/vision, le cache encodeur/cross-attention et la génération réelle du checkpoint 26B.
+Les crates modèles constituent à ce stade des frontières de workspace, pas la preuve que les modèles sont exécutables.
 
 ### 7.3 Limites connues du backend CUDA actuel
 
@@ -559,7 +550,7 @@ Chaque moteur de modèle doit pouvoir préparer, exécuter et libérer ses état
 
 ## 10. Feuille de route et phases de développement
 
-Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (politiques mémoire, backend CUDA et adaptateur Memory ↔ CUDA). La feuille de route ci-dessous repart de l'état réel du dépôt et utilise une numérotation de travail M0 à M12 ; elle ne réécrit pas l'historique des versions.
+Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (politiques mémoire, backend CUDA et adaptateur Memory ↔ CUDA). La feuille de route ci-dessous repart de l'état réel du dépôt et utilise une numérotation de travail M0 à M8 ; elle ne réécrit pas l'historique des versions.
 
 | Phase | Nom | Statut |
 |---|---|---|
@@ -573,8 +564,8 @@ Les versions v0.3, v0.4 et v0.5 sont des jalons historiques déjà livrés (poli
 | M7 | Scheduler et orchestration mémoire | **Livré sur `main` par la PR #21** |
 | M7.1 | Durcissement scheduler/runtime et préparation M8 | **Livré sur `main` par la PR #22** ; CI verte ; revalidation RTX 5090 réussie au SHA de code `c16e925` (17/17 requis par campagne, deux campagnes ; 27/27 tests workspace par campagne) ; limites restantes suivies dans l'issue #23 |
 | M8 | Socle tensoriel natif : opérations, dispatch et backends CPU/CUDA | **Livré sur `main` par la PR #24** — Tensor canonique, contrats, dispatch, kernels CUDA F32/BF16 et intégration mémoire/scheduler ; preuves matérielles versionnées |
-| M9 | Orchestration de diffusion modulaire commune | Cœur livré par la PR #32 ; compléments CPU-only et documentation suivis dans l'issue #31 |
-| M10 | Adaptateur et intégration DiffusionGemma | En cours dans la PR #40 ; génération complète et gates listés non validés |
+| M9 | Orchestration de diffusion modulaire commune | Cœur livré par la PR #32 ; validation CPU, métriques et documentation finalisées par la PR #43 (issue #31) ; suivis #33 à #38 |
+| M10 | Adaptateur et intégration DiffusionGemma | **Implémentation livrée ; PR #40 validée sous réserves, ouverte et non fusionnée** — verdict architecte du 25/11/2026 sur `24cb8dd8731fb767574204b3723cbaa2ae6030b0`, CI GitHub 4/4. Génération réelle déjà démontrée sur RTX 5090 (canvas 256, 48 étapes, 256/256 positions, pic 24 831 Mio). Finalisation CPU du 25/11 exécutée (bisects encodeur 210/210, vision 0,2 pas, décodeur 10,0 pas). Campagnes RTX 5090 du 25/11 exécutées : groupée 6/6 étapes vertes, puis finale 9/9 étapes vertes sur `460c9ef` — **différentiel CUDA↔CPU des 30 couches du décodeur et des logits bit-exact** (0,0 pas BF16 sur 810 comparaisons d'étape, routeur et logits ; ensembles d'experts 470/480 + 10 échanges de frontière, 0 structurel). Contrat D1/D2 : dérive de chaîne suivie, pas gate absolu. Restent la décision d'architecte sur le resserrement des portes CUDA↔CPU et la décision de merge. Voir `audits/m10-architect-decisions.md` et `audits/m10-rtx5090-final-decoder-logits-2026-11-25.md`. |
 | M11 | Adaptateur et intégration Clover | Planifié |
 | M12 | Optimisation et validation de performance | Planifié |
 
@@ -726,7 +717,7 @@ Critères d'acceptation :
 
 **Objectif :** livrer un seul modèle Tensor natif, les opérations de référence, le dispatch explicite et les backends CPU/CUDA qui serviront à l'orchestration de diffusion et aux deux adaptateurs. M8 ne développe aucune stratégie autoregressive ni boucle de génération de modèle.
 
-**État : livré sur `main` par la PR #24**, y compris la finalisation BF16 et la validation matérielle documentée séparément. Le crate claymore-tensor porte le Tensor canonique, les layouts validés, les vues empruntées, les opérations CPU F32 **et BF16** de référence (add, matmul, softmax, RMSNorm), les contrats typés (`contracts.rs`) et le dispatch déterministe avec explication de chaque refus. Les définitions Tensor concurrentes ont été retirées de claymore-device. Les huit kernels CUDA (quatre F32, quatre BF16) sont intégrés via une feature optionnelle, avec deux PTX `sm_120` versionnés, chargement par la Driver API, event de complétion réel et intégration aux budgets/gardes de claymore-memory et aux files du scheduler. BF16 utilise une représentation 16 bits exacte, une conversion FP32 explicite avec arrondi round-to-nearest-even et une accumulation FP32 pour matmul et réductions. FP16 reste non supporté. Le détail figure dans [m8-architecture.md](m8-architecture.md), dans le [rapport F32](audits/m8-rtx5090-hardware-validation.md), dans le [rapport BF16](audits/m8-bf16-rtx5090-hardware-validation.md), dans l'[audit des exigences de graphe](audits/m8-model-graph-requirements.md), dans l'[audit des différences numériques CPU/CUDA](audits/m8-cpu-cuda-numerics.md) et dans le [manifeste de provenance des PTX](audits/m8-ptx-provenance.md). Les opérations spécifiques aux modèles relèvent des adaptateurs M10/M11.
+**État :** implémenté dans la **PR #24 ouverte, non fusionnée dans `main`** (branche `feat/m8-tensor-foundation`), y compris la finalisation BF16 et la validation matérielle documentée séparément. Le crate claymore-tensor porte le Tensor canonique, les layouts validés, les vues empruntées, les opérations CPU F32 **et BF16** de référence (add, matmul, softmax, RMSNorm), les contrats typés (`contracts.rs`) et le dispatch déterministe avec explication de chaque refus. Les définitions Tensor concurrentes ont été retirées de claymore-device. Les huit kernels CUDA (quatre F32, quatre BF16) sont intégrés via une feature optionnelle, avec deux PTX `sm_120` versionnés, chargement par la Driver API, event de complétion réel et intégration aux budgets/gardes de claymore-memory et aux files du scheduler. BF16 utilise une représentation 16 bits exacte, une conversion FP32 explicite avec arrondi round-to-nearest-even et une accumulation FP32 pour matmul et réductions. FP16 reste non supporté. Le détail figure dans [m8-architecture.md](m8-architecture.md), dans le [rapport F32](audits/m8-rtx5090-hardware-validation.md), dans le [rapport BF16](audits/m8-bf16-rtx5090-hardware-validation.md), dans l'[audit des exigences de graphe](audits/m8-model-graph-requirements.md), dans l'[audit des différences numériques CPU/CUDA](audits/m8-cpu-cuda-numerics.md) et dans le [manifeste de provenance des PTX](audits/m8-ptx-provenance.md). Les opérations spécifiques aux modèles relèvent des adaptateurs M10/M11.
 
 Travaux :
 - finaliser les contrats Tensor, layouts, vues, aliasing et durée de vie ;
@@ -763,11 +754,19 @@ Critères de validation CPU-only :
 
 ### M10 — Adaptateur DiffusionGemma
 
+**État :** en cours sur `feat/m10-diffusiongemma` (PR #40 **ouverte, non mergée**), campagnes matérielles **exécutées** aux SHA `77e7665` (24/11), puis `460c9ef` (25/11, 9/9 étapes vertes, différentiel décodeur/logits bit-exact). Livré et réellement exercé sur la RTX 5090 : ingestion stricte et épinglée du checkpoint réel (`google/diffusiongemma-26B-A4B-it`, révision `cd40195554d3cfcb56f34b9adfb66efc790ed5b6`, 1047 tenseurs / 51 647 562 456 octets / 11 shards, couverture complète vérifiée), validation complète de la configuration, primitives M10 (`Linear`, `RotaryEmbed`, `Attention`, `SoftCap`, `Scale`, `ScaleScalar`, `ScaleBias`, `GeluMulUp`, `GatherRows`, `ScatterAdd`, `EmbedGather`, `RowMask`, `Widen`, `RouterTopK` ; référence CPU déterministe et 26 entrées PTX `sm_120`, dispatch exact), politique `EntropyBoundSampler` avec canvas 256 et acceptation masquée par seuil de confiance, adaptateur `DiffusionExecutor` branché sur M9, admission mémoire bornée et gardes `IN_FLIGHT` sur les lancements M10, **graphe complet** (MoE top-8 avec routeur compatible ATen, tour de vision, auto-conditionnement, cache KV encodeur, tête LM liée, exécuteur de streaming borné, résidence LRU bornée sous la marque haute VRAM).
+
+**Exécuté sur la carte le 24 novembre 2026** (créneau GPU final, une tâche à la fois, VRAM estimée annoncée avant et libération vérifiée après) : `hardware_m10_primitives` **21/21 verts**, `hardware_m10_streaming` **2/2 verts**, `hardware_m10_generation` — **génération réelle verte** (canvas 256, politique épinglée, **48 étapes** de débruitage, **256/256 positions** acceptées, pic VRAM **24 831 Mio**, **909 Gio** de poids uploadés, **605 669** lancements de kernel, 3 296 s) et **sémantique validée par étape** (couche 0 rejouée CUDA ↔ CPU : chaque étape à l'échelle de l'ULP BF16, **56/56 indices d'experts identiques**). Le checkpoint de 51,6 Go n'est jamais chargé intégralement : les poids sont streamés couche par couche.
+
+**Exécuté sur la carte le 25 novembre 2026** (campagnes groupée puis finale, une tâche à la fois, VRAM annoncée avant et libération vérifiée après) : campagne groupée **6/6 étapes vertes** (5/5 driver, 17/17 mémoire, 19/19 tenseurs, 13/13 injections de fautes, 21/21 primitives M10 à `max_abs=0e0`, checkpoint vérifié bit-identique), puis campagne finale **9/9 étapes vertes** sur le SHA `460c9ef` : les 6 mêmes étapes, la génération matérielle **3/3** (chaîne CUDA↔CPU bit-égale, bloc de canvas réel accepté, couche 0 par étape) et **deux passes du différentiel CUDA↔CPU des 30 couches du décodeur et des logits**, **bit-exactes** (`max_abs = 0,000000`, `rms = 0,000000`, **0,0 pas BF16** sur les 810 comparaisons d'étape, sur le routeur — scores bruts et poids, 30 couches — et sur les logits ; ensembles d'experts CUDA identiques à la référence sur 470/480 lignes, avec les **10 échanges de frontière** du bisect CPU et **zéro** divergence structurelle ; tables des deux passes **strictement identiques**). Pic VRAM du différentiel 11 889 Mio ; VRAM après session 1 300 Mio, aucun processus compute résiduel, aucune entrée Xid/NVRM. Rapports, journaux bruts horodatés et empreintes SHA-256 : [m10-diffusiongemma.md](m10-diffusiongemma.md), [campagne groupée](audits/m10-rtx5090-grouped-campaign-2026-11-25.md), [campagne finale décodeur/logits](audits/m10-rtx5090-final-decoder-logits-2026-11-25.md).
+
+**Non livré et non revendiqué :** l'**équivalence de chaîne BF16 de bout en bout** contre la référence eager. Le différentiel de chaîne CUDA ↔ CPU a été **corrigé** par la campagne de parité numérique (accord **bit-exact** encoder, couche 0 et logits — voir [m10-cuda-cpu-parity-fix.md](audits/m10-cuda-cpu-parity-fix.md)) ; la dérive **CPU ↔ dorée eager** subsiste et reste un **suivi** D2, jamais une porte absolue. Le **resserrement** des portes CUDA↔CPU à 0,0 pas est **proposé mais non appliqué** : une égalité bit stricte serait plus forte que ce que D1 énonce (D1 mesure une dérive en pas, pas une identité). Aucune performance ni débit n'est revendiqué. Le périmètre détaillé, les tolérances fixées avant campagne et les résultats bruts figurent dans [m10-diffusiongemma.md](m10-diffusiongemma.md) et dans le [rapport de validation](audits/m10-rtx5090-hardware-validation.md), avec le [prompt agent RTX 5090](agents/m10-rtx5090-agent-prompt.md).
+
 **Objectif :** intégrer google/diffusiongemma-26B-A4B-it au moteur de diffusion commun, en conservant les exigences propres à son architecture.
 
 Travaux : lecture du checkpoint et de sa configuration, représentation canvas/état, progression de denoising, attention bidirectionnelle, choix de précision et validation numérique, chargement des poids et gestion des tenseurs intermédiaires.
 
-Critères d'acceptation : étape réelle et reproductible du graphe du modèle, comparaison numérique à une référence fiable, gestion mémoire et campagne RTX 5090 versionnée.
+Critères d'acceptation : étape réelle et reproductible du graphe du modèle, comparaison numérique à une référence fiable, gestion mémoire et campagne RTX 5090 versionnée. **Premier critère partiellement satisfait** : une étape réelle du graphe décodeur à poids réels est exécutée et comparée ; le chemin encodeur/KV cache/cross-attention et le graphe complet restent à livrer.
 
 ### M11 — Adaptateur Clover
 
@@ -852,7 +851,7 @@ Historique de référence :
 - **v0.3** : memory orchestrator host-side ;
 - **v0.4** : backend CUDA Driver API optionnel.
 
-Les PR #1 (v0.3), #2 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in) ; la PR #5 a livré M1 (consolidation de la fondation matérielle). La PR #6 a livré M2 (`Device` / `Tensor` et simulateur CPU ; le type `Tensor` a ensuite été recentré dans `claymore-tensor` pendant M8). Les PR #15 et #16 ont livré M3 et M4 ; les PR #17 et #18 ont livré M5, dont le chemin nominal a été validé sur RTX 5090. La PR #20 a livré la première tranche M6 ; les PR #21 et #22 ont livré M7 et M7.1 ; la PR #24 a livré M8 ; la PR #32 a livré le cœur de l'orchestration M9. La PR #40 propose l'adaptateur DiffusionGemma M10, mais reste ouverte et ne revendique pas une génération complète du checkpoint.
+Les PR #1 (v0.3), v0.4 (v0.4) et #3 (documentation de référence) ont été fusionnées dans `main`. La PR #4 a livré v0.5.0 et l'adaptateur Memory ↔ CUDA (opt-in) ; la PR #5 a livré M1 ; la PR #6 a livré M2 ; les PR #15 et #16 ont livré M3 et M4 ; les PR #17 et #18 ont livré M5 ; la PR #20 a livré la première tranche M6 ; les PR #21 et #22 ont livré M7 et M7.1 ; la PR #24 a livré M8 ; la PR #32 a livré le cœur M9 ; la PR #43 a finalisé les compléments CPU-only et documentaires M9. La PR #40 porte l'intégration M10 : génération réelle exécutée sur RTX 5090 et verdict architectural **VALIDÉE SOUS RÉSERVES** sur le SHA `24cb8dd`. Les réserves sont détaillées dans `docs/m10-diffusiongemma.md` ; les bisects CPU vision/décodeur précèdent la dernière campagne matérielle, et le différentiel CUDA↔CPU des 30 couches du décodeur et des logits a été mesuré **bit-exact** sur RTX 5090 le 25/11 (`audits/m10-rtx5090-final-decoder-logits-2026-11-25.md`). La décision de merge de #40 reste distincte.
 
 Une PR ne doit pas être déclarée prête uniquement parce que le code existe : elle doit préciser si les tests couvrent le build par défaut, la feature CUDA, le matériel réel ou seulement un backend simulé.
 
@@ -913,6 +912,12 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 - `docs/audits/m3-device-foundations.md` — audit et durcissement des fondations Device.
 - `docs/audits/m4-device-lifecycle-contracts.md` — audit des contrats de libération, complétion asynchrone et vues tensor.
 - `docs/m8-architecture.md` — socle tensoriel natif, politique numérique F32/BF16 et tolérances.
+- `docs/m9-diffusion-orchestration.md` — contrats et limites de l'orchestration diffusion M9.
+- `docs/m10-diffusiongemma.md` — périmètre, critères, tolérances et gates de l'adaptateur DiffusionGemma.
+- `docs/agents/m10-rtx5090-agent-prompt.md` — consignes de réalisation et de validation matérielle M10.
+- `docs/audits/m10-rtx5090-hardware-validation.md` — campagne matérielle M10 sur RTX 5090 : traçabilité du checkpoint épinglé, primitives, sous-graphe à poids réels, budgets, défaut corrigé et gates ouverts.
+- `docs/audits/m10-rtx5090-final-decoder-logits-2026-11-25.md` — campagne finale M10 sur RTX 5090 (9/9 étapes vertes) : différentiel CUDA ↔ CPU **bit-exact** des 30 couches du décodeur et des logits, journaux bruts horodatés et empreintes SHA-256.
+- `docs/audits/fixtures/diffusiongemma-config.json` et `docs/audits/fixtures/diffusiongemma-generation-config.json` — copies de référence épinglées de la configuration et de la politique de génération.
 - `docs/audits/m8-model-graph-requirements.md` — exigences de graphe et frontières M8/M9/M10/M11.
 - `docs/audits/m8-rtx5090-hardware-validation.md` — campagne matérielle F32.
 - `docs/audits/m8-bf16-rtx5090-hardware-validation.md` — campagne matérielle BF16.
@@ -939,7 +944,7 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-19 | Correspondance de la feuille de route précédente : ancien M2 (backend Driver) → socle livré v0.4/M0 ; ancien M3 (Memory ↔ CUDA) → v0.5/M0 et durcissement M1 ; ancien M4 (scheduler) → nouveau M4 ; ancien M5 (moteurs modèles) → M5/M6/M7 selon le chemin d'exécution ; ancien M6 (optimisation) → M8. Les tests simulés de l'adaptateur sont reportés à M2/M3 ; la preuve de protection d'une allocation en vol jusqu'à l'event relève de M4. |
 | 2026-11-19 | Le backend CUDA utilise `Rc` car son contexte n'est pas `Send`/`Sync` : driver, buffers, streams, events et `CudaMemoryManager` sont confinés au thread propriétaire ; M4 doit prévoir un thread CUDA dédié ou une évolution sûre de ce modèle. |
 | 2026-11-18 | Cette référence est rédigée en français ; README et documentation technique existante restent en anglais. |
-| 2026-11-18 | DiffusionGemma (`google/diffusiongemma-26B-A4B-it`) et Clover disposent d'adaptateurs spécialisés partageant le runtime, le socle tensoriel et les services transverses. |
+| 2026-11-18 | DiffusionGemma (`google/diffusiongemma-26B-A4B-it`) et Clover disposent de moteurs distincts partageant les services transverses du runtime. |
 | 2026-11-20 | Claymore ne fonde pas son moteur tensoriel sur un runtime tensoriel externe : les contrats Device/Buffer/Tensor, l'ownership, la synchronisation, la politique mémoire et l'exécution des modèles doivent rester cohérents et maîtrisés dans le projet, sans adapter les invariants Claymore au cycle de vie d'un framework tiers. Ce choix évite une dépendance structurante et les frictions d'interopérabilité autour des contextes CUDA, des buffers et des transferts ; il augmente en contrepartie fortement l'effort d'implémentation, de maintenance, de correction numérique et d'optimisation. Claymore pourra s'appuyer sur des bibliothèques de calcul bas niveau et des outils CUDA selon §6.4, sans leur déléguer ses abstractions ni son runtime. |
 | 2026-11-20 | Candle et les autres projets externes restent des références d'étude uniquement ; Claymore possède ses contrats Device/Buffer/Tensor et son futur moteur tensoriel natif. DiffusionGemma est référencé par son identifiant Hugging Face exact. |
 | 2026-11-20 | M4 introduit une libération de buffer explicite et faillible, des tokens de complétion H2D/D2H vérifiables par CUDA event et des vues tensor stridées ; aucun raccordement CUDA au trait Device n'est autorisé avant validation de ces contrats. |
@@ -952,6 +957,18 @@ Ce document est la référence consolidée. Les documents spécialisés ci-desso
 | 2026-11-22 | Finalisation M8 : BF16 est implémenté en 16 bits exacts avec conversion FP32 explicite et arrondi round-to-nearest-even. Matmul et réductions accumulent en FP32 ; la sortie BF16 est arrondie une seule fois. FP16 reste non supporté et aucun cast/fallback implicite n'est autorisé. |
 | 2026-11-22 | Les deux modules PTX (`m8_f32.ptx` et `m8_bf16.ptx`) ciblent `sm_120` ; les kernels BF16 utilisent `cvt.rn.bf16.f32` et `fma.rn.f32`. La tolérance matérielle BF16 est exprimée en pas représentables (0 pour add, 1 pour matmul/softmax/RMSNorm), fixée avant la campagne. |
 | 2026-11-23 | DiffusionGemma est initialement ciblé en génération de texte uniquement ; image et vidéo sont hors périmètre sans décision produit et spécification multimodale ultérieures. Le runtime M9 expose les métriques CPU d'orchestration et des durées observées par phase, sans métriques GPU simulées. |
+| 2026-11-23 | M10 : le checkpoint est épinglé par révision et empreintes SHA-256 (`config.json`, index, `generation_config.json`) contrôlées à l'ouverture ; aucune révision mobile n'est suivie. La politique canonique de génération est l'`EntropyBoundSampler` de transformers ; le `scheduler_config.json` (abstraction `diffusers` `BlockRefinementScheduler`) est enregistré comme artefact séparé et non fusionné. |
+| 2026-11-23 | M10 : `layer_scalar` est une valeur apprise par couche (`0,068847656` en couche 0), pas `1.0`. Une primitive `Scale` explicite (F32/BF16, scalaire ou par colonne) est ajoutée pour l'appliquer comme dernière opération de couche ; aucune identité implicite n'est supposée. |
+| 2026-11-23 | M10 : pour une réduction dont la sortie peut s'annuler, le compte d'ULP n'est pas une borne (un élément proche de zéro peut avoir un ULP arbitrairement grand à erreur absolue bornée). Le critère d'attention BF16 est **dérivé du modèle d'erreur** : `max_abs ≤ 2^-8 · max|v|` (l'arrondi BF16 des probabilités de softmax apporte ≤ `2^-9` d'erreur relative, plus un bit de marge). L'ULP, le max, le RMS et le relatif restent mesurés et publiés. Les tolérances F32 (`1e-4`) et BF16 élémentaire/réduction (1 ULP) sont inchangées. |
+| 2026-11-23 | M10 : la dérive d'une chaîne complète est mesurée et publiée séparément des budgets par opération (un budget par opération n'est pas un budget de chaîne : 1 ULP de RMSNorm est amplifié par une projection à 2816 termes qui s'annule partiellement). La politique numérique de la chaîne complète (BF16 de bout en bout contre activations maîtresses FP32) reste une **décision ouverte**. |
+| 2026-11-23 | M10 : les lancements M10 installent les **mêmes gardes `IN_FLIGHT`** que les lancements M8 et passent par la même frontière de récupération (quiescence du flux prouvée avant de rendre la main, gestionnaire empoisonné si la synchronisation échoue). Découvert par la campagne : sans garde, une éviction pouvait libérer un tampon lu par un kernel en cours d'exécution. Verrouillé par quatre tests d'injection de fautes sur la branche M10. |
+| 2026-11-23 | M10 : le plafond dur de 28 Gio est un **seuil d'admission**, pas une limite de taille de modèle. Les poids vivent en VRAM **et** RAM et sont streamés couche par couche ; ce qui manque pour le graphe complet est du **code** (exécuteur de streaming borné, primitives MoE, tour de vision, auto-conditionnement, cache KV encodeur), pas de la capacité mémoire. Le **gate de génération réelle reste ouvert** ; aucune génération n'est revendiquée. |
+| 2026-11-24 | M10 : le **créneau GPU final est exécuté** (autorisation explicite, une tâche à la fois, VRAM estimée annoncée avant, libération vérifiée après). `hardware_m10_primitives` **21/21 verts**, `hardware_m10_streaming` **2/2 verts**, `hardware_m10_generation` : **génération réelle verte** — canvas 256, politique épinglée, **48 étapes** de débruitage, **256/256 positions** acceptées, pic VRAM **24 831 Mio** (< 26 Gio souple), **909 Gio** de poids uploadés, **605 669** lancements de kernel, 3 296 s. Le checkpoint de 51,6 Go n'est jamais chargé intégralement. |
+| 2026-11-24 | M10 : le **différentiel de chaîne** CUDA ↔ CPU reste **rouge** (`encoder_last_hidden` 5,835938 / 0,711149) et les **tolérances ne sont pas assouplies** ; la dérive CUDA ↔ CPU est du **même ordre** que la dérive CPU ↔ dorée eager (rms 0,763), cause commune (ordre d'accumulation du GEMM BF16 tierce) et non défaut d'opération. La **sémantique** est validée par étape : couche 0 rejouée CUDA ↔ CPU, chaque étape à l'échelle de l'ULP BF16 et **56/56 indices d'experts identiques**. |
+| 2026-11-24 | M10 : le routeur reproduit l'algorithme d'ATen (`nth_element` introselect puis `sort` sur les `k − 1` premiers, comparateur « valeur seule ») en Rust **et** en CUDA, validé **210/210** contre `torch.topk` sur les lignes dorées. Le `scalar_root_size` est conservé comme **scalaire F32** de bout en bout (opération `ScaleScalar`, un seul arrondi) : les logits BF16 du routeur sont **bit-exacts** contre l'upstream et les indices top-k de l'encodeur sont **exacts sur les 30 couches**. |
+| 2026-11-24 | M10 : le graphe CUDA a une **résidence bornée** — arène à emplacements stables, libération par portée (couche, étape de débruitage), éviction LRU des poids residents sous la marque haute. Le gestionnaire n'évince donc jamais un tenseur que le graphe référence encore, et le budget VRAM tient pendant **toute** la génération, pas seulement au pic d'une opération isolée. |
+| 2026-11-25 | M10 : finalisation CPU achevée — générateur et fixtures versionnés, bisects encodeur (210/210, 2,0 pas), vision (0,2 pas) et décodeur (10,0 pas ; 470/480 + 10 échanges de frontière, 0 structurel), tests sur checkpoint et journaux/hash publiés. Bornes D1 fixées après mesure ; décisions D1/D2 inchangées. | 
+| 2026-11-25 | M10 : campagne RTX 5090 groupée **6/6 étapes vertes** après correction du kernel Softmax M8 et régénération/provenance PTX ; checkpoint 1047 tenseurs vérifié bit-identique, primitives M10 21/21 bit-exactes, sous-graphe décodeur réel couche 0 bit-exact. Restent les mesures CUDA↔CPU des 30 couches du décodeur et des logits, puis le réalignement documentaire. |
 
 ### Correspondance de la feuille de route historique
 
@@ -973,7 +990,7 @@ Les références exactes (URL et révision/commit) doivent être consignées ava
 
 - FreeToken — URL/révision à compléter après vérification.
 - Strata (Niko1221) — URL/révision à compléter après vérification.
-- DiffusionGemma — `google/diffusiongemma-26B-A4B-it` ; révision exacte du dépôt à consigner avant l'implémentation du chargeur.
+- DiffusionGemma — `google/diffusiongemma-26B-A4B-it` ; **révision épinglée consignée** : dépôt `cd40195554d3cfcb56f34b9adfb66efc790ed5b6`, code de référence transformers `671aa77576266f41f33f9c28e2d824bfd1b1b63c`, empreintes SHA-256 de `config.json`, `model.safetensors.index.json` et `generation_config.json` (§1.1 de [m10-rtx5090-hardware-validation.md](audits/m10-rtx5090-hardware-validation.md)).
 - Clover-35B-A3B-preview — dépôt Hugging Face et révision à compléter après vérification.
 
 
