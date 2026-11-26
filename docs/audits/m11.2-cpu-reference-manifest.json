@@ -1,0 +1,29 @@
+{
+  "cuda_used": false,
+  "device": "cpu",
+  "fixture_count": 13,
+  "fixture_source_sha256": "26746af2da569367e53bb83c7cf430d620d804ef20156c052a64fc0c9180c1c6",
+  "fixture_values": 368,
+  "generator": "tools/m11/gen_cpu_reference.py",
+  "machine": "x86_64",
+  "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "processor": "",
+  "python_version": "3.13.5 (main, Jul 15 2026, 20:25:40) [GCC 14.2.0]",
+  "seed": 20261126,
+  "source": {
+    "file": "modeling_clover_moe.py",
+    "repository": "https://huggingface.co/Diffuspace/Clover-35B-A3B-Preview",
+    "revision": "4b0402b65e523d0183a14c431955438714cb16ff",
+    "sha256": "2584bd5502d6109c2cea9bee2f2ec98f147bbb8954c43858c0315eb4af9ffb0c",
+    "transcribed_functions": {
+      "CloverAttention eager attention": "modeling_clover_moe.py:640-650",
+      "CloverAttention.rotary": "modeling_clover_moe.py:597-608",
+      "CloverRMSNorm": "modeling_clover_moe.py:433-449",
+      "bd_gdn_conv1d": "modeling_clover_moe.py:253-317",
+      "bd_gdn_local_memory": "modeling_clover_moe.py:320-421",
+      "recurrent_commit_torch": "modeling_clover_moe.py:452-468"
+    }
+  },
+  "torch_num_threads": 1,
+  "torch_version": "2.10.0+cpu"
+}
