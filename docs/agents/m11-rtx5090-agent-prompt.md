@@ -11,7 +11,7 @@ Projet : https://github.com/zenhit777/Claymore
 Jalon : M11 — intégration native de `Diffuspace/Clover-35B-A3B-Preview`.
 
 Branche de travail M11 : `feat/m11-clover-foundation`.
-Base M10 : `feat/m10-diffusiongemma`, actuellement clôturée administrativement sans merge dans `main`.
+Base M10 : `main` au commit `47c98e78cb23bf7e48b3d24ed5be1ddc40547563`, qui contient M10 via le merge #40. Ne pas réappliquer ni cherry-picker les commits M10 ; `feat/m10-diffusiongemma` est une branche historique.
 
 Référence matérielle attendue : NVIDIA RTX 5090 32 Gio, compute capability sm_120. L'agent doit détecter et consigner le système hôte, le CPU, la RAM, le noyau WSL2, le driver et le toolkit réellement présents ; ne jamais supposer des valeurs fixes.
 
@@ -26,7 +26,7 @@ Architecture Clover à valider : 40 couches hybrides GDN/full attention, 256 exp
 5. Les tests CPU de référence et différentiels sont verts ; toutes les tolérances ont été définies avant la campagne.
 6. Le checkpoint et les fixtures nécessaires sont déjà disponibles localement ; ne pas lancer de téléchargement massif pendant le créneau GPU.
 7. Un préflight est présenté au propriétaire avec commandes exactes, ordre des tâches et budget VRAM maximal par tâche.
-8. Le propriétaire répond explicitement qu'il autorise cette session. En l'absence de réponse claire, ne rien lancer.
+8. **Chaque opération GPU/VRAM exige sa propre autorisation explicite, ponctuelle et préalable.** L'accord sur le préflight ou sur une première opération n'autorise jamais les suivantes. Avant chaque opération, l'agent doit présenter la commande exacte, le but, le budget VRAM maximal, la durée estimée, les conditions d'arrêt et l'état de la carte, puis attendre la réponse claire de l'utilisateur. En l'absence d'une nouvelle autorisation pour cette opération précise, ne rien lancer.
 
 ## Phase A — Préflight sans allocation CUDA
 
@@ -66,11 +66,12 @@ Pour chaque tâche, annoncer :
 
 ## Phase C — Exécution autorisée
 
-Après autorisation explicite :
+Pour chaque tâche séparément, après avoir demandé et reçu une autorisation explicite dédiée à cette tâche :
 - exécuter une seule tâche à la fois ;
 - ne jamais dépasser le budget souple de 26 Gio ni le plafond dur planifié de 28 Gio ;
 - conserver 4 Gio de réserve physique, sous réserve de l'usage externe réel ;
 - contrôler la VRAM avant/après chaque tâche ;
+- après chaque tâche, arrêter et demander une nouvelle autorisation avant de lancer la suivante ;
 - vérifier que tous les événements CUDA sont terminés et que les gardes mémoire sont libérées avant de poursuivre ;
 - interrompre la campagne au premier échec de sûreté, fuite, erreur driver/Xid/NVRM ou pression mémoire imprévue ;
 - ne pas relancer avec des tolérances modifiées et ne pas masquer un échec.
