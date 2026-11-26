@@ -1592,10 +1592,9 @@ mod tests {
         let cos = bf16_tensor(&device, vec![2, 4], &cos);
         let sin = bf16_tensor(&device, vec![2, 4], &sin);
         let output = rotary_embed_partial(&device, &input, &cos, &sin).unwrap();
-        assert_reference_close(
+        assert_bf16_reference_close(
             &values(&device, &output),
             crate::clover_gdn_upstream_fixtures::ROPE_OUTPUT,
-            1e-4,
         );
     }
 
