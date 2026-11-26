@@ -226,11 +226,47 @@ Nothing historical was rewritten or deleted; no pinned digest, shape, dtype or g
   its entries still verify; the script entry has been stale since `1916239`, before this replay). The
   new attestation is `m11.1-postfix-2026-11-26-logs.sha256`.
 
+## Final replay on the publication HEAD — 2026-11-26
+
+Third full replay of the same CPU-only protocol, run on branch `feat/m11-clover-foundation` at
+publication HEAD `580a8984cc8964496e04f39b420333eb9fa7903e` (remote HEAD verified before the run;
+no commit overwritten). Full report `m11.1-final-replay-2026-11-26.md`, artefacts prefixed
+`m11.1-final-2026-11-26-`, attestation `m11.1-final-2026-11-26-logs.sha256` (23 entries). Nothing
+historical was rewritten; no pinned digest, shape, dtype or golden fixture changed.
+
+- Streaming digest verification with production code: **28/28**, `artifact_sha256=verified`,
+  exit 0, 55 min 11,51 s (~20,94 MB/s), peak RSS 5 552 KiB, `payloads_read=false`,
+  `cuda_initialized=false`. Independent `sha256sum` pass: **28/28** equal to the pinned table and
+  byte-identical to both earlier passes (9 min 08 s, ~126,50 MB/s):
+  `m11.1-final-2026-11-26-digest-comparison.txt`.
+- Header inventory and arithmetic control hold unchanged: 26 shards + 2 sidecars, 813 tensors,
+  34,661,350,848 parameters, payload 69,322,701,696 bytes, `file == 8 + header + payload` for all
+  28 files, `payload == index.metadata.total_size`
+  (`m11.1-final-2026-11-26-arithmetic-control.txt`).
+- Metadata-only load plan: three runs byte-identical with SHA `ffb6c9655ab7b4f5441a4a679afd0508d3814c54feb4a872b2cd850f955ce022`
+  — **the same digest as the postfix pass**, i.e. plan bit-stable across campaigns;
+  `max_chunk_bytes=8388608` unchanged.
+- Negative gates T0–T3 and the F32-sidecar gate (T4) reproduced with rejection messages identical
+  to both published transcripts.
+- Tokenizer/chat-template audit regenerated field-for-field identical to the published ones; the
+  rebuilt fixture file is **byte-identical** to
+  `fixtures/clover-tokenizer-fixtures-postfix-2026-11-26.json` (parity 9/9, rejections 3/3). The
+  historical `fixtures/clover-tokenizer-fixtures.json` is deliberately left untouched to keep
+  `m11.1-checkpoint-2026-11-26-logs.sha256` verifiable (anomaly N4); the postfix file remains
+  the reference carrying the parity proof.
+- Rust gates: `cargo fmt --check`, `clippy --workspace --all-targets -D warnings`,
+  `cargo test --workspace --all-targets --locked` green on stable and on 1.86.0 (284 tests, 0
+  failures, 12 ignored); Clover/checkpoint scope 28 tests on each toolchain.
+
 ## M11.1 gate status — 2026-11-26
 
 Raw authentication of the pinned revision, the complete 28-file digest verification, the tensor-name/shape/dtype
-inventory, the metadata-only load plan and the tokenizer/chat-template audit are **complete and evidenced, twice**:
-once at `f930fbf`/`cd811df` and once post-corrective at `443b1c4` (section above). What remains for M11.1 is the
+inventory, the metadata-only load plan and the tokenizer/chat-template audit are **complete and evidenced, three
+times**: once at `f930fbf`/`cd811df`, once post-corrective at `443b1c4` (sections above) and once final on the
+publication HEAD `580a8984` (final replay section above), with bit-identical load plan, fixtures and digests
+across the last two passes. Attestations `m11.1-checkpoint-2026-11-26-logs.sha256` (historical, 17/18 — see N4),
+`m11.1-postfix-2026-11-26-logs.sha256` (29/29) and `m11.1-final-2026-11-26-logs.sha256` (23/23).
+What remains for M11.1 is the
 architect's review of PR #53 and decision **A2** (the three distinct EOS/PAD layers, draft recorded in
 `docs/audits/m11-architect-decisions.md`, still unapproved) — not missing evidence. M11.1 does not claim an
 executable Clover model: no forward pass, no device execution and no memory-admission path exist yet; those belong

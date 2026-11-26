@@ -1,0 +1,554 @@
+### tokenizer audit replay — 2026-11-26T23:00:44+01:00
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+[transformers] You are using a model of type `clover_moe` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+{
+ "env": {
+  "python": "3.12.3",
+  "transformers": "5.19.0",
+  "tokenizers": "0.23.3",
+  "safetensors": "0.8.0",
+  "jinja2": "3.1.6",
+  "cuda_available": false,
+  "checkpoint_dir": "/mnt/c/Users/sjteb/.cache/huggingface/hub/hub/models--Diffuspace--Clover-35B-A3B-Preview/snapshots/4b0402b65e523d0183a14c431955438714cb16ff",
+  "torch": "absent"
+ },
+ "config_eos": {
+  "config.eos_token_id": 248044,
+  "config.pad_token_id": null,
+  "config.mask_token": null,
+  "config.mask_token_id": 151669,
+  "config.vocab_size": 248320,
+  "config.model_type": "clover_moe",
+  "config.architectures": [
+   "CloverMoeModelLM"
+  ],
+  "generation_config": {
+   "max_new_tokens": 24576,
+   "do_sample": false,
+   "use_cache": true,
+   "eos_token_id": [
+    248046,
+    248044
+   ],
+   "pad_token_id": 248044,
+   "transformers_version": "5.19.0",
+   "bos_token_id": 248044,
+   "presence_penalty": 0.9,
+   "frequency_penalty": 0.0,
+   "repetition_penalty": 1.05,
+   "dllm_length_penalty": 10.0,
+   "dllm_length_penalty_start": 8192,
+   "dllm_length_penalty_window": 8192,
+   "dllm_think_end_bias": 10.0,
+   "dllm_think_end_start": 4096,
+   "dllm_think_end_window": 4096,
+   "dllm_think_end_token_id": 248069,
+   "temperature": 1.0,
+   "top_k": null,
+   "top_p": 1.0
+  },
+  "tokenizer_config.eos_token": "<|im_end|>",
+  "tokenizer_config.pad_token": "<|endoftext|>",
+  "tokenizer_config.mask_token": "<|mask|>",
+  "tokenizer_config.model_max_length": 131072,
+  "tokenizer_config.tokenizer_class": "Qwen2Tokenizer"
+ },
+ "tokenizer": {
+  "class": "Qwen2Tokenizer",
+  "vocab_size_len": 248077,
+  "vocab_size_size": 248044,
+  "model_max_length": 131072,
+  "eos_token": "<|im_end|>",
+  "eos_token_id": 248046,
+  "pad_token": "<|endoftext|>",
+  "pad_token_id": 248044,
+  "all_special_tokens": [
+   "<|endoftext|>",
+   "<|im_end|>",
+   "<|mask|>"
+  ],
+  "all_special_ids": [
+   151669,
+   248044,
+   248046
+  ]
+ },
+ "token_id_map": [
+  {
+   "id": 248044,
+   "expected_string": "<|endoftext|>",
+   "id->string": "<|endoftext|>",
+   "string->id": 248044,
+   "tokenize_to_single_id": true,
+   "tokenize_ids": [
+    248044
+   ],
+   "ok": true
+  },
+  {
+   "id": 248045,
+   "expected_string": "<|im_start|>",
+   "id->string": "<|im_start|>",
+   "string->id": 248045,
+   "tokenize_to_single_id": true,
+   "tokenize_ids": [
+    248045
+   ],
+   "ok": true
+  },
+  {
+   "id": 248046,
+   "expected_string": "<|im_end|>",
+   "id->string": "<|im_end|>",
+   "string->id": 248046,
+   "tokenize_to_single_id": true,
+   "tokenize_ids": [
+    248046
+   ],
+   "ok": true
+  },
+  {
+   "id": 151669,
+   "expected_string": "<|mask|>",
+   "id->string": "<|mask|>",
+   "string->id": 151669,
+   "tokenize_to_single_id": true,
+   "tokenize_ids": [
+    151669
+   ],
+   "ok": true
+  },
+  {
+   "id": 248068,
+   "expected_string": "<think>",
+   "id->string": "<think>",
+   "string->id": 248068,
+   "tokenize_to_single_id": true,
+   "tokenize_ids": [
+    248068
+   ],
+   "ok": true
+  },
+  {
+   "id": 248069,
+   "expected_string": "</think>",
+   "id->string": "</think>",
+   "string->id": 248069,
+   "tokenize_to_single_id": true,
+   "tokenize_ids": [
+    248069
+   ],
+   "ok": true
+  }
+ ],
+ "mask_token_registration": {
+  "in_added_tokens": true,
+  "added_entry": {
+   "id": 151669,
+   "content": "<|mask|>",
+   "single_word": false,
+   "lstrip": false,
+   "rstrip": false,
+   "normalized": false,
+   "special": true
+  },
+  "registered_as_special_in_fast": true,
+  "in_additional_special_tokens": false,
+  "vocab_index": 151669,
+  "byte_decoder_present": "ByteLevel",
+  "not_split": true,
+  "unk_id": null
+ },
+ "remapping_151669": {
+  "merges_total": 247581,
+  "token_at_151669": "<|mask|>",
+  "merges_referencing_mask_or_151669": [],
+  "merges_referencing_count": 0,
+  "encode_decode_roundtrip": "<|mask|>",
+  "special_tokens_defined": [
+   "<|endoftext|>",
+   "<|im_start|>",
+   "<|im_end|>",
+   "<|object_ref_start|>",
+   "<|object_ref_end|>",
+   "<|box_start|>",
+   "<|box_end|>",
+   "<|quad_start|>",
+   "<|quad_end|>",
+   "<|vision_start|>",
+   "<|vision_end|>",
+   "<|vision_pad|>",
+   "<|image_pad|>",
+   "<|video_pad|>",
+   "<tool_call>",
+   "</tool_call>",
+   "<|fim_prefix|>",
+   "<|fim_middle|>",
+   "<|fim_suffix|>",
+   "<|fim_pad|>",
+   "<|repo_name|>",
+   "<|file_sep|>",
+   "<tool_response>",
+   "</tool_response>",
+   "<think>",
+   "</think>",
+   "<|audio_start|>",
+   "<|audio_end|>",
+   "<tts_pad>",
+   "<tts_text_bos>",
+   "<tts_text_eod>",
+   "<tts_text_bos_single>",
+   "<|audio_pad|>",
+   "<|mask|>"
+  ]
+ },
+ "template": {
+  "bytes": 7912,
+  "sha256": "01094df7cd8905d1220ea8b31e4f1086dc9bedf0305d3c2fa6578b5fa33b6815",
+  "declared_in_tokenizer_config": false,
+  "mentions_image": false,
+  "mentions_video": false,
+  "mentions_audio": false,
+  "mentions_pixels_or_patch": false,
+  "vision_special_tokens_present": [],
+  "thinking_switch_tokens": {
+   "<think>": false,
+   "</think>": false,
+   "think": true,
+   "nothink": false
+  }
+ },
+ "chat_template_fixtures": [
+  {
+   "fixture": "user_simple",
+   "messages": [
+    {
+     "role": "user",
+     "content": "Bonjour, presente-toi en une phrase."
+    }
+   ],
+   "kw": {},
+   "generation_prompt": true,
+   "rendered": "<|im_start|>user\nBonjour, presente-toi en une phrase.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+   "ids": [
+    248045,
+    846,
+    198,
+    78768,
+    11,
+    51385,
+    4534,
+    72,
+    644,
+    5992,
+    16629,
+    13,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    248068,
+    198
+   ],
+   "n_tokens": 19
+  },
+  {
+   "fixture": "user_simple",
+   "messages": [
+    {
+     "role": "user",
+     "content": "Bonjour, presente-toi en une phrase."
+    }
+   ],
+   "kw": {},
+   "generation_prompt": false,
+   "rendered": "<|im_start|>user\nBonjour, presente-toi en une phrase.<|im_end|>\n",
+   "ids": [
+    248045,
+    846,
+    198,
+    78768,
+    11,
+    51385,
+    4534,
+    72,
+    644,
+    5992,
+    16629,
+    13,
+    248046,
+    198
+   ],
+   "n_tokens": 14
+  },
+  {
+   "fixture": "system_user_assistant",
+   "messages": [
+    {
+     "role": "system",
+     "content": "Tu reponds en francais, factuellement."
+    },
+    {
+     "role": "user",
+     "content": "Que vaut 2+2 ?"
+    },
+    {
+     "role": "assistant",
+     "content": "4."
+    }
+   ],
+   "kw": {},
+   "generation_prompt": true,
+   "rendered": "<|im_start|>system\nTu reponds en francais, factuellement.<|im_end|>\n<|im_start|>user\nQue vaut 2+2 ?<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n4.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+   "ids": [
+    248045,
+    8678,
+    198,
+    51193,
+    311,
+    3396,
+    82,
+    644,
+    48642,
+    11,
+    2029,
+    74053,
+    13,
+    248046,
+    198,
+    248045,
+    846,
+    198,
+    24955,
+    197288,
+    220,
+    17,
+    10,
+    17,
+    907,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    248068,
+    271,
+    248069,
+    271,
+    19,
+    13,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    248068,
+    198
+   ],
+   "n_tokens": 43
+  },
+  {
+   "fixture": "system_user_assistant",
+   "messages": [
+    {
+     "role": "system",
+     "content": "Tu reponds en francais, factuellement."
+    },
+    {
+     "role": "user",
+     "content": "Que vaut 2+2 ?"
+    },
+    {
+     "role": "assistant",
+     "content": "4."
+    }
+   ],
+   "kw": {},
+   "generation_prompt": false,
+   "rendered": "<|im_start|>system\nTu reponds en francais, factuellement.<|im_end|>\n<|im_start|>user\nQue vaut 2+2 ?<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n4.<|im_end|>\n",
+   "ids": [
+    248045,
+    8678,
+    198,
+    51193,
+    311,
+    3396,
+    82,
+    644,
+    48642,
+    11,
+    2029,
+    74053,
+    13,
+    248046,
+    198,
+    248045,
+    846,
+    198,
+    24955,
+    197288,
+    220,
+    17,
+    10,
+    17,
+    907,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    248068,
+    271,
+    248069,
+    271,
+    19,
+    13,
+    248046,
+    198
+   ],
+   "n_tokens": 38
+  },
+  {
+   "fixture": "user_thinking_enabled",
+   "messages": [
+    {
+     "role": "user",
+     "content": "Compte les voyelles de 'diffusion'."
+    }
+   ],
+   "kw": {
+    "enable_thinking": true
+   },
+   "generation_prompt": true,
+   "rendered": "<|im_start|>user\nCompte les voyelles de 'diffusion'.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+   "ids": [
+    248045,
+    846,
+    198,
+    1057,
+    23395,
+    3424,
+    22345,
+    35588,
+    401,
+    359,
+    13102,
+    7321,
+    4282,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    248068,
+    198
+   ],
+   "n_tokens": 20
+  },
+  {
+   "fixture": "user_thinking_enabled",
+   "messages": [
+    {
+     "role": "user",
+     "content": "Compte les voyelles de 'diffusion'."
+    }
+   ],
+   "kw": {
+    "enable_thinking": true
+   },
+   "generation_prompt": false,
+   "rendered": "<|im_start|>user\nCompte les voyelles de 'diffusion'.<|im_end|>\n",
+   "ids": [
+    248045,
+    846,
+    198,
+    1057,
+    23395,
+    3424,
+    22345,
+    35588,
+    401,
+    359,
+    13102,
+    7321,
+    4282,
+    248046,
+    198
+   ],
+   "n_tokens": 15
+  },
+  {
+   "fixture": "user_thinking_disabled",
+   "messages": [
+    {
+     "role": "user",
+     "content": "Compte les voyelles de 'diffusion'."
+    }
+   ],
+   "kw": {
+    "enable_thinking": false
+   },
+   "generation_prompt": true,
+   "rendered": "<|im_start|>user\nCompte les voyelles de 'diffusion'.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+   "ids": [
+    248045,
+    846,
+    198,
+    1057,
+    23395,
+    3424,
+    22345,
+    35588,
+    401,
+    359,
+    13102,
+    7321,
+    4282,
+    248046,
+    198,
+    248045,
+    74455,
+    198,
+    248068,
+    271,
+    248069,
+    271
+   ],
+   "n_tokens": 22
+  },
+  {
+   "fixture": "user_thinking_disabled",
+   "messages": [
+    {
+     "role": "user",
+     "content": "Compte les voyelles de 'diffusion'."
+    }
+   ],
+   "kw": {
+    "enable_thinking": false
+   },
+   "generation_prompt": false,
+   "rendered": "<|im_start|>user\nCompte les voyelles de 'diffusion'.<|im_end|>\n",
+   "ids": [
+    248045,
+    846,
+    198,
+    1057,
+    23395,
+    3424,
+    22345,
+    35588,
+    401,
+    359,
+    13102,
+    7321,
+    4282,
+    248046,
+    198
+   ],
+   "n_tokens": 15
+  }
+ ]
+}
+tok_rc=0

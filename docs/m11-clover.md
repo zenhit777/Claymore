@@ -2,7 +2,7 @@
 
 ## Statut
 
-M11 est découpé en cinq incréments (#48 à #52). **M11.1 est implémenté côté code CPU-only dans la PR #53** et ses preuves locales ont été **rafraîchies après correctifs** le 2026-11-26 : la validation de cette étape n'est plus conditionnée qu'à la revue architecturale et à la décision A2. Cette étape établit les contrats de configuration, la provenance, l'inventaire Safetensors et un plan de lecture metadata-only. Elle ne constitue pas une compatibilité Clover exécutable et ne lance aucun forward pass.
+M11 est découpé en cinq incréments (#48 à #52). **M11.1 est implémenté côté code CPU-only dans la PR #53** et ses preuves locales ont été **rafraîchies après correctifs puis rejouées sur le HEAD de publication** le 2026-11-26 (`m11.1-final-replay-2026-11-26.md`) : la validation de cette étape n'est plus conditionnée qu'à la revue architecturale et à la décision A2. Cette étape établit les contrats de configuration, la provenance, l'inventaire Safetensors et un plan de lecture metadata-only. Elle ne constitue pas une compatibilité Clover exécutable et ne lance aucun forward pass.
 
 - PR #53 : `feat/m11-clover-foundation` → `main`, ouverte. L'API GitHub la renvoie **non draft** au 2026-11-26 alors que ce document la décrivait en draft : écart consigné (`m11.1-cpu-evidence-refresh-2026-11-26.md`, N2), à trancher par le titulaire de la PR.
 - Issue de suivi M11.1 : #48.
@@ -16,7 +16,7 @@ M11 est découpé en cinq incréments (#48 à #52). **M11.1 est implémenté cô
 - Rapport technique : [Clover](https://arxiv.org/abs/2611.24636).
 - Manifeste : `docs/audits/clover-upstream-manifest.md`.
 
-L'audit réel publié rapporte 13/13 empreintes non-Xet et 28/28 empreintes Safetensors concordantes avec la table Xet. Il relève 813 tenseurs, 34 661 350 848 paramètres et 69 322 701 696 octets de payload. Ces preuves ont été **rejouées en post-correctif** le 2026-11-26 sur le HEAD `443b1c4d` : hachage intégral Claymore des 28 artefacts (`artifact_sha256=verified`, 55 min 08,79 s, 20,95 Mo/s, `payloads_read=false`), gates négatives T0–T3 reproduites, plan de chargement exercé (28 shards / 813 tenseurs / 8 845 chunks, 8 MiB maximum, déterministe), parité réelle de tokenisation directe ↔ rendu retokenisé sur les 9 cas positifs. Détail et journaux dans `docs/audits/m11.1-cpu-evidence-refresh-2026-11-26.md` et l'addendum `docs/audits/m11.1-audit-corrections-2026-11-26.md` § 10.
+L'audit réel publié rapporte 13/13 empreintes non-Xet et 28/28 empreintes Safetensors concordantes avec la table Xet. Il relève 813 tenseurs, 34 661 350 848 paramètres et 69 322 701 696 octets de payload. Ces preuves ont été **rejouées en post-correctif** le 2026-11-26 sur le HEAD `443b1c4d`, puis **une troisième fois sur le HEAD de publication `580a8984`** : hachage intégral Claymore des 28 artefacts (`artifact_sha256=verified`, 55 min 08,79 s puis 55 min 11,51 s, ~20,9 Mo/s, `payloads_read=false`), hachage indépendant `sha256sum` 28/28 sur les trois passes, gates négatives T0–T3 et porte BF16 de sidecar (T4) reproduites, plan de chargement exercé (28 shards / 813 tenseurs / 8 845 chunks, 8 MiB maximum, déterministe, byte-identique entre passes postfix et finale), parité réelle de tokenisation directe ↔ rendu retokenisé sur les 9 cas positifs et fixtures byte-identiques entre ces deux passes. Détail et journaux : `docs/audits/m11.1-final-replay-2026-11-26.md`, `docs/audits/m11.1-cpu-evidence-refresh-2026-11-26.md` et l'addendum `docs/audits/m11.1-audit-corrections-2026-11-26.md` § 10–11.
 
 Ne jamais utiliser `main` comme source reproductible pour le checkpoint et ne pas déclarer Clover pris en charge tant que les gates de provenance, de schéma, de tokenisation et d'exécution n'ont pas été satisfaites.
 
@@ -84,13 +84,13 @@ Le plan de chargement est **metadata-only** : il ne lit pas les payloads, n'allo
 
 ## Validation et gates restantes
 
-La CI Rust stable et Rust 1.86 a réussi sur le code corrigé, notamment le correctif SHA-256, le plan chunk/shard et le contrôle BF16 des sidecars ; elle est **verte sur le HEAD `443b1c4d`** (run [45859382944](https://github.com/zenhit777/Claymore/actions/runs/45859382944)).
+La CI Rust stable et Rust 1.86 est **verte sur le HEAD `443b1c4d`** (run [45859382944](https://github.com/zenhit777/Claymore/actions/runs/45859382944)) ; la réplique locale complète (`cargo fmt --check`, `clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace --all-targets --locked` sur stable et 1.86.0 : 284 tests, 0 échec, 12 ignorés) est **verte sur le HEAD de publication** ; la CI GitHub sur ce HEAD est consignée dans le relevé de suivi dès les deux jobs terminés.
 
-Items de validation du rafraîchissement CPU-only (`docs/audits/prompts/m11.1-cpu-evidence-refresh-agent.md`), exécutés le 2026-11-26 :
+Items de validation du rafraîchissement CPU-only (`docs/audits/prompts/m11.1-cpu-evidence-refresh-agent.md`), exécutés le 2026-11-26 puis rejoués sur le HEAD de publication :
 
-1. ~~rejouer le hachage complet de 69,3 GB avec la nouvelle primitive SHA-256~~ — **fait**, 28/28, exit 0, 55 min 08,79 s ;
-2. ~~régénérer les fixtures tokenizer/template et vérifier la parité entre tokenisation directe et rendu retokenisé~~ — **fait**, 9/9 identités d'identifiants, 3/3 rejets aux motifs attendus ; un défaut d'outillage du script (`BatchEncoding` itéré par `list`) a été trouvé et corrigé au passage ;
-3. ~~mettre à jour les journaux/checksums sans modifier les empreintes épinglées~~ — **fait** sous le préfixe `m11.1-postfix-2026-11-26-`, attestation historique laissée intacte ;
+1. ~~rejouer le hachage complet de 69,3 GB avec la nouvelle primitive SHA-256~~ — **fait deux fois** : 28/28, exit 0, 55 min 08,79 s (postfix) puis 55 min 11,51 s (finale), avec contrôle croisé `sha256sum` 28/28 ;
+2. ~~régénérer les fixtures tokenizer/template et vérifier la parité entre tokenisation directe et rendu retokenisé~~ — **fait deux fois**, 9/9 identités d'identifiants, 3/3 rejets aux motifs attendus, fixtures byte-identiques entre les deux passes ; un défaut d'outillage du script (`BatchEncoding` itéré par `list`) avait été trouvé et corrigé au passage postfix ;
+3. ~~mettre à jour les journaux/checksums sans modifier les empreintes épinglées~~ — **fait** sous les préfixes `m11.1-postfix-2026-11-26-` et `m11.1-final-2026-11-26-`, attestations historiques laissées intactes et revérifiées (29/29 postfix ; 17/18 checkpoint, écart N4 préexistant et documenté) ;
 4. **restant** : obtenir le verdict explicite de l'architecte sur la PR #53 et la décision A2.
 
-Aucun forward pass, aucune génération, aucun kernel CUDA ni aucune validation RTX 5090 n'est requis pour M11.1. La campagne RTX appartient à #52, après les incréments CPU. Voir `docs/audits/m11.1-audit-corrections-2026-11-26.md` et `docs/audits/prompts/m11.1-cpu-evidence-refresh-agent.md`.
+Aucun forward pass, aucune génération, aucun kernel CUDA ni aucune validation RTX 5090 n'est requis pour M11.1. La campagne RTX appartient à #52, après les incréments CPU. Voir `docs/audits/m11.1-final-replay-2026-11-26.md`, `docs/audits/m11.1-audit-corrections-2026-11-26.md` et `docs/audits/prompts/m11.1-cpu-evidence-refresh-agent.md`.

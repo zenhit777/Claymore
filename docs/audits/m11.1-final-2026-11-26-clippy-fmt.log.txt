@@ -1,0 +1,7 @@
+### fmt+clippy — 2026-11-26T23:01:16+01:00
+fmt_rc=0
+   = note: `cargo::unused_dependencies` is set to `warn` by default
+help: consider removing the dependency on `claymore-core`
+warning: `claymore-cuda` (manifest) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.14s
+clippy_rc=0
