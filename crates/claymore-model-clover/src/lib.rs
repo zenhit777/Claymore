@@ -4,11 +4,13 @@
 //! scheduling, and memory admission remain owned by the shared Claymore crates.
 
 pub mod checkpoint;
+pub mod gdn;
 pub mod config;
 pub use checkpoint::{
     CloverCheckpointError, CloverCheckpointInventory, CloverInventoryIdentity, CloverLoadPlan,
     CloverShardIndex, ShardLoadPlan, ShardSummary, TensorChunkPlan, TensorLoadPlan, TensorSummary,
 };
+pub use gdn::{block_preview, recurrent_commit, GdnDimensions, GdnError};
 pub use config::{
     CloverConfig, CloverConfigError, LayerType, CONFIG_REVISION, CONFIG_SHA256, INDEX_SHA256,
     MODEL_ID,
