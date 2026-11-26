@@ -660,16 +660,6 @@ mod tests {
         }
     }
 
-    fn assert_reference_close(actual: &[f32], expected: &[f32], tolerance: f32) {
-        assert_eq!(actual.len(), expected.len());
-        for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
-            assert!(
-                (actual - expected).abs() <= tolerance,
-                "reference mismatch at {index}: actual={actual:?}, expected={expected:?}, tolerance={tolerance}"
-            );
-        }
-    }
-
     #[test]
     fn clover_zero_centered_rms_norm_matches_pinned_upstream_cpu_fixture() {
         let device = CpuDevice::new();
