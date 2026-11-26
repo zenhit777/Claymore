@@ -35,6 +35,15 @@ pub const VRAM_HEADROOM_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// Per-layer KV cache entry on host: `(kv_heads, head_dim, rows, keys_bits, values_bits)`.
 pub type KvLayerEntry = (usize, usize, usize, Vec<Bf16>, Vec<Bf16>);
 
+/// DiffusionGemma's decoder attends bidirectionally over the complete encoder
+/// cache and canvas, including on layers whose encoder counterpart is sliding.
+/// The pinned upstream mask builder uses local_size only for mask-elision
+/// decisions when mask_function is bidirectional; it does not apply a window.
+/// Keep the decoder policy explicit so it cannot inherit the encoder window.
+fn decoder_attention_sliding_window() -> Option<usize> {
+    None
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum GraphError {
     #[error(transparent)]
@@ -1306,11 +1315,10 @@ impl CudaGraph {
             };
             let rope = if global { 1_000_000.0f32 } else { 10_000.0f32 };
             let partial = if global { Some(0.25f32) } else { None };
-            let sliding = if global {
-                None
-            } else {
-                Some(text.sliding_window.unwrap_or(1024))
-            };
+            // The pinned DiffusionGemma decoder is bidirectional for every
+            // layer. local_size on the upstream mask builder is only an
+            // optimization hint here, not a decoder sliding-window policy.
+            let sliding = decoder_attention_sliding_window();
             inputs = self.text_layer(
                 "decoder",
                 layer,
@@ -1584,6 +1592,28 @@ impl CudaGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decoder_attention_remains_bidirectional_past_encoder_window() {
+        let positions = [1024usize];
+        let kv_len = 2048usize;
+
+        // The decoder's policy must not inherit the 1024-token encoder window.
+        assert!(decoder_attention_sliding_window().is_none());
+        assert!(CudaGraph::build_mask(
+            &positions,
+            kv_len,
+            decoder_attention_sliding_window(),
+            false,
+        )
+        .is_none());
+
+        // Applying the encoder window would incorrectly hide distant keys.
+        let encoder_window = CudaGraph::build_mask(&positions, kv_len, Some(1024), false).unwrap();
+        assert_eq!(encoder_window[0], f32::NEG_INFINITY);
+        assert_eq!(encoder_window[1024], 0.0);
+        assert_eq!(encoder_window[2047], f32::NEG_INFINITY);
+    }
 
     #[test]
     // A `const { assert!.. }` block needs Rust 1.87; the MSRV is 1.86.
