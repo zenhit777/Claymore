@@ -247,8 +247,11 @@ pub fn rms_norm_silu_gate(
     }
     let shape = input.layout().shape();
     let width = *shape.last().ok_or(OpError::InvalidRank)?;
-    if scale.layout().shape() != [width] || gate.layout().shape() != shape {
+    if scale.layout().shape() != [width] {
         return Err(OpError::ScaleMismatch);
+    }
+    if gate.layout().shape() != shape {
+        return Err(OpError::ShapeMismatch);
     }
     let source = read_numeric(device, input)?;
     let weights = read_numeric(device, scale)?;
@@ -271,7 +274,11 @@ pub fn rms_norm_silu_gate(
         for index in 0..width {
             let normalized = src[index] * inv_rms * weights[index];
             let gate_value = gates[row_index * width + index];
-            let silu_gate = if gate_value >= 0.0 {
+            let silu_gate = if gate_value.is_nan() || gate_value == f32::INFINITY {
+                gate_value
+            } else if gate_value == f32::NEG_INFINITY {
+                -0.0
+            } else if gate_value >= 0.0 {
                 gate_value / (1.0 + (-gate_value).exp())
             } else {
                 let exponential = gate_value.exp();
