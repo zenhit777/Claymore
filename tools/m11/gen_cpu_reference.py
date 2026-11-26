@@ -314,7 +314,7 @@ def main() -> int:
     k_norm = rms_norm(attn_k_input, attn_k_weight, 1e-6, True)
     q_rot, q_cos, q_sin = rotary_partial(q_norm, torch.tensor([1, 2]), 10000.0, 0.5)
     k_rot, k_cos, k_sin = rotary_partial(k_norm, torch.tensor([0, 1, 2]), 10000.0, 0.5)
-    attn_v = (((torch.arange(48).reshape(3, 2, 4).float() % 19) - 9) / 20).to(torch.bfloat16)
+    attn_v = (((torch.arange(24).reshape(3, 2, 4).float() % 19) - 9) / 20).to(torch.bfloat16)
     attn_gate = (((torch.arange(128).reshape(2, 16, 4).float() % 11) - 5) / 8).to(torch.bfloat16)
     allow = torch.tensor([[[[True, True, False], [True, True, False]]]], dtype=torch.bool)
     q_heads = q_rot.permute(1, 0, 2).unsqueeze(0)
