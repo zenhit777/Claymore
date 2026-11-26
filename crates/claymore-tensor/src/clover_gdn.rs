@@ -673,7 +673,8 @@ mod tests {
             4,
             &[true, true, true],
             GdnOutputDType::F32,
-        ).unwrap();
+        )
+        .unwrap();
         assert!(output[0] > output[1] && output[1] > output[2]);
         assert_eq!(history, before);
     }
