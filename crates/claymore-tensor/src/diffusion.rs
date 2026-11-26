@@ -1073,7 +1073,7 @@ mod tests {
             &device,
             &rotary_embed_partial(&device, &input, &cos, &sin).unwrap(),
         );
-        assert_eq!(output, [-3.0, -4.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
+        assert_eq!(output, [-3.0, -4.0, 1.0, 2.0, 5.0, 6.0, 7.0, 8.0]);
     }
 
     #[test]
