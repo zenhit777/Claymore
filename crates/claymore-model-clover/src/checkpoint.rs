@@ -580,8 +580,22 @@ mod tests {
         ));
     }
 
+    fn write_synthetic_shard(root: &Path, filename: &str, tensor: &str) {
+        let header_json = format!(
+            r#"{{"{tensor}":{{"dtype":"BF16","shape":[2],"data_offsets":[0,4]}}}}"#
+        );
+        let mut header = header_json.into_bytes();
+        while header.len() % 8 != 0 {
+            header.push(b' ');
+        }
+        let mut bytes = (header.len() as u64).to_le_bytes().to_vec();
+        bytes.extend_from_slice(&header);
+        bytes.extend_from_slice(&[0, 0, 0, 0]);
+        fs::write(root.join(filename), bytes).unwrap();
+    }
+
     #[test]
-    fn inspect_validates_synthetic_shard_header_and_payload_accounting() {
+    fn inspect_validates_model_shard_and_indexed_gdn_sidecars() {
         let root = std::env::temp_dir().join(format!(
             "claymore-clover-index-{}-{}",
             std::process::id(),
@@ -589,27 +603,41 @@ mod tests {
         ));
         fs::create_dir_all(&root).unwrap();
 
-        let mut header =
-            br#"{"weight":{"dtype":"BF16","shape":[2],"data_offsets":[0,4]}}"#.to_vec();
-        while header.len() % 8 != 0 {
-            header.push(b' ');
-        }
-        let mut shard_bytes = (header.len() as u64).to_le_bytes().to_vec();
-        shard_bytes.extend_from_slice(&header);
-        shard_bytes.extend_from_slice(&[0, 0, 0, 0]);
-        fs::write(root.join("model-00001-of-00001.safetensors"), shard_bytes).unwrap();
+        write_synthetic_shard(
+            &root,
+            "model-00001-of-00001.safetensors",
+            "weight",
+        );
+        write_synthetic_shard(
+            &root,
+            "bd_gdn_conv_right_weight.safetensors",
+            "model.layers.0.linear_attn.conv_right_weight",
+        );
+        write_synthetic_shard(
+            &root,
+            "bd_gdn_softmax_scalars.safetensors",
+            "model.layers.0.linear_attn.bd_softmax_logit_scale",
+        );
         fs::write(
             root.join(INDEX_FILE),
-            br#"{"metadata":{"total_size":4,"total_parameters":2},"weight_map":{"weight":"model-00001-of-00001.safetensors"}}"#,
+            br#"{"metadata":{"total_size":12,"total_parameters":6},"weight_map":{"weight":"model-00001-of-00001.safetensors","model.layers.0.linear_attn.conv_right_weight":"bd_gdn_conv_right_weight.safetensors","model.layers.0.linear_attn.bd_softmax_logit_scale":"bd_gdn_softmax_scalars.safetensors"}}"#,
         )
         .unwrap();
 
         let inventory = CloverCheckpointInventory::inspect(&root).unwrap();
         assert_eq!(inventory.identity().shard_count, 1);
-        assert_eq!(inventory.identity().tensor_count, 1);
-        assert_eq!(inventory.identity().payload_bytes, 4);
-        assert_eq!(inventory.identity().parameter_count, 2);
+        assert_eq!(inventory.identity().sidecar_count, 2);
+        assert_eq!(inventory.identity().tensor_count, 3);
+        assert_eq!(inventory.identity().payload_bytes, 12);
+        assert_eq!(inventory.identity().parameter_count, 6);
         assert_eq!(inventory.tensor("weight").unwrap().shape, vec![2]);
+        assert_eq!(inventory.shard_summaries().len(), 3);
+        assert_eq!(
+            CloverCheckpointInventory::inspect_gdn_sidecars(&root)
+                .unwrap()
+                .len(),
+            2
+        );
         assert!(matches!(
             inventory.validate_pinned_geometry(),
             Err(CloverCheckpointError::PinnedShardCount {
