@@ -2,7 +2,7 @@
 
 ## Statut
 
-M11 est découpé en cinq incréments (#48 à #52). **M11.1 est implémenté côté code CPU-only dans la PR #53**, mais la validation de cette étape reste conditionnée au rafraîchissement local de certaines preuves et à la revue architecturale. Cette étape établit les contrats de configuration, la provenance, l'inventaire Safetensors et un plan de lecture metadata-only. Elle ne constitue pas une compatibilité Clover exécutable et ne lance aucun forward pass.
+M11 est suivi par cinq issues techniques (#48 à #52), qui restent rattachées à un seul objectif d'intégration Clover. **M11.1 est implémenté côté code CPU-only dans la PR #53**, mais sa validation reste conditionnée au rafraîchissement de preuves locales et à la revue architecturale. **M11.2 est en cours dans la PR #54** : les références CPU GDN, attention, RoPE et contrats numériques sont développés dans `claymore-tensor`, sans moteur parallèle. Aucune compatibilité Clover exécutable n'est encore revendiquée.
 
 - PR #53 : `feat/m11-clover-foundation` → `main`, toujours ouverte et en draft jusqu'à la clôture des gates documentées.
 - Issue de suivi M11.1 : #48.
@@ -73,6 +73,23 @@ Le socle Clover comprend :
 - les scripts d'audit tokenizer/template, les fixtures et les démonstrations fail-closed T0–T3.
 
 Le plan de chargement est **metadata-only** : il ne lit pas les payloads, n'alloue aucun tenseur, ne réserve aucune mémoire et n'initialise aucun device. Il n'est pas encore un ordonnanceur de lecture, un transfert asynchrone ou une intégration au MemoryOrchestrator. Ces responsabilités appartiennent aux incréments suivants.
+
+## M11.2 — références CPU et contrats numériques (en cours, PR #54)
+
+La PR #54 est empilée sur la fondation #53 tant que celle-ci n'est pas intégrée. Elle reste en draft ; son code n'est pas considéré comme validé tant que la CI complète et les comparaisons différentielles ne sont pas vertes.
+
+Les primitives communes déjà présentes dans M8/M10 sont réutilisées : projections linéaires, RMSNorm, attention GQA, RoPE, masques, softmax, top-k et gather/scatter. Les ajouts Clover restent dans `claymore-tensor` :
+
+- activations SiLU/sigmoid, multiplication élémentaire et variantes RMSNorm zero-centered / RMSNorm-SiLU-gate ;
+- références GDN : gates `A_log` / `dt_bias`, transition récurrente FP32, convolution causale, convolution de preview avec right-context indépendant, preview softmax bidirectionnel et bucket historique ;
+- masque full-attention causal-prefix / bloc bidirectionnel en preview et causal au commit ;
+- gate de sortie full-attention et voie RoPE partielle qui ne tourne que les 25 % initiaux du head Clover.
+
+Le crate `claymore-model-clover` n'introduit pas de dépendance vers le crate tensor : il consommera ces primitives lorsqu'il assemblera le graphe. Les états de preview restent en lecture seule ; seul le commit causal avance les états persistants.
+
+**État de validation au HEAD documenté :** la première CI a révélé un conflit d'emprunt dans le décalage de l'historique convolutionnel et des écarts rustfmt. Le conflit a été corrigé avec `copy_within` et les corrections de format ont été appliquées. Aucun run CI vert n'est encore confirmé sur le HEAD actuel. Les fixtures différentielles indépendantes issues de l'implémentation upstream épinglée, ainsi que les tests workspace / Clippy / MSRV 1.86, restent obligatoires.
+
+Source d'implémentation : `modeling_clover_moe.py` à la révision `4b0402b65e523d0183a14c431955438714cb16ff`. Aucun kernel CUDA, benchmark ni accès VRAM n'est inclus.
 
 ## Contraintes d'intégration
 
