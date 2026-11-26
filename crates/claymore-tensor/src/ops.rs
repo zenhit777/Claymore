@@ -198,6 +198,91 @@ pub fn mul(device: &dyn Device, lhs: &Tensor, rhs: &Tensor) -> Result<Tensor, Op
     write_numeric(device, &values, lhs.layout().shape().to_vec(), dtype)
 }
 
+/// RMSNorm for Clover's zero-centered q/k scales: effective weight is
+/// `1 + checkpoint_weight` in FP32, with no intermediate BF16 rounding.
+pub fn rms_norm_zero_centered(
+    device: &dyn Device,
+    input: &Tensor,
+    scale: &Tensor,
+    epsilon: f32,
+) -> Result<Tensor, OpError> {
+    if !epsilon.is_finite() || epsilon < 0.0 {
+        return Err(OpError::InvalidEpsilon);
+    }
+    let shape = input.layout().shape();
+    let width = *shape.last().ok_or(OpError::InvalidRank)?;
+    if scale.layout().shape() != [width] {
+        return Err(OpError::ScaleMismatch);
+    }
+    let source = read_numeric(device, input)?;
+    let weights = read_numeric(device, scale)?;
+    if source.dtype() != weights.dtype() {
+        return Err(OpError::MixedDType);
+    }
+    let dtype = source.dtype();
+    let values = source.to_f32();
+    let weights = weights.to_f32();
+    let mut output = vec![0.0f32; values.len()];
+    for (src, dst) in values.chunks_exact(width).zip(output.chunks_exact_mut(width)) {
+        let mean_square = src.iter().map(|x| x * x).sum::<f32>() / width as f32;
+        let inv_rms = 1.0f32 / (mean_square + epsilon).sqrt();
+        for index in 0..width {
+            dst[index] = src[index] * inv_rms * (1.0 + weights[index]);
+        }
+    }
+    write_numeric(device, &output, shape.to_vec(), dtype)
+}
+
+/// Clover GDN RMSNorm with SiLU output gate. Normalization, scaling and gate
+/// multiplication remain FP32 until the single final output conversion.
+pub fn rms_norm_silu_gate(
+    device: &dyn Device,
+    input: &Tensor,
+    scale: &Tensor,
+    gate: &Tensor,
+    epsilon: f32,
+) -> Result<Tensor, OpError> {
+    if !epsilon.is_finite() || epsilon < 0.0 {
+        return Err(OpError::InvalidEpsilon);
+    }
+    let shape = input.layout().shape();
+    let width = *shape.last().ok_or(OpError::InvalidRank)?;
+    if scale.layout().shape() != [width] || gate.layout().shape() != shape {
+        return Err(OpError::ScaleMismatch);
+    }
+    let source = read_numeric(device, input)?;
+    let weights = read_numeric(device, scale)?;
+    let gates = read_numeric(device, gate)?;
+    if source.dtype() != weights.dtype() || source.dtype() != gates.dtype() {
+        return Err(OpError::MixedDType);
+    }
+    let dtype = source.dtype();
+    let values = source.to_f32();
+    let weights = weights.to_f32();
+    let gates = gates.to_f32();
+    let mut output = vec![0.0f32; values.len()];
+    for (row_index, (src, dst)) in values
+        .chunks_exact(width)
+        .zip(output.chunks_exact_mut(width))
+        .enumerate()
+    {
+        let mean_square = src.iter().map(|x| x * x).sum::<f32>() / width as f32;
+        let inv_rms = 1.0f32 / (mean_square + epsilon).sqrt();
+        for index in 0..width {
+            let normalized = src[index] * inv_rms * weights[index];
+            let gate_value = gates[row_index * width + index];
+            let silu_gate = if gate_value >= 0.0 {
+                gate_value / (1.0 + (-gate_value).exp())
+            } else {
+                let exponential = gate_value.exp();
+                gate_value * exponential / (1.0 + exponential)
+            };
+            dst[index] = normalized * silu_gate;
+        }
+    }
+    write_numeric(device, &output, shape.to_vec(), dtype)
+}
+
 /// Row-major matrix multiplication for rank-2 F32/BF16 tensors.
 ///
 /// Every product is accumulated in FP32 with `mul_add`, in the same index order
