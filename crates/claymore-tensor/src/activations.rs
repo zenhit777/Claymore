@@ -101,13 +101,12 @@ mod tests {
     #[test]
     fn silu_matches_reference_values_for_f32() {
         let device = CpuDevice::new();
-        let input = f32_tensor(
-            &device,
-            vec![7],
-            &[-10.0, -2.0, -0.0, 0.0, 1.0, 2.0, 10.0],
-        );
+        let input = f32_tensor(&device, vec![7], &[-10.0, -2.0, -0.0, 0.0, 1.0, 2.0, 10.0]);
         let output = read_f32(&device, &silu(&device, &input).unwrap());
-        for (actual, source) in output.iter().zip([-10.0f32, -2.0, -0.0, 0.0, 1.0, 2.0, 10.0]) {
+        for (actual, source) in output
+            .iter()
+            .zip([-10.0f32, -2.0, -0.0, 0.0, 1.0, 2.0, 10.0])
+        {
             let expected = silu_scalar(source);
             assert!((actual - expected).abs() <= 1e-6);
         }
