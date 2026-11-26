@@ -1,12 +1,12 @@
-use std::fs::File;
-use std::io::{self, Read};
-use std::path::Path;
-
 //! Dependency-free SHA-256 used to pin checkpoint metadata and artifacts.
 //!
 //! Tensor payloads are validated structurally (offsets, shapes, coverage) but
 //! are not individually hashed by the Safetensors format. Small metadata files
 //! with known digests are verified with this implementation.
+
+use std::fs::File;
+use std::io::{self, Read};
+use std::path::Path;
 
 const K: [u32; 64] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
