@@ -14,6 +14,11 @@ use claymore_checkpoint::sha256::{hex, sha256};
 use claymore_checkpoint::strict_json::Json;
 use thiserror::Error;
 
+use crate::config::{
+    GDN_CONV_KERNEL_DIM, GDN_KEY_HEAD_DIM, GDN_KEY_HEADS, GDN_VALUE_HEAD_DIM,
+    GDN_VALUE_HEADS, LAYER_COUNT,
+};
+
 pub const MAX_INDEX_BYTES: u64 = 16 * 1024 * 1024;
 pub const PINNED_SHARD_COUNT: usize = 26;
 pub const PINNED_TOTAL_SIZE_BYTES: u64 = 69_322_701_696;
@@ -408,6 +413,64 @@ impl CloverCheckpointInventory {
                 actual: self.identity.payload_bytes,
             });
         }
+
+        let channels = 2 * GDN_KEY_HEADS * GDN_KEY_HEAD_DIM
+            + GDN_VALUE_HEADS * GDN_VALUE_HEAD_DIM;
+        let conv_shape = vec![channels, 1, GDN_CONV_KERNEL_DIM - 1];
+        let scalar_shape = vec![GDN_VALUE_HEADS];
+        let mut expected_sidecars = BTreeMap::new();
+        for layer in 0..LAYER_COUNT {
+            // Clover uses three GDN layers followed by one full-attention layer.
+            if layer % 4 == 3 {
+                continue;
+            }
+            expected_sidecars.insert(
+                format!("model.layers.{layer}.linear_attn.conv_right_weight"),
+                (GDN_ASSETS[0], conv_shape.clone()),
+            );
+            for scalar in [
+                "bd_softmax_logit_scale",
+                "bd_softmax_history_bias",
+                "bd_softmax_history_c",
+            ] {
+                expected_sidecars.insert(
+                    format!("model.layers.{layer}.linear_attn.{scalar}"),
+                    (GDN_ASSETS[1], scalar_shape.clone()),
+                );
+            }
+        }
+
+        let actual_sidecars: BTreeSet<String> = self
+            .summaries
+            .iter()
+            .filter_map(|(name, tensor)| {
+                GDN_ASSETS
+                    .contains(&tensor.shard.as_str())
+                    .then_some(name.clone())
+            })
+            .collect();
+        let expected_names: BTreeSet<String> = expected_sidecars.keys().cloned().collect();
+        if actual_sidecars != expected_names {
+            return Err(CloverCheckpointError::PinnedSidecarTensorSetMismatch {
+                missing: expected_names.difference(&actual_sidecars).cloned().collect(),
+                unexpected: actual_sidecars.difference(&expected_names).cloned().collect(),
+            });
+        }
+        for (name, (expected_file, expected_shape)) in expected_sidecars {
+            let actual = self
+                .summaries
+                .get(&name)
+                .expect("sidecar tensor set validated above");
+            if actual.shard != expected_file || actual.shape != expected_shape {
+                return Err(CloverCheckpointError::PinnedSidecarTensorMismatch {
+                    tensor: name,
+                    expected_file: expected_file.to_owned(),
+                    actual_file: actual.shard.clone(),
+                    expected_shape,
+                    actual_shape: actual.shape.clone(),
+                });
+            }
+        }
         Ok(())
     }
 
@@ -563,6 +626,19 @@ pub enum CloverCheckpointError {
     PinnedSidecarCount { expected: usize, actual: usize },
     #[error("pinned Clover requires {expected} payload bytes, found {actual}")]
     PinnedTotalSize { expected: u64, actual: u64 },
+    #[error("pinned GDN sidecar tensor set mismatch (missing={missing:?}, unexpected={unexpected:?})")]
+    PinnedSidecarTensorSetMismatch {
+        missing: Vec<String>,
+        unexpected: Vec<String>,
+    },
+    #[error("pinned GDN tensor {tensor} mismatch: expected {expected_file} {expected_shape:?}, got {actual_file} {actual_shape:?}")]
+    PinnedSidecarTensorMismatch {
+        tensor: String,
+        expected_file: String,
+        actual_file: String,
+        expected_shape: Vec<usize>,
+        actual_shape: Vec<usize>,
+    },
     #[error("invalid GDN sidecar tensor {tensor} in {file}")]
     InvalidSidecarTensor { file: String, tensor: String },
 }
