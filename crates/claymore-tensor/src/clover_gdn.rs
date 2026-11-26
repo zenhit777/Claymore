@@ -103,10 +103,10 @@ pub fn gdn_gates(
 /// Build Clover full-attention additive mask for one active block.
 ///
 /// Prefix keys are visible only when marked valid. During preview every valid
-/// block key is visible to every valid query (bidirectional denoising). During
-/// commit, block keys are causal within the current block. Invalid query rows
-/// and invalid keys are fully masked; the attention reference maps an all-masked
-/// row to zero probabilities, matching Clover's eager backend.
+/// block key is visible to every query (bidirectional denoising). During commit,
+/// block keys are causal within the current block and invalid query rows are
+/// fully masked. Preview deliberately retains invalid query rows, matching the
+/// upstream boolean key mask; callers discard those positions at block resolution.
 pub fn full_attention_mask(
     prefix_valid: &[bool],
     block_valid: &[bool],
@@ -122,7 +122,7 @@ pub fn full_attention_mask(
         .ok_or(GdnError::SizeOverflow)?;
     let mut mask = vec![f32::NEG_INFINITY; len];
     for query in 0..query_tokens {
-        if !block_valid[query] {
+        if !preview && !block_valid[query] {
             continue;
         }
         let row = query * key_tokens;
@@ -621,7 +621,7 @@ mod tests {
         let preview = full_attention_mask(&[], &[true, false], true).unwrap();
         assert_eq!(
             preview,
-            vec![0.0, f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY]
+            vec![0.0, f32::NEG_INFINITY, 0.0, f32::NEG_INFINITY]
         );
         let commit = full_attention_mask(&[], &[true, false], false).unwrap();
         assert_eq!(
@@ -695,6 +695,10 @@ mod tests {
         let width = prefix.len() + block.len();
         assert_eq!(
             &preview[0..width],
+            &[0.0, f32::NEG_INFINITY, 0.0, 0.0, 0.0, f32::NEG_INFINITY]
+        );
+        assert_eq!(
+            &preview[width..],
             &[0.0, f32::NEG_INFINITY, 0.0, 0.0, 0.0, f32::NEG_INFINITY]
         );
         assert_eq!(
