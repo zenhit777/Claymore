@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use claymore_checkpoint::safetensors::{SafetensorsError, SafetensorsFile, WeightDType};
+use claymore_checkpoint::safetensors::{SafetensorsError, SafetensorsFile, WeightDType, MAX_CHUNK_BYTES};
 use claymore_checkpoint::sha256::{hex, sha256, sha256_file};
 use claymore_checkpoint::strict_json::Json;
 use thiserror::Error;
@@ -332,7 +332,48 @@ pub struct TensorSummary {
     pub shard: String,
     pub shape: Vec<usize>,
     pub dtype: WeightDType,
+    /// Offset relative to the Safetensors shard payload region.
+    pub data_start: u64,
     pub byte_len: u64,
+}
+
+/// One bounded read operation in a metadata-only Clover load plan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TensorChunkPlan {
+    /// Offset relative to the start of this tensor.
+    pub tensor_offset: u64,
+    /// Offset relative to the start of the shard payload region.
+    pub shard_payload_offset: u64,
+    /// Number of bytes to request; never exceeds MAX_CHUNK_BYTES.
+    pub length_bytes: usize,
+}
+
+/// Read plan for one tensor, ordered by its physical offset within the shard.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TensorLoadPlan {
+    pub name: String,
+    pub shape: Vec<usize>,
+    pub dtype: WeightDType,
+    pub byte_len: u64,
+    pub chunks: Vec<TensorChunkPlan>,
+}
+
+/// Read plan for one shard. Tensor and chunk order is deterministic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShardLoadPlan {
+    pub name: String,
+    pub file_bytes: u64,
+    pub header_bytes: u64,
+    pub payload_bytes: u64,
+    pub tensors: Vec<TensorLoadPlan>,
+}
+
+/// Metadata-only streaming plan. It allocates no tensor payload and touches no device.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CloverLoadPlan {
+    pub max_chunk_bytes: usize,
+    pub total_payload_bytes: u64,
+    pub shards: Vec<ShardLoadPlan>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -461,6 +502,7 @@ impl CloverCheckpointInventory {
                             shard: shard_name.clone(),
                             shape: entry.shape().to_vec(),
                             dtype: entry.dtype(),
+                            data_start: entry.data_start(),
                             byte_len: entry.byte_len(),
                         },
                     )
@@ -883,9 +925,74 @@ impl CloverCheckpointInventory {
         &self.shard_summaries
     }
 
+    /// Derive a deterministic shard/tensor/chunk read plan from validated headers.
+    ///
+    /// The plan contains only offsets and lengths. It performs no payload reads,
+    /// tensor allocation, CUDA initialization, or memory admission.
+    pub fn load_plan(&self) -> Result<CloverLoadPlan, CloverCheckpointError> {
+        let mut shards = Vec::with_capacity(self.shard_summaries.len());
+        for shard in &self.shard_summaries {
+            let mut tensor_refs: Vec<_> = self
+                .summaries
+                .iter()
+                .filter(|(_, tensor)| tensor.shard == shard.name)
+                .collect();
+            tensor_refs.sort_by_key(|(name, tensor)| (tensor.data_start, *name));
+
+            let mut tensors = Vec::with_capacity(tensor_refs.len());
+            for (name, tensor) in tensor_refs {
+                tensors.push(TensorLoadPlan {
+                    name: name.clone(),
+                    shape: tensor.shape.clone(),
+                    dtype: tensor.dtype,
+                    byte_len: tensor.byte_len,
+                    chunks: plan_tensor_chunks(tensor.data_start, tensor.byte_len)?,
+                });
+            }
+            shards.push(ShardLoadPlan {
+                name: shard.name.clone(),
+                file_bytes: shard.file_bytes,
+                header_bytes: shard.header_bytes,
+                payload_bytes: shard.payload_bytes,
+                tensors,
+            });
+        }
+
+        Ok(CloverLoadPlan {
+            max_chunk_bytes: MAX_CHUNK_BYTES,
+            total_payload_bytes: self.identity.payload_bytes,
+            shards,
+        })
+    }
+
     pub fn shard(&self, name: &str) -> Option<&SafetensorsFile> {
         self.shards.get(name)
     }
+}
+
+fn plan_tensor_chunks(
+    data_start: u64,
+    byte_len: u64,
+) -> Result<Vec<TensorChunkPlan>, CloverCheckpointError> {
+    let mut chunks = Vec::new();
+    let mut tensor_offset = 0u64;
+    while tensor_offset < byte_len {
+        let remaining = byte_len - tensor_offset;
+        let length_bytes = usize::try_from(remaining.min(MAX_CHUNK_BYTES as u64))
+            .map_err(|_| CloverCheckpointError::SizeOverflow)?;
+        let shard_payload_offset = data_start
+            .checked_add(tensor_offset)
+            .ok_or(CloverCheckpointError::SizeOverflow)?;
+        chunks.push(TensorChunkPlan {
+            tensor_offset,
+            shard_payload_offset,
+            length_bytes,
+        });
+        tensor_offset = tensor_offset
+            .checked_add(length_bytes as u64)
+            .ok_or(CloverCheckpointError::SizeOverflow)?;
+    }
+    Ok(chunks)
 }
 
 fn require_only_fields(
@@ -1129,6 +1236,57 @@ mod tests {
             })
         ));
 
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn load_plan_is_deterministic_and_splits_large_tensors_into_bounded_chunks() {
+        let chunks = plan_tensor_chunks(128, (MAX_CHUNK_BYTES as u64) * 2 + 7).unwrap();
+        assert_eq!(chunks.len(), 3);
+        assert_eq!(chunks[0].tensor_offset, 0);
+        assert_eq!(chunks[0].shard_payload_offset, 128);
+        assert_eq!(chunks[0].length_bytes, MAX_CHUNK_BYTES);
+        assert_eq!(chunks[1].tensor_offset, MAX_CHUNK_BYTES as u64);
+        assert_eq!(chunks[1].shard_payload_offset, 128 + MAX_CHUNK_BYTES as u64);
+        assert_eq!(chunks[1].length_bytes, MAX_CHUNK_BYTES);
+        assert_eq!(chunks[2].tensor_offset, (MAX_CHUNK_BYTES as u64) * 2);
+        assert_eq!(chunks[2].shard_payload_offset, 128 + (MAX_CHUNK_BYTES as u64) * 2);
+        assert_eq!(chunks[2].length_bytes, 7);
+        assert!(chunks.iter().all(|chunk| chunk.length_bytes <= MAX_CHUNK_BYTES));
+
+        let root = std::env::temp_dir().join(format!(
+            "claymore-clover-plan-{}-{}",
+            std::process::id(),
+            NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        write_synthetic_shard(&root, "model-00001-of-00001.safetensors", "weight");
+        write_synthetic_shard(
+            &root,
+            "bd_gdn_conv_right_weight.safetensors",
+            "model.layers.0.linear_attn.conv_right_weight",
+        );
+        write_synthetic_shard(
+            &root,
+            "bd_gdn_softmax_scalars.safetensors",
+            "model.layers.0.linear_attn.bd_softmax_logit_scale",
+        );
+        fs::write(
+            root.join(INDEX_FILE),
+            br#"{"metadata":{"total_size":12,"total_parameters":6},"weight_map":{"weight":"model-00001-of-00001.safetensors","model.layers.0.linear_attn.conv_right_weight":"bd_gdn_conv_right_weight.safetensors","model.layers.0.linear_attn.bd_softmax_logit_scale":"bd_gdn_softmax_scalars.safetensors"}}"#,
+        ).unwrap();
+
+        let inventory = CloverCheckpointInventory::inspect(&root).unwrap();
+        let plan = inventory.load_plan().unwrap();
+        assert_eq!(plan.total_payload_bytes, 12);
+        assert_eq!(plan.max_chunk_bytes, MAX_CHUNK_BYTES);
+        assert_eq!(plan.shards.len(), 3);
+        let model = plan.shards.iter().find(|shard| shard.name == "model-00001-of-00001.safetensors").unwrap();
+        assert_eq!(model.tensors.len(), 1);
+        assert_eq!(model.tensors[0].name, "weight");
+        assert_eq!(model.tensors[0].chunks.len(), 1);
+        assert_eq!(model.tensors[0].chunks[0].length_bytes, 4);
+        assert_eq!(model.tensors[0].chunks[0].shard_payload_offset, 0);
         fs::remove_dir_all(root).unwrap();
     }
 
