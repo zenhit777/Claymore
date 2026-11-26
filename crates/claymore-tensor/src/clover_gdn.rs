@@ -706,6 +706,10 @@ mod tests {
             &[0.0, f32::NEG_INFINITY, 0.0, 0.0, 0.0, f32::NEG_INFINITY]
         );
         assert_eq!(
+            &preview[2 * width..],
+            &[0.0, f32::NEG_INFINITY, 0.0, 0.0, 0.0, f32::NEG_INFINITY]
+        );
+        assert_eq!(
             &commit[0..width],
             &[
                 0.0,
