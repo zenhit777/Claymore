@@ -30,6 +30,18 @@ pub enum LayerType {
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct CloverAutoMap {
+    #[serde(rename = "AutoConfig")]
+    pub auto_config: String,
+    #[serde(rename = "AutoModel")]
+    pub auto_model: String,
+    #[serde(rename = "AutoModelForCausalLM")]
+    pub auto_model_for_causal_lm: String,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct RopeParameters {
     pub partial_rotary_factor: f64,
     pub rope_theta: f64,
@@ -37,6 +49,7 @@ pub struct RopeParameters {
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct DenoisingConfig {
     pub algorithm: String,
     pub threshold: f64,
@@ -45,8 +58,10 @@ pub struct DenoisingConfig {
 /// The subset of Clover's upstream config that affects graph construction,
 /// weight interpretation, memory planning, or generation semantics.
 #[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct CloverConfig {
     pub architectures: Vec<String>,
+    pub auto_map: CloverAutoMap,
     pub attention_bias: bool,
     pub attention_dropout: f64,
     pub attn_output_gate: bool,
@@ -58,6 +73,7 @@ pub struct CloverConfig {
     pub head_dim: usize,
     pub hidden_act: String,
     pub hidden_size: usize,
+    pub initializer_range: f64,
     pub layer_types: Vec<LayerType>,
     pub linear_conv_kernel_dim: usize,
     pub linear_key_head_dim: usize,
@@ -133,6 +149,9 @@ impl CloverConfig {
         if !is_bf16(&self.dtype) {
             return Err(CloverConfigError::UnsupportedDType(self.dtype.clone()));
         }
+        if !self.initializer_range.is_finite() || self.initializer_range <= 0.0 {
+            return Err(CloverConfigError::InvalidFloat("initializer_range"));
+        }
         if !self.rms_norm_eps.is_finite() || self.rms_norm_eps <= 0.0 {
             return Err(CloverConfigError::InvalidFloat("rms_norm_eps"));
         }
@@ -207,7 +226,11 @@ impl CloverConfig {
             })
             .collect();
 
-        let matches = self.hidden_size == HIDDEN_SIZE
+        let matches = self.auto_map.auto_config == "configuration_clover_moe.CloverMoeConfig"
+            && self.auto_map.auto_model == "modeling_clover_moe.CloverMoeModel"
+            && self.auto_map.auto_model_for_causal_lm == "modeling_clover_moe.CloverMoeModelLM"
+            && (self.initializer_range - 0.02).abs() < f64::EPSILON
+            && self.hidden_size == HIDDEN_SIZE
             && self.num_hidden_layers == LAYER_COUNT
             && self.layer_types == expected_layers
             && self.num_experts == EXPERT_COUNT
@@ -305,6 +328,8 @@ pub enum CloverConfigError {
     InvalidGroupedQueryGeometry,
     #[error("unsupported model architecture")]
     UnsupportedArchitecture,
+    #[error("unknown or unsupported configuration field")]
+    UnknownOrUnsupportedField,
     #[error("unsupported model_type")]
     UnsupportedModelType,
     #[error("unsupported activation or denoising algorithm")]
