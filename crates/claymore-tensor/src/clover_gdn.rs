@@ -619,9 +619,15 @@ mod tests {
     #[test]
     fn full_attention_mask_supports_empty_prefix_and_partial_final_block() {
         let preview = full_attention_mask(&[], &[true, false], true).unwrap();
-        assert_eq!(preview, vec![0.0, f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY]);
+        assert_eq!(
+            preview,
+            vec![0.0, f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY]
+        );
         let commit = full_attention_mask(&[], &[true, false], false).unwrap();
-        assert_eq!(commit, vec![0.0, f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY]);
+        assert_eq!(
+            commit,
+            vec![0.0, f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY]
+        );
     }
 
     #[test]
@@ -634,7 +640,8 @@ mod tests {
             3,
             1,
             GdnOutputDType::F32,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(decay[0], f32::NEG_INFINITY);
         assert!(decay[1].is_nan());
         assert!(decay[2].is_finite());
@@ -654,7 +661,8 @@ mod tests {
             1,
             &[true, true, true],
             GdnOutputDType::F32,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(output[0].to_bits(), (-0.0f32).to_bits());
         assert_eq!(output[1], f32::INFINITY);
         assert!(output[2].is_nan());
@@ -808,7 +816,8 @@ mod tests {
             &[true, true],
             GdnOutputDType::F32,
             &mut whole_state,
-        ).unwrap();
+        )
+        .unwrap();
 
         let mut chunked_state = vec![0.0; 2];
         let first = recurrent_commit(
@@ -821,7 +830,8 @@ mod tests {
             &[true],
             GdnOutputDType::F32,
             &mut chunked_state,
-        ).unwrap();
+        )
+        .unwrap();
         let second = recurrent_commit(
             dimensions,
             &[0.0, 1.0],
@@ -832,7 +842,8 @@ mod tests {
             &[true],
             GdnOutputDType::F32,
             &mut chunked_state,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(chunked_state, whole_state);
         assert_eq!(vec![first[0], second[0]], whole_output);
