@@ -790,6 +790,55 @@ mod tests {
     }
 
     #[test]
+    fn recurrent_commit_chunking_preserves_prefix_state_across_block_boundary() {
+        let dimensions = GdnDimensions {
+            key_heads: 1,
+            value_heads: 1,
+            key_dim: 2,
+            value_dim: 1,
+        };
+        let mut whole_state = vec![0.0; 2];
+        let whole_output = recurrent_commit(
+            dimensions,
+            &[1.0, 0.0, 0.0, 1.0],
+            &[1.0, 0.0, 0.0, 1.0],
+            &[2.0, 3.0],
+            &[0.0, 0.0],
+            &[1.0, 1.0],
+            &[true, true],
+            GdnOutputDType::F32,
+            &mut whole_state,
+        ).unwrap();
+
+        let mut chunked_state = vec![0.0; 2];
+        let first = recurrent_commit(
+            dimensions,
+            &[1.0, 0.0],
+            &[1.0, 0.0],
+            &[2.0],
+            &[0.0],
+            &[1.0],
+            &[true],
+            GdnOutputDType::F32,
+            &mut chunked_state,
+        ).unwrap();
+        let second = recurrent_commit(
+            dimensions,
+            &[0.0, 1.0],
+            &[0.0, 1.0],
+            &[3.0],
+            &[0.0],
+            &[1.0],
+            &[true],
+            GdnOutputDType::F32,
+            &mut chunked_state,
+        ).unwrap();
+
+        assert_eq!(chunked_state, whole_state);
+        assert_eq!([first[0], second[0]], whole_output.as_slice());
+    }
+
+    #[test]
     fn invalid_tokens_do_not_change_recurrent_state() {
         let mut state = vec![0.25, -0.5, 0.75, 1.0];
         let before = state.clone();
