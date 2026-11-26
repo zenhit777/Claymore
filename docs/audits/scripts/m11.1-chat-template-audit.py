@@ -45,10 +45,14 @@ for name, msgs, kw in CASES:
     e = {"fixture": name, "kwargs": kw, "messages": msgs}
     try:
         s = tok.apply_chat_template(msgs, return_tensors=None, tokenize=False, **kw)
-        ids = list(tok(s, add_special_tokens=False)["input_ids"])
+        direct_ids = list(
+            tok.apply_chat_template(msgs, return_tensors=None, tokenize=True, **kw)
+        )
+        rendered_ids = list(tok(s, add_special_tokens=False)["input_ids"])
         e["rendered"] = s
-        e["token_ids"] = ids
-        e["n_tokens"] = len(ids)
+        e["token_ids"] = direct_ids
+        e["rendered_token_ids"] = rendered_ids
+        e["n_tokens"] = len(direct_ids)
         e["contains_vision_token"] = any(
             t in s for t in ("<|image_pad|>", "<|vision_start|>", "<|vision_end|>",
                              "<|video_pad|>", "<|audio_start|>"))
@@ -56,7 +60,7 @@ for name, msgs, kw in CASES:
         e["im_end_count"] = s.count("<|im_end|>")
         e["think_open_count"] = s.count("<think>")
         e["think_close_count"] = s.count("</think>")
-        e["roundtrip_ids_stable"] = ids == list(tok(s, add_special_tokens=False)["input_ids"])
+        e["roundtrip_ids_stable"] = direct_ids == rendered_ids
         e["status"] = "OK"
     except Exception as ex:
         e["status"] = "REJET_ATTENDU" if name.endswith("rejet") else "ECHEC_INATTENDU"
@@ -72,5 +76,6 @@ for e in out:
         print("   n_tokens=%d im_start=%d im_end=%d think_open=%d think_close=%d vision=%s"
               % (e["n_tokens"], e["im_start_count"], e["im_end_count"], e["think_open_count"],
                  e["think_close_count"], e["contains_vision_token"]))
+        print("   direct/rendered token IDs match:", e["roundtrip_ids_stable"])
         print("   ids:", e["token_ids"][:12], "..." if len(e["token_ids"]) > 12 else "")
         print("   rendu:", repr(e["rendered"]))
