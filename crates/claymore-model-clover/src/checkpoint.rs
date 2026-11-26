@@ -15,8 +15,8 @@ use claymore_checkpoint::strict_json::Json;
 use thiserror::Error;
 
 use crate::config::{
-    CloverConfig, CloverConfigError, GDN_CONV_KERNEL_DIM, GDN_KEY_HEAD_DIM, GDN_KEY_HEADS,
-    GDN_VALUE_HEAD_DIM, GDN_VALUE_HEADS, LAYER_COUNT,
+    CloverConfig, CloverConfigError, GDN_CONV_KERNEL_DIM, GDN_KEY_HEADS, GDN_KEY_HEAD_DIM,
+    GDN_VALUE_HEADS, GDN_VALUE_HEAD_DIM, LAYER_COUNT,
 };
 
 pub const MAX_INDEX_BYTES: u64 = 16 * 1024 * 1024;
@@ -426,8 +426,8 @@ impl CloverCheckpointInventory {
             });
         }
 
-        let channels = 2 * GDN_KEY_HEADS * GDN_KEY_HEAD_DIM
-            + GDN_VALUE_HEADS * GDN_VALUE_HEAD_DIM;
+        let channels =
+            2 * GDN_KEY_HEADS * GDN_KEY_HEAD_DIM + GDN_VALUE_HEADS * GDN_VALUE_HEAD_DIM;
         let conv_shape = vec![channels, 1, GDN_CONV_KERNEL_DIM - 1];
         let scalar_shape = vec![GDN_VALUE_HEADS];
         let mut expected_sidecars = BTreeMap::new();
@@ -464,8 +464,14 @@ impl CloverCheckpointInventory {
         let expected_names: BTreeSet<String> = expected_sidecars.keys().cloned().collect();
         if actual_sidecars != expected_names {
             return Err(CloverCheckpointError::PinnedSidecarTensorSetMismatch {
-                missing: expected_names.difference(&actual_sidecars).cloned().collect(),
-                unexpected: actual_sidecars.difference(&expected_names).cloned().collect(),
+                missing: expected_names
+                    .difference(&actual_sidecars)
+                    .cloned()
+                    .collect(),
+                unexpected: actual_sidecars
+                    .difference(&expected_names)
+                    .cloned()
+                    .collect(),
             });
         }
         for (name, (expected_file, expected_shape)) in expected_sidecars {
@@ -640,7 +646,9 @@ pub enum CloverCheckpointError {
     PinnedSidecarCount { expected: usize, actual: usize },
     #[error("pinned Clover requires {expected} payload bytes, found {actual}")]
     PinnedTotalSize { expected: u64, actual: u64 },
-    #[error("pinned GDN sidecar tensor set mismatch (missing={missing:?}, unexpected={unexpected:?})")]
+    #[error(
+        "pinned GDN sidecar tensor set mismatch (missing={missing:?}, unexpected={unexpected:?})"
+    )]
     PinnedSidecarTensorSetMismatch {
         missing: Vec<String>,
         unexpected: Vec<String>,
