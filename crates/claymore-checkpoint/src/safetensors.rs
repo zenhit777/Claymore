@@ -1,5 +1,4 @@
-//! Bounded, fail-closed Safetensors reader for the pinned DiffusionGemma
-//! checkpoint.
+//! Bounded, fail-closed, model-agnostic Safetensors container reader.
 //!
 //! The reader validates the whole header before returning a handle: duplicate
 //! names, unsupported dtypes, malformed shapes, arithmetic overflow, offsets
