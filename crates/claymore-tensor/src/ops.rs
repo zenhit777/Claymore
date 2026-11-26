@@ -616,4 +616,31 @@ mod tests {
         let bf = bf16_tensor(&device, vec![2, 2], &bf(&[1.0, 1.0, 1.0, 1.0]));
         assert_eq!(mul(&device, &a, &bf).unwrap_err(), OpError::MixedDType);
     }
+    #[test]
+    fn zero_centered_rms_norm_adds_one_in_fp32() {
+        let device = CpuDevice::new();
+        let input = tensor(&device, vec![1, 2], &[3.0, 4.0]);
+        let scale = tensor(&device, vec![2], &[0.0, 0.0]);
+        let output = values(
+            &device,
+            &rms_norm_zero_centered(&device, &input, &scale, 0.0).unwrap(),
+        );
+        assert!((output[0] - 3.0 / 12.5f32.sqrt()).abs() < 1e-6);
+        assert!((output[1] - 4.0 / 12.5f32.sqrt()).abs() < 1e-6);
+    }
+
+    #[test]
+    fn gdn_rms_norm_applies_silu_gate_before_single_output_rounding() {
+        let device = CpuDevice::new();
+        let input = tensor(&device, vec![1, 2], &[3.0, 4.0]);
+        let scale = tensor(&device, vec![2], &[1.0, 1.0]);
+        let gate = tensor(&device, vec![1, 2], &[0.0, f32::NEG_INFINITY]);
+        let output = values(
+            &device,
+            &rms_norm_silu_gate(&device, &input, &scale, &gate, 0.0).unwrap(),
+        );
+        assert_eq!(output[0], 0.0);
+        assert_eq!(output[1].to_bits(), (-0.0f32).to_bits());
+    }
+
 }
