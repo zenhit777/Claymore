@@ -145,7 +145,8 @@ pub fn full_attention_mask(
 /// Inputs use row-major layouts: input [tokens, channels], history
 /// [channels, kernel_width - 1], weights [channels, kernel_width]. The state
 /// is copied and returned; the caller's cache is never mutated on error.
-/// Invalid tokens emit zeros and do not advance their channel history.
+/// Invalid tokens are multiplied by the validity mask and do not advance history.
+/// Finite values therefore emit zero; NaNs retain IEEE `NaN * 0 = NaN` semantics.
 #[allow(clippy::too_many_arguments)]
 pub fn causal_conv_silu(
     input: &[f32],
@@ -336,8 +337,9 @@ fn silu_scalar(value: f32) -> f32 {
 /// - g/beta: [tokens, value_heads]
 /// - state: [value_heads, value_dim, key_dim] (FP32)
 ///
-/// Invalid tokens emit zeros and leave the recurrent state unchanged. All
-/// lengths are checked before the caller's state is mutated.
+/// Invalid tokens leave the recurrent state unchanged and multiply their
+/// output by zero (preserving IEEE NaN propagation). All lengths are checked
+/// before the caller's state is mutated.
 #[allow(clippy::too_many_arguments)]
 pub fn recurrent_commit(
     dims: GdnDimensions,
@@ -871,6 +873,47 @@ mod tests {
     }
 
     #[test]
+    fn recurrent_commit_preserves_nan_output_for_invalid_query_without_state_commit() {
+        let dimensions = GdnDimensions {
+            key_heads: 1,
+            value_heads: 1,
+            key_dim: 2,
+            value_dim: 1,
+        };
+        let mut state = vec![0.25, -0.5];
+        let before_invalid = {
+            let mut first_state = state.clone();
+            recurrent_commit(
+                dimensions,
+                &[1.0, 0.0],
+                &[1.0, 0.0],
+                &[2.0],
+                &[0.0],
+                &[1.0],
+                &[true],
+                GdnOutputDType::F32,
+                &mut first_state,
+            )
+            .unwrap();
+            first_state
+        };
+        let output = recurrent_commit(
+            dimensions,
+            &[1.0, 0.0, f32::NAN, 0.0],
+            &[1.0, 0.0, 1.0, 0.0],
+            &[2.0, 3.0],
+            &[0.0, 0.0],
+            &[1.0, 1.0],
+            &[true, false],
+            GdnOutputDType::F32,
+            &mut state,
+        )
+        .unwrap();
+        assert_eq!(state, before_invalid);
+        assert!(output[1].is_nan());
+    }
+
+    #[test]
     fn invalid_tokens_do_not_change_recurrent_state() {
         let mut state = vec![0.25, -0.5, 0.75, 1.0];
         let before = state.clone();
@@ -931,6 +974,68 @@ mod tests {
         assert_eq!(state, before);
         assert_eq!(&output[2..], &[0.0, 0.0]);
         assert!(output[..2].iter().all(|value| value.is_finite()));
+    }
+
+    #[test]
+    fn block_preview_preserves_nan_from_invalid_queries_and_values() {
+        let dimensions = GdnDimensions {
+            key_heads: 1,
+            value_heads: 1,
+            key_dim: 2,
+            value_dim: 1,
+        };
+        let state = [0.2, -0.3];
+        let invalid_query = block_preview(
+            dimensions,
+            &[1.0, 0.0, f32::NAN, 0.0],
+            &[1.0, 0.0, 1.0, 0.0],
+            &[2.0, 3.0],
+            &[0.0, 0.0],
+            &[true, false],
+            &state,
+            1.0 / 2.0f32.sqrt(),
+            GdnOutputDType::F32,
+            &[10.0],
+            &[5.0],
+            &[1.0],
+        )
+        .unwrap();
+        assert!(invalid_query[1].is_nan());
+
+        let invalid_value = block_preview(
+            dimensions,
+            &[1.0, 0.0, 1.0, 0.0],
+            &[1.0, 0.0, 1.0, 0.0],
+            &[2.0, f32::NAN],
+            &[0.0, 0.0],
+            &[true, false],
+            &state,
+            1.0 / 2.0f32.sqrt(),
+            GdnOutputDType::F32,
+            &[10.0],
+            &[5.0],
+            &[1.0],
+        )
+        .unwrap();
+        assert!(invalid_value[0].is_nan());
+    }
+
+    #[test]
+    fn causal_conv_masks_invalid_values_but_preserves_nan_multiplication() {
+        let (output, history) = causal_conv_silu(
+            &[1.0, f32::NAN],
+            2,
+            1,
+            &[],
+            &[1.0],
+            1,
+            &[true, false],
+            GdnOutputDType::F32,
+        )
+        .unwrap();
+        assert!((output[0] - silu_scalar(1.0)).abs() < 1e-6);
+        assert!(output[1].is_nan());
+        assert!(history.is_empty());
     }
 
     #[test]
