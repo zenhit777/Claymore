@@ -61,7 +61,11 @@ for name, msgs, kw in CASES:
         e["think_open_count"] = s.count("<think>")
         e["think_close_count"] = s.count("</think>")
         e["roundtrip_ids_stable"] = direct_ids == rendered_ids
-        e["status"] = "OK"
+        if e["roundtrip_ids_stable"]:
+            e["status"] = "OK"
+        else:
+            e["status"] = "ECHEC_INATTENDU"
+            e["error"] = "Direct and rendered tokenization produced different token IDs"
     except Exception as ex:
         e["status"] = "REJET_ATTENDU" if name.endswith("rejet") else "ECHEC_INATTENDU"
         e["error"] = f"{type(ex).__name__}: {ex}"
@@ -79,3 +83,6 @@ for e in out:
         print("   direct/rendered token IDs match:", e["roundtrip_ids_stable"])
         print("   ids:", e["token_ids"][:12], "..." if len(e["token_ids"]) > 12 else "")
         print("   rendu:", repr(e["rendered"]))
+
+if any(e["status"] == "ECHEC_INATTENDU" for e in out):
+    raise SystemExit(1)
