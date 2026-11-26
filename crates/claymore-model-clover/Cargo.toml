@@ -7,7 +7,6 @@ license.workspace = true
 
 [dependencies]
 claymore-checkpoint = { path = "../claymore-checkpoint" }
-claymore-tensor = { path = "../claymore-tensor" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
