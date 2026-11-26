@@ -27,7 +27,7 @@ SEED = 20261126
 
 
 def recurrent_commit_torch(q, k, v, g, beta, state, valid):
-    # Pinned upstream lines 452-468.
+    # Pinned upstream lines 250-267.
     h = v.shape[2]
     q = q.float() * torch.rsqrt(q.float().square().sum(-1, keepdim=True) + 1e-6)
     k = k.float() * torch.rsqrt(k.float().square().sum(-1, keepdim=True) + 1e-6)
@@ -47,7 +47,7 @@ def recurrent_commit_torch(q, k, v, g, beta, state, valid):
 
 
 def bd_gdn_conv1d(mixed_qkv, clean_conv_states, conv_weights, block_size, active_valid_mask, conv_right_weight):
-    # Pinned upstream lines 253-317, batch size one fixture.
+    # Pinned upstream lines 51-116, batch size one fixture.
     num_tokens, channels = mixed_qkv.shape
     batch_size = clean_conv_states.shape[0]
     assert num_tokens == batch_size * block_size
@@ -71,7 +71,7 @@ def bd_gdn_conv1d(mixed_qkv, clean_conv_states, conv_weights, block_size, active
 
 def bd_gdn_local_memory(query, key, value, g, clean_ssm_states, active_valid_mask,
                         scale, softmax_logit_scale, softmax_history_bias, softmax_history_c):
-    # Pinned upstream lines 320-421, batch size one fixture.
+    # Pinned upstream lines 118-221, batch size one fixture.
     num_tokens = query.shape[1]
     batch_size = clean_ssm_states.shape[0]
     block_size = num_tokens // batch_size
@@ -111,7 +111,7 @@ def bd_gdn_local_memory(query, key, value, g, clean_ssm_states, active_valid_mas
 
 
 def causal_conv_invalid_torch(raw, history, weight, valid):
-    # Pinned upstream lines 531-542: input-dtype products, FP32 sum, SiLU.
+    # Pinned upstream causal_conv_silu, lines 482-495: input-dtype products, FP32 sum, SiLU.
     pieces = []
     next_history = history.clone()
     for token in range(raw.shape[1]):
@@ -124,7 +124,7 @@ def causal_conv_invalid_torch(raw, history, weight, valid):
 
 
 def rms_norm(x, weight, eps, zero_centered=True, gate=None):
-    # Pinned upstream lines 433-449.
+    # Pinned upstream CloverRMSNorm.forward, lines 239-247 (class 231-247).
     y = x.float() * torch.rsqrt(x.float().square().mean(-1, keepdim=True) + eps)
     effective_weight = 1 + weight.float() if zero_centered else weight.float()
     y = y * effective_weight
@@ -134,7 +134,7 @@ def rms_norm(x, weight, eps, zero_centered=True, gate=None):
 
 
 def rotary_partial(x, positions, theta, partial_factor):
-    # Pinned upstream CloverAttention.rotary, lines 597-608.
+    # Pinned upstream CloverAttention.rotary, lines 395-406.
     rotary_dim = int(x.shape[-1] * partial_factor)
     inv = 1.0 / theta ** (
         torch.arange(0, rotary_dim, 2, device="cpu", dtype=torch.float32) / rotary_dim
@@ -147,7 +147,7 @@ def rotary_partial(x, positions, theta, partial_factor):
 
 
 def attention_eager(q, k, v, gate, allow):
-    # Pinned CloverAttention eager branch, lines 640-650.
+    # Pinned CloverAttention eager branch, lines 443-447.
     query_heads = q.shape[1]
     kv_heads = k.shape[1]
     k = k.repeat_interleave(query_heads // kv_heads, 1)
@@ -341,12 +341,14 @@ def main() -> int:
         "file": SOURCE_FILE,
         "sha256": SOURCE_SHA256,
         "transcribed_functions": {
-            "recurrent_commit_torch": "modeling_clover_moe.py:452-468",
-            "bd_gdn_conv1d": "modeling_clover_moe.py:253-317",
-            "bd_gdn_local_memory": "modeling_clover_moe.py:320-421",
-            "CloverRMSNorm": "modeling_clover_moe.py:433-449",
-            "CloverAttention.rotary": "modeling_clover_moe.py:597-608",
-            "CloverAttention eager attention": "modeling_clover_moe.py:640-650",
+            "recurrent_commit_torch": "modeling_clover_moe.py:250-267",
+            "bd_gdn_conv1d": "modeling_clover_moe.py:51-116",
+            "bd_gdn_local_memory": "modeling_clover_moe.py:118-221",
+            "causal_conv_silu": "modeling_clover_moe.py:482-495",
+            "CloverRMSNorm": "modeling_clover_moe.py:231-247",
+            "CloverAttention.rotary": "modeling_clover_moe.py:395-406",
+            "CloverAttention eager attention": "modeling_clover_moe.py:443-447",
+            "full_attention_mask": "modeling_clover_moe.py:428-437 (allow construction)",
         },
     }
     rust_lines = [

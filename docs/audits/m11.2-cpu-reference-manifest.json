@@ -10,20 +10,22 @@
   "processor": "",
   "python_version": "3.13.5 (main, Jul 15 2026, 20:25:40) [GCC 14.2.0]",
   "seed": 20261126,
-  "source_file_observed_sha256": null,
-  "source_file_verified": false,
+  "source_file_observed_sha256": "2584bd5502d6109c2cea9bee2f2ec98f147bbb8954c43858c0315eb4af9ffb0c",
+  "source_file_verified": true,
   "source": {
     "file": "modeling_clover_moe.py",
     "repository": "https://huggingface.co/Diffuspace/Clover-35B-A3B-Preview",
     "revision": "4b0402b65e523d0183a14c431955438714cb16ff",
     "sha256": "2584bd5502d6109c2cea9bee2f2ec98f147bbb8954c43858c0315eb4af9ffb0c",
     "transcribed_functions": {
-      "CloverAttention eager attention": "modeling_clover_moe.py:640-650",
-      "CloverAttention.rotary": "modeling_clover_moe.py:597-608",
-      "CloverRMSNorm": "modeling_clover_moe.py:433-449",
-      "bd_gdn_conv1d": "modeling_clover_moe.py:253-317",
-      "bd_gdn_local_memory": "modeling_clover_moe.py:320-421",
-      "recurrent_commit_torch": "modeling_clover_moe.py:452-468"
+      "CloverAttention eager attention": "modeling_clover_moe.py:443-447",
+      "CloverAttention.rotary": "modeling_clover_moe.py:395-406",
+      "CloverRMSNorm": "modeling_clover_moe.py:231-247",
+      "bd_gdn_conv1d": "modeling_clover_moe.py:51-116",
+      "bd_gdn_local_memory": "modeling_clover_moe.py:118-221",
+      "causal_conv_silu": "modeling_clover_moe.py:482-495",
+      "full_attention_mask": "modeling_clover_moe.py:428-437 (allow construction)",
+      "recurrent_commit_torch": "modeling_clover_moe.py:250-267"
     }
   },
   "torch_num_threads": 1,
