@@ -13,7 +13,7 @@ Jalon : M11 — intégration native de `Diffuspace/Clover-35B-A3B-Preview`.
 Branche de travail M11 : `feat/m11-clover-foundation`.
 Base M10 : `feat/m10-diffusiongemma`, actuellement clôturée administrativement sans merge dans `main`.
 
-Référence matérielle : WSL2, NVIDIA RTX 5090 32 Gio, compute capability sm_120, CPU Ryzen 9 7950X3D, RAM 128 Gio.
+Référence matérielle attendue : NVIDIA RTX 5090 32 Gio, compute capability sm_120. L'agent doit détecter et consigner le système hôte, le CPU, la RAM, le noyau WSL2, le driver et le toolkit réellement présents ; ne jamais supposer des valeurs fixes.
 
 Architecture Clover à valider : 40 couches hybrides GDN/full attention, 256 experts routés, top-8/token, 1 expert partagé, BF16 poids, état GDN FP32, bloc 32 par défaut, LowConfidence. Les poids publiés représentent environ 69 GB : ils ne peuvent pas être chargés intégralement dans les 32 Gio de VRAM. Le chemin doit utiliser le streaming et la résidence partielle contrôlés par MemoryOrchestrator.
 
