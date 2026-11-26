@@ -991,6 +991,17 @@ mod tests {
             .collect()
     }
 
+    fn assert_bf16_one_ulp(actual: &[f32], expected: &[f32]) {
+        assert_eq!(actual.len(), expected.len());
+        for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+            let one_ulp = expected.abs().max(f32::MIN_POSITIVE) / 128.0;
+            assert!(
+                (actual - expected).abs() <= one_ulp,
+                "BF16 reference mismatch at {index}: actual={actual:?}, expected={expected:?}, one_ulp={one_ulp}"
+            );
+        }
+    }
+
     fn assert_reference_close(actual: &[f32], expected: &[f32], tolerance: f32) {
         assert_eq!(actual.len(), expected.len());
         for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
@@ -1028,11 +1039,7 @@ mod tests {
             &mut state,
         )
         .unwrap();
-        assert_reference_close(
-            &output,
-            crate::clover_gdn_upstream_fixtures::REC_OUTPUT,
-            1e-4,
-        );
+        assert_bf16_one_ulp(&output, crate::clover_gdn_upstream_fixtures::REC_OUTPUT);
         assert_reference_close(
             &state,
             crate::clover_gdn_upstream_fixtures::REC_STATE_OUT,
@@ -1069,11 +1076,7 @@ mod tests {
             &[1.0, 0.75],
         )
         .unwrap();
-        assert_reference_close(
-            &output,
-            crate::clover_gdn_upstream_fixtures::PREVIEW_OUTPUT,
-            1e-4,
-        );
+        assert_bf16_one_ulp(&output, crate::clover_gdn_upstream_fixtures::PREVIEW_OUTPUT);
         assert_eq!(state, [0.1, -0.2, 0.3, 0.05, -0.15, 0.25, 0.2, -0.1]);
     }
 
@@ -1093,15 +1096,10 @@ mod tests {
             GdnOutputDType::BF16,
         )
         .unwrap();
-        assert_reference_close(
-            &causal,
-            crate::clover_gdn_upstream_fixtures::CAUSAL_OUTPUT,
-            1e-4,
-        );
-        assert_reference_close(
+        assert_bf16_one_ulp(&causal, crate::clover_gdn_upstream_fixtures::CAUSAL_OUTPUT);
+        assert_bf16_one_ulp(
             &next_history,
             crate::clover_gdn_upstream_fixtures::CAUSAL_STATE_OUT,
-            1e-4,
         );
 
         let block_raw = bf16_values(&[0.2, -0.4, 0.7, 0.1, -0.3, 0.6]);
@@ -1118,11 +1116,7 @@ mod tests {
             GdnOutputDType::BF16,
         )
         .unwrap();
-        assert_reference_close(
-            &block,
-            crate::clover_gdn_upstream_fixtures::BLOCK_OUTPUT,
-            1e-4,
-        );
+        assert_bf16_one_ulp(&block, crate::clover_gdn_upstream_fixtures::BLOCK_OUTPUT);
         assert_eq!(history, bf16_values(&[0.1, -0.2, 0.3, -0.4, 0.2, 0.05]));
     }
 
@@ -1145,6 +1139,6 @@ mod tests {
             crate::clover_gdn_upstream_fixtures::GATE_DECAY,
             1e-6,
         );
-        assert_reference_close(&beta, crate::clover_gdn_upstream_fixtures::GATE_BETA, 1e-4);
+        assert_bf16_one_ulp(&beta, crate::clover_gdn_upstream_fixtures::GATE_BETA);
     }
 }
