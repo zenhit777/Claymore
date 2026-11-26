@@ -1052,6 +1052,26 @@ mod tests {
     }
 
     #[test]
+    fn clover_partial_rope_rotates_only_first_quarter_of_head() {
+        let (cos_values, sin_values) =
+            rope_tables_partial(&[0, 1], 256, 10_000_000.0, 0.25).unwrap();
+        assert_eq!(cos_values.len(), 2 * 64);
+        assert_eq!(sin_values.len(), 2 * 64);
+        assert!(cos_values[..64].iter().all(|value| (*value - 1.0).abs() < 1e-6));
+        assert!(sin_values[..64].iter().all(|value| value.abs() < 1e-6));
+
+        let device = CpuDevice::new();
+        let input = tensor(&device, vec![1, 1, 8], &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
+        let cos = tensor(&device, vec![1, 4], &[0.0, 0.0, 1.0, 1.0]);
+        let sin = tensor(&device, vec![1, 4], &[1.0, 1.0, 0.0, 0.0]);
+        let output = values(
+            &device,
+            &rotary_embed_partial(&device, &input, &cos, &sin).unwrap(),
+        );
+        assert_eq!(output, [-3.0, -4.0, 1.0, 2.0, 5.0, 6.0, 7.0, 8.0]);
+    }
+
+    #[test]
     fn proportional_rope_keeps_the_full_frequency_vector_and_zeroes_the_tail() {
         let inv_freq = rope_inv_freq(RopeType::Proportional, 8, 1_000_000.0, 0.25).unwrap();
         assert_eq!(inv_freq.len(), 4);
