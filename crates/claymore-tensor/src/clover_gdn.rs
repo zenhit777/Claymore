@@ -835,7 +835,7 @@ mod tests {
         ).unwrap();
 
         assert_eq!(chunked_state, whole_state);
-        assert_eq!([first[0], second[0]], whole_output.as_slice());
+        assert_eq!(vec![first[0], second[0]], whole_output);
     }
 
     #[test]
