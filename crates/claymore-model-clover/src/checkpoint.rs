@@ -16,6 +16,7 @@ use thiserror::Error;
 
 pub const MAX_INDEX_BYTES: u64 = 16 * 1024 * 1024;
 pub const PINNED_SHARD_COUNT: usize = 26;
+pub const PINNED_TOTAL_SIZE_BYTES: u64 = 69_322_701_696;
 const INDEX_FILE: &str = "model.safetensors.index.json";
 const GDN_ASSETS: [&str; 2] = [
     "bd_gdn_conv_right_weight.safetensors",
@@ -401,6 +402,12 @@ impl CloverCheckpointInventory {
                 actual: self.identity.sidecar_count,
             });
         }
+        if self.identity.payload_bytes != PINNED_TOTAL_SIZE_BYTES {
+            return Err(CloverCheckpointError::PinnedTotalSize {
+                expected: PINNED_TOTAL_SIZE_BYTES,
+                actual: self.identity.payload_bytes,
+            });
+        }
         Ok(())
     }
 
@@ -554,6 +561,8 @@ pub enum CloverCheckpointError {
     PinnedShardCount { expected: usize, actual: usize },
     #[error("pinned Clover requires {expected} GDN sidecars, found {actual}")]
     PinnedSidecarCount { expected: usize, actual: usize },
+    #[error("pinned Clover requires {expected} payload bytes, found {actual}")]
+    PinnedTotalSize { expected: u64, actual: u64 },
     #[error("invalid GDN sidecar tensor {tensor} in {file}")]
     InvalidSidecarTensor { file: String, tensor: String },
 }
