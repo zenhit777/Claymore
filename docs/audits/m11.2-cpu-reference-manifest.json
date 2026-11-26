@@ -10,6 +10,8 @@
   "processor": "",
   "python_version": "3.13.5 (main, Jul 15 2026, 20:25:40) [GCC 14.2.0]",
   "seed": 20261126,
+  "source_file_observed_sha256": null,
+  "source_file_verified": false,
   "source": {
     "file": "modeling_clover_moe.py",
     "repository": "https://huggingface.co/Diffuspace/Clover-35B-A3B-Preview",
