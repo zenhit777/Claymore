@@ -2,7 +2,7 @@
   "cuda_used": false,
   "device": "cpu",
   "fixture_count": 13,
-  "fixture_source_sha256": "26746af2da569367e53bb83c7cf430d620d804ef20156c052a64fc0c9180c1c6",
+  "fixture_source_sha256": "73dc32869445591505ee49caedc7a82cce8a7791edecd352df567fa33984e886",
   "fixture_values": 368,
   "generator": "tools/m11/gen_cpu_reference.py",
   "machine": "x86_64",
