@@ -77,6 +77,7 @@ pub struct CloverConfig {
     pub num_hidden_layers: usize,
     pub num_key_value_heads: usize,
     pub output_router_logits: bool,
+    pub pad_token_id: Option<u32>,
     pub partial_rotary_factor: f64,
     pub rms_norm_eps: f64,
     pub rope_parameters: RopeParameters,
@@ -84,6 +85,7 @@ pub struct CloverConfig {
     pub tie_word_embeddings: bool,
     pub use_cache: bool,
     pub vocab_size: usize,
+    pub transformers_version: String,
     pub num_shared_experts: usize,
     pub attention_backend: String,
     pub denoising_config: DenoisingConfig,
@@ -214,6 +216,19 @@ impl CloverConfig {
             && self.vocab_size == VOCAB_SIZE
             && self.max_position_embeddings == MAX_CONTEXT
             && self.block_size == DEFAULT_BLOCK_SIZE
+            && self.bos_token_id == 248_044
+            && self.eos_token_id == 248_044
+            && self.mask_token_id == 151_669
+            && self.moe_intermediate_size == 512
+            && self.shared_expert_intermediate_size == 512
+            && !self.attention_bias
+            && !self.output_router_logits
+            && self.pad_token_id.is_none()
+            && self.attention_backend == "sdpa"
+            && self.transformers_version == "5.19.0"
+            && self.mamba_ssm_dtype == "float32"
+            && self.attention_dropout == 0.0
+            && (self.rms_norm_eps - 1e-6).abs() < f64::EPSILON
             && self.full_attention_interval == 4
             && self.num_attention_heads == 16
             && self.num_key_value_heads == 2
