@@ -814,6 +814,27 @@ mod tests {
     static NEXT_TEMP: AtomicUsize = AtomicUsize::new(0);
 
     #[test]
+    fn pinned_digest_manifest_covers_all_weight_artifacts() {
+        let mut names = BTreeSet::new();
+        let mut digests = BTreeSet::new();
+        for (name, digest) in PINNED_ASSET_SHA256 {
+            assert!(names.insert(name));
+            assert!(digests.insert(digest));
+            assert_eq!(digest.len(), 64);
+            assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        }
+
+        for name in GDN_ASSETS {
+            assert!(names.contains(name));
+        }
+        for index in 1..=PINNED_SHARD_COUNT {
+            let name = format!("model-{index:05}-of-{PINNED_SHARD_COUNT:05}.safetensors");
+            assert!(names.contains(name.as_str()));
+        }
+        assert_eq!(names.len(), 28);
+    }
+
+    #[test]
     fn index_parser_rejects_path_traversal_and_duplicate_json_keys() {
         let traversal = br#"{"metadata":{"total_size":2},"weight_map":{"x":"../model-00001-of-00001.safetensors"}}"#;
         assert!(matches!(
