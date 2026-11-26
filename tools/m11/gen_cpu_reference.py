@@ -292,16 +292,18 @@ def main() -> int:
 
     # Full-attention reference: zero-centered q/k RMSNorm, partial RoPE,
     # 16Q/2KV GQA, causal-prefix/block mask and output sigmoid gate.
-    attn_q_input = torch.randn((2, 16, 4), dtype=torch.bfloat16) * 0.3
-    attn_k_input = torch.randn((3, 2, 4), dtype=torch.bfloat16) * 0.3
+    attn_q_input = ((torch.arange(128).reshape(2, 16, 4).float() % 17) - 8) / 20
+    attn_q_input = attn_q_input.to(torch.bfloat16)
+    attn_k_input = ((torch.arange(48).reshape(3, 2, 4).float() % 13) - 6) / 15
+    attn_k_input = attn_k_input.to(torch.bfloat16)
     attn_q_weight = torch.tensor([0.0, 0.1, -0.1, 0.2], dtype=torch.bfloat16)
     attn_k_weight = torch.tensor([0.1, -0.1, 0.2, 0.0], dtype=torch.bfloat16)
     q_norm = rms_norm(attn_q_input, attn_q_weight, 1e-6, True)
     k_norm = rms_norm(attn_k_input, attn_k_weight, 1e-6, True)
     q_rot, q_cos, q_sin = rotary_partial(q_norm, torch.tensor([1, 2]), 10000.0, 0.5)
     k_rot, k_cos, k_sin = rotary_partial(k_norm, torch.tensor([0, 1, 2]), 10000.0, 0.5)
-    attn_v = torch.randn((3, 2, 4), dtype=torch.bfloat16) * 0.4
-    attn_gate = torch.randn((2, 16, 4), dtype=torch.bfloat16) * 0.5
+    attn_v = (((torch.arange(48).reshape(3, 2, 4).float() % 19) - 9) / 20).to(torch.bfloat16)
+    attn_gate = (((torch.arange(128).reshape(2, 16, 4).float() % 11) - 5) / 8).to(torch.bfloat16)
     allow = torch.tensor([[[[True, True, False], [True, True, False]]]], dtype=torch.bool)
     q_heads = q_rot.permute(1, 0, 2).unsqueeze(0)
     k_heads = k_rot.permute(1, 0, 2).unsqueeze(0)
@@ -340,8 +342,15 @@ def main() -> int:
         f'pub const SOURCE_SHA256: &str = "{SOURCE_SHA256}";',
         f"pub const TORCH_VERSION: &str = \"{torch.__version__}\";",
     ]
+    golden_names = {
+        "REC_OUTPUT", "REC_STATE_OUT", "PREVIEW_OUTPUT", "CAUSAL_OUTPUT",
+        "CAUSAL_STATE_OUT", "BLOCK_OUTPUT", "GATE_DECAY", "GATE_BETA",
+        "NORM_ZERO_OUT", "NORM_GATE_OUT", "ROPE_OUTPUT", "ATTN_OUTPUT",
+        "ATTN_GATED_OUTPUT",
+    }
     for name, tensor in fixtures.items():
-        rust_lines.append(rust_const(name, tensor))
+        if name in golden_names:
+            rust_lines.append(rust_const(name, tensor))
     rust_path = out / "clover_gdn_upstream_fixtures.rs"
     rust_path.write_text("\n".join(rust_lines) + "\n")
 
