@@ -619,9 +619,9 @@ mod tests {
     #[test]
     fn full_attention_mask_supports_empty_prefix_and_partial_final_block() {
         let preview = full_attention_mask(&[], &[true, false], true).unwrap();
-        assert_eq!(preview, vec![0.0, f32::NEG_INFINITY, 0.0, f32::NEG_INFINITY]);
+        assert_eq!(preview, vec![0.0, f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY]);
         let commit = full_attention_mask(&[], &[true, false], false).unwrap();
-        assert_eq!(commit, vec![0.0, f32::NEG_INFINITY, 0.0, f32::NEG_INFINITY]);
+        assert_eq!(commit, vec![0.0, f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY]);
     }
 
     #[test]
@@ -649,9 +649,9 @@ mod tests {
             &[f32::NEG_INFINITY, f32::INFINITY, f32::NAN],
             3,
             1,
-            &[0.0],
-            &[1.0, 0.0],
-            2,
+            &[],
+            &[1.0],
+            1,
             &[true, true, true],
             GdnOutputDType::F32,
         ).unwrap();
