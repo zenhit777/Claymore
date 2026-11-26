@@ -30,34 +30,118 @@ const GDN_ASSETS: [&str; 2] = [
 
 /// Upstream Xet SHA-256 values for all 28 indexed Safetensors artifacts.
 pub const PINNED_ASSET_SHA256: [(&str, &str); 28] = [
-    (\n        "bd_gdn_conv_right_weight.safetensors",\n        "6b27471aa645628c403ce1cba40105528f60aa9bd5b4e873b5ffaa2074ad71d4",\n    ),
-    (\n        "bd_gdn_softmax_scalars.safetensors",\n        "a8165aee2433e9b795bcc572a80c53fdfa1585a1b84534af4c20bbdb1332037a",\n    ),
-    (\n        "model-00001-of-00026.safetensors",\n        "c340eef575e465c061812a527d427f25b1cd09e850b453a936083b3d769f1751",\n    ),
-    (\n        "model-00002-of-00026.safetensors",\n        "2a24ff37d42bf33c8cefd58d96d8f502f98a3da0889d086f5eaa1648ced03610",\n    ),
-    (\n        "model-00003-of-00026.safetensors",\n        "f7d0ec384ebe97ad56b6f3468cb15bb4d55281327ddbfdbc7c359c58e2038bcd",\n    ),
-    (\n        "model-00004-of-00026.safetensors",\n        "0b88421141e09e9cec2316914bf3e5e73d62a0c03a2d4486c7c09932649ff6a0",\n    ),
-    (\n        "model-00005-of-00026.safetensors",\n        "a065d9424ab410e2ddc5e8d0d4f417282e3993d5ea612898ea64c04632c30d67",\n    ),
-    (\n        "model-00006-of-00026.safetensors",\n        "e61750b3be8c7934608df1bf4b9a9e15fdb5ae0c624899321ce1d7887323b23e",\n    ),
-    (\n        "model-00007-of-00026.safetensors",\n        "92a452f10d75a41d2e5eaaba46858dcecfec400ba8f853122460e31c1f825085",\n    ),
-    (\n        "model-00008-of-00026.safetensors",\n        "226e7fb60fbdfe85f3671ebf471f503930b721e6ff06b62c50d460ff2f5e5ca2",\n    ),
-    (\n        "model-00009-of-00026.safetensors",\n        "73ff108e69d42fc9d2353067209546b7b25833796b7e3e1d1290a995d98e4807",\n    ),
-    (\n        "model-00010-of-00026.safetensors",\n        "71b8223e3f135d9f0215f07ba2ffa376d8177ac0913d119e531728813f6e2d21",\n    ),
-    (\n        "model-00011-of-00026.safetensors",\n        "e2a6b92e994b28b7b9125f443dce256668b140dcd71f3c65cb03ac1e31552d44",\n    ),
-    (\n        "model-00012-of-00026.safetensors",\n        "221c34e566494b044813aa4b4de82350fa8ee1601323d2d52224a7db73979180",\n    ),
-    (\n        "model-00013-of-00026.safetensors",\n        "752a860ad1593e9d273d215ab7aa194ce95c35cea75f5d60498142d07a725ccf",\n    ),
-    (\n        "model-00014-of-00026.safetensors",\n        "4351cbf05ee65e8c0b8a4316324423e2bb9874fd98b062f9ad02bd1cd34c5319",\n    ),
-    (\n        "model-00015-of-00026.safetensors",\n        "b6a1f0d82bb6145632e369a1de85adde3446cd721b5cced28b4a037f41d34fe6",\n    ),
-    (\n        "model-00016-of-00026.safetensors",\n        "10ada7f1814b1ef6da75e913e946af05b135bef1cc5c8e874c11e03f238f76e7",\n    ),
-    (\n        "model-00017-of-00026.safetensors",\n        "e598e5845299541f4c38fa0bb80e20e2c39c525e9676880e3b2477e9740df939",\n    ),
-    (\n        "model-00018-of-00026.safetensors",\n        "cdaa56291ae23785a489f9e9fbd063fe25e9b1a7e228d787b910a2e3559ba3eb",\n    ),
-    (\n        "model-00019-of-00026.safetensors",\n        "66550744d97ffa0b9f8f0cad1b66a7a1426ed0b99404ae0731e51e622ca705d1",\n    ),
-    (\n        "model-00020-of-00026.safetensors",\n        "4d9a696b1efc80ef80554cbfb09629e9355e8082bf7eaae7053b67a9eb9556d1",\n    ),
-    (\n        "model-00021-of-00026.safetensors",\n        "96cf4f331f51936dac903f9e8726c2d4125b7fda97bebd2bee34eefa319a2ceb",\n    ),
-    (\n        "model-00022-of-00026.safetensors",\n        "d5e11497960fe856c241662ed6e1bb0bda234baf42b8b7f09421c6bfe35a63e3",\n    ),
-    (\n        "model-00023-of-00026.safetensors",\n        "d9cf73995d153079fdec0e87f83c711914457331139f11f06fa312b15f439308",\n    ),
-    (\n        "model-00024-of-00026.safetensors",\n        "adcf9389c87d8e95d76cad82d35100317d164331cce2fe9ddecf3d5c68f372f9",\n    ),
-    (\n        "model-00025-of-00026.safetensors",\n        "52990ce8792a4cda271a9aad4135ff4f5707c9b91c3051afe1d7ffae071be593",\n    ),
-    (\n        "model-00026-of-00026.safetensors",\n        "7fb786f9db4227edd863e0cc00f777f454bff460671cda3dd63f6faec2f79592",\n    ),
+    (
+        "bd_gdn_conv_right_weight.safetensors",
+        "6b27471aa645628c403ce1cba40105528f60aa9bd5b4e873b5ffaa2074ad71d4",
+    ),
+    (
+        "bd_gdn_softmax_scalars.safetensors",
+        "a8165aee2433e9b795bcc572a80c53fdfa1585a1b84534af4c20bbdb1332037a",
+    ),
+    (
+        "model-00001-of-00026.safetensors",
+        "c340eef575e465c061812a527d427f25b1cd09e850b453a936083b3d769f1751",
+    ),
+    (
+        "model-00002-of-00026.safetensors",
+        "2a24ff37d42bf33c8cefd58d96d8f502f98a3da0889d086f5eaa1648ced03610",
+    ),
+    (
+        "model-00003-of-00026.safetensors",
+        "f7d0ec384ebe97ad56b6f3468cb15bb4d55281327ddbfdbc7c359c58e2038bcd",
+    ),
+    (
+        "model-00004-of-00026.safetensors",
+        "0b88421141e09e9cec2316914bf3e5e73d62a0c03a2d4486c7c09932649ff6a0",
+    ),
+    (
+        "model-00005-of-00026.safetensors",
+        "a065d9424ab410e2ddc5e8d0d4f417282e3993d5ea612898ea64c04632c30d67",
+    ),
+    (
+        "model-00006-of-00026.safetensors",
+        "e61750b3be8c7934608df1bf4b9a9e15fdb5ae0c624899321ce1d7887323b23e",
+    ),
+    (
+        "model-00007-of-00026.safetensors",
+        "92a452f10d75a41d2e5eaaba46858dcecfec400ba8f853122460e31c1f825085",
+    ),
+    (
+        "model-00008-of-00026.safetensors",
+        "226e7fb60fbdfe85f3671ebf471f503930b721e6ff06b62c50d460ff2f5e5ca2",
+    ),
+    (
+        "model-00009-of-00026.safetensors",
+        "73ff108e69d42fc9d2353067209546b7b25833796b7e3e1d1290a995d98e4807",
+    ),
+    (
+        "model-00010-of-00026.safetensors",
+        "71b8223e3f135d9f0215f07ba2ffa376d8177ac0913d119e531728813f6e2d21",
+    ),
+    (
+        "model-00011-of-00026.safetensors",
+        "e2a6b92e994b28b7b9125f443dce256668b140dcd71f3c65cb03ac1e31552d44",
+    ),
+    (
+        "model-00012-of-00026.safetensors",
+        "221c34e566494b044813aa4b4de82350fa8ee1601323d2d52224a7db73979180",
+    ),
+    (
+        "model-00013-of-00026.safetensors",
+        "752a860ad1593e9d273d215ab7aa194ce95c35cea75f5d60498142d07a725ccf",
+    ),
+    (
+        "model-00014-of-00026.safetensors",
+        "4351cbf05ee65e8c0b8a4316324423e2bb9874fd98b062f9ad02bd1cd34c5319",
+    ),
+    (
+        "model-00015-of-00026.safetensors",
+        "b6a1f0d82bb6145632e369a1de85adde3446cd721b5cced28b4a037f41d34fe6",
+    ),
+    (
+        "model-00016-of-00026.safetensors",
+        "10ada7f1814b1ef6da75e913e946af05b135bef1cc5c8e874c11e03f238f76e7",
+    ),
+    (
+        "model-00017-of-00026.safetensors",
+        "e598e5845299541f4c38fa0bb80e20e2c39c525e9676880e3b2477e9740df939",
+    ),
+    (
+        "model-00018-of-00026.safetensors",
+        "cdaa56291ae23785a489f9e9fbd063fe25e9b1a7e228d787b910a2e3559ba3eb",
+    ),
+    (
+        "model-00019-of-00026.safetensors",
+        "66550744d97ffa0b9f8f0cad1b66a7a1426ed0b99404ae0731e51e622ca705d1",
+    ),
+    (
+        "model-00020-of-00026.safetensors",
+        "4d9a696b1efc80ef80554cbfb09629e9355e8082bf7eaae7053b67a9eb9556d1",
+    ),
+    (
+        "model-00021-of-00026.safetensors",
+        "96cf4f331f51936dac903f9e8726c2d4125b7fda97bebd2bee34eefa319a2ceb",
+    ),
+    (
+        "model-00022-of-00026.safetensors",
+        "d5e11497960fe856c241662ed6e1bb0bda234baf42b8b7f09421c6bfe35a63e3",
+    ),
+    (
+        "model-00023-of-00026.safetensors",
+        "d9cf73995d153079fdec0e87f83c711914457331139f11f06fa312b15f439308",
+    ),
+    (
+        "model-00024-of-00026.safetensors",
+        "adcf9389c87d8e95d76cad82d35100317d164331cce2fe9ddecf3d5c68f372f9",
+    ),
+    (
+        "model-00025-of-00026.safetensors",
+        "52990ce8792a4cda271a9aad4135ff4f5707c9b91c3051afe1d7ffae071be593",
+    ),
+    (
+        "model-00026-of-00026.safetensors",
+        "7fb786f9db4227edd863e0cc00f777f454bff460671cda3dd63f6faec2f79592",
+    ),
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
