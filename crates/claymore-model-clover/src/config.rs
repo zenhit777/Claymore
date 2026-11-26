@@ -10,8 +10,7 @@ use thiserror::Error;
 pub const MODEL_ID: &str = "Diffuspace/Clover-35B-A3B-Preview";
 
 /// Immutable revision that introduced the audited public config.json.
-pub const CONFIG_REVISION: &str =
-    "4b0402b65e523d0183a14c431955438714cb16ff";
+pub const CONFIG_REVISION: &str = "4b0402b65e523d0183a14c431955438714cb16ff";
 
 pub const HIDDEN_SIZE: usize = 2048;
 pub const LAYER_COUNT: usize = 40;
@@ -117,7 +116,10 @@ impl CloverConfig {
             ("num_experts_per_tok", self.num_experts_per_tok),
             ("num_hidden_layers", self.num_hidden_layers),
             ("num_key_value_heads", self.num_key_value_heads),
-            ("shared_expert_intermediate_size", self.shared_expert_intermediate_size),
+            (
+                "shared_expert_intermediate_size",
+                self.shared_expert_intermediate_size,
+            ),
             ("vocab_size", self.vocab_size),
             ("num_shared_experts", self.num_shared_experts),
         ] {
@@ -145,9 +147,7 @@ impl CloverConfig {
         {
             return Err(CloverConfigError::InvalidRope);
         }
-        if !self.attention_dropout.is_finite()
-            || !(0.0..=1.0).contains(&self.attention_dropout)
-        {
+        if !self.attention_dropout.is_finite() || !(0.0..=1.0).contains(&self.attention_dropout) {
             return Err(CloverConfigError::InvalidFloat("attention_dropout"));
         }
         if !self.moe_block_coreset_top_p.is_finite()
@@ -160,7 +160,9 @@ impl CloverConfig {
             || self.denoising_config.threshold <= 0.0
             || self.denoising_config.threshold > 1.0
         {
-            return Err(CloverConfigError::InvalidFloat("denoising_config.threshold"));
+            return Err(CloverConfigError::InvalidFloat(
+                "denoising_config.threshold",
+            ));
         }
         if self.layer_types.len() != self.num_hidden_layers {
             return Err(CloverConfigError::LayerCountMismatch {
@@ -300,8 +302,7 @@ pub enum CloverConfigError {
 mod tests {
     use super::*;
 
-    const PINNED_CONFIG: &str =
-        include_str!("../../../docs/audits/fixtures/clover-config.json");
+    const PINNED_CONFIG: &str = include_str!("../../../docs/audits/fixtures/clover-config.json");
 
     #[test]
     fn parses_and_validates_the_pinned_architecture() {
