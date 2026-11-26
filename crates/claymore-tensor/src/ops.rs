@@ -667,11 +667,7 @@ mod tests {
             vec![2, 4],
             &bf16_values(&[0.2, -0.7, 1.1, 0.3, -0.4, 0.6, 0.1, -0.9]),
         );
-        let weight = bf16_tensor(
-            &device,
-            vec![4],
-            &bf16_values(&[-0.25, 0.5, 0.0, 0.125]),
-        );
+        let weight = bf16_tensor(&device, vec![4], &bf16_values(&[-0.25, 0.5, 0.0, 0.125]));
         let output = rms_norm_zero_centered(&device, &input, &weight, 1e-6).unwrap();
         assert_eq!(output.layout().dtype(), DType::BF16);
         assert_reference_close(
@@ -686,11 +682,7 @@ mod tests {
         let device = CpuDevice::new();
         let input_values = [0.2, -0.7, 1.1, 0.3, -0.4, 0.6, 0.1, -0.9];
         let input = bf16_tensor(&device, vec![2, 4], &bf16_values(&input_values));
-        let weight = bf16_tensor(
-            &device,
-            vec![4],
-            &bf16_values(&[0.5, 1.0, 1.5, 0.25]),
-        );
+        let weight = bf16_tensor(&device, vec![4], &bf16_values(&[0.5, 1.0, 1.5, 0.25]));
         let gate = bf16_tensor(
             &device,
             vec![2, 4],
@@ -704,5 +696,4 @@ mod tests {
             1e-4,
         );
     }
-
 }
