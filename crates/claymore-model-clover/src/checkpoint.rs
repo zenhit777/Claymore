@@ -28,6 +28,8 @@ pub struct CloverShardIndex {
     total_parameters: Option<u64>,
     weight_map: BTreeMap<String, String>,
     shards: BTreeSet<String>,
+    model_shards: BTreeSet<String>,
+    sidecars: BTreeSet<String>,
     shard_count: usize,
 }
 
@@ -90,6 +92,8 @@ impl CloverShardIndex {
 
         let mut weight_map = BTreeMap::new();
         let mut shards = BTreeSet::new();
+        let mut model_shards = BTreeSet::new();
+        let mut sidecars = BTreeSet::new();
         let mut declared_shard_count = None;
         for (tensor, value) in entries {
             if tensor.is_empty() || tensor.contains('\0') {
@@ -102,15 +106,21 @@ impl CloverShardIndex {
                 .ok_or_else(|| CloverCheckpointError::InvalidIndex {
                     reason: format!("weight_map entry {tensor:?} must be a string"),
                 })?;
-            let (_, shard_count) = parse_shard_name(shard)
-                .ok_or_else(|| CloverCheckpointError::UnsafeShardName(shard.to_owned()))?;
-            if declared_shard_count
-                .replace(shard_count)
-                .is_some_and(|old| old != shard_count)
-            {
-                return Err(CloverCheckpointError::InvalidIndex {
-                    reason: "shard filenames declare inconsistent shard counts".to_owned(),
-                });
+            if GDN_ASSETS.contains(&shard) {
+                sidecars.insert(shard.to_owned());
+            } else {
+                let (_, declared_count) = parse_shard_name(shard)
+                    .ok_or_else(|| CloverCheckpointError::UnsafeShardName(shard.to_owned()))?;
+                if declared_shard_count
+                    .replace(declared_count)
+                    .is_some_and(|old| old != declared_count)
+                {
+                    return Err(CloverCheckpointError::InvalidIndex {
+                        reason: "model shard filenames declare inconsistent shard counts"
+                            .to_owned(),
+                    });
+                }
+                model_shards.insert(shard.to_owned());
             }
             shards.insert(shard.to_owned());
             weight_map.insert(tensor.clone(), shard.to_owned());
@@ -118,23 +128,32 @@ impl CloverShardIndex {
 
         let shard_count =
             declared_shard_count.ok_or_else(|| CloverCheckpointError::InvalidIndex {
-                reason: "weight_map has no shard entries".to_owned(),
+                reason: "weight_map has no model shard entries".to_owned(),
             })? as usize;
-        if shards.len() != shard_count {
+        if model_shards.len() != shard_count {
             return Err(CloverCheckpointError::InvalidIndex {
                 reason: format!(
-                    "index references {} shards but filenames declare {shard_count}",
-                    shards.len()
+                    "index references {} model shards but filenames declare {shard_count}",
+                    model_shards.len()
                 ),
             });
         }
         for index in 1..=shard_count {
             let name = format!("model-{index:05}-of-{shard_count:05}.safetensors");
-            if !shards.contains(&name) {
+            if !model_shards.contains(&name) {
                 return Err(CloverCheckpointError::InvalidIndex {
-                    reason: format!("shard sequence is missing {name}"),
+                    reason: format!("model shard sequence is missing {name}"),
                 });
             }
+        }
+        let expected_sidecars: BTreeSet<String> =
+            GDN_ASSETS.iter().map(|name| (*name).to_owned()).collect();
+        if sidecars != expected_sidecars {
+            return Err(CloverCheckpointError::InvalidIndex {
+                reason: format!(
+                    "GDN sidecar set mismatch: expected {expected_sidecars:?}, got {sidecars:?}"
+                ),
+            });
         }
 
         Ok(Self {
@@ -142,6 +161,8 @@ impl CloverShardIndex {
             total_parameters,
             weight_map,
             shards,
+            model_shards,
+            sidecars,
             shard_count,
         })
     }
@@ -164,6 +185,14 @@ impl CloverShardIndex {
 
     pub fn shard_count(&self) -> usize {
         self.shard_count
+    }
+
+    pub fn model_shards(&self) -> &BTreeSet<String> {
+        &self.model_shards
+    }
+
+    pub fn sidecars(&self) -> &BTreeSet<String> {
+        &self.sidecars
     }
 }
 
@@ -188,6 +217,7 @@ pub struct TensorSummary {
 pub struct CloverInventoryIdentity {
     pub index_sha256: String,
     pub shard_count: usize,
+    pub sidecar_count: usize,
     pub tensor_count: usize,
     pub payload_bytes: u64,
     pub parameter_count: u64,
@@ -271,7 +301,8 @@ impl CloverCheckpointInventory {
             }
 
             for entry in shard.tensors() {
-                if entry.dtype() != WeightDType::BF16 {
+                let is_sidecar = GDN_ASSETS.contains(&shard_name.as_str());
+                if !is_sidecar && entry.dtype() != WeightDType::BF16 {
                     return Err(CloverCheckpointError::UnsupportedWeightDType {
                         tensor: entry.name().to_owned(),
                         actual: entry.dtype().name(),
@@ -339,7 +370,8 @@ impl CloverCheckpointInventory {
 
         let identity = CloverInventoryIdentity {
             index_sha256,
-            shard_count: shards.len(),
+            shard_count: index.shard_count(),
+            sidecar_count: index.sidecars().len(),
             tensor_count: summaries.len(),
             payload_bytes,
             parameter_count,
@@ -361,6 +393,12 @@ impl CloverCheckpointInventory {
             return Err(CloverCheckpointError::PinnedShardCount {
                 expected: PINNED_SHARD_COUNT,
                 actual: self.identity.shard_count,
+            });
+        }
+        if self.identity.sidecar_count != GDN_ASSETS.len() {
+            return Err(CloverCheckpointError::PinnedSidecarCount {
+                expected: GDN_ASSETS.len(),
+                actual: self.identity.sidecar_count,
             });
         }
         Ok(())
@@ -514,6 +552,8 @@ pub enum CloverCheckpointError {
     SizeOverflow,
     #[error("pinned Clover requires {expected} model shards, found {actual}")]
     PinnedShardCount { expected: usize, actual: usize },
+    #[error("pinned Clover requires {expected} GDN sidecars, found {actual}")]
+    PinnedSidecarCount { expected: usize, actual: usize },
     #[error("invalid GDN sidecar tensor {tensor} in {file}")]
     InvalidSidecarTensor { file: String, tensor: String },
 }
