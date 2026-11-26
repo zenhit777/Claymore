@@ -87,7 +87,7 @@ Les primitives communes déjà présentes dans M8/M10 sont réutilisées : proje
 
 Le crate `claymore-model-clover` n'introduit pas de dépendance vers le crate tensor : il consommera ces primitives lorsqu'il assemblera le graphe. Les états de preview restent en lecture seule ; seul le commit causal avance les états persistants.
 
-**État de validation au HEAD documenté :** la première CI a révélé un conflit d'emprunt dans le décalage de l'historique convolutionnel et des écarts rustfmt. Le conflit a été corrigé avec `copy_within` et les corrections de format ont été appliquées. Aucun run CI vert n'est encore confirmé sur le HEAD actuel. Les fixtures différentielles indépendantes issues de l'implémentation upstream épinglée, ainsi que les tests workspace / Clippy / MSRV 1.86, restent obligatoires.
+**État de validation au HEAD documenté :** la première CI a révélé un conflit d'emprunt dans le décalage de l'historique convolutionnel et des écarts rustfmt. Le conflit a été corrigé avec `copy_within`. Le run 45887374989 a ensuite détecté un helper sigmoid privé inaccessible depuis le module GDN, ainsi que des écarts rustfmt supplémentaires. Le helper est maintenant partagé en visibilité `pub(crate)` et les formats signalés ont été corrigés. Un nouveau run CI sur le HEAD corrigé reste nécessaire ; aucun run vert n'est confirmé. Les fixtures différentielles indépendantes issues de l'implémentation upstream épinglée, ainsi que les tests workspace / Clippy / MSRV 1.86, restent obligatoires.
 
 Source d'implémentation : `modeling_clover_moe.py` à la révision `4b0402b65e523d0183a14c431955438714cb16ff`. Aucun kernel CUDA, benchmark ni accès VRAM n'est inclus.
 
