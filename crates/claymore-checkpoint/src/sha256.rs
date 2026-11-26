@@ -1,3 +1,7 @@
+use std::fs::File;
+use std::io::{self, Read};
+use std::path::Path;
+
 //! Dependency-free SHA-256 used to pin checkpoint metadata and artifacts.
 //!
 //! Tensor payloads are validated structurally (offsets, shapes, coverage) but
@@ -117,6 +121,26 @@ impl Sha256Stream {
     }
 }
 
+/// Compute SHA-256 from a reader using bounded memory.
+pub fn sha256_reader<R: Read>(reader: &mut R) -> io::Result<[u8; 32]> {
+    let mut stream = Sha256Stream::new();
+    let mut buffer = vec![0u8; 1024 * 1024];
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        stream.update(&buffer[..read]);
+    }
+    Ok(stream.finish())
+}
+
+/// Compute SHA-256 for a file without materializing its contents.
+pub fn sha256_file(path: impl AsRef<Path>) -> io::Result<[u8; 32]> {
+    let mut file = File::open(path)?;
+    sha256_reader(&mut file)
+}
+
 /// Lowercase hexadecimal rendering of a digest.
 pub fn hex(digest: &[u8; 32]) -> String {
     let mut out = String::with_capacity(64);
@@ -172,6 +196,13 @@ fn compress(state: &mut [u32; 8], block: &[u8; 64]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn streaming_reader_matches_in_memory_digest() {
+        let bytes = b"streaming checkpoint digest";
+        let mut reader = std::io::Cursor::new(bytes);
+        assert_eq!(sha256_reader(&mut reader).unwrap(), sha256(bytes));
+    }
 
     #[test]
     fn matches_fips_vectors() {
