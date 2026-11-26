@@ -479,8 +479,9 @@ impl CloverCheckpointInventory {
             }
 
             for entry in shard.tensors() {
-                let is_sidecar = GDN_ASSETS.contains(&shard_name.as_str());
-                if !is_sidecar && entry.dtype() != WeightDType::BF16 {
+                // The pinned Clover release stores model weights and both GDN
+                // sidecars as BF16. Runtime widening is a later explicit step.
+                if entry.dtype() != WeightDType::BF16 {
                     return Err(CloverCheckpointError::UnsupportedWeightDType {
                         tensor: entry.name().to_owned(),
                         actual: entry.dtype().name(),
@@ -1067,7 +1068,7 @@ pub enum CloverCheckpointError {
         missing: Vec<String>,
         unexpected: Vec<String>,
     },
-    #[error("tensor {tensor} has unsupported dtype {actual}; BF16 is required for model shards")]
+    #[error("tensor {tensor} has unsupported dtype {actual}; BF16 is required for all pinned Clover assets")]
     UnsupportedWeightDType {
         tensor: String,
         actual: &'static str,
@@ -1178,15 +1179,26 @@ mod tests {
     }
 
     fn write_synthetic_shard(root: &Path, filename: &str, tensor: &str) {
-        let header_json =
-            format!(r#"{{"{tensor}":{{"dtype":"BF16","shape":[2],"data_offsets":[0,4]}}}}"#);
+        write_synthetic_shard_dtype(root, filename, tensor, "BF16", 4);
+    }
+
+    fn write_synthetic_shard_dtype(
+        root: &Path,
+        filename: &str,
+        tensor: &str,
+        dtype: &str,
+        payload_bytes: usize,
+    ) {
+        let header_json = format!(
+            r#"{{"{tensor}":{{"dtype":"{dtype}","shape":[2],"data_offsets":[0,{payload_bytes}]}}}}"#
+        );
         let mut header = header_json.into_bytes();
         while header.len() % 8 != 0 {
             header.push(b' ');
         }
         let mut bytes = (header.len() as u64).to_le_bytes().to_vec();
         bytes.extend_from_slice(&header);
-        bytes.extend_from_slice(&[0, 0, 0, 0]);
+        bytes.resize(bytes.len() + payload_bytes, 0);
         fs::write(root.join(filename), bytes).unwrap();
     }
 
@@ -1238,6 +1250,43 @@ mod tests {
             })
         ));
 
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn inspect_rejects_f32_gdn_sidecars_for_the_pinned_release() {
+        let root = std::env::temp_dir().join(format!(
+            "claymore-clover-sidecar-dtype-{}-{}",
+            std::process::id(),
+            NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+
+        write_synthetic_shard(&root, "model-00001-of-00001.safetensors", "weight");
+        write_synthetic_shard_dtype(
+            &root,
+            "bd_gdn_conv_right_weight.safetensors",
+            "model.layers.0.linear_attn.conv_right_weight",
+            "F32",
+            8,
+        );
+        write_synthetic_shard(
+            &root,
+            "bd_gdn_softmax_scalars.safetensors",
+            "model.layers.0.linear_attn.bd_softmax_logit_scale",
+        );
+        fs::write(
+            root.join(INDEX_FILE),
+            br#"{"metadata":{"total_size":16,"total_parameters":6},"weight_map":{"weight":"model-00001-of-00001.safetensors","model.layers.0.linear_attn.conv_right_weight":"bd_gdn_conv_right_weight.safetensors","model.layers.0.linear_attn.bd_softmax_logit_scale":"bd_gdn_softmax_scalars.safetensors"}}"#,
+        ).unwrap();
+
+        assert!(matches!(
+            CloverCheckpointInventory::inspect(&root),
+            Err(CloverCheckpointError::UnsupportedWeightDType {
+                actual: "F32",
+                ..
+            })
+        ));
         fs::remove_dir_all(root).unwrap();
     }
 
