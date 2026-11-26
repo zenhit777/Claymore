@@ -1583,10 +1583,9 @@ mod tests {
             &device,
             vec![2, 2, 8],
             &[
-                0.2, -0.7, 1.1, 0.3, -0.4, 0.6, 0.1, -0.9,
-                0.5, 0.2, -0.3, 0.8, 0.1, -0.6, 0.7, -0.2,
-                -0.1, 0.4, 0.6, -0.8, 0.3, 0.2, -0.5, 0.9,
-                0.7, -0.2, 0.1, 0.5, -0.8, 0.4, 0.3, -0.6,
+                0.2, -0.7, 1.1, 0.3, -0.4, 0.6, 0.1, -0.9, 0.5, 0.2, -0.3, 0.8, 0.1, -0.6, 0.7,
+                -0.2, -0.1, 0.4, 0.6, -0.8, 0.3, 0.2, -0.5, 0.9, 0.7, -0.2, 0.1, 0.5, -0.8, 0.4,
+                0.3, -0.6,
             ],
         );
         let (cos, sin) = rope_tables_partial(&[3, 7], 8, 10_000.0, 0.5).unwrap();
@@ -1634,8 +1633,8 @@ mod tests {
         let q = rotary_embed_partial(&device, &q, &q_cos, &q_sin).unwrap();
         let k = rotary_embed_partial(&device, &k, &k_cos, &k_sin).unwrap();
 
-        let mask_values = crate::clover_gdn::full_attention_mask(&[true], &[true, false], true)
-            .unwrap();
+        let mask_values =
+            crate::clover_gdn::full_attention_mask(&[true], &[true, false], true).unwrap();
         let mask = tensor(&device, vec![2, 3], &mask_values);
         let attended = attention(&device, &q, &k, &v, Some(&mask), 0.5).unwrap();
         let gated = attention_output_gate(&device, &attended, &gate).unwrap();
@@ -1651,5 +1650,4 @@ mod tests {
             1e-4,
         );
     }
-
 }
