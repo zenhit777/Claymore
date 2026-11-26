@@ -6,8 +6,8 @@
 pub mod checkpoint;
 pub mod config;
 pub use checkpoint::{
-    CloverCheckpointError, CloverCheckpointInventory, CloverInventoryIdentity, CloverShardIndex,
-    ShardSummary, TensorSummary,
+    CloverCheckpointError, CloverCheckpointInventory, CloverInventoryIdentity, CloverLoadPlan,
+    CloverShardIndex, ShardLoadPlan, ShardSummary, TensorChunkPlan, TensorLoadPlan, TensorSummary,
 };
 pub use config::{
     CloverConfig, CloverConfigError, LayerType, CONFIG_REVISION, CONFIG_SHA256, INDEX_SHA256,
