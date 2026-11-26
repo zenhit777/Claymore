@@ -169,14 +169,69 @@ Executed CPU-only on WSL2 Linux 6.18.58.1, `x86_64`, no CUDA toolkit involvement
 - Stored sidecar dtype is **BF16**, not FP32. FP32 applies to the runtime SSM/GDN state, never to these stored tensors; the adapter must not cast them to FP32 on load.
 - Remaining payload digests: none outstanding — all 28 indexed Safetensors were recomputed locally and match.
 - Owner's pre-existing local snapshot, used for the payload pass: `/mnt/c/Users/sjteb/.cache/huggingface/hub/hub/models--Diffuspace--Clover-35B-A3B-Preview/snapshots/4b0402b65e523d0183a14c431955438714cb16ff` (Windows-side Hub cache, plain files, no symlinks). Revision proof: the cache tree file `trees/4b0402b65e523d0183a14c431955438714cb16ff.json` carries 41 entries whose 41 sizes and 41 `blob_id` values equal the Hub API values for the pinned revision, `refs/main` is `4b0402b65e523d0183a14c431955438714cb16ff`, and the 13 non-Xet raw digests reproduce exactly (13/13) the values computed from the direct download.
-- Payload runs: `inspect_checkpoint` on the pinned snapshot returns `result=PINNED_CONFIG_AND_HEADER_INVENTORY_VALID` with `tensor_count=813`, `parameter_count=34661350848`, `payload_bytes=69322701696`, `payloads_read=false`, `cuda_initialized=false`. `inspect_checkpoint --verify-sha256` then streams all 69.3 GB in 54 min 01 s, exit 0, and prints `artifact_sha256=verified` followed by the same `result=PINNED_CONFIG_AND_HEADER_INVENTORY_VALID`, `payloads_read=false`, `cuda_initialized=false`.
-- Performance observation, not a validation issue: `sha256_file` streams in `MAX_CHUNK_BYTES = 8 MiB` blocks through the crate's software SHA-256, measured at ~21 MB/s here against ~200 MB/s for `sha256sum`; the 69.3 GB pass therefore costs roughly an hour on this machine. A hardware-accelerated or wider-block hasher is an M11.2 performance candidate.
+- Payload runs: `inspect_checkpoint` on the pinned snapshot returns `result=PINNED_CONFIG_AND_HEADER_INVENTORY_VALID` with `tensor_count=813`, `parameter_count=34661350848`, `payload_bytes=69322701696`, `payloads_read=false`, `cuda_initialized=false`. `inspect_checkpoint --verify-sha256` then streams all 69.3 GB in 54 min 01 s, exit 0, and prints `artifact_sha256=verified` followed by the same `result=PINNED_CONFIG_AND_HEADER_INVENTORY_VALID`, `payloads_read=false`, `cuda_initialized=false`. That run predates the `Sha256Stream` fix `7ee60fff`; the post-corrective replay is recorded in the next section.
+- Performance observation, not a validation issue: the historical 69.3 GB pass ran at ~21 MB/s and
+  was originally attributed to `MAX_CHUNK_BYTES = 8 MiB` blocks. That attribution was withdrawn
+  (`m11.1-audit-corrections-2026-11-26.md` § 1): `sha256_reader` uses a 1 MiB read buffer. The
+  post-corrective pass re-measured ~21 MB/s (55 min 08 s wall, 2 939 s user CPU, 18 s system CPU,
+  peak RSS 5 212 KiB), which identifies the pass as **CPU-bound software SHA-256**, not I/O-bound.
+  A hardware-accelerated or faster hasher remains an M11.2 performance candidate.
 
 No checkpoint compatibility or executable-model claim is permitted until these gates pass.
+
+## Post-corrective CPU-only refresh — 2026-11-26
+
+Replay of the local evidence after the `Sha256Stream` fix (`7ee60fff`), the strict BF16 gate for the
+GDN sidecars (`f23fc1b5`), the metadata-only shard/tensor/chunk plan (`18df143`, `d1949fd`, `91365c7`)
+and the chat-template parity script fixes (`1916239`, `7d0b327`, `7d5685a`). Branch
+`feat/m11-clover-foundation` at HEAD `443b1c4d923c1b4a33952ca4856d1bdff622025d`; full report
+`m11.1-cpu-evidence-refresh-2026-11-26.md`, artefacts prefixed `m11.1-postfix-2026-11-26-`.
+Nothing historical was rewritten or deleted; no pinned digest, shape, dtype or golden fixture changed.
+
+- Environment: `rustc 1.100.0` / `cargo 1.100.0`, MSRV tested with `rustc 1.86.0`, Python 3.12.3,
+  `transformers` 5.19.0, `tokenizers` 0.23.3, `jinja2` 3.1.6, `safetensors` 0.8.0, PyTorch absent.
+  `CUDA_VISIBLE_DEVICES=""` on every command; no `nvidia-smi` call; no CUDA context; no VRAM; no
+  payload tensor; no forward pass.
+- Revision proof of the reused snapshot: `refs/main` equals the pinned revision; the local cache tree
+  file reproduces **41/41** sizes and **41/41** `blob_id` values of the pinned Hub API response
+  (`m11.1-postfix-2026-11-26-trees-vs-api-comparison.txt`); the 13 non-Xet raw digests reproduce the
+  table above **13/13** (`m11.1-postfix-2026-11-26-nonxet-vs-manifest-comparison.txt`).
+- Header inventory: 26 model shards + 2 GDN sidecars, 813 tensors, 34,661,350,848 parameters,
+  `payload_bytes=69322701696`; per-artifact arithmetic control holds for all 28 files
+  (`bytes = 8 + header_bytes + payload_bytes`, 224 B of u64 length prefixes, 93,976 B of headers,
+  `payload == index.metadata.total_size`): `m11.1-postfix-2026-11-26-arithmetic-control.txt`.
+- Load plan, metadata-only: `load_plan_shards=28`, `load_plan_tensors=813`,
+  `load_plan_chunks=8845`, `load_plan_max_chunk_bytes=8388608`; three consecutive runs produce
+  byte-identical output; peak RSS 4.4 MiB. Determinism and the 8 MiB bound are also covered by
+  `load_plan_is_deterministic_and_splits_large_tensors_into_bounded_chunks`.
+- Streaming digest verification with the fixed primitive: **28/28**, exit 0, `artifact_sha256=verified`,
+  55 min 08,79 s, ~21 MB/s, peak RSS 5,212 KiB, `payloads_read=false`, `cuda_initialized=false`; an
+  independent `sha256sum` pass over the same 28 files reproduces the pinned table 28/28
+  (`m11.1-postfix-2026-11-26-digest-comparison.txt`).
+- Negative gates T0–T3 replayed with the fixed binary: identical rejection messages and exit codes to
+  the original transcript (T0 exit 0; T1 config digest; T2 `TotalSizeMismatch`; T3 index digest).
+- Rust gates: 28 tests green on stable and on 1.86, including
+  `inspect_rejects_f32_gdn_sidecars_for_the_pinned_release` (an F32 GDN sidecar is refused),
+  `streaming_updates_preserve_partial_blocks_across_calls` and
+  `streaming_reader_handles_short_reads`; `clippy -D warnings` and `cargo fmt --check` clean.
+- Tokenizer/chat template: regenerated audit is field-for-field identical to the published one except
+  the local checkpoint path; the regenerated fixture differs only by the added
+  `rendered_token_ids` field. Parity is now a real comparison — `apply_chat_template(tokenize=True)`
+  versus re-tokenising the rendered text with `add_special_tokens=False` — for **9/9** positive
+  fixtures, with **3/3** expected rejections and zero unexpected failures.
+  A tooling defect was found and fixed in this replay: the parity script iterated a `BatchEncoding`
+  with `list(...)`, which yields dictionary keys, so all 9 positive fixtures failed; digests of every
+  script revision are recorded in `m11.1-postfix-2026-11-26-script-digests.txt`.
+- Attestation: the historical `m11.1-checkpoint-2026-11-26-logs.sha256` is left untouched (17/18 of
+  its entries still verify; the script entry has been stale since `1916239`, before this replay). The
+  new attestation is `m11.1-postfix-2026-11-26-logs.sha256`.
 
 ## M11.1 gate status — 2026-11-26
 
 Raw authentication of the pinned revision, the complete 28-file digest verification, the tensor-name/shape/dtype
-inventory and the tokenizer/chat-template audit are **complete and evidenced**. What still keeps PR #53 in draft is
-the architectural review, not missing evidence. M11.1 does not claim an executable Clover model: no forward pass,
-no device execution and no memory-admission path exist yet; those belong to M11.2 and later.
+inventory, the metadata-only load plan and the tokenizer/chat-template audit are **complete and evidenced, twice**:
+once at `f930fbf`/`cd811df` and once post-corrective at `443b1c4` (section above). What remains for M11.1 is the
+architect's review of PR #53 and decision **A2** (the three distinct EOS/PAD layers, draft recorded in
+`docs/audits/m11-architect-decisions.md`, still unapproved) — not missing evidence. M11.1 does not claim an
+executable Clover model: no forward pass, no device execution and no memory-admission path exist yet; those belong
+to M11.2 and later.

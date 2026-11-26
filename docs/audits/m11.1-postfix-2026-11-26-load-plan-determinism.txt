@@ -1,0 +1,23 @@
+# Contrôle de déterminisme et de bornes du plan de chargement (metadata-only)
+# trois executions successives de inspect_checkpoint sur le snapshot epingle, sorties comparees octet a octet
+run1_vs_run2=identique
+run2_vs_run3=identique
+
+load_plan_shards=28
+load_plan_tensors=813
+load_plan_chunks=8845
+load_plan_max_chunk_bytes=8388608
+result=PINNED_CONFIG_AND_HEADER_INVENTORY_VALID
+payloads_read=false
+cuda_initialized=false
+
+# empreinte sha256 des trois sorties :
+ffb6c9655ab7b4f5441a4a679afd0508d3814c54feb4a872b2cd850f955ce022  /home/sjteb/projets/m11.1-postfix-2026-11-26/plan-run-1.log
+ffb6c9655ab7b4f5441a4a679afd0508d3814c54feb4a872b2cd850f955ce022  /home/sjteb/projets/m11.1-postfix-2026-11-26/plan-run-2.log
+ffb6c9655ab7b4f5441a4a679afd0508d3814c54feb4a872b2cd850f955ce022  /home/sjteb/projets/m11.1-postfix-2026-11-26/plan-run-3.log
+
+# occupation memorienne maximale du processus (payload jamais materialise) :
+/home/sjteb/projets/m11.1-postfix-2026-11-26/plan-run-1.time:	Maximum resident set size (kbytes): 4576
+/home/sjteb/projets/m11.1-postfix-2026-11-26/plan-run-2.time:	Maximum resident set size (kbytes): 4404
+/home/sjteb/projets/m11.1-postfix-2026-11-26/plan-run-3.time:	Maximum resident set size (kbytes): 4500
+/home/sjteb/projets/m11.1-postfix-2026-11-26/inspect-headers.time:	Maximum resident set size (kbytes): 4476

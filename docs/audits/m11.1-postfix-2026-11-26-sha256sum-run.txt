@@ -1,0 +1,7 @@
+# Fenetre et debit de la passe sha256sum independante (28 artefacts, 69 322 795 672 octets)
+debut=2026-11-26T21:03:17+01:00
+fin=2026-11-26T21:13:41+01:00
+duree_s=623.94
+debit_octets_par_s=111104907.0
+lignes=28 exit=0
+stderr=0 octets
