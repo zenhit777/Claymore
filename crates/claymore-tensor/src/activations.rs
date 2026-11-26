@@ -155,5 +155,4 @@ mod tests {
         assert_eq!(output[3], 1.0);
         assert_eq!(output[4], 1.0);
     }
-
 }
