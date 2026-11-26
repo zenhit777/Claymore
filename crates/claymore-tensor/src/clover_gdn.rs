@@ -4,6 +4,7 @@
 //! derived from the immutable Clover release. All recurrent state is FP32;
 //! activation outputs are explicitly rounded to F32 or BF16.
 
+use crate::activations::sigmoid_scalar;
 use crate::Bf16;
 use thiserror::Error;
 
@@ -212,7 +213,12 @@ pub fn block_conv_silu(
         return Err(GdnError::ShapeMismatch);
     }
     let joined_len = kernel_width - 1 + tokens;
-    let mut joined = vec![0.0f32; channels.checked_mul(joined_len).ok_or(GdnError::SizeOverflow)?];
+    let mut joined = vec![
+        0.0f32;
+        channels
+            .checked_mul(joined_len)
+            .ok_or(GdnError::SizeOverflow)?
+    ];
     for channel in 0..channels {
         let base = channel * joined_len;
         joined[base..base + kernel_width - 1].copy_from_slice(
@@ -588,8 +594,12 @@ mod tests {
             1,
             1,
             GdnOutputDType::BF16,
-        ).unwrap();
-        assert_eq!(beta[0].to_bits(), Bf16::from_f32(beta[0]).to_f32().to_bits());
+        )
+        .unwrap();
+        assert_eq!(
+            beta[0].to_bits(),
+            Bf16::from_f32(beta[0]).to_f32().to_bits()
+        );
     }
 
     #[test]
