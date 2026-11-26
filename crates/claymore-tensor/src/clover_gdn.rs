@@ -617,6 +617,68 @@ mod tests {
     }
 
     #[test]
+    fn full_attention_mask_supports_empty_prefix_and_partial_final_block() {
+        let preview = full_attention_mask(&[], &[true, false], true).unwrap();
+        assert_eq!(preview, vec![0.0, f32::NEG_INFINITY, 0.0, f32::NEG_INFINITY]);
+        let commit = full_attention_mask(&[], &[true, false], false).unwrap();
+        assert_eq!(commit, vec![0.0, f32::NEG_INFINITY, 0.0, f32::NEG_INFINITY]);
+    }
+
+    #[test]
+    fn gdn_gates_propagate_nan_and_define_infinite_limits() {
+        let (decay, beta) = gdn_gates(
+            &[f32::INFINITY, f32::NAN, 0.0],
+            &[f32::NEG_INFINITY, f32::NAN, f32::INFINITY],
+            &[0.0],
+            &[0.0],
+            3,
+            1,
+            GdnOutputDType::F32,
+        ).unwrap();
+        assert_eq!(decay[0], f32::NEG_INFINITY);
+        assert!(decay[1].is_nan());
+        assert!(decay[2].is_finite());
+        assert_eq!(beta[0], 0.0);
+        assert!(beta[1].is_nan());
+        assert_eq!(beta[2], 1.0);
+    }
+
+    #[test]
+    fn causal_conv_propagates_nan_and_infinite_limits() {
+        let (output, _) = causal_conv_silu(
+            &[f32::NEG_INFINITY, f32::INFINITY, f32::NAN],
+            3,
+            1,
+            &[0.0],
+            &[1.0, 0.0],
+            2,
+            &[true, true, true],
+            GdnOutputDType::F32,
+        ).unwrap();
+        assert_eq!(output[0].to_bits(), (-0.0f32).to_bits());
+        assert_eq!(output[1], f32::INFINITY);
+        assert!(output[2].is_nan());
+    }
+
+    #[test]
+    fn convolution_shape_error_does_not_mutate_caller_history() {
+        let history = vec![0.25, -0.5];
+        let before = history.clone();
+        let result = causal_conv_silu(
+            &[1.0],
+            2,
+            1,
+            &history,
+            &[1.0, 1.0],
+            3,
+            &[true, true],
+            GdnOutputDType::F32,
+        );
+        assert_eq!(result, Err(GdnError::ShapeMismatch));
+        assert_eq!(history, before);
+    }
+
+    #[test]
     fn full_attention_mask_distinguishes_bidirectional_preview_and_causal_commit() {
         let prefix = [true, false, true];
         let block = [true, true, false];
