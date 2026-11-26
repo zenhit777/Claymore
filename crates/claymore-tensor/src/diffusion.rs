@@ -1062,13 +1062,13 @@ mod tests {
 
         let device = CpuDevice::new();
         let input = tensor(&device, vec![1, 1, 8], &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
-        let cos = tensor(&device, vec![1, 4], &[0.0, 0.0, 1.0, 1.0]);
-        let sin = tensor(&device, vec![1, 4], &[1.0, 1.0, 0.0, 0.0]);
+        let cos = tensor(&device, vec![1, 4], &[0.0, 0.0, 0.0, 0.0]);
+        let sin = tensor(&device, vec![1, 4], &[1.0, 1.0, 1.0, 1.0]);
         let output = values(
             &device,
             &rotary_embed_partial(&device, &input, &cos, &sin).unwrap(),
         );
-        assert_eq!(output, [-3.0, -4.0, 1.0, 2.0, 5.0, 6.0, 7.0, 8.0]);
+        assert_eq!(output, [-3.0, -4.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
     }
 
     #[test]
