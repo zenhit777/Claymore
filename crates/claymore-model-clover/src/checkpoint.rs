@@ -608,7 +608,6 @@ impl CloverCheckpointInventory {
         Ok(())
     }
 
-
     /// Validate every model tensor against the pinned Python module structure.
     ///
     /// The expected names and shapes are derived from modeling_clover_moe.py at
@@ -622,22 +621,29 @@ impl CloverCheckpointInventory {
         let q_heads = 16usize;
         let kv_heads = 2usize;
         let head_dim = 256usize;
-        let gdn_channels = 2 * GDN_KEY_HEADS * GDN_KEY_HEAD_DIM
-            + GDN_VALUE_HEADS * GDN_VALUE_HEAD_DIM;
+        let gdn_channels =
+            2 * GDN_KEY_HEADS * GDN_KEY_HEAD_DIM + GDN_VALUE_HEADS * GDN_VALUE_HEAD_DIM;
         let gdn_value_width = GDN_VALUE_HEADS * GDN_VALUE_HEAD_DIM;
-        let mut expected: BTreeMap<String, (Vec<usize>, Option<&'static str>)> =
-            BTreeMap::new();
+        let mut expected: BTreeMap<String, (Vec<usize>, Option<&'static str>)> = BTreeMap::new();
 
         let mut add = |name: String, shape: Vec<usize>, sidecar: Option<&'static str>| {
             expected.insert(name, (shape, sidecar));
         };
-        add("model.embed_tokens.weight".into(), vec![vocab, hidden], None);
+        add(
+            "model.embed_tokens.weight".into(),
+            vec![vocab, hidden],
+            None,
+        );
         add("model.norm.weight".into(), vec![hidden], None);
         add("lm_head.weight".into(), vec![vocab, hidden], None);
 
         for layer in 0..LAYER_COUNT {
             let prefix = format!("model.layers.{layer}");
-            add(format!("{prefix}.input_layernorm.weight"), vec![hidden], None);
+            add(
+                format!("{prefix}.input_layernorm.weight"),
+                vec![hidden],
+                None,
+            );
             add(
                 format!("{prefix}.post_attention_layernorm.weight"),
                 vec![hidden],
@@ -697,11 +703,7 @@ impl CloverCheckpointInventory {
                 );
                 add(format!("{gdn}.A_log"), vec![GDN_VALUE_HEADS], None);
                 add(format!("{gdn}.dt_bias"), vec![GDN_VALUE_HEADS], None);
-                add(
-                    format!("{gdn}.norm.weight"),
-                    vec![GDN_VALUE_HEAD_DIM],
-                    None,
-                );
+                add(format!("{gdn}.norm.weight"), vec![GDN_VALUE_HEAD_DIM], None);
                 add(
                     format!("{gdn}.out_proj.weight"),
                     vec![hidden, gdn_value_width],
@@ -726,11 +728,7 @@ impl CloverCheckpointInventory {
             }
 
             let mlp = format!("{prefix}.mlp");
-            add(
-                format!("{mlp}.gate.weight"),
-                vec![experts, hidden],
-                None,
-            );
+            add(format!("{mlp}.gate.weight"), vec![experts, hidden], None);
             add(
                 format!("{mlp}.experts.gate_up_proj"),
                 vec![experts, 2 * moe_intermediate, hidden],
@@ -1003,11 +1001,22 @@ pub enum CloverCheckpointError {
     #[error("invalid GDN sidecar tensor {tensor} in {file}")]
     InvalidSidecarTensor { file: String, tensor: String },
     #[error("pinned model tensor set mismatch (missing={missing:?}, unexpected={unexpected:?})")]
-    PinnedTensorSetMismatch { missing: Vec<String>, unexpected: Vec<String> },
+    PinnedTensorSetMismatch {
+        missing: Vec<String>,
+        unexpected: Vec<String>,
+    },
     #[error("pinned tensor {tensor} shape mismatch: expected {expected:?}, got {actual:?}")]
-    PinnedTensorShapeMismatch { tensor: String, expected: Vec<usize>, actual: Vec<usize> },
+    PinnedTensorShapeMismatch {
+        tensor: String,
+        expected: Vec<usize>,
+        actual: Vec<usize>,
+    },
     #[error("pinned tensor {tensor} is in the wrong shard: expected {expected}, got {actual}")]
-    PinnedTensorShardMismatch { tensor: String, expected: String, actual: String },
+    PinnedTensorShardMismatch {
+        tensor: String,
+        expected: String,
+        actual: String,
+    },
     #[error("SHA-256 mismatch for {file}: expected {expected}, got {actual}")]
     HashMismatch {
         file: String,
