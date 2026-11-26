@@ -77,8 +77,13 @@ mod tests {
     use claymore_device::{CpuDevice, DType, Device};
 
     fn f32_tensor(device: &CpuDevice, shape: Vec<usize>, values: &[f32]) -> Tensor {
-        let bytes: Vec<u8> = values.iter().flat_map(|value| value.to_ne_bytes()).collect();
-        let mut storage = device.allocate(MemoryTier::Host, bytes.len() as u64).unwrap();
+        let bytes: Vec<u8> = values
+            .iter()
+            .flat_map(|value| value.to_ne_bytes())
+            .collect();
+        let mut storage = device
+            .allocate(MemoryTier::Host, bytes.len() as u64)
+            .unwrap();
         device.write(storage.as_mut(), 0, &bytes).unwrap();
         Tensor::new(storage, shape, DType::F32).unwrap()
     }
