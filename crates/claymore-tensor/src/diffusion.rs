@@ -1074,6 +1074,19 @@ mod tests {
             &rotary_embed_partial(&device, &input, &cos, &sin).unwrap(),
         );
         assert_eq!(output, [-3.0, -4.0, 1.0, 2.0, 5.0, 6.0, 7.0, 8.0]);
+
+        let bf_input = bf16_tensor(
+            &device,
+            vec![1, 1, 8],
+            &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        );
+        let bf_cos = bf16_tensor(&device, vec![1, 4], &[0.0, 0.0, 0.0, 0.0]);
+        let bf_sin = bf16_tensor(&device, vec![1, 4], &[1.0, 1.0, 1.0, 1.0]);
+        let bf_output = values(
+            &device,
+            &rotary_embed_partial(&device, &bf_input, &bf_cos, &bf_sin).unwrap(),
+        );
+        assert_eq!(bf_output, [-3.0, -4.0, 1.0, 2.0, 5.0, 6.0, 7.0, 8.0]);
     }
 
     #[test]
