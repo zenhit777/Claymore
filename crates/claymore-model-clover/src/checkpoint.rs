@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use claymore_checkpoint::safetensors::{SafetensorsError, SafetensorsFile, WeightDType};
 use claymore_checkpoint::sha256::{hex, sha256};
@@ -255,8 +255,8 @@ impl CloverCheckpointInventory {
                 .collect();
             let actual: BTreeSet<&str> = shard.tensors().map(|entry| entry.name()).collect();
             if expected != actual {
-                let missing: Vec<_> = expected.difference(&actual).copied().collect();
-                let unexpected: Vec<_> = actual.difference(&expected).copied().collect();
+                let missing: Vec<_> = expected.difference(&actual).map(|name| (*name).to_owned()).collect();
+                let unexpected: Vec<_> = actual.difference(&expected).map(|name| (*name).to_owned()).collect();
                 return Err(CloverCheckpointError::ShardTensorMismatch {
                     shard: shard_name.clone(),
                     missing,
