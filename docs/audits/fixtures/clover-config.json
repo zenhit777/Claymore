@@ -1,5 +1,10 @@
 {
   "architectures": ["CloverMoeModelLM"],
+  "auto_map": {
+    "AutoConfig": "configuration_clover_moe.CloverMoeConfig",
+    "AutoModel": "modeling_clover_moe.CloverMoeModel",
+    "AutoModelForCausalLM": "modeling_clover_moe.CloverMoeModelLM"
+  },
   "attention_bias": false,
   "attention_dropout": 0.0,
   "attn_output_gate": true,
@@ -11,6 +16,7 @@
   "head_dim": 256,
   "hidden_act": "silu",
   "hidden_size": 2048,
+  "initializer_range": 0.02,
   "layer_types": [
     "linear_attention", "linear_attention", "linear_attention", "full_attention",
     "linear_attention", "linear_attention", "linear_attention", "full_attention",
