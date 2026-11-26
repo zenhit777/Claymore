@@ -675,6 +675,32 @@ mod tests {
     }
 
     #[test]
+    fn block_preview_competes_local_value_with_gate_decayed_history_bucket() {
+        let dimensions = GdnDimensions {
+            key_heads: 1,
+            value_heads: 1,
+            key_dim: 2,
+            value_dim: 1,
+        };
+        let output = block_preview(
+            dimensions,
+            &[1.0, 0.0],
+            &[1.0, 0.0],
+            &[2.0],
+            &[0.0],
+            &[true],
+            &[3.0, 0.0],
+            1.0 / 2.0f32.sqrt(),
+            GdnOutputDType::F32,
+            &[0.0],
+            &[0.0],
+            &[0.0],
+        ).unwrap();
+        let expected = 1.0 + 1.5 / 2.0f32.sqrt();
+        assert!((output[0] - expected).abs() < 1e-5);
+    }
+
+    #[test]
     fn invalid_tokens_do_not_change_recurrent_state() {
         let mut state = vec![0.25, -0.5, 0.75, 1.0];
         let before = state.clone();
