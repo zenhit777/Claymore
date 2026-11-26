@@ -40,6 +40,12 @@ CASES = [
     ("F12_liste_vide_rejet", [], {"add_generation_prompt": True}),
 ]
 
+EXPECTED_REJECTIONS = {
+    "F10_multimodal_content_rejet": ("TemplateError", "text content only"),
+    "F11_role_inconnu_rejet": ("TemplateError", "No user query found"),
+    "F12_liste_vide_rejet": ("ValueError", "empty conversation"),
+}
+
 out = []
 for name, msgs, kw in CASES:
     e = {"fixture": name, "kwargs": kw, "messages": msgs}
@@ -67,8 +73,13 @@ for name, msgs, kw in CASES:
             e["status"] = "ECHEC_INATTENDU"
             e["error"] = "Direct and rendered tokenization produced different token IDs"
     except Exception as ex:
-        e["status"] = "REJET_ATTENDU" if name.endswith("rejet") else "ECHEC_INATTENDU"
-        e["error"] = f"{type(ex).__name__}: {ex}"
+        error = f"{type(ex).__name__}: {ex}"
+        expected = EXPECTED_REJECTIONS.get(name)
+        if expected and all(part in error for part in expected):
+            e["status"] = "REJET_ATTENDU"
+        else:
+            e["status"] = "ECHEC_INATTENDU"
+        e["error"] = error
     out.append(e)
 
 json.dump(out, open(OUT, "w"), ensure_ascii=False, indent=1)
