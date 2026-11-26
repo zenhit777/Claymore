@@ -1,4 +1,4 @@
-//! Dependency-free SHA-256 used to pin small checkpoint metadata files.
+//! Dependency-free SHA-256 used to pin checkpoint metadata and artifacts.
 //!
 //! Tensor payloads are validated structurally (offsets, shapes, coverage) but
 //! are not individually hashed by the Safetensors format. Small metadata files
