@@ -27,5 +27,125 @@
     }
   },
   "torch_num_threads": 1,
-  "torch_version": "2.10.0+cpu"
+  "torch_version": "2.10.0+cpu",
+  "fixtures": {
+    "REC_OUTPUT": {
+      "shape": [
+        1,
+        3,
+        2,
+        2
+      ],
+      "dtype": "BF16 widened to F32",
+      "values": 12
+    },
+    "REC_STATE_OUT": {
+      "shape": [
+        1,
+        2,
+        2,
+        2
+      ],
+      "dtype": "F32",
+      "values": 8
+    },
+    "PREVIEW_OUTPUT": {
+      "shape": [
+        1,
+        3,
+        2,
+        2
+      ],
+      "dtype": "BF16 widened to F32",
+      "values": 12
+    },
+    "CAUSAL_OUTPUT": {
+      "shape": [
+        1,
+        4,
+        2
+      ],
+      "dtype": "BF16 widened to F32",
+      "values": 8
+    },
+    "CAUSAL_STATE_OUT": {
+      "shape": [
+        1,
+        2,
+        3
+      ],
+      "dtype": "BF16 widened to F32",
+      "values": 6
+    },
+    "BLOCK_OUTPUT": {
+      "shape": [
+        3,
+        2
+      ],
+      "dtype": "BF16 widened to F32",
+      "values": 6
+    },
+    "GATE_DECAY": {
+      "shape": [
+        1,
+        3,
+        2
+      ],
+      "dtype": "F32",
+      "values": 6
+    },
+    "GATE_BETA": {
+      "shape": [
+        1,
+        3,
+        2
+      ],
+      "dtype": "BF16 widened to F32",
+      "values": 6
+    },
+    "NORM_ZERO_OUT": {
+      "shape": [
+        2,
+        4
+      ],
+      "dtype": "BF16 widened to F32",
+      "values": 8
+    },
+    "NORM_GATE_OUT": {
+      "shape": [
+        2,
+        4
+      ],
+      "dtype": "BF16 widened to F32",
+      "values": 8
+    },
+    "ROPE_OUTPUT": {
+      "shape": [
+        2,
+        2,
+        8
+      ],
+      "dtype": "BF16 widened to F32",
+      "values": 32
+    },
+    "ATTN_OUTPUT": {
+      "shape": [
+        1,
+        2,
+        16,
+        4
+      ],
+      "dtype": "BF16 widened to F32",
+      "values": 128
+    },
+    "ATTN_GATED_OUTPUT": {
+      "shape": [
+        1,
+        2,
+        64
+      ],
+      "dtype": "BF16 widened to F32",
+      "values": 128
+    }
+  }
 }
