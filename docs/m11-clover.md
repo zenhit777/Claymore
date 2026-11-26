@@ -8,7 +8,7 @@ M11 est le prochain jalon produit après M10. Il est en cours de découpage et d
 
 - Modèle : `Diffuspace/Clover-35B-A3B-Preview`
 - Révision du `config.json` consultée : `4b0402b65e523d0183a14c431955438714cb16ff`
-- La révision du code modèle, du tokenizer, du template de conversation, de l'index Safetensors et des poids doit être auditée et épinglée séparément avant l'ouverture du chargeur de checkpoint.
+- Le snapshot de release est épinglé au commit `4b0402b65e523d0183a14c431955438714cb16ff`. Le manifeste `docs/audits/clover-upstream-manifest.md` recense les fichiers à vérifier ; les SHA-256 bruts de chaque artefact restent à calculer avant toute compatibilité checkpoint.
 - Licence publiée : Apache-2.0 ; les attributions Qwen / Hugging Face doivent être conservées pour le code dérivé.
 - Référence d'architecture : [rapport technique Clover](https://arxiv.org/abs/2611.24636).
 
@@ -53,11 +53,12 @@ Le coreset agrège les scores top-8 sur le bloc et sélectionne un sous-ensemble
 
 `crates/claymore-model-clover/src/config.rs` introduit :
 - le parseur typé des champs structurants du config ;
-- validation BF16 explicite, dimensions, géométrie GQA, top-k, paramètres flottants, motif des couches et sémantique de débruitage ;
+- validation BF16 explicite, dimensions, géométrie GQA, top-k, paramètres flottants, motif des couches, sémantique de débruitage et valeurs `auto_map` / `initializer_range` ;
+- désérialisation fail-closed qui rejette les champs inconnus et les doublons des champs typés ;
 - validation de l'architecture épinglée ;
 - fixture JSON et tests négatifs/positifs CPU-only.
 
-Ce premier incrément ne vérifie pas encore le SHA-256 du fichier upstream et ne valide pas l'index Safetensors. Ces points restent dans #48 ; ne pas interpréter le seul parseur comme une preuve de provenance du checkpoint.
+Le schéma couvre maintenant tous les champs du `config.json` de release et refuse les dérives de schéma. Le manifeste de provenance est créé, mais les SHA-256 des octets bruts et l'inventaire Safetensors restent à réaliser ; ne pas interpréter le parseur ou la fixture comme une preuve de provenance du checkpoint.
 
 ## Contraintes d'intégration
 
