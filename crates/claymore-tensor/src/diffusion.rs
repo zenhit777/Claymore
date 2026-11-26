@@ -336,8 +336,7 @@ pub fn rotary_embed_partial(
                 let first_sin = sin_table[table_base + index];
                 let second_cos = cos_table[table_base + half + index];
                 let second_sin = sin_table[table_base + half + index];
-                output[base + index] =
-                    round(round(first * first_cos) - round(second * first_sin));
+                output[base + index] = round(round(first * first_cos) - round(second * first_sin));
                 output[base + half + index] =
                     round(round(second * second_cos) + round(first * second_sin));
             }
@@ -1057,11 +1056,17 @@ mod tests {
             rope_tables_partial(&[0, 1], 256, 10_000_000.0, 0.25).unwrap();
         assert_eq!(cos_values.len(), 2 * 64);
         assert_eq!(sin_values.len(), 2 * 64);
-        assert!(cos_values[..64].iter().all(|value| (*value - 1.0).abs() < 1e-6));
+        assert!(cos_values[..64]
+            .iter()
+            .all(|value| (*value - 1.0).abs() < 1e-6));
         assert!(sin_values[..64].iter().all(|value| value.abs() < 1e-6));
 
         let device = CpuDevice::new();
-        let input = tensor(&device, vec![1, 1, 8], &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
+        let input = tensor(
+            &device,
+            vec![1, 1, 8],
+            &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        );
         let cos = tensor(&device, vec![1, 4], &[0.0, 0.0, 0.0, 0.0]);
         let sin = tensor(&device, vec![1, 4], &[1.0, 1.0, 1.0, 1.0]);
         let output = values(
