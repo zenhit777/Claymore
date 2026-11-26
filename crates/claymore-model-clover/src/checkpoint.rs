@@ -135,7 +135,7 @@ impl CloverShardIndex {
         let shard_count =
             declared_shard_count.ok_or_else(|| CloverCheckpointError::InvalidIndex {
                 reason: "weight_map has no model shard entries".to_owned(),
-            })? as usize;
+            })?;
         if model_shards.len() != shard_count {
             return Err(CloverCheckpointError::InvalidIndex {
                 reason: format!(
