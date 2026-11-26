@@ -495,9 +495,9 @@ pub fn block_preview(
 
             let mut history = vec![0.0f32; dims.value_dim];
             let decay = g[query_token * dims.value_heads + value_head].exp();
-            for value_index in 0..dims.value_dim {
+            for (value_index, history_value) in history.iter_mut().enumerate() {
                 let row_base = value_index * dims.key_dim;
-                history[value_index] =
+                *history_value =
                     dot(&state[row_base..row_base + dims.key_dim], &q_norm) * scale * decay;
             }
 
