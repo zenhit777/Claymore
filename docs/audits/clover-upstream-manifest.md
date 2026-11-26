@@ -51,7 +51,7 @@ Measured on the local pinned snapshot, byte-for-byte identical to the sizes publ
 
 ### Pinned upstream digests for the 28 indexed Safetensors artifacts
 
-These are the SHA-256 values published in Hugging Face Xet pointer metadata at the pinned revision; local streaming verification of the 28 payloads is still gated on the checkpoint download.
+These are the SHA-256 values published in Hugging Face Xet pointer metadata at the pinned revision. The local pinned snapshot was subsequently verified end-to-end: all 28 payload files were streamed and their raw SHA-256 values matched this table (28/28), as recorded in `docs/audits/m11.1-clover-checkpoint-audit-2026-11-26.md` and the accompanying logs.
 
 | Artifact | Revision | Raw SHA-256 |
 |---|---|---|
