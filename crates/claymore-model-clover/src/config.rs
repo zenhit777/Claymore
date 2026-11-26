@@ -390,10 +390,14 @@ mod tests {
     #[test]
     fn rejects_unknown_fields_and_duplicate_known_fields() {
         let mut unknown = PINNED_CONFIG.trim_end().trim_end_matches('}').to_owned();
-        unknown.push_str(",\n  \\\"unexpected_upstream_field\\\": true\n}");
+        unknown.push_str(",\n  \"unexpected_upstream_field\": true\n}");
         assert!(CloverConfig::from_json(&unknown).is_err());
 
-        let duplicate = PINNED_CONFIG.replacen(\"\\\"hidden_size\\\": 2048\", \\\"\\\"hidden_size\\\": 2048, \\\"hidden_size\\\": 2048\", 1);
+        let duplicate = PINNED_CONFIG.replacen(
+            "\"hidden_size\": 2048",
+            "\"hidden_size\": 2048, \"hidden_size\": 2048",
+            1,
+        );
         assert!(CloverConfig::from_json(&duplicate).is_err());
     }
 
