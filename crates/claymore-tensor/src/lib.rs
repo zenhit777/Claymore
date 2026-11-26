@@ -12,7 +12,7 @@ pub mod contracts;
 pub mod clover_gdn;
 pub mod diffusion;
 pub mod ops;
-pub use activations::silu;
+pub use activations::{sigmoid, silu};
 pub use aten_topk::top_k_largest;
 pub use bf16::Bf16;
 pub use clover_gdn::{block_conv_silu, block_preview, causal_conv_silu, recurrent_commit, GdnDimensions, GdnError, GdnOutputDType};
@@ -28,7 +28,7 @@ pub use diffusion::{
     scale_bias, scale_scalar, scatter_add, sliding_window_mask, soft_cap, validate_mask, widen,
     RopeType, MASK_BLOCKED,
 };
-pub use ops::{add, matmul, rms_norm, softmax_last_dim, OpError};
+pub use ops::{add, matmul, mul, rms_norm, softmax_last_dim, OpError};
 use thiserror::Error;
 
 /// A validated tensor layout. Strides are measured in elements, not bytes.
