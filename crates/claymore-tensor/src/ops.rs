@@ -649,6 +649,17 @@ mod tests {
         values.iter().map(|value| Bf16::from_f32(*value)).collect()
     }
 
+    fn assert_bf16_one_ulp(actual: &[f32], expected: &[f32]) {
+        assert_eq!(actual.len(), expected.len());
+        for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+            let one_ulp = expected.abs().max(f32::MIN_POSITIVE) / 128.0;
+            assert!(
+                (actual - expected).abs() <= one_ulp,
+                "BF16 reference mismatch at {index}: actual={actual:?}, expected={expected:?}, one_ulp={one_ulp}"
+            );
+        }
+    }
+
     fn assert_reference_close(actual: &[f32], expected: &[f32], tolerance: f32) {
         assert_eq!(actual.len(), expected.len());
         for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
@@ -670,10 +681,9 @@ mod tests {
         let weight = bf16_tensor(&device, vec![4], &bf16_values(&[-0.25, 0.5, 0.0, 0.125]));
         let output = rms_norm_zero_centered(&device, &input, &weight, 1e-6).unwrap();
         assert_eq!(output.layout().dtype(), DType::BF16);
-        assert_reference_close(
+        assert_bf16_one_ulp(
             &values(&device, &output),
             crate::clover_gdn_upstream_fixtures::NORM_ZERO_OUT,
-            1e-4,
         );
     }
 
@@ -690,10 +700,9 @@ mod tests {
         );
         let output = rms_norm_silu_gate(&device, &input, &weight, &gate, 1e-6).unwrap();
         assert_eq!(output.layout().dtype(), DType::BF16);
-        assert_reference_close(
+        assert_bf16_one_ulp(
             &values(&device, &output),
             crate::clover_gdn_upstream_fixtures::NORM_GATE_OUT,
-            1e-4,
         );
     }
 }
