@@ -49,7 +49,11 @@ impl CloverShardIndex {
             .ok_or_else(|| CloverCheckpointError::InvalidIndex {
                 reason: "metadata must be an object".to_owned(),
             })?;
-        require_only_fields(metadata, &["total_size", "total_parameters"], "index metadata")?;
+        require_only_fields(
+            metadata,
+            &["total_size", "total_parameters"],
+            "index metadata",
+        )?;
 
         let total_size = root
             .get("metadata")
@@ -64,15 +68,12 @@ impl CloverShardIndex {
             .and_then(|value| value.get("total_parameters"))
         {
             None => None,
-            Some(value) => Some(
-                value
-                    .as_u64()
-                    .filter(|value| *value > 0)
-                    .ok_or_else(|| CloverCheckpointError::InvalidIndex {
-                        reason: "metadata.total_parameters must be a non-zero unsigned integer"
-                            .to_owned(),
-                    })?,
-            ),
+            Some(value) => Some(value.as_u64().filter(|value| *value > 0).ok_or_else(|| {
+                CloverCheckpointError::InvalidIndex {
+                    reason: "metadata.total_parameters must be a non-zero unsigned integer"
+                        .to_owned(),
+                }
+            })?),
         };
 
         let entries = root
@@ -96,13 +97,17 @@ impl CloverShardIndex {
                     reason: "weight_map contains an empty or invalid tensor name".to_owned(),
                 });
             }
-            let shard = value.as_str().ok_or_else(|| CloverCheckpointError::InvalidIndex {
-                reason: format!("weight_map entry {tensor:?} must be a string"),
-            })?;
-            let (_, shard_count) = parse_shard_name(shard).ok_or_else(|| {
-                CloverCheckpointError::UnsafeShardName(shard.to_owned())
-            })?;
-            if declared_shard_count.replace(shard_count).is_some_and(|old| old != shard_count) {
+            let shard = value
+                .as_str()
+                .ok_or_else(|| CloverCheckpointError::InvalidIndex {
+                    reason: format!("weight_map entry {tensor:?} must be a string"),
+                })?;
+            let (_, shard_count) = parse_shard_name(shard)
+                .ok_or_else(|| CloverCheckpointError::UnsafeShardName(shard.to_owned()))?;
+            if declared_shard_count
+                .replace(shard_count)
+                .is_some_and(|old| old != shard_count)
+            {
                 return Err(CloverCheckpointError::InvalidIndex {
                     reason: "shard filenames declare inconsistent shard counts".to_owned(),
                 });
@@ -111,9 +116,10 @@ impl CloverShardIndex {
             weight_map.insert(tensor.clone(), shard.to_owned());
         }
 
-        let shard_count = declared_shard_count.ok_or_else(|| CloverCheckpointError::InvalidIndex {
-            reason: "weight_map has no shard entries".to_owned(),
-        })? as usize;
+        let shard_count =
+            declared_shard_count.ok_or_else(|| CloverCheckpointError::InvalidIndex {
+                reason: "weight_map has no shard entries".to_owned(),
+            })? as usize;
         if shards.len() != shard_count {
             return Err(CloverCheckpointError::InvalidIndex {
                 reason: format!(
@@ -482,12 +488,21 @@ pub enum CloverCheckpointError {
         unexpected: Vec<String>,
     },
     #[error("tensor {tensor} has unsupported dtype {actual}; BF16 is required for model shards")]
-    UnsupportedWeightDType { tensor: String, actual: &'static str },
+    UnsupportedWeightDType {
+        tensor: String,
+        actual: &'static str,
+    },
     #[error("tensor {tensor} byte length mismatch: expected {expected}, got {actual}")]
-    TensorByteLength { tensor: String, expected: u64, actual: u64 },
+    TensorByteLength {
+        tensor: String,
+        expected: u64,
+        actual: u64,
+    },
     #[error("checkpoint payload size mismatch: index declares {index}, shards contain {actual}")]
     TotalSizeMismatch { index: u64, actual: u64 },
-    #[error("checkpoint parameter count mismatch: index declares {index}, shards contain {actual}")]
+    #[error(
+        "checkpoint parameter count mismatch: index declares {index}, shards contain {actual}"
+    )]
     ParameterCountMismatch { index: u64, actual: u64 },
     #[error("integer overflow while inspecting checkpoint")]
     SizeOverflow,
@@ -528,7 +543,8 @@ mod tests {
         ));
         fs::create_dir_all(&root).unwrap();
 
-        let mut header = br#"{"weight":{"dtype":"BF16","shape":[2],"data_offsets":[0,4]}}"#.to_vec();
+        let mut header =
+            br#"{"weight":{"dtype":"BF16","shape":[2],"data_offsets":[0,4]}}"#.to_vec();
         while header.len() % 8 != 0 {
             header.push(b' ');
         }
@@ -550,7 +566,10 @@ mod tests {
         assert_eq!(inventory.tensor("weight").unwrap().shape, vec![2]);
         assert!(matches!(
             inventory.validate_pinned_geometry(),
-            Err(CloverCheckpointError::PinnedShardCount { expected: 26, actual: 1 })
+            Err(CloverCheckpointError::PinnedShardCount {
+                expected: 26,
+                actual: 1
+            })
         ));
 
         fs::remove_dir_all(root).unwrap();
@@ -558,9 +577,18 @@ mod tests {
 
     #[test]
     fn shard_name_parser_requires_a_complete_safe_sequence() {
-        assert_eq!(parse_shard_name("model-00001-of-00026.safetensors"), Some((1, 26)));
-        assert_eq!(parse_shard_name("model-00026-of-00026.safetensors"), Some((26, 26)));
-        assert_eq!(parse_shard_name("../model-00001-of-00026.safetensors"), None);
+        assert_eq!(
+            parse_shard_name("model-00001-of-00026.safetensors"),
+            Some((1, 26))
+        );
+        assert_eq!(
+            parse_shard_name("model-00026-of-00026.safetensors"),
+            Some((26, 26))
+        );
+        assert_eq!(
+            parse_shard_name("../model-00001-of-00026.safetensors"),
+            None
+        );
         assert_eq!(parse_shard_name("model-00000-of-00026.safetensors"), None);
     }
 }
