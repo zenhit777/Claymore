@@ -9,7 +9,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use claymore_checkpoint::safetensors::{SafetensorsError, SafetensorsFile, WeightDType, MAX_CHUNK_BYTES};
+use claymore_checkpoint::safetensors::{
+    SafetensorsError, SafetensorsFile, WeightDType, MAX_CHUNK_BYTES,
+};
 use claymore_checkpoint::sha256::{hex, sha256, sha256_file};
 use claymore_checkpoint::strict_json::Json;
 use thiserror::Error;
@@ -1250,9 +1252,14 @@ mod tests {
         assert_eq!(chunks[1].shard_payload_offset, 128 + MAX_CHUNK_BYTES as u64);
         assert_eq!(chunks[1].length_bytes, MAX_CHUNK_BYTES);
         assert_eq!(chunks[2].tensor_offset, (MAX_CHUNK_BYTES as u64) * 2);
-        assert_eq!(chunks[2].shard_payload_offset, 128 + (MAX_CHUNK_BYTES as u64) * 2);
+        assert_eq!(
+            chunks[2].shard_payload_offset,
+            128 + (MAX_CHUNK_BYTES as u64) * 2
+        );
         assert_eq!(chunks[2].length_bytes, 7);
-        assert!(chunks.iter().all(|chunk| chunk.length_bytes <= MAX_CHUNK_BYTES));
+        assert!(chunks
+            .iter()
+            .all(|chunk| chunk.length_bytes <= MAX_CHUNK_BYTES));
 
         let root = std::env::temp_dir().join(format!(
             "claymore-clover-plan-{}-{}",
@@ -1281,7 +1288,11 @@ mod tests {
         assert_eq!(plan.total_payload_bytes, 12);
         assert_eq!(plan.max_chunk_bytes, MAX_CHUNK_BYTES);
         assert_eq!(plan.shards.len(), 3);
-        let model = plan.shards.iter().find(|shard| shard.name == "model-00001-of-00001.safetensors").unwrap();
+        let model = plan
+            .shards
+            .iter()
+            .find(|shard| shard.name == "model-00001-of-00001.safetensors")
+            .unwrap();
         assert_eq!(model.tensors.len(), 1);
         assert_eq!(model.tensors[0].name, "weight");
         assert_eq!(model.tensors[0].chunks.len(), 1);
