@@ -10,7 +10,7 @@ pub use checkpoint::{
     CloverCheckpointError, CloverCheckpointInventory, CloverInventoryIdentity, CloverLoadPlan,
     CloverShardIndex, ShardLoadPlan, ShardSummary, TensorChunkPlan, TensorLoadPlan, TensorSummary,
 };
-pub use gdn::{block_preview, recurrent_commit, GdnDimensions, GdnError};
+pub use gdn::{block_preview, recurrent_commit, GdnDimensions, GdnError, GdnOutputDType};
 pub use config::{
     CloverConfig, CloverConfigError, LayerType, CONFIG_REVISION, CONFIG_SHA256, INDEX_SHA256,
     MODEL_ID,
