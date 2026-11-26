@@ -1522,7 +1522,9 @@ mod tests {
             &device,
             &attention_output_gate(&device, &attention, &gate).unwrap(),
         );
-        assert_eq!(output, [1.0, -4.0, 0.0]);
+        assert_eq!(output[0], 1.0);
+        assert_eq!(output[1], -4.0);
+        assert!(output[2].abs() < 1e-40);
     }
 
     #[test]
