@@ -1,7 +1,13 @@
-//! Clover-35B-A3B-preview integration boundary.
-///
-/// TODO: implement Claymore-native model loading, GDN/block-diffusion execution,
-/// MoE routing, expert residency/cache management, and attention kernels.
+//! Clover-35B-A3B-Preview model adapter boundary.
+//!
+//! Model-specific graph semantics live here. Tensor storage, device execution,
+//! scheduling, and memory admission remain owned by the shared Claymore crates.
+
+pub mod config;
+pub use config::{CloverConfig, CloverConfigError, LayerType, CONFIG_REVISION, MODEL_ID};
+
+/// Lifecycle marker retained until the model graph is wired to the shared
+/// diffusion executor. This is not an inference engine state machine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CloverEngineState {
     Uninitialized,
