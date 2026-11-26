@@ -351,10 +351,12 @@ pub fn rotary_embed_partial(
 /// * `k`/`v` are `[key_tokens, kv_heads, head_dim]` with `heads % kv_heads == 0`;
 /// * `mask` is `[query_tokens, key_tokens]` and is added to the scores.
 ///
-/// Scores, the softmax and the value reduction are evaluated in FP32. The
-/// eager pinned reference materializes BF16 scores, then rounds the softmax
-/// probabilities to BF16 before the value reduction. A fully masked query row
-/// produces a zero output row instead of NaN; mask builders reject such masks.
+/// Scores, the softmax and the value reduction are evaluated in FP32, matching
+/// the pinned eager reference (`q.float() @ k.float().transpose(-1, -2) *
+/// scale`, then `masked_fill` with `-inf`); no BF16 score is materialized. The
+/// softmax probabilities are rounded to BF16 before the value reduction, as in
+/// `probs.to(v.dtype)`. A fully masked query row produces a zero output row
+/// instead of NaN; mask builders reject such masks.
 #[allow(clippy::too_many_arguments)]
 pub fn attention(
     device: &dyn Device,
@@ -429,14 +431,14 @@ pub fn attention(
                 for dim in 0..head_dim {
                     accumulator = q[q_base + dim].mul_add(k[k_base + dim], accumulator);
                 }
-                // The eager reference first materializes the BF16 score, then
-                // adds the attention mask, and only then upcasts for softmax.
-                let mut score = round_to_dtype(&[accumulator * scale], dtype)[0];
+                // The pinned eager reference keeps the whole score chain in FP32:
+                // `scores = (q.float() @ k.float().transpose(-1, -2)) * scale`, then
+                // replaces disallowed keys with `-inf` (`masked_fill`). The additive
+                // FP32 mask (entries `0.0` or `-inf`) reproduces that replacement
+                // exactly, and no BF16 score is ever materialized.
+                let mut score = accumulator * scale;
                 if let Some(mask_values) = &mask_values {
-                    score = round_to_dtype(
-                        &[score + mask_values[token * key_tokens + key_index]],
-                        dtype,
-                    )[0];
+                    score += mask_values[token * key_tokens + key_index];
                 }
                 scores[key_index] = score;
             }
@@ -1647,5 +1649,4 @@ mod tests {
             );
         }
     }
-
 }

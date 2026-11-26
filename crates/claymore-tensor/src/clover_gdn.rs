@@ -260,14 +260,12 @@ pub fn block_conv_silu(
             for distance in 1..kernel_width {
                 let future = token + distance;
                 if future < tokens {
-                    let future_value = joined
-                        [channel * joined_len + kernel_width - 1 + future];
-                    sum += future_value
-                        * right_weights[channel * (kernel_width - 1) + distance - 1];
+                    let future_value = joined[channel * joined_len + kernel_width - 1 + future];
+                    sum +=
+                        future_value * right_weights[channel * (kernel_width - 1) + distance - 1];
                 }
             }
-            output[token * channels + channel] =
-                round_value(silu_scalar(sum) * mask, output_dtype);
+            output[token * channels + channel] = round_value(silu_scalar(sum) * mask, output_dtype);
         }
     }
     Ok(output)
@@ -409,8 +407,7 @@ pub fn recurrent_commit(
                     decayed_row[key_index] += delta * k_norm[key_index];
                 }
                 if valid[token] {
-                    next_state[row_base..row_base + dims.key_dim]
-                        .copy_from_slice(&decayed_row);
+                    next_state[row_base..row_base + dims.key_dim].copy_from_slice(&decayed_row);
                 }
                 let output_state = if valid[token] {
                     &decayed_row
@@ -581,6 +578,25 @@ fn stable_softmax(logits: &[f32]) -> Vec<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The generated fixture constants must stay pinned to the audited upstream
+    /// revision and to the environment recorded in
+    /// `docs/audits/m11.2-cpu-reference-manifest.json`. Regenerating the
+    /// fixtures against a different upstream revision, or with a different
+    /// PyTorch build, must fail here until the manifest is consciously updated.
+    #[test]
+    fn upstream_fixture_provenance_is_pinned() {
+        use crate::clover_gdn_upstream_fixtures;
+        assert_eq!(
+            clover_gdn_upstream_fixtures::SOURCE_REVISION,
+            "4b0402b65e523d0183a14c431955438714cb16ff"
+        );
+        assert_eq!(
+            clover_gdn_upstream_fixtures::SOURCE_SHA256,
+            "2584bd5502d6109c2cea9bee2f2ec98f147bbb8954c43858c0315eb4af9ffb0c"
+        );
+        assert_eq!(clover_gdn_upstream_fixtures::TORCH_VERSION, "2.10.0+cpu");
+    }
 
     fn dims() -> GdnDimensions {
         GdnDimensions {
