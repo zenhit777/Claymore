@@ -721,7 +721,8 @@ mod tests {
             &[0.0],
             &[0.0],
             &[0.0],
-        ).unwrap();
+        )
+        .unwrap();
         let expected = 1.0 + 1.5 / 2.0f32.sqrt();
         assert!((output[0] - expected).abs() < 1e-5);
     }
