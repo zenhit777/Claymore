@@ -45,9 +45,20 @@ impl Json {
         }
     }
 
+    /// Read an unsigned integer without rounding. JSON exporters sometimes
+    /// serialize byte counts as floating-point values with an integral value;
+    /// accept those only while the value is exactly representable by f64.
     pub fn as_u64(&self) -> Option<u64> {
         match self {
-            Self::Number(value) => value.as_u64(),
+            Self::Number(value) => value.as_u64().or_else(|| {
+                let number = value.as_f64()?;
+                const MAX_EXACT_F64_INTEGER: f64 = 9_007_199_254_740_991.0;
+                (number.is_finite()
+                    && number >= 0.0
+                    && number.fract() == 0.0
+                    && number <= MAX_EXACT_F64_INTEGER)
+                    .then_some(number as u64)
+            }),
             _ => None,
         }
     }
@@ -155,6 +166,14 @@ impl<'de> Deserialize<'de> for Json {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn accepts_exact_integral_float_metadata_without_rounding() {
+        assert_eq!(Json::parse(b"71903645408.0").unwrap().as_u64(), Some(71_903_645_408));
+        assert_eq!(Json::parse(b"1.5").unwrap().as_u64(), None);
+        assert_eq!(Json::parse(b"9007199254740992.0").unwrap().as_u64(), None);
+        assert_eq!(Json::parse(b"-1.0").unwrap().as_u64(), None);
+    }
 
     #[test]
     fn rejects_duplicate_keys_at_every_level() {
