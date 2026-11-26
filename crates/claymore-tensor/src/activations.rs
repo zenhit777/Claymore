@@ -52,7 +52,7 @@ pub fn sigmoid(device: &dyn Device, input: &Tensor) -> Result<Tensor, OpError> {
 }
 
 #[inline]
-fn sigmoid_scalar(value: f32) -> f32 {
+pub(crate) fn sigmoid_scalar(value: f32) -> f32 {
     if value.is_nan() {
         return value;
     }
