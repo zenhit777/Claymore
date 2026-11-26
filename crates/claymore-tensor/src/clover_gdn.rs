@@ -167,17 +167,19 @@ pub fn causal_conv_silu(
         valid,
     )?;
     let mut next_history = history.to_vec();
-    let mut output = vec![0.0; input.len()];
-    let mut window = vec![0.0; kernel_width];
+    let mut output = vec![0.0f32; input.len()];
+    let history_width = kernel_width - 1;
     for token in 0..tokens {
+        let mask = if valid[token] { 1.0 } else { 0.0 };
         for channel in 0..channels {
-            if !valid[token] {
-                continue;
+            let hist_base = channel * history_width;
+            let mut window = vec![0.0f32; kernel_width];
+            if history_width > 0 {
+                window[..history_width]
+                    .copy_from_slice(&next_history[hist_base..hist_base + history_width]);
             }
-            let hist_base = channel * (kernel_width - 1);
-            window[..kernel_width - 1]
-                .copy_from_slice(&next_history[hist_base..hist_base + kernel_width - 1]);
-            window[kernel_width - 1] = input[token * channels + channel];
+            let current = round_product(input[token * channels + channel], mask, output_dtype);
+            window[history_width] = current;
             let mut sum = 0.0f32;
             for tap in 0..kernel_width {
                 sum += round_product(
@@ -186,10 +188,11 @@ pub fn causal_conv_silu(
                     output_dtype,
                 );
             }
-            output[token * channels + channel] = silu_scalar(sum);
-            if kernel_width > 1 {
-                next_history.copy_within(hist_base + 1..hist_base + kernel_width - 1, hist_base);
-                next_history[hist_base + kernel_width - 2] = input[token * channels + channel];
+            let activated = round_value(silu_scalar(sum), output_dtype);
+            output[token * channels + channel] = round_product(activated, mask, output_dtype);
+            if valid[token] && history_width > 0 {
+                next_history.copy_within(hist_base + 1..hist_base + history_width, hist_base);
+                next_history[hist_base + history_width - 1] = current;
             }
         }
     }
@@ -248,9 +251,7 @@ pub fn block_conv_silu(
     }
     let mut output = vec![0.0f32; input.len()];
     for token in 0..tokens {
-        if !valid[token] {
-            continue;
-        }
+        let mask = if valid[token] { 1.0 } else { 0.0 };
         for channel in 0..channels {
             let base = channel * joined_len + token;
             let mut sum = 0.0f32;
@@ -259,15 +260,18 @@ pub fn block_conv_silu(
             }
             for distance in 1..kernel_width {
                 let future = token + distance;
-                if future < tokens && valid[future] {
-                    sum += input[future * channels + channel]
+                if future < tokens {
+                    let future_value = joined
+                        [channel * joined_len + kernel_width - 1 + future];
+                    sum += future_value
                         * right_weights[channel * (kernel_width - 1) + distance - 1];
                 }
             }
-            output[token * channels + channel] = silu_scalar(sum);
+            output[token * channels + channel] =
+                round_value(silu_scalar(sum) * mask, output_dtype);
         }
     }
-    Ok(round_output(output, output_dtype))
+    Ok(output)
 }
 
 fn validate_conv(
@@ -300,9 +304,13 @@ fn validate_conv(
 }
 
 fn round_product(lhs: f32, rhs: f32, dtype: GdnOutputDType) -> f32 {
+    round_value(lhs * rhs, dtype)
+}
+
+fn round_value(value: f32, dtype: GdnOutputDType) -> f32 {
     match dtype {
-        GdnOutputDType::F32 => lhs * rhs,
-        GdnOutputDType::BF16 => Bf16::from_f32(lhs * rhs).to_f32(),
+        GdnOutputDType::F32 => value,
+        GdnOutputDType::BF16 => Bf16::from_f32(value).to_f32(),
     }
 }
 
