@@ -52,10 +52,11 @@ Le coreset agrège les scores top-8 sur le bloc et sélectionne un sous-ensemble
 ## Premier incrément implémenté
 
 `crates/claymore-model-clover/src/config.rs` introduit :
-- le parseur typé des champs structurants du config ;
+- le parseur typé de tous les champs du `config.json` de release ;
 - validation BF16 explicite, dimensions, géométrie GQA, top-k, paramètres flottants, motif des couches, sémantique de débruitage et valeurs `auto_map` / `initializer_range` ;
 - désérialisation fail-closed qui rejette les champs inconnus et les doublons des champs typés ;
-- validation de l'architecture épinglée ;
+- validation de l'architecture épinglée, y compris les chemins `auto_map` et `initializer_range` ;
+- refus fail-closed des champs inconnus et des doublons de champs typés ;
 - fixture JSON et tests négatifs/positifs CPU-only.
 
 Le schéma couvre maintenant tous les champs du `config.json` de release et refuse les dérives de schéma. Le manifeste de provenance est créé, mais les SHA-256 des octets bruts et l'inventaire Safetensors restent à réaliser ; ne pas interpréter le parseur ou la fixture comme une preuve de provenance du checkpoint.
