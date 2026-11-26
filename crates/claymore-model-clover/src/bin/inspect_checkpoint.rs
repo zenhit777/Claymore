@@ -45,6 +45,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     config.validate_pinned()?;
 
     let inventory = CloverCheckpointInventory::inspect_pinned(&root, &config)?;
+    let load_plan = inventory.load_plan()?;
     let identity = inventory.identity();
     if identity.index_sha256 != INDEX_SHA256 {
         return Err(format!(
@@ -63,6 +64,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("tensor_count={}", identity.tensor_count);
     println!("parameter_count={}", identity.parameter_count);
     println!("payload_bytes={}", identity.payload_bytes);
+    println!("load_plan_shards={}", load_plan.shards.len());
+    println!(
+        "load_plan_tensors={}",
+        load_plan.shards.iter().map(|shard| shard.tensors.len()).sum::<usize>()
+    );
+    println!(
+        "load_plan_chunks={}",
+        load_plan
+            .shards
+            .iter()
+            .flat_map(|shard| &shard.tensors)
+            .map(|tensor| tensor.chunks.len())
+            .sum::<usize>()
+    );
+    println!("load_plan_max_chunk_bytes={}", load_plan.max_chunk_bytes);
     if verify_hashes {
         inventory.verify_pinned_asset_hashes()?;
         println!("artifact_sha256=verified");
