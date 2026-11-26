@@ -404,12 +404,18 @@ mod tests {
     #[test]
     fn rejects_pinned_auto_map_and_initializer_drift() {
         let mut config = CloverConfig::from_json(PINNED_CONFIG).unwrap();
-        config.auto_map.auto_model_for_causal_lm = \"other.Model\".to_owned();
-        assert!(matches!(config.validate_pinned(), Err(CloverConfigError::PinnedArchitectureMismatch)));
+        config.auto_map.auto_model_for_causal_lm = "other.Model".to_owned();
+        assert!(matches!(
+            config.validate_pinned(),
+            Err(CloverConfigError::PinnedArchitectureMismatch)
+        ));
 
         let mut config = CloverConfig::from_json(PINNED_CONFIG).unwrap();
         config.initializer_range = 0.0;
-        assert!(matches!(config.validate(), Err(CloverConfigError::InvalidFloat(\"initializer_range\"))));
+        assert!(matches!(
+            config.validate(),
+            Err(CloverConfigError::InvalidFloat("initializer_range"))
+        ));
     }
 
     #[test]
