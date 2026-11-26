@@ -42,6 +42,34 @@ fn silu_scalar(value: f32) -> f32 {
     value * sigmoid
 }
 
+/// Logistic sigmoid, evaluated in FP32 and rounded once to the input dtype.
+pub fn sigmoid(device: &dyn Device, input: &Tensor) -> Result<Tensor, OpError> {
+    let source = read_numeric(device, input)?;
+    let dtype = source.dtype();
+    let values = source.to_f32();
+    let output: Vec<f32> = values.into_iter().map(sigmoid_scalar).collect();
+    write_numeric(device, &output, input.layout().shape().to_vec(), dtype)
+}
+
+#[inline]
+fn sigmoid_scalar(value: f32) -> f32 {
+    if value.is_nan() {
+        return value;
+    }
+    if value == f32::INFINITY {
+        return 1.0;
+    }
+    if value == f32::NEG_INFINITY {
+        return 0.0;
+    }
+    if value >= 0.0 {
+        1.0 / (1.0 + (-value).exp())
+    } else {
+        let exponential = value.exp();
+        exponential / (1.0 + exponential)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
