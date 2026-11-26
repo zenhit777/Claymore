@@ -698,7 +698,11 @@ mod tests {
             &[0.0, f32::NEG_INFINITY, 0.0, 0.0, 0.0, f32::NEG_INFINITY]
         );
         assert_eq!(
-            &preview[width..],
+            &preview[width..2 * width],
+            &[0.0, f32::NEG_INFINITY, 0.0, 0.0, 0.0, f32::NEG_INFINITY]
+        );
+        assert_eq!(
+            &preview[2 * width..],
             &[0.0, f32::NEG_INFINITY, 0.0, 0.0, 0.0, f32::NEG_INFINITY]
         );
         assert_eq!(
@@ -1073,9 +1077,7 @@ mod tests {
     fn causal_and_preview_convolutions_match_pinned_upstream_cpu_fixtures() {
         let raw = bf16_values(&[0.2, -0.4, 0.0, 0.0, 0.7, 0.1, -0.3, 0.6]);
         let history = bf16_values(&[0.1, -0.2, 0.3, -0.4, 0.2, 0.05]);
-        let weights = bf16_values(&[
-            0.2, -0.1, 0.3, 0.4, -0.2, 0.5, 0.1, -0.3,
-        ]);
+        let weights = bf16_values(&[0.2, -0.1, 0.3, 0.4, -0.2, 0.5, 0.1, -0.3]);
         let (causal, next_history) = causal_conv_silu(
             &raw,
             4,
@@ -1139,11 +1141,6 @@ mod tests {
             crate::clover_gdn_upstream_fixtures::GATE_DECAY,
             1e-6,
         );
-        assert_reference_close(
-            &beta,
-            crate::clover_gdn_upstream_fixtures::GATE_BETA,
-            1e-4,
-        );
+        assert_reference_close(&beta, crate::clover_gdn_upstream_fixtures::GATE_BETA, 1e-4);
     }
-
 }
