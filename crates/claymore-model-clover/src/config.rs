@@ -20,6 +20,11 @@ pub const SHARED_EXPERTS: usize = 1;
 pub const VOCAB_SIZE: usize = 248_320;
 pub const MAX_CONTEXT: usize = 131_072;
 pub const DEFAULT_BLOCK_SIZE: usize = 32;
+pub const GDN_KEY_HEADS: usize = 16;
+pub const GDN_VALUE_HEADS: usize = 32;
+pub const GDN_KEY_HEAD_DIM: usize = 128;
+pub const GDN_VALUE_HEAD_DIM: usize = 128;
+pub const GDN_CONV_KERNEL_DIM: usize = 4;
 
 /// A layer's execution family in the published checkpoint.
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
