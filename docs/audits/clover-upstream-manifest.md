@@ -73,6 +73,38 @@ Not yet complete:
 - Validation of all 26 model shards and both standalone GDN parameter files.
 - Tensor-name/shape/dtype inventory, including expert and shared-expert coverage.
 - Tokenizer and chat-template structural audit.
-- Review of `configuration_clover_moe.py`, `modeling_clover_moe.py`, and `sampling_clover_moe.py` at the pinned revision against the documented execution semantics.
+- Structural review of the pinned configuration, model and sampling Python sources against the documented execution semantics (completed at source level; raw-byte SHA-256 verification remains pending).
+
+## Source-level semantic audit (pinned release)
+
+The following contracts were checked against the Python implementation at the pinned repository revision. This review is a source audit, not a byte-authentication result; the raw SHA-256 entries above remain pending.
+
+### GDN preview and commit
+
+- GDN width is derived as 2 × 16 × 128 + 32 × 128 = 8192; Q/K/V are split into 16 key heads of width 128 and 32 value heads of width 128.
+- Preview convolution combines the clean causal history with the current block, adds learned independent right-convolution taps, applies SiLU, and does not mutate the clean convolution cache.
+- Preview local memory L2-normalizes Q/K in FP32, repeats them to the value-head count, computes intra-block softmax logits with a learned per-value-head logit scale, and adds one clean-history bucket. Its history logit is history_bias + history_c × log(valid_block_size / 32).
+- The clean recurrent read is decayed by exp(g) before being combined with local block attention. Preview does not apply the recurrent update coefficient beta and does not commit the preview state.
+- Commit mode is a separate causal recurrence: it applies beta = sigmoid(in_proj_b(x)), updates the FP32 SSM state token-by-token, and advances convolution history only for valid tokens. Preview and commit must not be conflated.
+
+### Full attention and MoE
+
+- Full attention projects Q together with an output gate, applies RMSNorm to Q/K, uses partial ordinary RoPE, expands the two KV heads to 16 query heads, and applies a sigmoid output gate after attention.
+- During preview, the current block is bidirectional while the committed prefix remains available as context. During commit, the current tokens are additionally constrained by a causal mask.
+- The MoE router computes token top-8. In preview with block coreset enabled, it first aggregates selected routing mass over the block, retains the smallest descending expert set reaching cumulative top-p 0.9 (always at least one), then applies token top-8 within that coreset.
+- Per-layer routed experts are stored as stacked gate_up_proj and down_proj parameters. Each layer also has one shared SwiGLU expert and a learned scalar gate. This is the basis for the pinned tensor-name/shape validator added to CloverCheckpointInventory.
+
+### LowConfidence generation and penalties
+
+- The sampling helper supports greedy decoding or temperature/top-k/top-p sampling. Confidence is nevertheless computed from the original, unscaled logits at temperature 1.
+- Presence/frequency/repetition and length/thinking biases use committed response history; uncommitted masked-block positions do not penalize one another.
+- A position is filled when confidence is strictly greater than the configured threshold. If no pending position qualifies, the most confident pending position is filled to guarantee progress.
+- A block is committed only after all of its positions are resolved; EOS handling occurs after block resolution, preserving earlier positions that may have been filled after an EOS position.
+- The upstream implementation does not expose beam search or speculative decoding through this generation path. These must not be assumed by the Claymore adapter.
+
+### Tokenizer and prompt boundary
+
+- The pinned tokenizer configuration identifies Qwen2Tokenizer, a 248,320-entry vocabulary, model maximum length 131,072, EOS <|im_end|>, PAD <|endoftext|>, and mask token <|mask|> at ID 151669.
+- Upstream attribution states that ID 151669 was remapped to <|mask|>, affected BPE merges were removed, and the chat template was reduced to text-only rendering. The complete tokenizer.json and chat_template.jinja still require raw-byte hashing and a structural/tokenization fixture audit before this boundary can be considered closed.
 
 No checkpoint compatibility or executable-model claim is permitted until these gates pass.
