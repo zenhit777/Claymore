@@ -3,6 +3,15 @@
 version = 4
 
 [[package]]
+name = "claymore-checkpoint"
+version = "0.5.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "claymore-cli"
 version = "0.5.0"
 dependencies = [
@@ -55,6 +64,7 @@ dependencies = [
 name = "claymore-model-clover"
 version = "0.5.0"
 dependencies = [
+ "claymore-checkpoint",
  "claymore-core",
  "serde",
  "serde_json",
@@ -65,6 +75,7 @@ dependencies = [
 name = "claymore-model-gemma"
 version = "0.5.0"
 dependencies = [
+ "claymore-checkpoint",
  "claymore-core",
  "claymore-device",
  "claymore-memory",
