@@ -133,6 +133,37 @@ pub fn rope_tables(
     Ok((cos, sin))
 }
 
+/// Build Clover's partial-RoPE tables. Unlike the legacy full-head table,
+/// these tables cover only the first `floor(head_dim * partial_factor)`
+/// dimensions; the remaining head dimensions are left unchanged.
+pub fn rope_tables_partial(
+    positions: &[u32],
+    head_dim: usize,
+    theta: f64,
+    partial_factor: f64,
+) -> Result<(Vec<f32>, Vec<f32>), OpError> {
+    let rotary_dim = (head_dim as f64 * partial_factor).floor() as usize;
+    if rotary_dim == 0 || rotary_dim % 2 != 0 || rotary_dim > head_dim {
+        return Err(OpError::InvalidRopeParameter(format!(
+            "partial rotary dimension {rotary_dim} is invalid for head_dim {head_dim}"
+        )));
+    }
+    let frequencies = rope_inv_freq(RopeType::Default, head_dim, theta, partial_factor)?;
+    let active = &frequencies[..rotary_dim / 2];
+    let mut cos = Vec::with_capacity(positions.len() * rotary_dim);
+    let mut sin = Vec::with_capacity(positions.len() * rotary_dim);
+    for &position in positions {
+        for _ in 0..2 {
+            for &frequency in active {
+                let angle = position as f32 * frequency;
+                cos.push(angle.cos());
+                sin.push(angle.sin());
+            }
+        }
+    }
+    Ok((cos, sin))
+}
+
 /// Dense linear projection without bias: `out[t, o] = sum_i x[t, i] * w[o, i]`.
 pub fn linear(device: &dyn Device, input: &Tensor, weight: &Tensor) -> Result<Tensor, OpError> {
     let input_shape = input.layout().shape();
@@ -240,6 +271,75 @@ pub fn rotary_embed(
                 output[base + index] = round(round(first * cosine) - round(second * sine));
                 output[base + half + index] =
                     round(round(second * cosine_second) + round(first * sine_second));
+            }
+        }
+    }
+    write_numeric(device, &output, shape.to_vec(), dtype)
+}
+
+/// Apply Clover's partial rotary embedding to [tokens, heads, head_dim].
+///
+/// The cosine/sine tables have shape [tokens, rotary_dim], where rotary_dim is
+/// even and no greater than head_dim. The first and second halves of that
+/// rotary prefix are paired; the remaining head dimensions pass through
+/// unchanged. BF16 preserves the upstream product and sum rounding boundaries.
+pub fn rotary_embed_partial(
+    device: &dyn Device,
+    input: &Tensor,
+    cos: &Tensor,
+    sin: &Tensor,
+) -> Result<Tensor, OpError> {
+    let shape = input.layout().shape();
+    if shape.len() != 3 {
+        return Err(OpError::ShapeMismatch);
+    }
+    let (tokens, heads, head_dim) = (shape[0], shape[1], shape[2]);
+    let table_shape = cos.layout().shape();
+    if table_shape.len() != 2
+        || table_shape[0] != tokens
+        || table_shape[1] == 0
+        || table_shape[1] % 2 != 0
+        || table_shape[1] > head_dim
+        || sin.layout().shape() != table_shape
+    {
+        return Err(OpError::ShapeMismatch);
+    }
+    let rotary_dim = table_shape[1];
+    let source = read_numeric(device, input)?;
+    let cosines = read_numeric(device, cos)?;
+    let sines = read_numeric(device, sin)?;
+    if source.dtype() != cosines.dtype() || source.dtype() != sines.dtype() {
+        return Err(OpError::MixedDType);
+    }
+    let dtype = source.dtype();
+    let x = source.to_f32();
+    let cos_table = cosines.to_f32();
+    let sin_table = sines.to_f32();
+    let bf16 = dtype == DType::BF16;
+    let round = |value: f32| {
+        if bf16 {
+            crate::Bf16::from_f32(value).to_f32()
+        } else {
+            value
+        }
+    };
+    let half = rotary_dim / 2;
+    let mut output = x.clone();
+    for token in 0..tokens {
+        for head in 0..heads {
+            let base = (token * heads + head) * head_dim;
+            let table_base = token * rotary_dim;
+            for index in 0..half {
+                let first = x[base + index];
+                let second = x[base + half + index];
+                let first_cos = cos_table[table_base + index];
+                let first_sin = sin_table[table_base + index];
+                let second_cos = cos_table[table_base + half + index];
+                let second_sin = sin_table[table_base + half + index];
+                output[base + index] =
+                    round(round(first * first_cos) - round(second * first_sin));
+                output[base + half + index] =
+                    round(round(second * second_cos) + round(first * second_sin));
             }
         }
     }
