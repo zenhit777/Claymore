@@ -26,7 +26,7 @@ pub const MAX_CHUNK_BYTES: usize = 8 * 1024 * 1024;
 
 const LENGTH_PREFIX_BYTES: u64 = 8;
 
-/// Weight dtypes accepted by the M10 execution path.
+/// Weight dtypes currently supported by the shared checkpoint reader.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WeightDType {
     F32,
