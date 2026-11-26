@@ -140,4 +140,20 @@ mod tests {
         assert_eq!(output[2], f32::INFINITY);
         assert!(output[3].is_nan());
     }
+    #[test]
+    fn sigmoid_has_stable_finite_and_infinite_semantics() {
+        let device = CpuDevice::new();
+        let input = f32_tensor(
+            &device,
+            vec![5],
+            &[f32::NEG_INFINITY, -100.0, 0.0, 100.0, f32::INFINITY],
+        );
+        let output = read_f32(&device, &sigmoid(&device, &input).unwrap());
+        assert_eq!(output[0], 0.0);
+        assert!(output[1] >= 0.0 && output[1] < 1e-30);
+        assert_eq!(output[2], 0.5);
+        assert_eq!(output[3], 1.0);
+        assert_eq!(output[4], 1.0);
+    }
+
 }
