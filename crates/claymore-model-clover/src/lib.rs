@@ -5,7 +5,10 @@
 
 pub mod checkpoint;
 pub mod config;
-pub use checkpoint::{CloverCheckpointError, CloverCheckpointInventory, CloverInventoryIdentity, CloverShardIndex, ShardSummary, TensorSummary};
+pub use checkpoint::{
+    CloverCheckpointError, CloverCheckpointInventory, CloverInventoryIdentity, CloverShardIndex,
+    ShardSummary, TensorSummary,
+};
 pub use config::{CloverConfig, CloverConfigError, LayerType, CONFIG_REVISION, MODEL_ID};
 
 /// Lifecycle marker retained until the model graph is wired to the shared
