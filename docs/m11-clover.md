@@ -84,7 +84,7 @@ Le plan de chargement est **metadata-only** : il ne lit pas les payloads, n'allo
 
 ## Validation et gates restantes
 
-La CI Rust stable et Rust 1.86 est **verte sur le HEAD `443b1c4d`** (run [45859382944](https://github.com/zenhit777/Claymore/actions/runs/45859382944)) ; la réplique locale complète (`cargo fmt --check`, `clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace --all-targets --locked` sur stable et 1.86.0 : 284 tests, 0 échec, 12 ignorés) est **verte sur le HEAD de publication** ; la CI GitHub sur ce HEAD est consignée dans le relevé de suivi dès les deux jobs terminés.
+La CI Rust stable et Rust 1.86 est **verte sur le HEAD `443b1c4d`** (run [45859382944](https://github.com/zenhit777/Claymore/actions/runs/45859382944)) et **verte sur le commit des preuves finales `9333242d`** (runs [45908958747](https://github.com/zenhit777/Claymore/actions/runs/45908958747) push et [45908963012](https://github.com/zenhit777/Claymore/actions/runs/45908963012) pull_request, 2/2 jobs chacun) ; la réplique locale complète (`cargo fmt --check`, `clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace --all-targets --locked` sur stable et 1.86.0 : 284 tests, 0 échec, 12 ignorés) est **verte sur le HEAD de publication**.
 
 Items de validation du rafraîchissement CPU-only (`docs/audits/prompts/m11.1-cpu-evidence-refresh-agent.md`), exécutés le 2026-11-26 puis rejoués sur le HEAD de publication :
 

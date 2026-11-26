@@ -256,7 +256,10 @@ historical was rewritten; no pinned digest, shape, dtype or golden fixture chang
   the reference carrying the parity proof.
 - Rust gates: `cargo fmt --check`, `clippy --workspace --all-targets -D warnings`,
   `cargo test --workspace --all-targets --locked` green on stable and on 1.86.0 (284 tests, 0
-  failures, 12 ignored); Clover/checkpoint scope 28 tests on each toolchain.
+  failures, 12 ignored); Clover/checkpoint scope 28 tests on each toolchain. GitHub CI `rust.yml`
+  on the evidence commit `9333242`: green 2/2 on both runs
+  [45908958747](https://github.com/zenhit777/Claymore/actions/runs/45908958747) (push) and
+  [45908963012](https://github.com/zenhit777/Claymore/actions/runs/45908963012) (pull_request).
 
 ## M11.1 gate status — 2026-11-26
 
