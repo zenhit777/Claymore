@@ -40,6 +40,8 @@ fixture module to `crates/claymore-tensor/src/` and update
 generated hashes.
 
 Golden values are stored as exact F32 bit patterns after widening upstream
-BF16/F32 outputs. Rust tests use explicit absolute tolerances for FP32 and
-BF16 operations; eager BF16 attention allows at most one representable BF16
-ULP to account for CPU reduction-order differences.
+BF16/F32 outputs. The predeclared comparison policy is one representable BF16
+ULP for every BF16 output (spacing `max(abs(expected), 2^-126) / 128`),
+`1e-6` absolute tolerance for FP32 gate values, and `2e-6` for the FP32
+recurrent state. This bounds CPU reduction-order differences without an
+arbitrary broad absolute tolerance.
