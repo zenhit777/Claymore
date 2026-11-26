@@ -65,7 +65,6 @@ name = "claymore-model-clover"
 version = "0.5.0"
 dependencies = [
  "claymore-checkpoint",
- "claymore-tensor",
  "serde",
  "serde_json",
  "thiserror",
