@@ -56,7 +56,6 @@ pub enum GdnError {
     InvalidScale,
 }
 
-
 /// Derive Clover's per-token GDN decay and update gates from the two
 /// projected gate streams. `a` and `b` are row-major [tokens, value_heads];
 /// `a_log` and `dt_bias` are [value_heads]. The decay is retained
@@ -74,8 +73,12 @@ pub fn gdn_gates(
     let len = tokens
         .checked_mul(value_heads)
         .ok_or(GdnError::SizeOverflow)?;
-    if tokens == 0 || value_heads == 0 || a.len() != len || b.len() != len
-        || a_log.len() != value_heads || dt_bias.len() != value_heads
+    if tokens == 0
+        || value_heads == 0
+        || a.len() != len
+        || b.len() != len
+        || a_log.len() != value_heads
+        || dt_bias.len() != value_heads
     {
         return Err(GdnError::ShapeMismatch);
     }
@@ -154,7 +157,15 @@ pub fn causal_conv_silu(
     valid: &[bool],
     output_dtype: GdnOutputDType,
 ) -> Result<(Vec<f32>, Vec<f32>), GdnError> {
-    validate_conv(input, tokens, channels, history, weights, kernel_width, valid)?;
+    validate_conv(
+        input,
+        tokens,
+        channels,
+        history,
+        weights,
+        kernel_width,
+        valid,
+    )?;
     let mut next_history = history.to_vec();
     let mut output = vec![0.0; input.len()];
     let mut window = vec![0.0; kernel_width];
@@ -177,10 +188,7 @@ pub fn causal_conv_silu(
             }
             output[token * channels + channel] = silu_scalar(sum);
             if kernel_width > 1 {
-                next_history.copy_within(
-                    hist_base + 1..hist_base + kernel_width - 1,
-                    hist_base,
-                );
+                next_history.copy_within(hist_base + 1..hist_base + kernel_width - 1, hist_base);
                 next_history[hist_base + kernel_width - 2] = input[token * channels + channel];
             }
         }
@@ -204,7 +212,13 @@ pub fn block_conv_silu(
     output_dtype: GdnOutputDType,
 ) -> Result<Vec<f32>, GdnError> {
     validate_conv(
-        input, tokens, channels, clean_history, causal_weights, kernel_width, valid,
+        input,
+        tokens,
+        channels,
+        clean_history,
+        causal_weights,
+        kernel_width,
+        valid,
     )?;
     let right_len = channels
         .checked_mul(kernel_width.saturating_sub(1))
@@ -638,7 +652,8 @@ mod tests {
             4,
             &[true, false, true],
             GdnOutputDType::F32,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(output[1], 0.0);
         assert!(output[0].is_finite() && output[2].is_finite());
         assert_eq!(history, vec![0.0, 1.0, 3.0]);
