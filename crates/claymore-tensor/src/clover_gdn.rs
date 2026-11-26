@@ -382,9 +382,7 @@ pub fn recurrent_commit(
     let query_scale = (dims.key_dim as f32).sqrt().recip();
 
     for token in 0..tokens {
-        if !valid[token] {
-            continue;
-        }
+        let mask = if valid[token] { 1.0 } else { 0.0 };
         for value_head in 0..dims.value_heads {
             let key_head = value_head / repeat;
             let q_base = (token * dims.key_heads + key_head) * dims.key_dim;
@@ -398,18 +396,26 @@ pub fn recurrent_commit(
 
             for value_index in 0..dims.value_dim {
                 let row_base = state_base + value_index * dims.key_dim;
-                let row = &mut next_state[row_base..row_base + dims.key_dim];
-                for item in row.iter_mut() {
-                    *item *= decay;
-                }
-                let remembered = dot(row, &k_norm);
+                let current_row = next_state[row_base..row_base + dims.key_dim].to_vec();
+                let mut decayed_row: Vec<f32> =
+                    current_row.iter().map(|value| value * decay).collect();
+                let remembered = dot(&decayed_row, &k_norm);
                 let value =
                     v[(token * dims.value_heads + value_head) * dims.value_dim + value_index];
                 let delta = (value - remembered) * beta[gate_index];
                 for key_index in 0..dims.key_dim {
-                    row[key_index] += delta * k_norm[key_index];
+                    decayed_row[key_index] += delta * k_norm[key_index];
                 }
-                let query_value = dot(row, &q_norm) * query_scale;
+                if valid[token] {
+                    next_state[row_base..row_base + dims.key_dim]
+                        .copy_from_slice(&decayed_row);
+                }
+                let output_state = if valid[token] {
+                    &decayed_row
+                } else {
+                    &current_row
+                };
+                let query_value = dot(output_state, &q_norm) * query_scale * mask;
                 output[(token * dims.value_heads + value_head) * dims.value_dim + value_index] =
                     query_value;
             }
@@ -492,9 +498,6 @@ pub fn block_preview(
         let history_logit = history_bias[value_head] + history_c[value_head] * block_log_ratio;
 
         for query_token in 0..tokens {
-            if !valid[query_token] {
-                continue;
-            }
             let query_head = value_head / repeat;
             let q_base = (query_token * dims.key_heads + query_head) * dims.key_dim;
             let q_norm = l2_normalize(&q[q_base..q_base + dims.key_dim]);
@@ -523,15 +526,15 @@ pub fn block_preview(
             for value_index in 0..dims.value_dim {
                 let mut local = 0.0f32;
                 for key_token in 0..tokens {
-                    if valid[key_token] {
-                        let value = v[(key_token * dims.value_heads + value_head) * dims.value_dim
-                            + value_index];
-                        local += weights[key_token] * value;
-                    }
+                    let value = v[(key_token * dims.value_heads + value_head) * dims.value_dim
+                        + value_index];
+                    let key_mask = if valid[key_token] { 1.0 } else { 0.0 };
+                    local += weights[key_token] * (value * key_mask);
                 }
                 let result = weights[tokens] * history[value_index] + local;
+                let query_mask = if valid[query_token] { 1.0 } else { 0.0 };
                 output[(query_token * dims.value_heads + value_head) * dims.value_dim
-                    + value_index] = result;
+                    + value_index] = result * query_mask;
             }
         }
     }
