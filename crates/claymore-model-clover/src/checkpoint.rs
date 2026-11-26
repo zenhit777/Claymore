@@ -617,7 +617,6 @@ impl CloverCheckpointInventory {
         let hidden = 2048usize;
         let vocab = 248_320usize;
         let experts = 256usize;
-        let top_k = 8usize;
         let moe_intermediate = 512usize;
         let shared_intermediate = 512usize;
         let q_heads = 16usize;
@@ -809,8 +808,6 @@ impl CloverCheckpointInventory {
                 });
             }
         }
-
-        let _ = top_k; // Top-k is a routing semantic, not a stored tensor dimension.
         Ok(())
     }
 
