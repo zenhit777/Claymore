@@ -1393,4 +1393,27 @@ mod tests {
         );
         assert_eq!(out, [1.0, 0.0, 5.0, 1.0]);
     }
+    #[test]
+    fn attention_output_gate_applies_sigmoid_before_elementwise_product() {
+        let device = CpuDevice::new();
+        let attention = tensor(&device, vec![1, 3], &[2.0, -4.0, 0.5]);
+        let gate = tensor(&device, vec![1, 3], &[0.0, 100.0, -100.0]);
+        let output = values(
+            &device,
+            &attention_output_gate(&device, &attention, &gate).unwrap(),
+        );
+        assert_eq!(output, [1.0, -4.0, 0.0]);
+    }
+
+    #[test]
+    fn attention_output_gate_rejects_shape_mismatch() {
+        let device = CpuDevice::new();
+        let attention = tensor(&device, vec![1, 2], &[1.0, 2.0]);
+        let gate = tensor(&device, vec![2], &[0.0, 0.0]);
+        assert_eq!(
+            attention_output_gate(&device, &attention, &gate).unwrap_err(),
+            OpError::ShapeMismatch
+        );
+    }
+
 }
