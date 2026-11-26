@@ -1212,6 +1212,17 @@ mod tests {
     }
 
     #[test]
+    fn clover_full_attention_16_query_heads_map_to_two_kv_heads() {
+        let device = CpuDevice::new();
+        let q = tensor(&device, vec![1, 16, 1], &[1.0; 16]);
+        let k = tensor(&device, vec![1, 2, 1], &[1.0, 1.0]);
+        let v = tensor(&device, vec![1, 2, 1], &[3.0, 7.0]);
+        let output = values(&device, &attention(&device, &q, &k, &v, None, 1.0).unwrap());
+        assert_eq!(&output[..8], &[3.0; 8]);
+        assert_eq!(&output[8..], &[7.0; 8]);
+    }
+
+    #[test]
     fn attention_rejects_invalid_shapes_scales_and_head_counts() {
         let device = CpuDevice::new();
         let q = tensor(&device, vec![1, 3, 2], &[1.0; 6]);
