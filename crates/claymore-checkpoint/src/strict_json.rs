@@ -1,4 +1,4 @@
-//! Minimal strict JSON value used for checkpoint metadata.
+//! Minimal strict JSON value used for strict checkpoint metadata parsing.
 //!
 //! `serde_json::Map` silently keeps the last value when a JSON object repeats
 //! a key. Checkpoint validation must instead fail closed, so this parser keeps
