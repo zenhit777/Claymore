@@ -173,7 +173,19 @@ def rust_const(name: str, tensor) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="fresh output directory")
+    parser.add_argument(
+        "--upstream-file",
+        type=Path,
+        help="optional local modeling_clover_moe.py; when supplied its SHA-256 is checked",
+    )
     args = parser.parse_args()
+    observed_source_sha256 = None
+    if args.upstream_file is not None:
+        observed_source_sha256 = hashlib.sha256(args.upstream_file.read_bytes()).hexdigest()
+        if observed_source_sha256 != SOURCE_SHA256:
+            raise SystemExit(
+                f"upstream source SHA-256 mismatch: expected {SOURCE_SHA256}, got {observed_source_sha256}"
+            )
     out = Path(args.out).resolve()
     if out.exists() and any(out.iterdir()):
         raise SystemExit(f"refusing to overwrite non-empty directory: {out}")
@@ -356,6 +368,8 @@ def main() -> int:
 
     manifest = {
         "source": source,
+        "source_file_verified": observed_source_sha256 is not None,
+        "source_file_observed_sha256": observed_source_sha256,
         "generator": "tools/m11/gen_cpu_reference.py",
         "seed": SEED,
         "device": "cpu",
