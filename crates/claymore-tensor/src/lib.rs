@@ -31,7 +31,10 @@ pub use diffusion::{
     rotary_embed, rotary_embed_partial, router_top_k, row_mask, scale, scale_bias, scale_scalar,
     scatter_add, sliding_window_mask, soft_cap, validate_mask, widen, RopeType, MASK_BLOCKED,
 };
-pub use ops::{add, matmul, mul, rms_norm, rms_norm_silu_gate, rms_norm_zero_centered, softmax_last_dim, OpError};
+pub use ops::{
+    add, matmul, mul, rms_norm, rms_norm_silu_gate, rms_norm_zero_centered, softmax_last_dim,
+    OpError,
+};
 use thiserror::Error;
 
 /// A validated tensor layout. Strides are measured in elements, not bytes.
