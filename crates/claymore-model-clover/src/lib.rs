@@ -3,7 +3,9 @@
 //! Model-specific graph semantics live here. Tensor storage, device execution,
 //! scheduling, and memory admission remain owned by the shared Claymore crates.
 
+pub mod checkpoint;
 pub mod config;
+pub use checkpoint::{CloverCheckpointError, CloverCheckpointInventory, CloverInventoryIdentity, CloverShardIndex, ShardSummary, TensorSummary};
 pub use config::{CloverConfig, CloverConfigError, LayerType, CONFIG_REVISION, MODEL_ID};
 
 /// Lifecycle marker retained until the model graph is wired to the shared
