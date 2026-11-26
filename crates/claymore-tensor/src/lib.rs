@@ -9,11 +9,13 @@ pub mod activations;
 pub mod aten_topk;
 pub mod bf16;
 pub mod contracts;
+pub mod clover_gdn;
 pub mod diffusion;
 pub mod ops;
 pub use activations::silu;
 pub use aten_topk::top_k_largest;
 pub use bf16::Bf16;
+pub use clover_gdn::{block_conv_silu, block_preview, causal_conv_silu, recurrent_commit, GdnDimensions, GdnError, GdnOutputDType};
 pub use contracts::{
     AliasRule, BackendCapabilities, BackendDecision, BackendPreference, CpuReferenceBackend,
     DispatchError, DispatchPlan, DispatchReport, ExecutionError, ExecutionRequest,
