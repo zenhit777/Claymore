@@ -223,7 +223,10 @@ pub fn rms_norm_zero_centered(
     let values = source.to_f32();
     let weights = weights.to_f32();
     let mut output = vec![0.0f32; values.len()];
-    for (src, dst) in values.chunks_exact(width).zip(output.chunks_exact_mut(width)) {
+    for (src, dst) in values
+        .chunks_exact(width)
+        .zip(output.chunks_exact_mut(width))
+    {
         let mean_square = src.iter().map(|x| x * x).sum::<f32>() / width as f32;
         let inv_rms = 1.0f32 / (mean_square + epsilon).sqrt();
         for index in 0..width {
@@ -642,5 +645,4 @@ mod tests {
         assert_eq!(output[0], 0.0);
         assert_eq!(output[1].to_bits(), (-0.0f32).to_bits());
     }
-
 }
