@@ -5,6 +5,7 @@
 //! it intentionally has no device, CUDA, or checkpoint-payload dependency.
 //! State is FP32, matching the pinned Clover implementation.
 
+use claymore_tensor::Bf16;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +35,13 @@ impl GdnDimensions {
             .and_then(|n| n.checked_mul(self.key_dim))
             .ok_or(GdnError::SizeOverflow)
     }
+}
+
+/// Output precision for the activation values. Recurrent state always stays FP32.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GdnOutputDType {
+    F32,
+    BF16,
 }
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
@@ -66,6 +74,7 @@ pub fn recurrent_commit(
     g: &[f32],
     beta: &[f32],
     valid: &[bool],
+    output_dtype: GdnOutputDType,
     state: &mut [f32],
 ) -> Result<Vec<f32>, GdnError> {
     let dims = dims.validate()?;
@@ -135,7 +144,7 @@ pub fn recurrent_commit(
     }
 
     state.copy_from_slice(&next_state);
-    Ok(output)
+    Ok(round_output(output, output_dtype))
 }
 
 /// Read-only bidirectional block preview over the clean recurrent state.
@@ -163,6 +172,7 @@ pub fn block_preview(
     valid: &[bool],
     clean_state: &[f32],
     scale: f32,
+    output_dtype: GdnOutputDType,
     logit_scale: &[f32],
     history_bias: &[f32],
     history_c: &[f32],
@@ -257,7 +267,17 @@ pub fn block_preview(
             }
         }
     }
-    Ok(output)
+    Ok(round_output(output, output_dtype))
+}
+
+fn round_output(values: Vec<f32>, dtype: GdnOutputDType) -> Vec<f32> {
+    values
+        .into_iter()
+        .map(|value| match dtype {
+            GdnOutputDType::F32 => value,
+            GdnOutputDType::BF16 => Bf16::from_f32(value).to_f32(),
+        })
+        .collect()
 }
 
 fn l2_normalize(values: &[f32]) -> Vec<f32> {
@@ -309,6 +329,7 @@ mod tests {
             &[0.0, 0.0],
             &[1.0, 1.0],
             &[true],
+            GdnOutputDType::F32,
             &mut state,
         )
         .unwrap();
@@ -330,6 +351,7 @@ mod tests {
             &[0.0, 0.0],
             &[1.0, 1.0],
             &[false],
+            GdnOutputDType::F32,
             &mut state,
         )
         .unwrap();
@@ -349,6 +371,7 @@ mod tests {
             &[0.0, 0.0],
             &[1.0, 1.0],
             &[true],
+            GdnOutputDType::F32,
             &mut state,
         );
         assert_eq!(result, Err(GdnError::ShapeMismatch));
@@ -368,6 +391,7 @@ mod tests {
             &[true, false],
             &state,
             1.0 / 2.0f32.sqrt(),
+            GdnOutputDType::F32,
             &[10.0, 10.0],
             &[5.0, 5.0],
             &[1.0, 1.0],
@@ -408,6 +432,7 @@ mod tests {
             &[true],
             &[0.0; 4],
             1.0,
+            GdnOutputDType::F32,
             &[10.0],
             &[5.0, 5.0],
             &[1.0, 1.0],
