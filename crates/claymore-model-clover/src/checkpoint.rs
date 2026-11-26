@@ -450,13 +450,6 @@ fn parse_shard_name(name: &str) -> Option<(usize, usize)> {
     Some((index, count))
 }
 
-fn validate_shard_component(name: &str) -> bool {
-    let mut components = Path::new(name).components();
-    matches!(components.next(), Some(Component::Normal(_)))
-        && components.next().is_none()
-        && parse_shard_name(name).is_some()
-}
-
 fn io_error(path: &Path, source: std::io::Error) -> CloverCheckpointError {
     CloverCheckpointError::Io {
         path: path.to_path_buf(),
