@@ -23,7 +23,7 @@ pub use contracts::{
     TensorOp, UnsupportedReason, ValidatedOp,
 };
 pub use diffusion::{
-    attention, bidirectional_mask, causal_mask, embed_gather, gather_rows, gelu_mul_up, linear,
+    attention, attention_output_gate, bidirectional_mask, causal_mask, embed_gather, gather_rows, gelu_mul_up, linear,
     padding_mask, rope_inv_freq, rope_tables, rotary_embed, router_top_k, row_mask, scale,
     scale_bias, scale_scalar, scatter_add, sliding_window_mask, soft_cap, validate_mask, widen,
     RopeType, MASK_BLOCKED,
