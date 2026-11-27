@@ -39,7 +39,7 @@
     "cuda_used_note": "declared by the generator at the time; the generator now reports torch.cuda.is_initialized() as an observation"
   },
   "regeneration_and_verification_environment": {
-    "note": "2026-11-27 CPU-only regeneration: full fixture file regenerated with the extended generator; the 13 original golden tensors (368 values) are bit-identical to the 2.10.0+cpu originals, proven by per-constant comparison; four new golden tensors added (MASK_COMMIT_ALLOW, ROPE_BIG_COS, ROPE_BIG_SIN, ROPE_BIG_OUTPUT); preview attention fixture corrected to include an invalid query row masked by the pinned upstream query-valid mask, with corresponding zero outputs; generator and fixture constants updated together",
+    "note": "2026-11-27 CPU-only regeneration: full fixture file regenerated with the extended generator; 11 of the 13 original golden tensors (112 values) remain bit-identical to the 2.10.0+cpu originals, proven by per-constant comparison; ATTN_OUTPUT and ATTN_GATED_OUTPUT retain their valid first-query rows and now zero the fully masked invalid second-query rows per upstream; four additional golden tensors are present (MASK_COMMIT_ALLOW, ROPE_BIG_COS, ROPE_BIG_SIN, ROPE_BIG_OUTPUT); preview attention fixture corrected to include an invalid query row masked by the pinned upstream query-valid mask, with corresponding zero outputs; generator and fixture constants updated together",
     "torch_version": "2.12.0+cu130",
     "python_version": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
     "platform": "Linux-6.18.58.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
