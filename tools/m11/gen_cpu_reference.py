@@ -146,6 +146,24 @@ def rotary_partial(x, positions, theta, partial_factor):
     return torch.cat((rotated, x[..., rotary_dim:]), -1), cos.squeeze(1), sin.squeeze(1)
 
 
+def attention_allow(valid, prefix_valid, preview):
+    # Pinned upstream CloverAttention.forward mask construction, lines 428-437.
+    prefix = prefix_valid.shape[-1]
+    tokens = valid.shape[-1]
+    valid = valid.unsqueeze(0)
+    prefix_valid = prefix_valid.unsqueeze(0)
+    key_valid = torch.cat((prefix_valid, valid), -1)
+    allow = key_valid[:, None, None, :].expand(1, 1, tokens, prefix + tokens)
+    if not preview:
+        causal = (
+            torch.arange(prefix + tokens, device="cpu")[None, :]
+            <= prefix + torch.arange(tokens, device="cpu")[:, None]
+        )
+        allow = allow & causal[None, None]
+    allow = allow & valid[:, None, :, None]
+    return allow
+
+
 def attention_eager(q, k, v, gate, allow):
     # Pinned CloverAttention eager branch, lines 443-447.
     query_heads = q.shape[1]
@@ -303,6 +321,19 @@ def main() -> int:
     }.items():
         add(name, value)
 
+    # Production RoPE configuration: head_dim 256, partial factor 0.25,
+    # rope_theta 10^7 (upstream CloverAttention.rotary, lines 395-406).
+    big_positions = torch.tensor([0, 1, 2], dtype=torch.float32)
+    big_input = (
+        ((torch.arange(3 * 256).reshape(3, 1, 256).float() % 23) - 11) / 16
+    ).to(torch.bfloat16)
+    big_out, big_cos, big_sin = rotary_partial(big_input, big_positions, 10_000_000.0, 0.25)
+    for name, value in {
+        "ROPE_BIG_INPUT": big_input, "ROPE_BIG_COS": big_cos, "ROPE_BIG_SIN": big_sin,
+        "ROPE_BIG_OUTPUT": big_out,
+    }.items():
+        add(name, value)
+
     # Full-attention reference: zero-centered q/k RMSNorm, partial RoPE,
     # 16Q/2KV GQA, causal-prefix/block mask and output sigmoid gate.
     attn_q_input = ((torch.arange(128).reshape(2, 16, 4).float() % 17) - 8) / 20
@@ -335,6 +366,20 @@ def main() -> int:
     }.items():
         add(name, value)
 
+    # Commit-mode full-attention mask against the pinned mask construction
+    # (lines 428-437): intra-block causality, fully masked invalid query rows
+    # and block-boundary positions (prefix length 3, block length 4, invalid
+    # query at index 2 and invalid prefix/key at index 1).
+    commit_prefix_valid = torch.tensor([True, False, True])
+    commit_block_valid = torch.tensor([True, True, False, True])
+    allow_commit = attention_allow(commit_block_valid, commit_prefix_valid, preview=False)
+    for name, value in {
+        "MASK_COMMIT_PREFIX_VALID": commit_prefix_valid.float(),
+        "MASK_COMMIT_BLOCK_VALID": commit_block_valid.float(),
+        "MASK_COMMIT_ALLOW": allow_commit.reshape(4, 7).float(),
+    }.items():
+        add(name, value)
+
     source = {
         "repository": "https://huggingface.co/Diffuspace/Clover-35B-A3B-Preview",
         "revision": SOURCE_REVISION,
@@ -349,6 +394,9 @@ def main() -> int:
             "CloverAttention.rotary": "modeling_clover_moe.py:395-406",
             "CloverAttention eager attention": "modeling_clover_moe.py:443-447",
             "full_attention_mask": "modeling_clover_moe.py:428-437 (allow construction)",
+            "GDN decay gate (-exp(A_log)*softplus(a+dt_bias))": "modeling_clover_moe.py:349-350",
+            "GDN beta gate (beta = sigmoid(b))": "modeling_clover_moe.py:374",
+            "attention output sigmoid gate": "modeling_clover_moe.py:447",
         },
     }
     rust_lines = [
@@ -361,7 +409,8 @@ def main() -> int:
         "REC_OUTPUT", "REC_STATE_OUT", "PREVIEW_OUTPUT", "CAUSAL_OUTPUT",
         "CAUSAL_STATE_OUT", "BLOCK_OUTPUT", "GATE_DECAY", "GATE_BETA",
         "NORM_ZERO_OUT", "NORM_GATE_OUT", "ROPE_OUTPUT", "ATTN_OUTPUT",
-        "ATTN_GATED_OUTPUT",
+        "ATTN_GATED_OUTPUT", "MASK_COMMIT_ALLOW",
+        "ROPE_BIG_COS", "ROPE_BIG_SIN", "ROPE_BIG_OUTPUT",
     }
     for name, tensor in fixtures.items():
         if name in golden_names:
@@ -372,22 +421,39 @@ def main() -> int:
     fixture_source_sha256 = hashlib.sha256(rust_path.read_bytes()).hexdigest()
     golden_tensors = [tensor for name, tensor in fixtures.items() if name in golden_names]
     manifest = {
+        "reference_kind": "transcription",
+        "reference_kind_note": (
+            "Fixtures are produced by PyTorch transcriptions of the pinned upstream "
+            "equations (see source.transcribed_functions), not by executing the upstream "
+            "module. The upstream SHA-256 proves file identity, not transcription fidelity."
+        ),
         "fixture_source_sha256": fixture_source_sha256,
         "fixture_count": len(golden_tensors),
         "fixture_values": sum(int(tensor.numel()) for tensor in golden_tensors),
         "source": source,
-        "source_file_verified": observed_source_sha256 is not None,
-        "source_file_observed_sha256": observed_source_sha256,
         "generator": "tools/m11/gen_cpu_reference.py",
         "seed": SEED,
         "device": "cpu",
-        "cuda_used": False,
-        "torch_version": torch.__version__,
-        "python_version": sys.version,
-        "platform": platform.platform(),
-        "machine": platform.machine(),
-        "processor": platform.processor(),
-        "torch_num_threads": torch.get_num_threads(),
+        "generation_environment": {
+            "torch_version": torch.__version__,
+            "python_version": sys.version,
+            "platform": platform.platform(),
+            "machine": platform.machine(),
+            "processor": platform.processor(),
+            "torch_num_threads": torch.get_num_threads(),
+            "cuda_used": bool(torch.cuda.is_initialized()),
+            "cuda_used_observation": (
+                "torch.cuda.is_initialized(), observed in-process; non-intrusive, this "
+                "generator never initializes a CUDA context"
+            ),
+        },
+        "upstream_verification": {
+            "file": SOURCE_FILE,
+            "expected_sha256": SOURCE_SHA256,
+            "observed_sha256": observed_source_sha256,
+            "verified": observed_source_sha256 is not None,
+            "verification_environment_torch_version": torch.__version__,
+        },
         "fixtures": {
             name: {
                 "shape": list(tensor.shape),
@@ -396,6 +462,14 @@ def main() -> int:
             }
             for name, tensor in fixtures.items()
             if name in golden_names
+        },
+        "tolerances": {
+            "bf16_output": (
+                "relative bound 2^-7 (at most 2 BF16 ULPs of the expected value): "
+                "max(abs(expected), 2^-126) / 128"
+            ),
+            "f32_gate": "absolute 1e-6",
+            "f32_recurrent_state": "absolute 2e-6",
         },
     }
     manifest_path = out / "manifest.json"

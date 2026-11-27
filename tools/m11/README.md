@@ -9,9 +9,20 @@ It covers:
 - causal and bidirectional/right-context convolution;
 - decay and beta gates;
 - zero-centered q/k RMSNorm and GDN RMSNorm + SiLU gate;
-- partial RoPE;
+- partial RoPE, including the production configuration (head_dim 256, partial
+  factor 0.25, rope_theta 10^7);
 - the full-attention path: RMSNorm, partial RoPE, 16Q/2KV GQA, prefix/block
-  mask, and output sigmoid gate.
+  mask, and output sigmoid gate;
+- the commit-mode `full_attention_mask` (intra-block causality, invalid query
+  rows, block-boundary positions) against the pinned mask construction.
+
+The fixtures are a *transcription* of the pinned upstream equations into
+PyTorch, not an execution of the upstream module: the upstream SHA-256 proves
+file identity, not transcription fidelity. The generated `manifest.json`
+records `reference_kind: "transcription"`, separates the generation
+environment from the upstream-file verification environment, and reports
+`cuda_used` as the observation `torch.cuda.is_initialized()` (never a CUDA
+context is created).
 
 The script only creates CPU tensors. It does not load model weights, import
 CUDA, query a GPU, allocate VRAM, or require the checkpoint. Do not add CUDA
@@ -40,8 +51,9 @@ fixture module to `crates/claymore-tensor/src/` and update
 generated hashes.
 
 Golden values are stored as exact F32 bit patterns after widening upstream
-BF16/F32 outputs. The predeclared comparison policy is one representable BF16
-ULP for every BF16 output (spacing `max(abs(expected), 2^-126) / 128`),
+BF16/F32 outputs. The predeclared comparison policy is a relative bound of
+2⁻⁷ — at most 2 representable BF16 ULPs of the expected value (spacing
+`max(abs(expected), 2^-126) / 128`) — for every BF16 output,
 `1e-6` absolute tolerance for FP32 gate values, and `2e-6` for the FP32
 recurrent state. This bounds CPU reduction-order differences without an
 arbitrary broad absolute tolerance.

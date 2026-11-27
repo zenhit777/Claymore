@@ -31,7 +31,7 @@ Le crate claymore-tensor fournit un ensemble déterministe pour deux dtypes, F32
 - softmax stable sur la dernière dimension ;
 - RMSNorm sur la dernière dimension avec vecteur de scale explicite (du même dtype que l'entrée).
 
-Ces opérations exigent des layouts contigus, un seul device instance et un dtype unique par opération. Elles ne convertissent pas silencieusement les types. FP16 reste **non supporté** : `DType::F16` est une métadonnée sans chemin de calcul. Ce jeu constitue un socle de référence, pas une affirmation qu'il couvre à lui seul les graphes complets de DiffusionGemma ou Clover. Les opérations supplémentaires relèvent des adaptateurs M10/M11 après le socle d'orchestration M9.
+Ces opérations exigent des layouts contigus, un seul device instance et un dtype unique par opération. Elles ne convertissent pas silencieusement les types. FP16 reste **non supporté** : `DType::F16` est une métadonnée sans chemin de calcul. Ce jeu constitue un socle de référence, pas une affirmation qu'il couvre à lui seul les graphes complets de DiffusionGemma ou Clover. Règle de partage depuis M11 : les primitives de référence génériques (noyaux numériques sans sémantique de modèle — attention, RoPE, RMSNorm, activations, primitives GDN) vivent dans `claymore-tensor` ; la composition du graphe et la sémantique propre à chaque modèle (ordre d'appel, masques et politiques de masque, machines d'état, mapping des checkpoints) vivent dans les adaptateurs M10/M11, par-dessus le socle d'orchestration M9.
 
 ### Politique numérique BF16
 
