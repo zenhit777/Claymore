@@ -289,7 +289,7 @@ impl<'a> CloverCpuWeightStore<'a> {
         ] {
             let actual = self.tensor_shape(&name).ok_or_else(|| CloverCpuWeightError::MissingTensor(name.clone()))?;
             if actual != expected {
-                return Err(CloverCpuWeightError::InvalidMatrixShape { tensor: name, shape: actual.to_vec() });
+                return Err(CloverCpuWeightError::InvalidMatrixShape { tensor: name.clone(), shape: actual.to_vec() });
             }
         }
         let gate_offset = expert.checked_mul(gate_elements)
