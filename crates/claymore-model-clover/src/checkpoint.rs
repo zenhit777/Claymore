@@ -995,7 +995,8 @@ impl CloverCheckpointInventory {
             });
         }
 
-        let count = u64::try_from(element_count).map_err(|_| CloverCheckpointError::SizeOverflow)?;
+        let count =
+            u64::try_from(element_count).map_err(|_| CloverCheckpointError::SizeOverflow)?;
         let end = element_offset
             .checked_add(count)
             .ok_or(CloverCheckpointError::SizeOverflow)?;
@@ -1029,13 +1030,13 @@ impl CloverCheckpointInventory {
             .weight_map()
             .get(tensor_name)
             .ok_or_else(|| CloverCheckpointError::TensorNotIndexed(tensor_name.to_owned()))?;
-        let shard = self
-            .shards
-            .get(shard_name)
-            .ok_or_else(|| CloverCheckpointError::MissingShard {
-                name: shard_name.clone(),
-                path: self.root.join(shard_name),
-            })?;
+        let shard =
+            self.shards
+                .get(shard_name)
+                .ok_or_else(|| CloverCheckpointError::MissingShard {
+                    name: shard_name.clone(),
+                    path: self.root.join(shard_name),
+                })?;
         let bytes = shard.read_tensor_range(tensor_name, byte_offset, byte_len)?;
         Ok(bytes
             .chunks_exact(2)
@@ -1307,8 +1308,7 @@ mod tests {
         let mut model_bytes = fs::read(&model_shard).unwrap();
         let header_len = u64::from_le_bytes(model_bytes[..8].try_into().unwrap()) as usize;
         let payload_start = 8 + header_len;
-        model_bytes[payload_start..payload_start + 4]
-            .copy_from_slice(&[0x80, 0x3f, 0x00, 0xc0]);
+        model_bytes[payload_start..payload_start + 4].copy_from_slice(&[0x80, 0x3f, 0x00, 0xc0]);
         fs::write(&model_shard, model_bytes).unwrap();
 
         fs::write(
@@ -1324,7 +1324,10 @@ mod tests {
         assert_eq!(inventory.identity().payload_bytes, 12);
         assert_eq!(inventory.identity().parameter_count, 6);
         assert_eq!(inventory.tensor("weight").unwrap().shape, vec![2]);
-        assert_eq!(inventory.read_bf16_range("weight", 0, 2).unwrap(), [0x3f80, 0xc000]);
+        assert_eq!(
+            inventory.read_bf16_range("weight", 0, 2).unwrap(),
+            [0x3f80, 0xc000]
+        );
         assert!(matches!(
             inventory.read_bf16_range("weight", 1, 2),
             Err(CloverCheckpointError::TensorElementRangeOutOfBounds { .. })
