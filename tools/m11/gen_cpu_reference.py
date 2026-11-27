@@ -335,7 +335,7 @@ def main() -> int:
         add(name, value)
 
     # Full-attention reference: zero-centered q/k RMSNorm, partial RoPE,
-    # 16Q/2KV GQA, causal-prefix/block mask and output sigmoid gate.
+    # 16Q/2KV GQA, preview mask with one invalid query row, and output sigmoid gate.
     attn_q_input = ((torch.arange(128).reshape(2, 16, 4).float() % 17) - 8) / 20
     attn_q_input = attn_q_input.to(torch.bfloat16)
     attn_k_input = ((torch.arange(24).reshape(3, 2, 4).float() % 13) - 6) / 15
@@ -348,7 +348,9 @@ def main() -> int:
     k_rot, k_cos, k_sin = rotary_partial(k_norm, torch.tensor([0, 1, 2]), 10000.0, 0.5)
     attn_v = (((torch.arange(24).reshape(3, 2, 4).float() % 19) - 9) / 20).to(torch.bfloat16)
     attn_gate = (((torch.arange(128).reshape(2, 16, 4).float() % 11) - 5) / 8).to(torch.bfloat16)
-    allow = torch.tensor([[[[True, True, False], [True, True, False]]]], dtype=torch.bool)
+    attn_valid = torch.tensor([True, False], dtype=torch.bool)
+    attn_prefix_valid = torch.tensor([True], dtype=torch.bool)
+    allow = attention_allow(attn_valid, attn_prefix_valid, preview=True)
     q_heads = q_rot.permute(1, 0, 2).unsqueeze(0)
     k_heads = k_rot.permute(1, 0, 2).unsqueeze(0)
     v_heads = attn_v.permute(1, 0, 2).unsqueeze(0)
