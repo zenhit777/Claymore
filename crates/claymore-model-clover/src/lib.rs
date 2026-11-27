@@ -32,10 +32,10 @@ pub use moe::{
     execute_moe_cpu, project_router_logits_cpu, CloverExpertWeights, CloverMoeError,
     CloverMoeRouter, CloverRoutingPlan, CloverSharedExpertWeights, TokenRoute,
 };
-pub use weights::{CloverCpuWeightError, CloverCpuWeightStore};
 pub use residency::{
     prefetch_requests_for_routing, CloverExpertCache, CloverExpertCacheError,
     CloverExpertCacheMetrics, CloverExpertGeometry, CloverExpertLoadRequest,
     CloverExpertLoadSchedule, CloverExpertLoadTask, CloverExpertPrefetchRequest,
     CloverExpertScheduleError, CloverSharedExpertGeometry, CloverSharedExpertLoadRequest,
 };
+pub use weights::{CloverCpuWeightError, CloverCpuWeightStore};
