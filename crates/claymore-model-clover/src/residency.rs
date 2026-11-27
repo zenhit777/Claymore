@@ -95,10 +95,7 @@ impl CloverExpertLoadSchedule {
         let mut chunks = Vec::new();
         for group in chunk_groups {
             let first = group.first().ok_or(CloverExpertScheduleError::EmptyPlan)?;
-            if group
-                .iter()
-                .any(|chunk| chunk.expert_id != first.expert_id)
-            {
+            if group.iter().any(|chunk| chunk.expert_id != first.expert_id) {
                 return Err(CloverExpertScheduleError::MixedExpertPlan);
             }
             chunks.extend(group);
@@ -1691,9 +1688,11 @@ mod tests {
         let compute_snapshot = scheduler.task(compute).unwrap();
         assert_eq!(compute_snapshot.dependencies, vec![schedule.load_task()]);
 
-        assert_eq!(scheduler.start_next(TaskKind::Prefetch), Some(schedule.load_task()));
+        assert_eq!(
+            scheduler.start_next(TaskKind::Prefetch),
+            Some(schedule.load_task())
+        );
         scheduler.complete(schedule.load_task()).unwrap();
         assert_eq!(scheduler.start_next(TaskKind::Compute), Some(compute));
     }
-
 }
