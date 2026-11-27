@@ -5,6 +5,8 @@
 
 pub mod checkpoint;
 pub mod config;
+pub mod moe;
+pub mod residency;
 pub use checkpoint::{
     CloverCheckpointError, CloverCheckpointInventory, CloverInventoryIdentity, CloverLoadPlan,
     CloverShardIndex, ShardLoadPlan, ShardSummary, TensorChunkPlan, TensorLoadPlan, TensorSummary,
@@ -12,6 +14,16 @@ pub use checkpoint::{
 pub use config::{
     CloverConfig, CloverConfigError, LayerType, CONFIG_REVISION, CONFIG_SHA256, INDEX_SHA256,
     MODEL_ID,
+};
+pub use moe::{
+    execute_moe_cpu, project_router_logits_cpu, CloverExpertWeights, CloverMoeError,
+    CloverMoeRouter, CloverRoutingPlan, CloverSharedExpertWeights, TokenRoute,
+};
+pub use residency::{
+    prefetch_requests_for_routing, CloverExpertCache, CloverExpertCacheError,
+    CloverExpertCacheMetrics, CloverExpertGeometry, CloverExpertLoadRequest,
+    CloverExpertLoadSchedule, CloverExpertLoadTask, CloverExpertPrefetchRequest,
+    CloverExpertScheduleError, CloverSharedExpertGeometry, CloverSharedExpertLoadRequest,
 };
 
 /// Lifecycle marker retained until the model graph is wired to the shared
