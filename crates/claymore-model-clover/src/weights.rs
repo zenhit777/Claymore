@@ -41,7 +41,6 @@ pub enum CloverCpuWeightError {
     ExpertOutOfRange { expert: usize, experts: usize },
 }
 
-
 /// Checkpoint view of one GDN layer. Large projections remain lazy tensor names
 /// and are executed through CloverCpuWeightStore::linear; only compact
 /// convolution and recurrent parameters are materialized here.
@@ -281,7 +280,6 @@ impl<'a> CloverCpuWeightStore<'a> {
 
         Ok(output)
     }
-
 
     /// Resolve a GDN layer's compact parameters and lazy projection tensor names.
     pub fn gdn_weights(
@@ -782,27 +780,92 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         let bits = |value: f32| (value.to_bits() >> 16) as u16;
         let model = root.join("model-00001-of-00001.safetensors");
-        write_multi_tensor(&model, &[
-            ("model.layers.0.linear_attn.conv1d.weight", &[3, 1, 2], &[bits(1.0), bits(2.0), bits(3.0), bits(4.0), bits(5.0), bits(6.0)]),
-            ("model.layers.0.linear_attn.in_proj_qkv.weight", &[3, 2], &[bits(7.0), bits(8.0), bits(9.0), bits(10.0), bits(11.0), bits(12.0)]),
-            ("model.layers.0.linear_attn.in_proj_z.weight", &[1, 2], &[bits(13.0), bits(14.0)]),
-            ("model.layers.0.linear_attn.in_proj_a.weight", &[1, 2], &[bits(15.0), bits(16.0)]),
-            ("model.layers.0.linear_attn.in_proj_b.weight", &[1, 2], &[bits(17.0), bits(18.0)]),
-            ("model.layers.0.linear_attn.A_log", &[1], &[bits(19.0)]),
-            ("model.layers.0.linear_attn.dt_bias", &[1], &[bits(20.0)]),
-            ("model.layers.0.linear_attn.norm.weight", &[1], &[bits(21.0)]),
-            ("model.layers.0.linear_attn.out_proj.weight", &[2, 1], &[bits(22.0), bits(23.0)]),
-        ]);
+        write_multi_tensor(
+            &model,
+            &[
+                (
+                    "model.layers.0.linear_attn.conv1d.weight",
+                    &[3, 1, 2],
+                    &[
+                        bits(1.0),
+                        bits(2.0),
+                        bits(3.0),
+                        bits(4.0),
+                        bits(5.0),
+                        bits(6.0),
+                    ],
+                ),
+                (
+                    "model.layers.0.linear_attn.in_proj_qkv.weight",
+                    &[3, 2],
+                    &[
+                        bits(7.0),
+                        bits(8.0),
+                        bits(9.0),
+                        bits(10.0),
+                        bits(11.0),
+                        bits(12.0),
+                    ],
+                ),
+                (
+                    "model.layers.0.linear_attn.in_proj_z.weight",
+                    &[1, 2],
+                    &[bits(13.0), bits(14.0)],
+                ),
+                (
+                    "model.layers.0.linear_attn.in_proj_a.weight",
+                    &[1, 2],
+                    &[bits(15.0), bits(16.0)],
+                ),
+                (
+                    "model.layers.0.linear_attn.in_proj_b.weight",
+                    &[1, 2],
+                    &[bits(17.0), bits(18.0)],
+                ),
+                ("model.layers.0.linear_attn.A_log", &[1], &[bits(19.0)]),
+                ("model.layers.0.linear_attn.dt_bias", &[1], &[bits(20.0)]),
+                (
+                    "model.layers.0.linear_attn.norm.weight",
+                    &[1],
+                    &[bits(21.0)],
+                ),
+                (
+                    "model.layers.0.linear_attn.out_proj.weight",
+                    &[2, 1],
+                    &[bits(22.0), bits(23.0)],
+                ),
+            ],
+        );
         let conv_sidecar = root.join("bd_gdn_conv_right_weight.safetensors");
-        write_multi_tensor(&conv_sidecar, &[
-            ("model.layers.0.linear_attn.conv_right_weight", &[3, 1, 1], &[bits(24.0), bits(25.0), bits(26.0)]),
-        ]);
+        write_multi_tensor(
+            &conv_sidecar,
+            &[(
+                "model.layers.0.linear_attn.conv_right_weight",
+                &[3, 1, 1],
+                &[bits(24.0), bits(25.0), bits(26.0)],
+            )],
+        );
         let scalar_sidecar = root.join("bd_gdn_softmax_scalars.safetensors");
-        write_multi_tensor(&scalar_sidecar, &[
-            ("model.layers.0.linear_attn.bd_softmax_logit_scale", &[1], &[bits(27.0)]),
-            ("model.layers.0.linear_attn.bd_softmax_history_bias", &[1], &[bits(28.0)]),
-            ("model.layers.0.linear_attn.bd_softmax_history_c", &[1], &[bits(29.0)]),
-        ]);
+        write_multi_tensor(
+            &scalar_sidecar,
+            &[
+                (
+                    "model.layers.0.linear_attn.bd_softmax_logit_scale",
+                    &[1],
+                    &[bits(27.0)],
+                ),
+                (
+                    "model.layers.0.linear_attn.bd_softmax_history_bias",
+                    &[1],
+                    &[bits(28.0)],
+                ),
+                (
+                    "model.layers.0.linear_attn.bd_softmax_history_c",
+                    &[1],
+                    &[bits(29.0)],
+                ),
+            ],
+        );
         fs::write(root.join("model.safetensors.index.json"), br#"{"metadata":{"total_size":58},"weight_map":{
             "model.layers.0.linear_attn.conv1d.weight":"model-00001-of-00001.safetensors",
             "model.layers.0.linear_attn.in_proj_qkv.weight":"model-00001-of-00001.safetensors",
@@ -823,13 +886,42 @@ mod tests {
         let weights = CloverCpuWeightStore::new(&inventory)
             .gdn_weights(0, 2, 1, 1, 1, 1, 2)
             .unwrap();
-        assert_eq!(weights.in_proj_qkv, "model.layers.0.linear_attn.in_proj_qkv.weight");
-        assert_eq!(weights.in_proj_z, "model.layers.0.linear_attn.in_proj_z.weight");
-        assert_eq!(weights.in_proj_a, "model.layers.0.linear_attn.in_proj_a.weight");
-        assert_eq!(weights.in_proj_b, "model.layers.0.linear_attn.in_proj_b.weight");
-        assert_eq!(weights.out_proj, "model.layers.0.linear_attn.out_proj.weight");
-        assert_eq!(weights.conv1d.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
-        assert_eq!(weights.conv_right.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [24.0, 25.0, 26.0]);
+        assert_eq!(
+            weights.in_proj_qkv,
+            "model.layers.0.linear_attn.in_proj_qkv.weight"
+        );
+        assert_eq!(
+            weights.in_proj_z,
+            "model.layers.0.linear_attn.in_proj_z.weight"
+        );
+        assert_eq!(
+            weights.in_proj_a,
+            "model.layers.0.linear_attn.in_proj_a.weight"
+        );
+        assert_eq!(
+            weights.in_proj_b,
+            "model.layers.0.linear_attn.in_proj_b.weight"
+        );
+        assert_eq!(
+            weights.out_proj,
+            "model.layers.0.linear_attn.out_proj.weight"
+        );
+        assert_eq!(
+            weights
+                .conv1d
+                .iter()
+                .map(|v| v.to_f32())
+                .collect::<Vec<_>>(),
+            [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+        );
+        assert_eq!(
+            weights
+                .conv_right
+                .iter()
+                .map(|v| v.to_f32())
+                .collect::<Vec<_>>(),
+            [24.0, 25.0, 26.0]
+        );
         assert_eq!(weights.a_log[0].to_f32(), 19.0);
         assert_eq!(weights.dt_bias[0].to_f32(), 20.0);
         assert_eq!(weights.norm[0].to_f32(), 21.0);
@@ -838,5 +930,4 @@ mod tests {
         assert_eq!(weights.softmax_history_c[0].to_f32(), 29.0);
         fs::remove_dir_all(root).unwrap();
     }
-
 }
