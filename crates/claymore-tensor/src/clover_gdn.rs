@@ -665,7 +665,7 @@ mod tests {
         let preview = full_attention_mask(&[], &[true, false], true).unwrap();
         assert_eq!(
             preview,
-            vec![0.0, f32::NEG_INFINITY, 0.0, f32::NEG_INFINITY]
+            vec![0.0, f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY]
         );
         let commit = full_attention_mask(&[], &[true, false], false).unwrap();
         assert_eq!(
