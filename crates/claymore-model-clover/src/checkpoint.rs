@@ -1303,6 +1303,14 @@ mod tests {
             "bd_gdn_softmax_scalars.safetensors",
             "model.layers.0.linear_attn.bd_softmax_logit_scale",
         );
+        let model_shard = root.join("model-00001-of-00001.safetensors");
+        let mut model_bytes = fs::read(&model_shard).unwrap();
+        let header_len = u64::from_le_bytes(model_bytes[..8].try_into().unwrap()) as usize;
+        let payload_start = 8 + header_len;
+        model_bytes[payload_start..payload_start + 4]
+            .copy_from_slice(&[0x80, 0x3f, 0x00, 0xc0]);
+        fs::write(&model_shard, model_bytes).unwrap();
+
         fs::write(
             root.join(INDEX_FILE),
             br#"{"metadata":{"total_size":12,"total_parameters":6},"weight_map":{"weight":"model-00001-of-00001.safetensors","model.layers.0.linear_attn.conv_right_weight":"bd_gdn_conv_right_weight.safetensors","model.layers.0.linear_attn.bd_softmax_logit_scale":"bd_gdn_softmax_scalars.safetensors"}}"#,
@@ -1316,7 +1324,7 @@ mod tests {
         assert_eq!(inventory.identity().payload_bytes, 12);
         assert_eq!(inventory.identity().parameter_count, 6);
         assert_eq!(inventory.tensor("weight").unwrap().shape, vec![2]);
-        assert_eq!(inventory.read_bf16_range("weight", 0, 2).unwrap(), [0, 0]);
+        assert_eq!(inventory.read_bf16_range("weight", 0, 2).unwrap(), [0x3f80, 0xc000]);
         assert!(matches!(
             inventory.read_bf16_range("weight", 1, 2),
             Err(CloverCheckpointError::TensorElementRangeOutOfBounds { .. })
