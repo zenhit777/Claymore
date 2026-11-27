@@ -103,15 +103,10 @@ pub fn gdn_gates(
 /// Build Clover full-attention additive mask for one active block.
 ///
 /// Prefix keys are visible only when marked valid. During preview every valid
-/// block key is visible to every query (bidirectional denoising). During commit,
-/// block keys are causal within the current block and invalid query rows are
-/// fully masked (pinned construction, `modeling_clover_moe.py:428-437`).
-/// Deliberate deviation in preview: upstream also masks invalid query rows in
-/// preview (`allow & valid[:, None, :, None]`, line 437); this reference keeps
-/// those rows and relies on the caller to discard invalid preview positions at
-/// block resolution (preview never commits state). Pending architect
-/// confirmation; commit mode matches upstream exactly (differential fixture
-/// `MASK_COMMIT_ALLOW`).
+/// block key is visible to every valid query (bidirectional denoising). During
+/// commit, block keys are causal within the current block. Invalid query rows
+/// are fully masked in both modes, matching the pinned construction in
+/// `modeling_clover_moe.py:428-437`.
 pub fn full_attention_mask(
     prefix_valid: &[bool],
     block_valid: &[bool],
@@ -127,7 +122,7 @@ pub fn full_attention_mask(
         .ok_or(GdnError::SizeOverflow)?;
     let mut mask = vec![f32::NEG_INFINITY; len];
     for query in 0..query_tokens {
-        if !preview && !block_valid[query] {
+        if !block_valid[query] {
             continue;
         }
         let row = query * key_tokens;
@@ -750,14 +745,7 @@ mod tests {
             &preview[width..2 * width],
             &[0.0, f32::NEG_INFINITY, 0.0, 0.0, 0.0, f32::NEG_INFINITY]
         );
-        assert_eq!(
-            &preview[2 * width..],
-            &[0.0, f32::NEG_INFINITY, 0.0, 0.0, 0.0, f32::NEG_INFINITY]
-        );
-        assert_eq!(
-            &preview[2 * width..],
-            &[0.0, f32::NEG_INFINITY, 0.0, 0.0, 0.0, f32::NEG_INFINITY]
-        );
+        assert!(preview[2 * width..].iter().all(|value| value.is_infinite() && value.is_sign_negative()));
         assert_eq!(
             &commit[0..width],
             &[
