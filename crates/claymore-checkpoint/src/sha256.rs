@@ -1,8 +1,12 @@
-//! Dependency-free SHA-256 used to pin small checkpoint metadata files.
+//! Dependency-free SHA-256 used to pin checkpoint metadata and artifacts.
 //!
 //! Tensor payloads are validated structurally (offsets, shapes, coverage) but
 //! are not individually hashed by the Safetensors format. Small metadata files
 //! with known digests are verified with this implementation.
+
+use std::fs::File;
+use std::io::{self, Read};
+use std::path::Path;
 
 const K: [u32; 64] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -71,7 +75,7 @@ impl Sha256Stream {
         }
     }
 
-    /// Feed at most `stream::MAX_CHUNK_BYTES` bytes at a time.
+    /// Feed another chunk of bytes into the digest.
     pub fn update(&mut self, bytes: &[u8]) {
         self.total = self
             .total
@@ -86,6 +90,10 @@ impl Sha256Stream {
             if self.buffered == 64 {
                 compress(&mut self.state, &self.buffer);
                 self.buffered = 0;
+            } else {
+                // The new input did not complete the pending block. Keep the
+                // combined bytes buffered instead of resetting the count.
+                return;
             }
         }
         let mut chunks = bytes[offset..].chunks_exact(64);
@@ -115,6 +123,26 @@ impl Sha256Stream {
         }
         digest
     }
+}
+
+/// Compute SHA-256 from a reader using bounded memory.
+pub fn sha256_reader<R: Read>(reader: &mut R) -> io::Result<[u8; 32]> {
+    let mut stream = Sha256Stream::new();
+    let mut buffer = vec![0u8; 1024 * 1024];
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        stream.update(&buffer[..read]);
+    }
+    Ok(stream.finish())
+}
+
+/// Compute SHA-256 for a file without materializing its contents.
+pub fn sha256_file(path: impl AsRef<Path>) -> io::Result<[u8; 32]> {
+    let mut file = File::open(path)?;
+    sha256_reader(&mut file)
 }
 
 /// Lowercase hexadecimal rendering of a digest.
@@ -174,6 +202,46 @@ mod tests {
     use super::*;
 
     #[test]
+    fn streaming_updates_preserve_partial_blocks_across_calls() {
+        let input: Vec<u8> = (0..4097).map(|index| (index * 37) as u8).collect();
+        for chunk_size in [1, 2, 7, 31, 55, 63, 64, 65, 127, 1024] {
+            let mut stream = Sha256Stream::new();
+            for chunk in input.chunks(chunk_size) {
+                stream.update(chunk);
+            }
+            assert_eq!(
+                stream.finish(),
+                sha256(&input),
+                "streaming digest differs with chunk size {chunk_size}"
+            );
+        }
+    }
+
+    #[test]
+    fn streaming_reader_handles_short_reads() {
+        struct ShortReader<'a> {
+            remaining: &'a [u8],
+            max_read: usize,
+        }
+
+        impl Read for ShortReader<'_> {
+            fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+                let count = output.len().min(self.max_read).min(self.remaining.len());
+                output[..count].copy_from_slice(&self.remaining[..count]);
+                self.remaining = &self.remaining[count..];
+                Ok(count)
+            }
+        }
+
+        let bytes: Vec<u8> = (0..8193).map(|index| (index * 19) as u8).collect();
+        let mut reader = ShortReader {
+            remaining: &bytes,
+            max_read: 13,
+        };
+        assert_eq!(sha256_reader(&mut reader).unwrap(), sha256(&bytes));
+    }
+
+    #[test]
     fn matches_fips_vectors() {
         assert_eq!(
             hex(&sha256(b"")),
@@ -192,15 +260,14 @@ mod tests {
     }
 
     #[test]
-    fn handles_block_boundaries() {
-        for length in [55, 56, 57, 63, 64, 65, 127, 128, 129] {
+    fn streaming_updates_handle_padding_boundaries() {
+        for length in [0, 1, 55, 56, 57, 63, 64, 65, 127, 128, 129, 255, 256, 257] {
             let input = vec![0x5au8; length];
-            let digest = sha256(&input);
-            // Recompute with a second independent padding path (streamed by
-            // concatenating one extra byte and slicing is not equivalent), so
-            // this test only pins determinism and output width.
-            assert_eq!(digest, sha256(&input));
-            assert_eq!(hex(&digest).len(), 64);
+            let mut stream = Sha256Stream::new();
+            for chunk in input.chunks(1) {
+                stream.update(chunk);
+            }
+            assert_eq!(stream.finish(), sha256(&input), "length {length}");
         }
     }
 }

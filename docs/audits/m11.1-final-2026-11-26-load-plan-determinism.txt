@@ -1,0 +1,20 @@
+### headers/plan determinism — 2026-11-26T23:00:16+01:00
+run1_rc=0
+run2_rc=0
+run3_rc=0
+ffb6c9655ab7b4f5441a4a679afd0508d3814c54feb4a872b2cd850f955ce022  /tmp/m111-final/plan-run-1.log
+ffb6c9655ab7b4f5441a4a679afd0508d3814c54feb4a872b2cd850f955ce022  /tmp/m111-final/plan-run-2.log
+ffb6c9655ab7b4f5441a4a679afd0508d3814c54feb4a872b2cd850f955ce022  /tmp/m111-final/plan-run-3.log
+PLAN_DETERMINISM_OK byte-identical
+rss_kb=4428
+rss_kb=4592
+rss_kb=4548
+tensor_count=813
+parameter_count=34661350848
+payload_bytes=69322701696
+load_plan_shards=28
+load_plan_chunks=8845
+load_plan_max_chunk_bytes=8388608
+file=bd_gdn_conv_right_weight.safetensors bytes=1478024 header_bytes=3456 payload_bytes=1474560 tensors=30
+file=bd_gdn_softmax_scalars.safetensors bytes=15584 header_bytes=9816 payload_bytes=5760 tensors=90
+file=model-00001-of-00026.safetensors bytes=3835692216 header_bytes=1200 payload_bytes=3835691008 tensors=10

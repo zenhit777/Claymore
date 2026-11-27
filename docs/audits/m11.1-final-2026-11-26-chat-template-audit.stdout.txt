@@ -1,0 +1,55 @@
+### chat template audit replay — 2026-11-26T23:00:46+01:00
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+[transformers] You are using a model of type `clover_moe` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating.
+============ F1_user_genprompt -> OK
+   n_tokens=19 im_start=2 im_end=1 think_open=1 think_close=0 vision=False
+   direct/rendered token IDs match: True
+   ids: [248045, 846, 198, 78768, 11, 51385, 4534, 72, 644, 5992, 16629, 13] ...
+   rendu: '<|im_start|>user\nBonjour, presente-toi en une phrase.<|im_end|>\n<|im_start|>assistant\n<think>\n'
+============ F2_user_nogenprompt -> OK
+   n_tokens=14 im_start=1 im_end=1 think_open=0 think_close=0 vision=False
+   direct/rendered token IDs match: True
+   ids: [248045, 846, 198, 78768, 11, 51385, 4534, 72, 644, 5992, 16629, 13] ...
+   rendu: '<|im_start|>user\nBonjour, presente-toi en une phrase.<|im_end|>\n'
+============ F3_sys_user_assistant_nogenprompt -> OK
+   n_tokens=38 im_start=3 im_end=3 think_open=1 think_close=1 vision=False
+   direct/rendered token IDs match: True
+   ids: [248045, 8678, 198, 51193, 311, 3396, 82, 644, 48642, 11, 2029, 74053] ...
+   rendu: '<|im_start|>system\nTu reponds en francais, factuellement.<|im_end|>\n<|im_start|>user\nQue vaut 2+2 ?<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n4.<|im_end|>\n'
+============ F4_sys_user_assistant_genprompt -> OK
+   n_tokens=43 im_start=4 im_end=3 think_open=2 think_close=1 vision=False
+   direct/rendered token IDs match: True
+   ids: [248045, 8678, 198, 51193, 311, 3396, 82, 644, 48642, 11, 2029, 74053] ...
+   rendu: '<|im_start|>system\nTu reponds en francais, factuellement.<|im_end|>\n<|im_start|>user\nQue vaut 2+2 ?<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n4.<|im_end|>\n<|im_start|>assistant\n<think>\n'
+============ F5_enable_thinking_true -> OK
+   n_tokens=19 im_start=2 im_end=1 think_open=1 think_close=0 vision=False
+   direct/rendered token IDs match: True
+   ids: [248045, 846, 198, 78768, 11, 51385, 4534, 72, 644, 5992, 16629, 13] ...
+   rendu: '<|im_start|>user\nBonjour, presente-toi en une phrase.<|im_end|>\n<|im_start|>assistant\n<think>\n'
+============ F6_enable_thinking_false -> OK
+   n_tokens=21 im_start=2 im_end=1 think_open=1 think_close=1 vision=False
+   direct/rendered token IDs match: True
+   ids: [248045, 846, 198, 78768, 11, 51385, 4534, 72, 644, 5992, 16629, 13] ...
+   rendu: '<|im_start|>user\nBonjour, presente-toi en une phrase.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n'
+============ F7_preserve_thinking_false -> OK
+   n_tokens=38 im_start=3 im_end=3 think_open=1 think_close=1 vision=False
+   direct/rendered token IDs match: True
+   ids: [248045, 8678, 198, 51193, 311, 3396, 82, 644, 48642, 11, 2029, 74053] ...
+   rendu: '<|im_start|>system\nTu reponds en francais, factuellement.<|im_end|>\n<|im_start|>user\nQue vaut 2+2 ?<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n4.<|im_end|>\n'
+============ F8_add_non_thinking_prefix_false -> OK
+   n_tokens=34 im_start=3 im_end=3 think_open=0 think_close=0 vision=False
+   direct/rendered token IDs match: True
+   ids: [248045, 8678, 198, 51193, 311, 3396, 82, 644, 48642, 11, 2029, 74053] ...
+   rendu: '<|im_start|>system\nTu reponds en francais, factuellement.<|im_end|>\n<|im_start|>user\nQue vaut 2+2 ?<|im_end|>\n<|im_start|>assistant\n4.<|im_end|>\n'
+============ F9_tools_genprompt -> OK
+   n_tokens=267 im_start=3 im_end=2 think_open=1 think_close=0 vision=False
+   direct/rendered token IDs match: True
+   ids: [248045, 8678, 198, 2, 13455, 271, 2523, 599, 2528, 310, 279, 2614] ...
+   rendu: '<|im_start|>system\n# Tools\n\nYou have access to the following functions:\n\n<tools>\n{"type": "function", "function": {"name": "lookup", "description": "Cherche un fait", "parameters": {"type": "object", "properties": {"q": {"type": "string"}}}}}\n</tools>\n\nIf you choose to call a function ONLY reply in the following format with NO suffix:\n\n<tool_call>\n<function=example_function_name>\n<parameter=example_parameter_1>\nvalue_1\n</parameter>\n<parameter=example_parameter_2>\nThis is the value for the second parameter\nthat can span\nmultiple lines\n</parameter>\n</function>\n</tool_call>\n\n<IMPORTANT>\nReminder:\n- Function calls MUST follow the specified format: an inner <function=...></function> block must be nested within <tool_call></tool_call> XML tags\n- Required parameters MUST be specified\n- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after\n- If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls\n</IMPORTANT><|im_end|>\n<|im_start|>user\nBonjour, presente-toi en une phrase.<|im_end|>\n<|im_start|>assistant\n<think>\n'
+============ F10_multimodal_content_rejet -> REJET_ATTENDU
+   TemplateError: This model accepts text content only.
+============ F11_role_inconnu_rejet -> REJET_ATTENDU
+   TemplateError: No user query found in messages.
+============ F12_liste_vide_rejet -> REJET_ATTENDU
+   ValueError: Cannot apply chat template to an empty conversation. Provide at least one message.
+tpl_rc=0

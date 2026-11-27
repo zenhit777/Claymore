@@ -1,4 +1,4 @@
-//! Minimal strict JSON value used for checkpoint metadata.
+//! Minimal strict JSON value used for strict checkpoint metadata parsing.
 //!
 //! `serde_json::Map` silently keeps the last value when a JSON object repeats
 //! a key. Checkpoint validation must instead fail closed, so this parser keeps
@@ -10,7 +10,7 @@ use serde_json::Number;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum Json {
+pub enum Json {
     Null,
     Bool(bool),
     Number(Number),
@@ -20,46 +20,57 @@ pub(crate) enum Json {
 }
 
 impl Json {
-    pub(crate) fn parse(bytes: &[u8]) -> Result<Self, String> {
+    pub fn parse(bytes: &[u8]) -> Result<Self, String> {
         serde_json::from_slice(bytes).map_err(|error| error.to_string())
     }
 
-    pub(crate) fn as_object(&self) -> Option<&[(String, Json)]> {
+    pub fn as_object(&self) -> Option<&[(String, Json)]> {
         match self {
             Self::Object(entries) => Some(entries),
             _ => None,
         }
     }
 
-    pub(crate) fn as_array(&self) -> Option<&[Json]> {
+    pub fn as_array(&self) -> Option<&[Json]> {
         match self {
             Self::Array(values) => Some(values),
             _ => None,
         }
     }
 
-    pub(crate) fn as_str(&self) -> Option<&str> {
+    pub fn as_str(&self) -> Option<&str> {
         match self {
             Self::String(value) => Some(value),
             _ => None,
         }
     }
 
-    pub(crate) fn as_u64(&self) -> Option<u64> {
+    /// Read an unsigned integer without rounding. JSON exporters sometimes
+    /// serialize byte counts as floating-point values with an integral value;
+    /// accept those only while the value is exactly representable by f64.
+    pub fn as_u64(&self) -> Option<u64> {
         match self {
-            Self::Number(value) => value.as_u64(),
+            Self::Number(value) => value.as_u64().or_else(|| {
+                let number = value.as_f64()?;
+                const MAX_EXACT_F64_INTEGER: f64 = 9_007_199_254_740_991.0;
+                (number.is_finite()
+                    && number >= 0.0
+                    && number.fract() == 0.0
+                    && number <= MAX_EXACT_F64_INTEGER)
+                    .then_some(number as u64)
+            }),
             _ => None,
         }
     }
 
-    pub(crate) fn get(&self, key: &str) -> Option<&Json> {
+    pub fn get(&self, key: &str) -> Option<&Json> {
         self.as_object()?
             .iter()
             .find(|(name, _)| name == key)
             .map(|(_, value)| value)
     }
 
-    pub(crate) fn type_name(&self) -> &'static str {
+    pub fn type_name(&self) -> &'static str {
         match self {
             Self::Null => "null",
             Self::Bool(_) => "boolean",
@@ -155,6 +166,17 @@ impl<'de> Deserialize<'de> for Json {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn accepts_exact_integral_float_metadata_without_rounding() {
+        assert_eq!(
+            Json::parse(b"71903645408.0").unwrap().as_u64(),
+            Some(71_903_645_408)
+        );
+        assert_eq!(Json::parse(b"1.5").unwrap().as_u64(), None);
+        assert_eq!(Json::parse(b"9007199254740992.0").unwrap().as_u64(), None);
+        assert_eq!(Json::parse(b"-1.0").unwrap().as_u64(), None);
+    }
 
     #[test]
     fn rejects_duplicate_keys_at_every_level() {

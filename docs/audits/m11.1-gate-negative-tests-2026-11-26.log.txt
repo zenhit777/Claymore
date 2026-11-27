@@ -1,0 +1,33 @@
+# M11.1 - demonstration fail-closed des portes de digest de l'inspecteur
+# binaire=target/debug/inspect_checkpoint checkpoint=/mnt/c/Users/sjteb/.cache/huggingface/hub/hub/models--Diffuspace--Clover-35B-A3B-Preview/snapshots/4b0402b65e523d0183a14c431955438714cb16ff
+# constantes epinglees : CONFIG_SHA256, INDEX_SHA256 (crates/claymore-model-clover/src/config.rs)
+
+## T0 - controle positif sur le snapshot epingle (attendu : succes)
+$ CUDA_VISIBLE_DEVICES="" inspect_checkpoint "$CKPT"
+config_sha256=e07639edf658af63dbbb52b6eb488d72d1a2f194f15638539b02e3e94b76ecf5
+index_sha256=6270f95c35739b2c40db0026e8683fb84544c258fa637cd88a3b4887a79fd063
+artifact_sha256=not_requested
+result=PINNED_CONFIG_AND_HEADER_INVENTORY_VALID
+exit=0
+
+## T1 - config.json mute (40 -> 50 dans num_hidden_layers)
+# attendu : rejet sur empreinte de config, avant toute lecture de payload
+$ CUDA_VISIBLE_DEVICES="" inspect_checkpoint <repertoire_config_mutée_seule>
+Error: "config.json digest mismatch: expected e07639edf658af63dbbb52b6eb488d72d1a2f194f15638539b02e3e94b76ecf5, got 0ad30917e20e54e510dc7f114d4e159290e989d49b346d49b8b8aa85c139f551"
+exit=1
+
+## T2 - index mute structurellement (total_size 6.. -> 7..)
+# attendu : rejet structurel TotalSizeMismatch, avant le controle d'empreinte
+$ CUDA_VISIBLE_DEVICES="" inspect_checkpoint <repertoire_symlinks_des_28_shards_index_muté>
+Error: TotalSizeMismatch { index: 79322701696, actual: 69322701696 }
+exit=1
+
+## T3 - index mute sans changement structurel (une espace appendue en fin de fichier)
+# attendu : rejet sur empreinte d'index, avant tout hachage de payload
+# taille_mutée=70669 sha256_muté=597bf09d97d03a4b20870c22ce1c7ad69902e0bd7ae2e894040187734b390b21
+$ CUDA_VISIBLE_DEVICES="" inspect_checkpoint <repertoire_index_muté>
+Error: "checkpoint index digest mismatch: expected 6270f95c35739b2c40db0026e8683fb84544c258fa637cd88a3b4887a79fd063, got 597bf09d97d03a4b20870c22ce1c7ad69902e0bd7ae2e894040187734b390b21"
+exit=1
+
+# taille du repertoire d'experiences T2/T3 (symlinks uniquement, payload non copie) :
+192K	/tmp/tmp.3XxutCf5xM/idx

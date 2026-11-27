@@ -1,0 +1,21 @@
+# M11.1 final replay environment — 2026-11-26T23:00:01+01:00
+HEAD=580a8984cc8964496e04f39b420333eb9fa7903e
+branch=feat/m11-clover-foundation
+Linux Morpheus 6.18.58.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Tue Oct 27 00:24:11 UTC 2026 x86_64 GNU/Linux
+
+cargo 1.100.0 (3acc79c0c 2026-11-05)
+rustc 1.100.0 (0ef1bc386 2026-11-09)
+
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+build rc=0
+-rwxr-xr-x 2 sjteb sjteb 12901696 Nov 26 20:07 target/debug/inspect_checkpoint
+57b1d5705063301df29223c5b56ed5e2920b320d63b33cd0ffc374e8d3e3023d  target/debug/inspect_checkpoint
+
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+py 3.12.3
+transformers 5.19.0
+tokenizers 0.23.3
+jinja2 3.1.6
+safetensors 0.8.0
+torch absent check:
+torch=ABSENT

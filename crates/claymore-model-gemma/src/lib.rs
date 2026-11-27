@@ -16,11 +16,11 @@ pub mod generation;
 pub mod generation_loop;
 pub mod graph;
 pub mod rng;
-pub mod safetensors;
+pub use claymore_checkpoint::safetensors;
 pub mod sampling;
-pub mod sha256;
+pub use claymore_checkpoint::sha256;
 pub mod stream;
-mod strict_json;
+pub(crate) use claymore_checkpoint::strict_json;
 
 pub use canvas::{CanvasError, CanvasMetrics, CanvasPosition, CanvasTokenState, GemmaCanvas};
 pub use checkpoint::{

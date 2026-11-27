@@ -1,0 +1,32 @@
+# Attestation SHA-256 des preuves post-correctives M11.1 du 2026-11-26
+# generees apres verification de chaque entree ; le fichier historique m11.1-checkpoint-2026-11-26-logs.sha256 n'est pas modifie
+# verification : sha256sum -c m11.1-postfix-2026-11-26-logs.sha256
+a34d81441ee65b40b53805592724444c68a2b735290cc168e6a6df13e67ee0e5  fixtures/clover-tokenizer-fixtures-postfix-2026-11-26.json
+55980932da4daa405b845691fcd7946328721f4389566ae686e9881afa38e80d  m11.1-cpu-evidence-refresh-2026-11-26.md
+259b7eb12ace9dd96a20ac18d2f0e6e4fbc6ed353df5f51430c51a9a1d1266c6  m11.1-postfix-2026-11-26-arithmetic-control.txt
+9d53a2d47ee78174601e2196d3e346b611c4aa0ed990e6ed475c8f298b9430ea  m11.1-postfix-2026-11-26-cargo-test-msrv-1.86.log.txt
+ff151b2b38edff77fe9c7e841900c0afa199f9176fc39f32d5395c4b00267232  m11.1-postfix-2026-11-26-cargo-test-workspace.log.txt
+38748f9dfecde50167cf43f3cc1a4559cc40865f9f38563dc457ec5ef65a4f0b  m11.1-postfix-2026-11-26-cargo-test.log.txt
+0aec2b752c34fc017c2fc0fd4ebc31a7af3b77d7620df366b70fa01dff543933  m11.1-postfix-2026-11-26-chat-template-audit.stdout.txt
+27ce8aadb8ec5bdbb9494026d9fe155abdbcbf185afaf1a8c3970ce079d9f771  m11.1-postfix-2026-11-26-chat-template-fixtures.json
+6e9be88ccf045042893c524ee97b9537e97727cf21f32a416648324806e68a68  m11.1-postfix-2026-11-26-clippy-fmt.log.txt
+fdad2fc16a47884a97a2b8e7eb3e03f5bc97cb29597e667506df65064c40833b  m11.1-postfix-2026-11-26-digest-comparison.txt
+65a0c679be36e401f82c0886e02aac2f31034e0e12508e012abac69fb436bc0c  m11.1-postfix-2026-11-26-environment.log.txt
+da2e508d6ad8390ebfe2f263e85724012bd55e6e6e5b7d05d80ce8478cae4bb4  m11.1-postfix-2026-11-26-gate-f32-sidecar.log.txt
+64f3934a4408b665283ce21623c4eb738eb64140b834a5af8a332bd6bd5ecd1b  m11.1-postfix-2026-11-26-gate-negative-tests.log.txt
+ffb6c9655ab7b4f5441a4a679afd0508d3814c54feb4a872b2cd850f955ce022  m11.1-postfix-2026-11-26-inspect-headers.log.txt
+53a10fe026202d0e414c7f6a7c289c7701350523813095c169862feb5158bfee  m11.1-postfix-2026-11-26-inspect-verify-sha256.log.txt
+f84271ef07fe5b857d47ddbede609a97f8e881ea5b6c0017ca87c6fa9a99de2c  m11.1-postfix-2026-11-26-inspect-verify-sha256.time.txt
+e443219523181f9404a3e3a7b09d23148b1d93a09614b103528e285009b5c612  m11.1-postfix-2026-11-26-load-plan-determinism.txt
+12befa317d2fc205cbc1e8e67e443be6dd3d640248fcbf98583bf4f846d36ed2  m11.1-postfix-2026-11-26-nonxet-sha256.txt
+2037e54989275b6391dbafdee9c579ceb5400747c047d9be5477aa763c4332b2  m11.1-postfix-2026-11-26-nonxet-vs-manifest-comparison.txt
+ad9d7411b250cec381cd584d1a20bcf0f6b0e822a6a1d0663344e71657be19b5  m11.1-postfix-2026-11-26-payload-sha256.txt
+ad9d7411b250cec381cd584d1a20bcf0f6b0e822a6a1d0663344e71657be19b5  m11.1-postfix-2026-11-26-pinned-asset-sha256.txt
+b95de3409128a260925b2b163a408f48deb290f0460202d0e539f227ef310d89  m11.1-postfix-2026-11-26-safetensors-sizes.txt
+d2d488d7bd4f9e95ace4665c426e62ed549eec163f6bc325e1c17518d06c98fa  m11.1-postfix-2026-11-26-script-digests.txt
+ff44e7e3fed8be70c95d4f8916578e2af3f6caa21a6c5bff77c59e4b3eb654a6  m11.1-postfix-2026-11-26-sha256sum-run.txt
+1ef91bfb7e9f4cedca6dde0a418617b18a02acd4ddaa5a9f748ee4e427490714  m11.1-postfix-2026-11-26-tokenizer-audit.json
+3962117ba413b19534085ffe50493e46d17ebf1b0d116af4bd83539ae314cdaf  m11.1-postfix-2026-11-26-trees-vs-api-comparison.txt
+24d0e52e5879db6d60508641d3939eea605a9752654f25ee1bd25db5b5a4e9f2  scripts/m11.1-chat-template-audit.py
+fd436968b1aa4ef6d95311d616fe8e57d6674ee16c6f8f25397cef2783b541c9  scripts/m11.1-lateral-controls.py
+b4c0f29415ce459d300e65e810fa00af06043e35307f980d23e15e9a059cb866  scripts/m11.1-t4-f32-sidecar.py

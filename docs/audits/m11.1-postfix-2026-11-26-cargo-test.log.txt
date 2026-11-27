@@ -1,0 +1,47 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/build/claymore-checkpoint/7ddda1c091129820/out/claymore_checkpoint-7ddda1c091129820)
+
+running 15 tests
+test sha256::tests::matches_fips_vectors ... ok
+test strict_json::tests::accepts_exact_integral_float_metadata_without_rounding ... ok
+test strict_json::tests::preserves_order_and_types ... ok
+test strict_json::tests::rejects_duplicate_keys_at_every_level ... ok
+test sha256::tests::streaming_updates_handle_padding_boundaries ... ok
+test safetensors::tests::detects_a_file_truncated_after_open ... ok
+test sha256::tests::streaming_reader_handles_short_reads ... ok
+test safetensors::tests::rejects_unsupported_dtypes_and_bad_entries ... ok
+test safetensors::tests::reads_a_tensor_range_relative_to_the_payload_not_to_the_file ... ok
+test safetensors::tests::reads_valid_bf16_and_f32_tensors_without_whole_shard_copy ... ok
+test safetensors::tests::rejects_malformed_json_duplicate_names_and_empty_names ... ok
+test safetensors::tests::rejects_metadata_that_is_not_a_string_map ... ok
+test safetensors::tests::rejects_shape_mismatch_alignment_overlap_gap_and_bounds ... ok
+test safetensors::tests::rejects_truncated_and_oversized_headers ... ok
+test sha256::tests::streaming_updates_preserve_partial_blocks_across_calls ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (target/debug/build/claymore-model-clover/03ac2d925347d12f/out/claymore_model_clover-03ac2d925347d12f)
+
+running 13 tests
+test checkpoint::tests::index_parser_rejects_path_traversal_and_duplicate_json_keys ... ok
+test checkpoint::tests::shard_name_parser_requires_a_complete_safe_sequence ... ok
+test checkpoint::tests::pinned_digest_manifest_covers_all_weight_artifacts ... ok
+test config::tests::pinned_digests_match_the_published_audit_evidence ... ok
+test config::tests::parses_and_validates_the_pinned_architecture ... ok
+test config::tests::rejects_invalid_probability_and_rope_values ... ok
+test config::tests::rejects_layer_pattern_and_geometry_drift ... ok
+test config::tests::rejects_non_bf16_weights_and_invalid_moe_top_k ... ok
+test config::tests::rejects_unknown_fields_and_duplicate_known_fields ... ok
+test checkpoint::tests::inspect_rejects_f32_gdn_sidecars_for_the_pinned_release ... ok
+test checkpoint::tests::inspect_validates_model_shard_and_indexed_gdn_sidecars ... ok
+test config::tests::rejects_pinned_auto_map_and_initializer_drift ... ok
+test checkpoint::tests::load_plan_is_deterministic_and_splits_large_tensors_into_bounded_chunks ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/inspect_checkpoint.rs (target/debug/build/claymore-model-clover/e1c767534a7ebf7e/out/inspect_checkpoint-e1c767534a7ebf7e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

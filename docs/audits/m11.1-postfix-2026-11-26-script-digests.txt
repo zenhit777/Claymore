@@ -1,0 +1,38 @@
+# Empreintes du script de parité du gabarit — chaîne de preuve
+# script = docs/audits/scripts/m11.1-chat-template-audit.py
+
+## État des empreintes le long de l'histoire
+
+| Origin | SHA-256 (octets bruts) | Commit |
+|---|---|---|
+| état publié avec la campagne initiale, épinglé dans `m11.1-checkpoint-2026-11-26-logs.sha256` | `3d8cf461aabb29a5c14170275bca9cfd1b1c4883cb32b330a56fec6184c95d6f` | `aae02fe docs(m11.1): publish the pinned Clover checkpoint audit with its evidence` |
+| après `1916239 test(tokenizer): compare direct and rendered chat template tokenization` | `18f6f5591c17c3d44a73f6306bf40dc972b151a2fd59cee6942f17db1057137b` | — |
+| après `7d0b327 test(tokenizer): fail closed on chat template token ID mismatch` | `d04dc5861fef148a2ca0be43c0b8061b63afab05e531519b67f49222e41e2146` | — |
+| état du HEAD `443b1c4`, après `7d5685a test(tokenizer): assert exact expected chat template rejection reasons` | `e01fc0a5d2a2e05aba0886fe26ef1446dc2e7cf633cca478dfab2bd75882d641` | `443b1c4` |
+| version corrigée par le présent mandat (extraction `input_ids` du `BatchEncoding`) | `24d0e52e5879db6d60508641d3939eea605a9752654f25ee1bd25db5b5a4e9f2` | à venir |
+
+Reproduction de n'importe quelle ligne : `git show <commit>:docs/audits/scripts/m11.1-chat-template-audit.py | sha256sum`.
+
+## Constat antérieur à ce mandat
+
+L'entrée `scripts/m11.1-chat-template-audit.py` du fichier historique
+`m11.1-checkpoint-2026-11-26-logs.sha256` **ne vérifiait déjà plus au HEAD `443b1c4`**, avant toute
+modification de ce mandat : les trois correctifs du script (`1916239`, `7d0b327`, `7d5685a`) ont été
+commités **après** la publication des empreintes (`aae02fe`) sans que `logs.sha256` soit régénéré.
+
+```
+$ cd docs/audits && sha256sum -c m11.1-checkpoint-2026-11-26-logs.sha256
+scripts/m11.1-chat-template-audit.py: FAILED            # attendu : empreinte 3d8cf461 (aae02fe),
+                                                        #         fichier e01fc0a5 (7d5685a)
+… 17 autres entrées : OK (18 entrées au total)
+```
+
+## Décision
+
+- Le fichier historique `m11.1-checkpoint-2026-11-26-logs.sha256` **n'est pas réécrit** : ses valeurs
+  restent l'attestation de ce qui a été publié à `aae02fe`.
+- Le présent mandat ne modifie aucune empreinte épinglée, aucun SHA de payload, aucune forme, aucun
+  dtype, aucune fixture dorée.
+- L'empreinte de la version corrigée du script est consignée ici **et** dans le nouveau fichier
+  `m11.1-postfix-2026-11-26-logs.sha256`, qui couvre les preuves post-correctives.
+- L'état antérieur du script reste intégralement vérifiable par `git show` ; rien n'est perdu.

@@ -1,5 +1,4 @@
-//! Bounded, fail-closed Safetensors reader for the pinned DiffusionGemma
-//! checkpoint.
+//! Bounded, fail-closed, model-agnostic Safetensors container reader.
 //!
 //! The reader validates the whole header before returning a handle: duplicate
 //! names, unsupported dtypes, malformed shapes, arithmetic overflow, offsets
@@ -26,7 +25,7 @@ pub const MAX_CHUNK_BYTES: usize = 8 * 1024 * 1024;
 
 const LENGTH_PREFIX_BYTES: u64 = 8;
 
-/// Weight dtypes accepted by the M10 execution path.
+/// Weight dtypes currently supported by the shared checkpoint reader.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WeightDType {
     F32,
