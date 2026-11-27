@@ -39,6 +39,8 @@ pub enum CloverCpuWeightError {
     SizeOverflow,
     #[error("expert index {expert} is outside the declared expert count {experts}")]
     ExpertOutOfRange { expert: usize, experts: usize },
+    #[error("invalid Clover weight geometry: {0}")]
+    InvalidGeometry(&'static str),
 }
 
 /// Architecture dimensions required to resolve one GDN layer's checkpoint tensors.
@@ -326,7 +328,9 @@ impl<'a> CloverCpuWeightStore<'a> {
             head_dim,
         } = geometry;
         if hidden_size == 0 || query_heads == 0 || kv_heads == 0 || head_dim == 0 {
-            return Err(CloverCpuWeightError::SizeOverflow);
+            return Err(CloverCpuWeightError::InvalidGeometry(
+                "full-attention dimensions must be non-zero",
+            ));
         }
         let query_width = query_heads
             .checked_mul(head_dim)
@@ -391,10 +395,12 @@ impl<'a> CloverCpuWeightStore<'a> {
             || key_dim == 0
             || value_heads == 0
             || value_dim == 0
-            || kernel_width == 0
+            || kernel_width < 2
             || value_heads % key_heads != 0
         {
-            return Err(CloverCpuWeightError::SizeOverflow);
+            return Err(CloverCpuWeightError::InvalidGeometry(
+                "GDN dimensions must be non-zero, kernel width >= 2, and value heads divisible by key heads",
+            ));
         }
         let key_width = key_heads
             .checked_mul(key_dim)
@@ -1032,6 +1038,20 @@ mod tests {
         assert_eq!(weights.softmax_logit_scale[0].to_f32(), 27.0);
         assert_eq!(weights.softmax_history_bias[0].to_f32(), 28.0);
         assert_eq!(weights.softmax_history_c[0].to_f32(), 29.0);
+        assert!(matches!(
+            CloverCpuWeightStore::new(&inventory).gdn_weights(
+                0,
+                CloverGdnGeometry {
+                    hidden_size: 2,
+                    key_heads: 2,
+                    key_dim: 1,
+                    value_heads: 1,
+                    value_dim: 1,
+                    kernel_width: 2,
+                },
+            ),
+            Err(CloverCpuWeightError::InvalidGeometry(_))
+        ));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -1125,6 +1145,18 @@ mod tests {
         assert_eq!(weights.o_proj, "model.layers.0.self_attn.o_proj.weight");
         assert_eq!(weights.q_norm[0].to_f32(), 11.0);
         assert_eq!(weights.k_norm[0].to_f32(), 12.0);
+        assert!(matches!(
+            CloverCpuWeightStore::new(&inventory).full_attention_weights(
+                0,
+                CloverFullAttentionGeometry {
+                    hidden_size: 3,
+                    query_heads: 1,
+                    kv_heads: 1,
+                    head_dim: 1,
+                },
+            ),
+            Err(CloverCpuWeightError::InvalidMatrixShape { .. })
+        ));
         fs::remove_dir_all(root).unwrap();
     }
 }
