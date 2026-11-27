@@ -273,29 +273,45 @@ impl<'a> CloverCpuWeightStore<'a> {
         intermediate_size: usize,
     ) -> Result<CloverExpertWeights, CloverCpuWeightError> {
         if num_experts == 0 || expert >= num_experts {
-            return Err(CloverCpuWeightError::ExpertOutOfRange { expert, experts: num_experts });
+            return Err(CloverCpuWeightError::ExpertOutOfRange {
+                expert,
+                experts: num_experts,
+            });
         }
         if hidden_size == 0 || intermediate_size == 0 {
             return Err(CloverCpuWeightError::SizeOverflow);
         }
         let gate_name = format!("model.layers.{layer}.mlp.experts.gate_up_proj");
         let down_name = format!("model.layers.{layer}.mlp.experts.down_proj");
-        let gate_rows = intermediate_size.checked_mul(2).ok_or(CloverCpuWeightError::SizeOverflow)?;
-        let gate_elements = gate_rows.checked_mul(hidden_size).ok_or(CloverCpuWeightError::SizeOverflow)?;
-        let down_elements = hidden_size.checked_mul(intermediate_size).ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let gate_rows = intermediate_size
+            .checked_mul(2)
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let gate_elements = gate_rows
+            .checked_mul(hidden_size)
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let down_elements = hidden_size
+            .checked_mul(intermediate_size)
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
         for (name, expected) in [
             (&gate_name, vec![num_experts, gate_rows, hidden_size]),
             (&down_name, vec![num_experts, hidden_size, intermediate_size]),
         ] {
-            let actual = self.tensor_shape(&name).ok_or_else(|| CloverCpuWeightError::MissingTensor(name.clone()))?;
+            let actual = self
+                .tensor_shape(name)
+                .ok_or_else(|| CloverCpuWeightError::MissingTensor(name.clone()))?;
             if actual != expected {
-                return Err(CloverCpuWeightError::InvalidMatrixShape { tensor: name.clone(), shape: actual.to_vec() });
+                return Err(CloverCpuWeightError::InvalidMatrixShape {
+                    tensor: name.clone(),
+                    shape: actual.to_vec(),
+                });
             }
         }
-        let gate_offset = expert.checked_mul(gate_elements)
+        let gate_offset = expert
+            .checked_mul(gate_elements)
             .and_then(|value| u64::try_from(value).ok())
             .ok_or(CloverCpuWeightError::SizeOverflow)?;
-        let down_offset = expert.checked_mul(down_elements)
+        let down_offset = expert
+            .checked_mul(down_elements)
             .and_then(|value| u64::try_from(value).ok())
             .ok_or(CloverCpuWeightError::SizeOverflow)?;
         Ok(CloverExpertWeights {
@@ -327,13 +343,22 @@ impl<'a> CloverCpuWeightStore<'a> {
             (&down_name, vec![hidden_size, intermediate_size]),
             (&shared_gate_name, vec![1, hidden_size]),
         ] {
-            let actual = self.tensor_shape(&name).ok_or_else(|| CloverCpuWeightError::MissingTensor(name.clone()))?;
+            let actual = self
+                .tensor_shape(name)
+                .ok_or_else(|| CloverCpuWeightError::MissingTensor(name.clone()))?;
             if actual != expected {
-                return Err(CloverCpuWeightError::InvalidMatrixShape { tensor: name, shape: actual.to_vec() });
+                return Err(CloverCpuWeightError::InvalidMatrixShape {
+                    tensor: name.clone(),
+                    shape: actual.to_vec(),
+                });
             }
         }
-        let projection_elements = intermediate_size.checked_mul(hidden_size).ok_or(CloverCpuWeightError::SizeOverflow)?;
-        let down_elements = hidden_size.checked_mul(intermediate_size).ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let projection_elements = intermediate_size
+            .checked_mul(hidden_size)
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let down_elements = hidden_size
+            .checked_mul(intermediate_size)
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
         Ok(CloverSharedExpertWeights {
             hidden_size,
             intermediate_size,
@@ -343,7 +368,6 @@ impl<'a> CloverCpuWeightStore<'a> {
             shared_gate: self.read_bf16(&shared_gate_name, 0, hidden_size)?,
         })
     }
-
 }
 
 #[cfg(test)]
