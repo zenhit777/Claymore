@@ -12,8 +12,8 @@ use claymore_tensor::Bf16;
 use thiserror::Error;
 
 use crate::{
-    CloverExpertWeights, CloverLoadPlan, CloverRoutingPlan, CloverSharedExpertWeights,
-    ShardLoadPlan, TensorLoadPlan,
+    CloverConfig, CloverExpertWeights, CloverLoadPlan, CloverRoutingPlan,
+    CloverSharedExpertWeights, ShardLoadPlan, TensorLoadPlan,
 };
 
 const PREFIX_BYTES: u64 = 8;
@@ -117,6 +117,16 @@ pub struct CloverExpertGeometry {
     pub intermediate_size: usize,
 }
 
+impl CloverExpertGeometry {
+    pub fn from_config(config: &CloverConfig) -> Self {
+        Self {
+            num_experts: config.num_experts,
+            hidden_size: config.hidden_size,
+            intermediate_size: config.moe_intermediate_size,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CloverExpertPrefetchRequest {
     pub layer: usize,
@@ -137,6 +147,15 @@ pub struct CloverExpertLoadRequest<'a> {
 pub struct CloverSharedExpertGeometry {
     pub hidden_size: usize,
     pub intermediate_size: usize,
+}
+
+impl CloverSharedExpertGeometry {
+    pub fn from_config(config: &CloverConfig) -> Self {
+        Self {
+            hidden_size: config.hidden_size,
+            intermediate_size: config.shared_expert_intermediate_size,
+        }
+    }
 }
 
 pub struct CloverSharedExpertLoadRequest<'a> {
