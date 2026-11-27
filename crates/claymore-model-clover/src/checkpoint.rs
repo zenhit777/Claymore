@@ -971,6 +971,77 @@ impl CloverCheckpointInventory {
     pub fn shard(&self, name: &str) -> Option<&SafetensorsFile> {
         self.shards.get(name)
     }
+
+    /// Read a bounded range of one indexed BF16 tensor without materializing
+    /// the complete tensor or its containing shard.
+    ///
+    /// Offsets and counts are measured in BF16 elements. A single call is
+    /// limited to MAX_CHUNK_BYTES; callers loading large matrices must iterate
+    /// over ranges. The returned u16 values preserve the checkpoint bit patterns.
+    pub fn read_bf16_range(
+        &self,
+        tensor_name: &str,
+        element_offset: u64,
+        element_count: usize,
+    ) -> Result<Vec<u16>, CloverCheckpointError> {
+        let summary = self
+            .summaries
+            .get(tensor_name)
+            .ok_or_else(|| CloverCheckpointError::TensorNotIndexed(tensor_name.to_owned()))?;
+        if summary.dtype != WeightDType::BF16 {
+            return Err(CloverCheckpointError::UnsupportedWeightDType {
+                tensor: tensor_name.to_owned(),
+                actual: summary.dtype.name(),
+            });
+        }
+
+        let count = u64::try_from(element_count).map_err(|_| CloverCheckpointError::SizeOverflow)?;
+        let end = element_offset
+            .checked_add(count)
+            .ok_or(CloverCheckpointError::SizeOverflow)?;
+        let tensor_elements = summary.byte_len / WeightDType::BF16.element_size_bytes() as u64;
+        if end > tensor_elements {
+            return Err(CloverCheckpointError::TensorElementRangeOutOfBounds {
+                tensor: tensor_name.to_owned(),
+                end,
+                elements: tensor_elements,
+            });
+        }
+
+        let byte_offset = element_offset
+            .checked_mul(WeightDType::BF16.element_size_bytes() as u64)
+            .ok_or(CloverCheckpointError::SizeOverflow)?;
+        let byte_len = element_count
+            .checked_mul(WeightDType::BF16.element_size_bytes())
+            .ok_or(CloverCheckpointError::SizeOverflow)?;
+        if byte_len > MAX_CHUNK_BYTES {
+            return Err(CloverCheckpointError::TensorReadChunkTooLarge {
+                actual: byte_len,
+                maximum: MAX_CHUNK_BYTES,
+            });
+        }
+        if byte_len == 0 {
+            return Ok(Vec::new());
+        }
+
+        let shard_name = self
+            .index
+            .weight_map()
+            .get(tensor_name)
+            .ok_or_else(|| CloverCheckpointError::TensorNotIndexed(tensor_name.to_owned()))?;
+        let shard = self
+            .shards
+            .get(shard_name)
+            .ok_or_else(|| CloverCheckpointError::MissingShard {
+                name: shard_name.clone(),
+                path: self.root.join(shard_name),
+            })?;
+        let bytes = shard.read_tensor_range(tensor_name, byte_offset, byte_len)?;
+        Ok(bytes
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect())
+    }
 }
 
 fn plan_tensor_chunks(
@@ -1087,6 +1158,16 @@ pub enum CloverCheckpointError {
     ParameterCountMismatch { index: u64, actual: u64 },
     #[error("integer overflow while inspecting checkpoint")]
     SizeOverflow,
+    #[error("tensor {0} is not indexed in the inspected checkpoint")]
+    TensorNotIndexed(String),
+    #[error("tensor {tensor} element range ends at {end}, beyond its {elements} elements")]
+    TensorElementRangeOutOfBounds {
+        tensor: String,
+        end: u64,
+        elements: u64,
+    },
+    #[error("tensor read chunk is {actual} bytes; maximum is {maximum}")]
+    TensorReadChunkTooLarge { actual: usize, maximum: usize },
     #[error("pinned Clover requires {expected} model shards, found {actual}")]
     PinnedShardCount { expected: usize, actual: usize },
     #[error("pinned Clover requires {expected} GDN sidecars, found {actual}")]
@@ -1235,6 +1316,15 @@ mod tests {
         assert_eq!(inventory.identity().payload_bytes, 12);
         assert_eq!(inventory.identity().parameter_count, 6);
         assert_eq!(inventory.tensor("weight").unwrap().shape, vec![2]);
+        assert_eq!(inventory.read_bf16_range("weight", 0, 2).unwrap(), [0, 0]);
+        assert!(matches!(
+            inventory.read_bf16_range("weight", 1, 2),
+            Err(CloverCheckpointError::TensorElementRangeOutOfBounds { .. })
+        ));
+        assert!(matches!(
+            inventory.read_bf16_range("missing", 0, 1),
+            Err(CloverCheckpointError::TensorNotIndexed(_))
+        ));
         assert_eq!(inventory.shard_summaries().len(), 3);
         assert_eq!(
             CloverCheckpointInventory::inspect_gdn_sidecars(&root)
