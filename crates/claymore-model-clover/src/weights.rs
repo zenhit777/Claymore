@@ -151,7 +151,7 @@ mod tests {
     fn write_tensor(path: &Path, name: &str, shape: &[usize], payload: &[u8]) {
         let shape = shape
             .iter()
-            .map(usize::to_string)
+            .map(|value| value.to_string())
             .collect::<Vec<_>>()
             .join(",");
         let header = format!(
