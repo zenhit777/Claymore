@@ -797,10 +797,13 @@ fn append_tasks(
             .ok_or(CloverExpertCacheError::SizeOverflow)?;
         let length_bytes =
             usize::try_from(last - first).map_err(|_| CloverExpertCacheError::SizeOverflow)?;
+        let payload_end = shard_offset
+            .checked_add(length_bytes as u64)
+            .ok_or(CloverExpertCacheError::SizeOverflow)?;
         let file_end = file_offset
             .checked_add(length_bytes as u64)
             .ok_or(CloverExpertCacheError::SizeOverflow)?;
-        if file_end > shard.file_bytes {
+        if payload_end > shard.payload_bytes || file_end > shard.file_bytes {
             return Err(CloverExpertCacheError::InvalidTensor(
                 tensor_name.to_owned(),
             ));
