@@ -38,4 +38,6 @@ pub use residency::{
     CloverExpertLoadSchedule, CloverExpertLoadTask, CloverExpertPrefetchRequest,
     CloverExpertScheduleError, CloverSharedExpertGeometry, CloverSharedExpertLoadRequest,
 };
-pub use weights::{CloverCpuWeightError, CloverCpuWeightStore, CloverGdnGeometry, CloverGdnWeights};
+pub use weights::{
+    CloverCpuWeightError, CloverCpuWeightStore, CloverGdnGeometry, CloverGdnWeights,
+};
