@@ -277,16 +277,7 @@ pub fn rms_norm_silu_gate(
         for index in 0..width {
             let normalized = src[index] * inv_rms * weights[index];
             let gate_value = gates[row_index * width + index];
-            let silu_gate = if gate_value.is_nan() || gate_value == f32::INFINITY {
-                gate_value
-            } else if gate_value == f32::NEG_INFINITY {
-                -0.0
-            } else if gate_value >= 0.0 {
-                gate_value / (1.0 + (-gate_value).exp())
-            } else {
-                let exponential = gate_value.exp();
-                gate_value * exponential / (1.0 + exponential)
-            };
+            let silu_gate = crate::activations::silu_scalar(gate_value);
             dst[index] = normalized * silu_gate;
         }
     }
@@ -649,13 +640,15 @@ mod tests {
         values.iter().map(|value| Bf16::from_f32(*value)).collect()
     }
 
-    fn assert_bf16_one_ulp(actual: &[f32], expected: &[f32]) {
+    /// BF16 fixtures are compared with a relative bound of 2⁻⁷ (≤ 2 BF16
+    /// ULPs of the expected value), not a single-ULP bound.
+    fn assert_bf16_within_relative_bound(actual: &[f32], expected: &[f32]) {
         assert_eq!(actual.len(), expected.len());
         for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
-            let one_ulp = expected.abs().max(f32::MIN_POSITIVE) / 128.0;
+            let relative_bound = expected.abs().max(f32::MIN_POSITIVE) / 128.0;
             assert!(
-                (actual - expected).abs() <= one_ulp,
-                "BF16 reference mismatch at {index}: actual={actual:?}, expected={expected:?}, one_ulp={one_ulp}"
+                (actual - expected).abs() <= relative_bound,
+                "BF16 reference mismatch at {index}: actual={actual:?}, expected={expected:?}, relative_bound(2^-7)={relative_bound}"
             );
         }
     }
@@ -671,7 +664,7 @@ mod tests {
         let weight = bf16_tensor(&device, vec![4], &bf16_values(&[-0.25, 0.5, 0.0, 0.125]));
         let output = rms_norm_zero_centered(&device, &input, &weight, 1e-6).unwrap();
         assert_eq!(output.layout().dtype(), DType::BF16);
-        assert_bf16_one_ulp(
+        assert_bf16_within_relative_bound(
             &values(&device, &output),
             crate::clover_gdn_upstream_fixtures::NORM_ZERO_OUT,
         );
@@ -690,7 +683,7 @@ mod tests {
         );
         let output = rms_norm_silu_gate(&device, &input, &weight, &gate, 1e-6).unwrap();
         assert_eq!(output.layout().dtype(), DType::BF16);
-        assert_bf16_one_ulp(
+        assert_bf16_within_relative_bound(
             &values(&device, &output),
             crate::clover_gdn_upstream_fixtures::NORM_GATE_OUT,
         );

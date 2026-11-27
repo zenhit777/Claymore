@@ -22,8 +22,12 @@ pub fn silu(device: &dyn Device, input: &Tensor) -> Result<Tensor, OpError> {
     write_numeric(device, &output, input.layout().shape().to_vec(), dtype)
 }
 
+/// Canonical SiLU scalar (`x · sigmoid(x)`), evaluated in FP32. This is the
+/// single definition shared by every primitive in the crate (tensor-level
+/// [`silu`], the Clover GDN convolutions and the GDN RMSNorm gate); call sites
+/// must not inline their own variants.
 #[inline]
-fn silu_scalar(value: f32) -> f32 {
+pub(crate) fn silu_scalar(value: f32) -> f32 {
     if value.is_nan() || value == f32::INFINITY {
         return value;
     }

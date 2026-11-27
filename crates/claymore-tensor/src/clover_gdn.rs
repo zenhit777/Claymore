@@ -4,7 +4,7 @@
 //! derived from the immutable Clover release. All recurrent state is FP32;
 //! activation outputs are explicitly rounded to F32 or BF16.
 
-use crate::activations::sigmoid_scalar;
+use crate::activations::{sigmoid_scalar, silu_scalar};
 use crate::Bf16;
 use thiserror::Error;
 
@@ -105,8 +105,13 @@ pub fn gdn_gates(
 /// Prefix keys are visible only when marked valid. During preview every valid
 /// block key is visible to every query (bidirectional denoising). During commit,
 /// block keys are causal within the current block and invalid query rows are
-/// fully masked. Preview deliberately retains invalid query rows, matching the
-/// upstream boolean key mask; callers discard those positions at block resolution.
+/// fully masked (pinned construction, `modeling_clover_moe.py:428-437`).
+/// Deliberate deviation in preview: upstream also masks invalid query rows in
+/// preview (`allow & valid[:, None, :, None]`, line 437); this reference keeps
+/// those rows and relies on the caller to discard invalid preview positions at
+/// block resolution (preview never commits state). Pending architect
+/// confirmation; commit mode matches upstream exactly (differential fixture
+/// `MASK_COMMIT_ALLOW`).
 pub fn full_attention_mask(
     prefix_valid: &[bool],
     block_valid: &[bool],
@@ -309,22 +314,6 @@ fn round_value(value: f32, dtype: GdnOutputDType) -> f32 {
         GdnOutputDType::F32 => value,
         GdnOutputDType::BF16 => Bf16::from_f32(value).to_f32(),
     }
-}
-
-fn silu_scalar(value: f32) -> f32 {
-    if value.is_nan() || value == f32::INFINITY {
-        return value;
-    }
-    if value == f32::NEG_INFINITY {
-        return -0.0;
-    }
-    let sigmoid = if value >= 0.0 {
-        1.0 / (1.0 + (-value).exp())
-    } else {
-        let exponential = value.exp();
-        exponential / (1.0 + exponential)
-    };
-    value * sigmoid
 }
 
 /// Commit a causal prefix token-by-token using Clover's recurrent delta rule.
@@ -595,7 +584,40 @@ mod tests {
             clover_gdn_upstream_fixtures::SOURCE_SHA256,
             "2584bd5502d6109c2cea9bee2f2ec98f147bbb8954c43858c0315eb4af9ffb0c"
         );
-        assert_eq!(clover_gdn_upstream_fixtures::TORCH_VERSION, "2.10.0+cpu");
+        assert_eq!(clover_gdn_upstream_fixtures::TORCH_VERSION, "2.12.0+cu130");
+    }
+
+    /// Commit-mode mask differential fixture against the pinned upstream mask
+    /// construction (`modeling_clover_moe.py:428-437`): prefix length 3 with a
+    /// hole, block length 4 straddling the block boundary, an invalid query
+    /// (index 2) whose row must be fully masked, and intra-block causality.
+    #[test]
+    fn clover_full_attention_mask_commit_matches_pinned_upstream_fixture() {
+        let prefix_valid = [true, false, true];
+        let block_valid = [true, true, false, true];
+        let mask = full_attention_mask(&prefix_valid, &block_valid, false).unwrap();
+        let fixture = crate::clover_gdn_upstream_fixtures::MASK_COMMIT_ALLOW;
+        assert_eq!(mask.len(), fixture.len());
+        for (index, (&allowed, &actual)) in fixture.iter().zip(mask.iter()).enumerate() {
+            let expected = if allowed > 0.5 {
+                0.0
+            } else {
+                f32::NEG_INFINITY
+            };
+            assert_eq!(
+                actual,
+                expected,
+                "row {} key {} (allowed fixture bit {allowed})",
+                index / 7,
+                index % 7
+            );
+        }
+        // Explicit semantics: the invalid query row is fully masked.
+        assert!(mask[14..21].iter().all(|value| *value == f32::NEG_INFINITY));
+        // Intra-block causality: query 0 sees no block key past index 0 even
+        // though block key 3 is valid.
+        assert_eq!(mask[4], f32::NEG_INFINITY); // block key 1 for query 0
+        assert_eq!(mask[3 * 7 + 6], 0.0); // block key 3 for query 3 (boundary)
     }
 
     fn dims() -> GdnDimensions {
@@ -1121,13 +1143,15 @@ mod tests {
             .collect()
     }
 
-    fn assert_bf16_one_ulp(actual: &[f32], expected: &[f32]) {
+    /// BF16 fixtures are compared with a relative bound of 2⁻⁷ (≤ 2 BF16
+    /// ULPs of the expected value), not a single-ULP bound.
+    fn assert_bf16_within_relative_bound(actual: &[f32], expected: &[f32]) {
         assert_eq!(actual.len(), expected.len());
         for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
-            let one_ulp = expected.abs().max(f32::MIN_POSITIVE) / 128.0;
+            let relative_bound = expected.abs().max(f32::MIN_POSITIVE) / 128.0;
             assert!(
-                (actual - expected).abs() <= one_ulp,
-                "BF16 reference mismatch at {index}: actual={actual:?}, expected={expected:?}, one_ulp={one_ulp}"
+                (actual - expected).abs() <= relative_bound,
+                "BF16 reference mismatch at {index}: actual={actual:?}, expected={expected:?}, relative_bound(2^-7)={relative_bound}"
             );
         }
     }
@@ -1169,7 +1193,7 @@ mod tests {
             &mut state,
         )
         .unwrap();
-        assert_bf16_one_ulp(&output, crate::clover_gdn_upstream_fixtures::REC_OUTPUT);
+        assert_bf16_within_relative_bound(&output, crate::clover_gdn_upstream_fixtures::REC_OUTPUT);
         assert_reference_close(
             &state,
             crate::clover_gdn_upstream_fixtures::REC_STATE_OUT,
@@ -1206,7 +1230,10 @@ mod tests {
             &[1.0, 0.75],
         )
         .unwrap();
-        assert_bf16_one_ulp(&output, crate::clover_gdn_upstream_fixtures::PREVIEW_OUTPUT);
+        assert_bf16_within_relative_bound(
+            &output,
+            crate::clover_gdn_upstream_fixtures::PREVIEW_OUTPUT,
+        );
         assert_eq!(state, [0.1, -0.2, 0.3, 0.05, -0.15, 0.25, 0.2, -0.1]);
     }
 
@@ -1226,8 +1253,11 @@ mod tests {
             GdnOutputDType::BF16,
         )
         .unwrap();
-        assert_bf16_one_ulp(&causal, crate::clover_gdn_upstream_fixtures::CAUSAL_OUTPUT);
-        assert_bf16_one_ulp(
+        assert_bf16_within_relative_bound(
+            &causal,
+            crate::clover_gdn_upstream_fixtures::CAUSAL_OUTPUT,
+        );
+        assert_bf16_within_relative_bound(
             &next_history,
             crate::clover_gdn_upstream_fixtures::CAUSAL_STATE_OUT,
         );
@@ -1246,7 +1276,10 @@ mod tests {
             GdnOutputDType::BF16,
         )
         .unwrap();
-        assert_bf16_one_ulp(&block, crate::clover_gdn_upstream_fixtures::BLOCK_OUTPUT);
+        assert_bf16_within_relative_bound(
+            &block,
+            crate::clover_gdn_upstream_fixtures::BLOCK_OUTPUT,
+        );
         assert_eq!(history, bf16_values(&[0.1, -0.2, 0.3, -0.4, 0.2, 0.05]));
     }
 
@@ -1269,6 +1302,6 @@ mod tests {
             crate::clover_gdn_upstream_fixtures::GATE_DECAY,
             1e-6,
         );
-        assert_bf16_one_ulp(&beta, crate::clover_gdn_upstream_fixtures::GATE_BETA);
+        assert_bf16_within_relative_bound(&beta, crate::clover_gdn_upstream_fixtures::GATE_BETA);
     }
 }
