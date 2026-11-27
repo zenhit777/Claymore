@@ -2,9 +2,9 @@
 
 ## Statut
 
-M11 est découpé en cinq incréments (#48 à #52). **M11.1 est implémenté côté code CPU-only dans la PR #53** et ses preuves locales ont été **rafraîchies après correctifs puis rejouées sur le HEAD de publication** le 2026-11-26 (`m11.1-final-replay-2026-11-26.md`) : la validation de cette étape n'est plus conditionnée qu'à la revue architecturale et à la décision A2. **M11.2 est en cours dans la PR #54** : les références CPU GDN, attention, RoPE et contrats numériques sont développés dans `claymore-tensor`, sans moteur parallèle. La fondation M11.1 établit les contrats de configuration, la provenance, l'inventaire Safetensors et un plan de lecture metadata-only ; M11.2 n'ajoute aucune référence GPU. Aucune compatibilité Clover exécutable n'est revendiquée et aucun forward pass n'est lancé.
+M11 est découpé en cinq incréments (#48 à #52). **M11.1 a été fusionné dans `main` via la PR #53** (merge commit `362be819`, registre A2 mis à jour dans `cb01a77`). La décision A2 est acceptée avec amendements ; A2-B reste volontairement ouverte pour M11.4 (sémantique EOS et traitement des 243 IDs excédentaires), comme consigné dans `docs/audits/m11-architect-decisions.md`. **M11.2 est développé dans la PR #54**, désormais basée directement sur `main` : références CPU GDN, attention, RoPE et contrats numériques dans `claymore-tensor`, sans moteur parallèle. Aucune compatibilité Clover exécutable n'est revendiquée et aucun forward pass n'est lancé.
 
-- PR #53 : `feat/m11-clover-foundation` → `main`, ouverte. L'API GitHub la renvoie **non draft** au 2026-11-26 alors que ce document la décrivait en draft : écart consigné (`m11.1-cpu-evidence-refresh-2026-11-26.md`, N2), à trancher par le titulaire de la PR.
+- PR #53 : `feat/m11-clover-foundation` → `main`, **fusionnée** le 2026-11-27 ; la branche M11.2 n'est plus empilée dessus.
 - Issue de suivi M11.1 : #48.
 - Aucun payload de tenseur n'est chargé ; aucune VRAM n'est consommée.
 
@@ -76,20 +76,20 @@ Le plan de chargement est **metadata-only** : il ne lit pas les payloads, n'allo
 
 ## M11.2 — références CPU et contrats numériques (en cours, PR #54)
 
-La PR #54 est empilée sur la fondation #53 tant que celle-ci n'est pas intégrée. Elle reste en draft ; son code n'est pas considéré comme validé tant que la CI complète et les comparaisons différentielles ne sont pas vertes.
+La PR #54 cible `main` après l'intégration de #53. Elle reste en draft pendant la confirmation architecturale finale ; la CI GitHub stable et MSRV 1.86 est verte sur le HEAD `c737e02` (2/2 jobs sur les événements push et pull_request).
 
 Les primitives communes déjà présentes dans M8/M10 sont réutilisées : projections linéaires, RMSNorm, attention GQA, RoPE, masques, softmax, top-k et gather/scatter. Les ajouts Clover restent dans `claymore-tensor` :
 
 - activations SiLU/sigmoid, multiplication élémentaire et variantes RMSNorm zero-centered / RMSNorm-SiLU-gate ;
 - références GDN : gates `A_log` / `dt_bias`, transition récurrente FP32, convolution causale, convolution de preview avec right-context indépendant, preview softmax bidirectionnel et bucket historique ;
-- masque full-attention causal-prefix / bloc bidirectionnel en preview et causal au commit ;
+- masque full-attention causal-prefix / bloc bidirectionnel en preview et causal au commit, avec lignes de requêtes invalides entièrement masquées dans les deux modes ;
 - gate de sortie full-attention et voie RoPE partielle qui ne tourne que les 25 % initiaux du head Clover.
 
 Le crate `claymore-model-clover` n'introduit pas de dépendance vers le crate tensor : il consommera ces primitives lorsqu'il assemblera le graphe. Les états de preview restent en lecture seule ; seul le commit causal avance les états persistants.
 
-**Références différentielles ajoutées :** `tools/m11/gen_cpu_reference.py` transcrit les équations des fonctions Clover épinglées et génère 13 sorties de référence (368 valeurs) à partir de petits tenseurs PyTorch CPU BF16/F32. Les fixtures sont enregistrées dans `clover_gdn_upstream_fixtures.rs`, avec provenance dans `docs/audits/m11.2-cpu-reference-manifest.json` : révision et SHA-256 du source, PyTorch 2.10.0+cpu, seed, plateforme et confirmation `cuda_used=false`. Les tests comparent GDN commit/preview, convolutions causale/right-context, gates, RMSNorm, RoPE partiel et pipeline full-attention 16Q/2KV avec output gate. La comparaison BF16 eager-attention utilise une borne d'un ULP BF16 ; les autres bornes sont explicites dans les tests.
+**Références différentielles ajoutées :** `tools/m11/gen_cpu_reference.py` transcrit les équations des fonctions Clover épinglées et produit 17 tenseurs dorés (1 356 valeurs) à partir de petits tenseurs PyTorch CPU BF16/F32. Les fixtures sont enregistrées dans `clover_gdn_upstream_fixtures.rs`, avec provenance dans `docs/audits/m11.2-cpu-reference-manifest.json` : révision et SHA-256 du source, environnements de génération et de vérification séparés, seed, plateforme et observation `cuda_used=false`. Les tests couvrent GDN commit/preview, convolutions causale/right-context, gates, RMSNorm, RoPE partiel (dont la configuration de production) et pipeline full-attention 16Q/2KV avec output gate. Les tolérances BF16 sont une borne relative 2⁻⁷ (au plus 2 ULP BF16), explicitement documentée.
 
-**État CI :** les runs précédents ont validé Rust stable, MSRV 1.86, rustfmt et Clippy avant l'ajout des fixtures. Le run 45889855763 sur le premier HEAD différentiel a détecté une assertion de masque preview trop large et un écart d'un ULP sur l'eager BF16 attention. Les assertions ont été corrigées et la tolérance est maintenant définie à un ULP BF16. Le HEAD courant doit encore repasser la CI complète ; aucune validation verte n'est revendiquée pour ces derniers changements.
+**État CI :** le premier passage après correction du masque a détecté deux attentes obsolètes : une ligne preview invalide encore visible dans un test, et des sorties dorées non nulles pour une requête invalide. Le générateur a été corrigé pour construire le masque preview avec les validités amont ; les 64 sorties de la requête invalide sont nulles dans les fixtures. Sur le HEAD `c737e02`, les workflows GitHub `Format, test, and lint` et `Minimum supported Rust 1.86` sont **verts** sur les événements push et pull_request (2/2 jobs chacun). Le workflow stable confirme notamment les 120 tests `claymore-tensor` réussis, les tests workspace, les contrôles CUDA sur stub sans GPU et Clippy. Aucun test matériel ni accès VRAM n'a été exécuté.
 
 Source d'implémentation : `modeling_clover_moe.py` à la révision `4b0402b65e523d0183a14c431955438714cb16ff`. Aucun kernel CUDA, benchmark ni accès VRAM n'est inclus.
 
@@ -110,6 +110,6 @@ Items de validation du rafraîchissement CPU-only (`docs/audits/prompts/m11.1-cp
 1. ~~rejouer le hachage complet de 69,3 GB avec la nouvelle primitive SHA-256~~ — **fait deux fois** : 28/28, exit 0, 55 min 08,79 s (postfix) puis 55 min 11,51 s (finale), avec contrôle croisé `sha256sum` 28/28 ;
 2. ~~régénérer les fixtures tokenizer/template et vérifier la parité entre tokenisation directe et rendu retokenisé~~ — **fait deux fois**, 9/9 identités d'identifiants, 3/3 rejets aux motifs attendus, fixtures byte-identiques entre les deux passes ; un défaut d'outillage du script (`BatchEncoding` itéré par `list`) avait été trouvé et corrigé au passage postfix ;
 3. ~~mettre à jour les journaux/checksums sans modifier les empreintes épinglées~~ — **fait** sous les préfixes `m11.1-postfix-2026-11-26-` et `m11.1-final-2026-11-26-`, attestations historiques laissées intactes et revérifiées (29/29 postfix ; 17/18 checkpoint, écart N4 préexistant et documenté) ;
-4. **restant** : obtenir le verdict explicite de l'architecte sur la PR #53 et la décision A2.
+4. **fait** : la PR #53 a été fusionnée et la décision A2 acceptée avec amendements ; A2-B reste ouverte pour M11.4, conformément au registre architectural.
 
 Aucun forward pass, aucune génération, aucun kernel CUDA ni aucune validation RTX 5090 n'est requis pour M11.1. La campagne RTX appartient à #52, après les incréments CPU. Voir `docs/audits/m11.1-final-replay-2026-11-26.md`, `docs/audits/m11.1-audit-corrections-2026-11-26.md` et `docs/audits/prompts/m11.1-cpu-evidence-refresh-agent.md`.
