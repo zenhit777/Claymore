@@ -18,6 +18,7 @@ use crate::{
 
 const PREFIX_BYTES: u64 = 8;
 const BF16_BYTES: usize = 2;
+const MAX_EXPERT_CHUNK_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Error)]
 pub enum CloverExpertCacheError {
@@ -588,7 +589,11 @@ fn build_shared_expert_load_tasks(
     hidden: usize,
     intermediate: usize,
 ) -> Result<Vec<CloverExpertLoadTask>, CloverExpertCacheError> {
-    if hidden == 0 || intermediate == 0 || plan.max_chunk_bytes == 0 {
+    if hidden == 0
+        || intermediate == 0
+        || plan.max_chunk_bytes == 0
+        || plan.max_chunk_bytes > MAX_EXPERT_CHUNK_BYTES
+    {
         return Err(CloverExpertCacheError::InvalidDimensions(
             "shared expert dimensions and maximum chunk size must be valid",
         ));
@@ -683,6 +688,7 @@ fn build_load_tasks(
         || hidden == 0
         || intermediate == 0
         || plan.max_chunk_bytes == 0
+        || plan.max_chunk_bytes > MAX_EXPERT_CHUNK_BYTES
     {
         return Err(CloverExpertCacheError::InvalidDimensions(
             "invalid model or expert dimensions",
