@@ -13,8 +13,9 @@ It covers:
   factor 0.25, rope_theta 10^7);
 - the full-attention path: RMSNorm, partial RoPE, 16Q/2KV GQA, prefix/block
   mask, and output sigmoid gate;
-- the commit-mode `full_attention_mask` (intra-block causality, invalid query
-  rows, block-boundary positions) against the pinned mask construction.
+- the preview and commit `full_attention_mask` paths against the pinned mask
+  construction, including fully masked invalid query rows, intra-block causality
+  in commit mode, and block-boundary positions.
 
 The fixtures are a *transcription* of the pinned upstream equations into
 PyTorch, not an execution of the upstream module: the upstream SHA-256 proves
