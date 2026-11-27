@@ -29,7 +29,7 @@ fn checkpoint_root() -> Option<PathBuf> {
 
 #[test]
 #[ignore = "requires the authentic pinned Clover checkpoint (set CLAYMORE_M11_CHECKPOINT)"]
-fn pinned_checkpoint_preview_forward_matches_pinned_topology() {
+fn pinned_checkpoint_preview_and_causal_forward_preserve_state_contracts() {
     let root = checkpoint_root().expect("CLAYMORE_M11_CHECKPOINT must point at the release dir");
     let config = CloverConfig::from_json(PINNED_CONFIG_JSON).unwrap();
     config.validate_pinned().unwrap();
@@ -121,6 +121,35 @@ fn pinned_checkpoint_preview_forward_matches_pinned_topology() {
     assert_eq!(backend.cached_kv_tokens(first_attention), 0);
     let (keys, values) = backend.kv_cache(first_attention);
     assert!(keys.is_empty() && values.is_empty());
+
+    // A real-weight causal prefill must advance every recurrent/KV layer
+    // exactly once. This complements the read-only preview assertion above:
+    // both paths now traverse the complete pinned graph and real MoE weights.
+    let causal = graph
+        .forward_causal(&mut backend, &prompt, &[true; 4], &[], &[0, 1, 2, 3])
+        .unwrap();
+    assert!(causal.logits.is_none(), "causal mode must skip the LM head");
+    assert_eq!(causal.hidden.tokens(), prompt.len());
+    assert_eq!(causal.hidden.hidden_size(), config.hidden_size);
+    for (layer, kind) in config.layer_types.iter().enumerate() {
+        match kind {
+            claymore_model_clover::LayerType::LinearAttention => {
+                assert_eq!(backend.gdn_committed_tokens(layer), prompt.len());
+                let (conv, recurrent) = backend.gdn_state(layer).unwrap();
+                assert!(conv.iter().any(|value| *value != 0.0));
+                assert!(recurrent.iter().any(|value| *value != 0.0));
+            }
+            claymore_model_clover::LayerType::FullAttention => {
+                assert_eq!(backend.cached_kv_tokens(layer), prompt.len());
+                let (keys, values) = backend.kv_cache(layer);
+                assert_eq!(
+                    keys.len(),
+                    prompt.len() * config.num_key_value_heads * config.head_dim
+                );
+                assert_eq!(values.len(), keys.len());
+            }
+        }
+    }
 
     if env::var("CLAYMORE_M11_VERIFY_SHA").as_deref() == Ok("1") {
         // Full-artifact SHA-256 verification (~55 min); off by default.
