@@ -5,6 +5,9 @@
 
 pub mod checkpoint;
 pub mod config;
+pub mod executor;
+pub mod generation;
+pub mod graph;
 pub mod moe;
 pub mod residency;
 pub use checkpoint::{
@@ -14,6 +17,15 @@ pub use checkpoint::{
 pub use config::{
     CloverConfig, CloverConfigError, LayerType, CONFIG_REVISION, CONFIG_SHA256, INDEX_SHA256,
     MODEL_ID,
+};
+pub use executor::{CloverDiffusionExecutor, CloverExecutorError, CloverGenerationOutput};
+pub use generation::{
+    CloverGenerationError, CloverGenerationOptions, CloverGenerationPlan, CloverInvalidTokenPolicy,
+    CloverPenaltyConfig,
+};
+pub use graph::{
+    CloverActivation, CloverForwardMode, CloverGraph, CloverGraphBackend, CloverGraphError,
+    CloverGraphOutput, CloverNormKind,
 };
 pub use moe::{
     execute_moe_cpu, project_router_logits_cpu, CloverExpertWeights, CloverMoeError,
@@ -25,11 +37,3 @@ pub use residency::{
     CloverExpertLoadSchedule, CloverExpertLoadTask, CloverExpertPrefetchRequest,
     CloverExpertScheduleError, CloverSharedExpertGeometry, CloverSharedExpertLoadRequest,
 };
-
-/// Lifecycle marker retained until the model graph is wired to the shared
-/// diffusion executor. This is not an inference engine state machine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CloverEngineState {
-    Uninitialized,
-    Ready,
-}

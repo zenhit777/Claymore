@@ -132,3 +132,21 @@ Items de validation du rafraîchissement CPU-only (`docs/audits/prompts/m11.1-cp
 4. **fait** : la PR #53 a été fusionnée et la décision A2 acceptée avec amendements ; A2-B reste ouverte pour M11.4, conformément au registre architectural.
 
 Aucun forward pass, aucune génération, aucun kernel CUDA ni aucune validation RTX 5090 n'est requis pour M11.1. La campagne RTX appartient à #52, après les incréments CPU. Voir `docs/audits/m11.1-final-replay-2026-11-26.md`, `docs/audits/m11.1-audit-corrections-2026-11-26.md` et `docs/audits/prompts/m11.1-cpu-evidence-refresh-agent.md`.
+
+
+## M11.4 — graphe et LowConfidence (en cours, branche `feat/m11-4-clover-lowconfidence`)
+
+La première tranche d'intégration ajoute le graphe Clover et l'adaptateur de génération au-dessus de l'API M9 existante, sans créer de runtime ou d'orchestrateur modèle parallèle.
+
+- `CloverGraph` construit l'ordre exact à partir de `config.layer_types`. Pour chaque couche, il exécute la normalisation d'entrée, GDN ou full-attention, le résiduel, la normalisation post-attention, la projection routeur, le top-k/coreset de #50, le MoE incluant l'expert partagé, puis le résiduel. La normalisation finale et la projection LM head same-position sont exécutées pour le preview seulement.
+- `CloverGraphBackend` est le contrat de calcul : les poids, tenseurs, caches GDN/KV et la résidence des experts restent détenus par le backend et les services mémoire communs. Un preview doit être strictement read-only sur les états propres ; le préfill et le replay causal sont les seuls chemins qui les avancent.
+- `CloverDiffusionExecutor` implémente `DiffusionExecutor` de M9. Il prépare un bloc complet de tokens masque, lance les previews same-position, applique LowConfidence strict (`confidence > threshold`), remplit toutes les positions admissibles ou la plus confiante si aucune ne passe, valide le bloc, puis ne rejoue causalement que le préfixe émis lorsqu'un bloc suivant est nécessaire.
+- Les blocs de sortie incomplets sont tout de même débruités à leur taille de preview complète, conformément à l'upstream. EOS est évalué en ordre positionnel après résolution complète du bloc ; les positions antérieures à l'EOS sont conservées.
+- La sémantique EOS suit le code pinned : liste EOS de génération si fournie, sinon repli sur `config.eos_token_id`, union avec `stop_token_ids`, déduplication et tri ; PAD suit `generation_config.pad_token_id`, puis `config.pad_token_id`, puis le premier terminal, puis zéro.
+- Les pénalités présence/fréquence/répétition et les biais longueur/think-end ne comptent que les tokens de réponse déjà committés. Les tokens non committés du bloc ne se pénalisent pas mutuellement. La confiance reste calculée sur les logits FP32 non divisés par la température, même en mode sampling.
+- M9 notifie désormais l'adaptateur à la fin d'une session ; l'annulation d'une session encore en file peut être vidée via `cancel_with_executor`. Le backend peut ainsi libérer les états propres sans placer de buffers dans le scheduler.
+- La politique concernant les 243 lignes de tête sans ID tokenizer reste ouverte (A2-B) : `CloverGenerationOptions` exige un choix explicite `Reject` ou `Mask`, sans valeur par défaut.
+
+**Couverture CPU ajoutée :** parcours layer-by-layer avec résidus et logits same-position dorés, motif pinned 30 GDN / 10 full-attention, top-8 sur 256 experts, LowConfidence multi-blocs et bloc final incomplet, fallback strict, EOS/stop/PAD, répétition/présence/fréquence, length/think-end, politiques Reject/Mask explicites, replay causal, annulation avant/pendant/après bloc, échec MoE, limite de contexte et isolation par exécuteurs/orchestrateurs indépendants.
+
+**Limite actuelle :** ce commit établit la composition du graphe et le contrat du backend, avec une implémentation backend synthétique dans les tests. Il ne prétend pas encore charger le checkpoint réel ni fournir un backend complet de matérialisation/exécution des poids Clover. La génération réelle à partir des 69,3 GB reste bloquée tant que ce backend n'est pas relié aux poids et aux opérations CPU de référence. #51 reste ouverte : aucune validation complète ni clôture d'issue ne sera revendiquée sur la seule base du graphe synthétique. Aucun contexte CUDA ou VRAM n'est initialisé.
