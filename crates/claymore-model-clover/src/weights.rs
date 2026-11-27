@@ -294,7 +294,10 @@ impl<'a> CloverCpuWeightStore<'a> {
             .ok_or(CloverCpuWeightError::SizeOverflow)?;
         for (name, expected) in [
             (&gate_name, vec![num_experts, gate_rows, hidden_size]),
-            (&down_name, vec![num_experts, hidden_size, intermediate_size]),
+            (
+                &down_name,
+                vec![num_experts, hidden_size, intermediate_size],
+            ),
         ] {
             let actual = self
                 .tensor_shape(name)
@@ -498,18 +501,28 @@ mod tests {
         let mut offset = 0usize;
         let mut payload = Vec::new();
         for (index, (name, shape, values)) in tensors.iter().enumerate() {
-            if index != 0 { header.push(','); }
-            let shape = shape.iter().map(usize::to_string).collect::<Vec<_>>().join(",");
+            if index != 0 {
+                header.push(',');
+            }
+            let shape = shape
+                .iter()
+                .map(usize::to_string)
+                .collect::<Vec<_>>()
+                .join(",");
             let start = offset;
             offset += values.len() * 2;
             header.push_str(&format!(
                 r#""{name}":{{"dtype":"BF16","shape":[{shape}],"data_offsets":[{start},{offset}]}}"#
             ));
-            for value in *values { payload.extend_from_slice(&value.to_le_bytes()); }
+            for value in *values {
+                payload.extend_from_slice(&value.to_le_bytes());
+            }
         }
         header.push('}');
         let mut header = header.into_bytes();
-        while header.len() % 8 != 0 { header.push(b' '); }
+        while header.len() % 8 != 0 {
+            header.push(b' ');
+        }
         let mut bytes = (header.len() as u64).to_le_bytes().to_vec();
         bytes.extend_from_slice(&header);
         bytes.extend_from_slice(&payload);
@@ -585,28 +598,52 @@ mod tests {
         let store = CloverCpuWeightStore::new(&inventory);
         let expert = store.routed_expert_weights(0, 1, 2, 2, 1).unwrap();
         assert_eq!(
-            expert.gate_up_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(),
+            expert
+                .gate_up_proj
+                .iter()
+                .map(|v| v.to_f32())
+                .collect::<Vec<_>>(),
             [5.0, 6.0, 7.0, 8.0]
         );
         assert_eq!(
-            expert.down_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(),
+            expert
+                .down_proj
+                .iter()
+                .map(|v| v.to_f32())
+                .collect::<Vec<_>>(),
             [11.0, 12.0]
         );
         let shared = store.shared_expert_weights(0, 2, 1).unwrap();
         assert_eq!(
-            shared.gate_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(),
+            shared
+                .gate_proj
+                .iter()
+                .map(|v| v.to_f32())
+                .collect::<Vec<_>>(),
             [13.0, 14.0]
         );
         assert_eq!(
-            shared.up_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(),
+            shared
+                .up_proj
+                .iter()
+                .map(|v| v.to_f32())
+                .collect::<Vec<_>>(),
             [15.0, 16.0]
         );
         assert_eq!(
-            shared.down_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(),
+            shared
+                .down_proj
+                .iter()
+                .map(|v| v.to_f32())
+                .collect::<Vec<_>>(),
             [17.0, 18.0]
         );
         assert_eq!(
-            shared.shared_gate.iter().map(|v| v.to_f32()).collect::<Vec<_>>(),
+            shared
+                .shared_gate
+                .iter()
+                .map(|v| v.to_f32())
+                .collect::<Vec<_>>(),
             [19.0, 20.0]
         );
         assert!(matches!(
@@ -615,5 +652,4 @@ mod tests {
         ));
         fs::remove_dir_all(root).unwrap();
     }
-
 }
