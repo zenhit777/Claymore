@@ -1,8 +1,8 @@
 {
   "reference_kind": "transcription",
   "reference_kind_note": "Fixtures are produced by PyTorch transcriptions of the pinned upstream equations (see source.transcribed_functions), not by executing the upstream module. The upstream SHA-256 proves file identity, not transcription fidelity.",
-  "manual_edits": "This curated manifest was edited by hand after generation and verification: the generation_environment block records the original fixture generation (PyTorch 2.10.0+cpu); the regeneration_and_verification_environment block records the separate 2026-11-27 CPU-only environment used for the regeneration diff, the new fixtures and the --upstream-file check; transcribed_functions line ranges were re-derived against the pinned file; tolerance wording follows the agreed relative-bound terminology.",
-  "fixture_source_sha256": "1e067373f088d1b8ee22284a5f0dd5f5f95fb8338fb439ba57fe68d0dcfbc93a",
+  "manual_edits": "This curated manifest was edited by hand after generation and verification: the generation_environment block records the original fixture generation (PyTorch 2.10.0+cpu); the regeneration_and_verification_environment block records the separate 2026-11-27 CPU-only environment used for the regeneration diff, the new fixtures and the --upstream-file check; transcribed_functions line ranges were re-derived against the pinned file; tolerance wording follows the agreed relative-bound terminology. The attention fixture was corrected to build its preview allow-mask through attention_allow(valid=[true,false], prefix_valid=[true], preview=true), so the second invalid query row is fully masked in accordance with upstream valid[:, None, :, None]; ATTN_OUTPUT and ATTN_GATED_OUTPUT were updated accordingly (the invalid query output is all zeros).",
+  "fixture_source_sha256": "45d166df122a01ced93b149ee71d5045d1ab451038fd637a7b4f14a54a0c67d3",
   "fixture_count": 17,
   "fixture_values": 1356,
   "source": {
@@ -39,7 +39,7 @@
     "cuda_used_note": "declared by the generator at the time; the generator now reports torch.cuda.is_initialized() as an observation"
   },
   "regeneration_and_verification_environment": {
-    "note": "2026-11-27 CPU-only regeneration: full fixture file regenerated with the extended generator; the 13 original golden tensors (368 values) are bit-identical to the 2.10.0+cpu originals, proven by per-constant comparison; four new golden tensors added (MASK_COMMIT_ALLOW, ROPE_BIG_COS, ROPE_BIG_SIN, ROPE_BIG_OUTPUT)",
+    "note": "2026-11-27 CPU-only regeneration: full fixture file regenerated with the extended generator; the 13 original golden tensors (368 values) are bit-identical to the 2.10.0+cpu originals, proven by per-constant comparison; four new golden tensors added (MASK_COMMIT_ALLOW, ROPE_BIG_COS, ROPE_BIG_SIN, ROPE_BIG_OUTPUT); preview attention fixture corrected to include an invalid query row masked by the pinned upstream query-valid mask, with corresponding zero outputs; generator and fixture constants updated together",
     "torch_version": "2.12.0+cu130",
     "python_version": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
     "platform": "Linux-6.18.58.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
