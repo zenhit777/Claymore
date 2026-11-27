@@ -41,6 +41,27 @@ pub enum CloverCpuWeightError {
     ExpertOutOfRange { expert: usize, experts: usize },
 }
 
+
+/// Checkpoint view of one GDN layer. Large projections remain lazy tensor names
+/// and are executed through CloverCpuWeightStore::linear; only compact
+/// convolution and recurrent parameters are materialized here.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CloverGdnWeights {
+    pub in_proj_qkv: String,
+    pub in_proj_z: String,
+    pub in_proj_a: String,
+    pub in_proj_b: String,
+    pub out_proj: String,
+    pub conv1d: Vec<Bf16>,
+    pub conv_right: Vec<Bf16>,
+    pub a_log: Vec<Bf16>,
+    pub dt_bias: Vec<Bf16>,
+    pub norm: Vec<Bf16>,
+    pub softmax_logit_scale: Vec<Bf16>,
+    pub softmax_history_bias: Vec<Bf16>,
+    pub softmax_history_c: Vec<Bf16>,
+}
+
 /// Read-only access to validated checkpoint weights for CPU reference kernels.
 ///
 /// This type borrows the inventory, whose shard handles remain the sole
@@ -259,6 +280,104 @@ impl<'a> CloverCpuWeightStore<'a> {
         }
 
         Ok(output)
+    }
+
+
+    /// Resolve a GDN layer's compact parameters and lazy projection tensor names.
+    pub fn gdn_weights(
+        &self,
+        layer: usize,
+        hidden_size: usize,
+        key_heads: usize,
+        key_dim: usize,
+        value_heads: usize,
+        value_dim: usize,
+        kernel_width: usize,
+    ) -> Result<CloverGdnWeights, CloverCpuWeightError> {
+        if hidden_size == 0
+            || key_heads == 0
+            || key_dim == 0
+            || value_heads == 0
+            || value_dim == 0
+            || kernel_width == 0
+            || value_heads % key_heads != 0
+        {
+            return Err(CloverCpuWeightError::SizeOverflow);
+        }
+        let key_width = key_heads
+            .checked_mul(key_dim)
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let value_width = value_heads
+            .checked_mul(value_dim)
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let channels = key_width
+            .checked_mul(2)
+            .and_then(|width| width.checked_add(value_width))
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let conv_elements = channels
+            .checked_mul(kernel_width)
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let right_elements = channels
+            .checked_mul(kernel_width.saturating_sub(1))
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let prefix = format!("model.layers.{layer}.linear_attn");
+        let names = [
+            format!("{prefix}.conv1d.weight"),
+            format!("{prefix}.in_proj_qkv.weight"),
+            format!("{prefix}.in_proj_z.weight"),
+            format!("{prefix}.in_proj_a.weight"),
+            format!("{prefix}.in_proj_b.weight"),
+            format!("{prefix}.A_log"),
+            format!("{prefix}.dt_bias"),
+            format!("{prefix}.norm.weight"),
+            format!("{prefix}.out_proj.weight"),
+            format!("{prefix}.conv_right_weight"),
+            format!("{prefix}.bd_softmax_logit_scale"),
+            format!("{prefix}.bd_softmax_history_bias"),
+            format!("{prefix}.bd_softmax_history_c"),
+        ];
+        let expected = [
+            vec![channels, 1, kernel_width],
+            vec![channels, hidden_size],
+            vec![value_width, hidden_size],
+            vec![value_heads, hidden_size],
+            vec![value_heads, hidden_size],
+            vec![value_heads],
+            vec![value_heads],
+            vec![value_dim],
+            vec![hidden_size, value_width],
+            vec![channels, 1, kernel_width.saturating_sub(1)],
+            vec![value_heads],
+            vec![value_heads],
+            vec![value_heads],
+        ];
+        for (name, expected_shape) in names.iter().zip(expected.iter()) {
+            let actual = self
+                .tensor_shape(name)
+                .ok_or_else(|| CloverCpuWeightError::MissingTensor(name.clone()))?;
+            if actual != expected_shape {
+                return Err(CloverCpuWeightError::InvalidMatrixShape {
+                    tensor: name.clone(),
+                    shape: actual.to_vec(),
+                });
+            }
+        }
+        let scalar = |index: usize| self.read_bf16(&names[index], 0, expected[index][0]);
+        Ok(CloverGdnWeights {
+            in_proj_qkv: names[1].clone(),
+            in_proj_z: names[2].clone(),
+            in_proj_a: names[3].clone(),
+            in_proj_b: names[4].clone(),
+            out_proj: names[8].clone(),
+            conv1d: self.read_bf16(&names[0], 0, conv_elements)?,
+            conv_right: self.read_bf16(&names[9], 0, right_elements)?,
+            a_log: scalar(5)?,
+            dt_bias: scalar(6)?,
+            norm: self.read_bf16(&names[7], 0, value_dim)?,
+            softmax_logit_scale: scalar(10)?,
+            softmax_history_bias: scalar(11)?,
+            softmax_history_c: scalar(12)?,
+        })
     }
 
     /// Materialize one routed expert from Clover's stacked checkpoint tensors.
@@ -652,4 +771,72 @@ mod tests {
         ));
         fs::remove_dir_all(root).unwrap();
     }
+
+    #[test]
+    fn resolves_gdn_projection_names_and_reads_compact_parameters() {
+        let root = std::env::temp_dir().join(format!(
+            "claymore-clover-gdn-weights-{}-{}",
+            std::process::id(),
+            NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let bits = |value: f32| (value.to_bits() >> 16) as u16;
+        let model = root.join("model-00001-of-00001.safetensors");
+        write_multi_tensor(&model, &[
+            ("model.layers.0.linear_attn.conv1d.weight", &[3, 1, 2], &[bits(1.0), bits(2.0), bits(3.0), bits(4.0), bits(5.0), bits(6.0)]),
+            ("model.layers.0.linear_attn.in_proj_qkv.weight", &[3, 2], &[bits(7.0), bits(8.0), bits(9.0), bits(10.0), bits(11.0), bits(12.0)]),
+            ("model.layers.0.linear_attn.in_proj_z.weight", &[1, 2], &[bits(13.0), bits(14.0)]),
+            ("model.layers.0.linear_attn.in_proj_a.weight", &[1, 2], &[bits(15.0), bits(16.0)]),
+            ("model.layers.0.linear_attn.in_proj_b.weight", &[1, 2], &[bits(17.0), bits(18.0)]),
+            ("model.layers.0.linear_attn.A_log", &[1], &[bits(19.0)]),
+            ("model.layers.0.linear_attn.dt_bias", &[1], &[bits(20.0)]),
+            ("model.layers.0.linear_attn.norm.weight", &[1], &[bits(21.0)]),
+            ("model.layers.0.linear_attn.out_proj.weight", &[2, 1], &[bits(22.0), bits(23.0)]),
+        ]);
+        let conv_sidecar = root.join("bd_gdn_conv_right_weight.safetensors");
+        write_multi_tensor(&conv_sidecar, &[
+            ("model.layers.0.linear_attn.conv_right_weight", &[3, 1, 1], &[bits(24.0), bits(25.0), bits(26.0)]),
+        ]);
+        let scalar_sidecar = root.join("bd_gdn_softmax_scalars.safetensors");
+        write_multi_tensor(&scalar_sidecar, &[
+            ("model.layers.0.linear_attn.bd_softmax_logit_scale", &[1], &[bits(27.0)]),
+            ("model.layers.0.linear_attn.bd_softmax_history_bias", &[1], &[bits(28.0)]),
+            ("model.layers.0.linear_attn.bd_softmax_history_c", &[1], &[bits(29.0)]),
+        ]);
+        fs::write(root.join("model.safetensors.index.json"), br#"{"metadata":{"total_size":58},"weight_map":{
+            "model.layers.0.linear_attn.conv1d.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.linear_attn.in_proj_qkv.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.linear_attn.in_proj_z.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.linear_attn.in_proj_a.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.linear_attn.in_proj_b.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.linear_attn.A_log":"model-00001-of-00001.safetensors",
+            "model.layers.0.linear_attn.dt_bias":"model-00001-of-00001.safetensors",
+            "model.layers.0.linear_attn.norm.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.linear_attn.out_proj.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.linear_attn.conv_right_weight":"bd_gdn_conv_right_weight.safetensors",
+            "model.layers.0.linear_attn.bd_softmax_logit_scale":"bd_gdn_softmax_scalars.safetensors",
+            "model.layers.0.linear_attn.bd_softmax_history_bias":"bd_gdn_softmax_scalars.safetensors",
+            "model.layers.0.linear_attn.bd_softmax_history_c":"bd_gdn_softmax_scalars.safetensors"
+        }}"#).unwrap();
+
+        let inventory = CloverCheckpointInventory::inspect(&root).unwrap();
+        let weights = CloverCpuWeightStore::new(&inventory)
+            .gdn_weights(0, 2, 1, 1, 1, 1, 2)
+            .unwrap();
+        assert_eq!(weights.in_proj_qkv, "model.layers.0.linear_attn.in_proj_qkv.weight");
+        assert_eq!(weights.in_proj_z, "model.layers.0.linear_attn.in_proj_z.weight");
+        assert_eq!(weights.in_proj_a, "model.layers.0.linear_attn.in_proj_a.weight");
+        assert_eq!(weights.in_proj_b, "model.layers.0.linear_attn.in_proj_b.weight");
+        assert_eq!(weights.out_proj, "model.layers.0.linear_attn.out_proj.weight");
+        assert_eq!(weights.conv1d.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+        assert_eq!(weights.conv_right.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [24.0, 25.0, 26.0]);
+        assert_eq!(weights.a_log[0].to_f32(), 19.0);
+        assert_eq!(weights.dt_bias[0].to_f32(), 20.0);
+        assert_eq!(weights.norm[0].to_f32(), 21.0);
+        assert_eq!(weights.softmax_logit_scale[0].to_f32(), 27.0);
+        assert_eq!(weights.softmax_history_bias[0].to_f32(), 28.0);
+        assert_eq!(weights.softmax_history_c[0].to_f32(), 29.0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
 }
