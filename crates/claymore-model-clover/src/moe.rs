@@ -741,4 +741,20 @@ mod tests {
         let output = execute_moe_cpu(&[one, one], 1, 2, &routing, &experts, None).unwrap();
         assert_eq!(output.len(), 2);
     }
+
+    #[test]
+    fn router_preserves_top_eight_and_normalizes_selected_weights() {
+        let router = CloverMoeRouter {
+            num_experts: 10,
+            experts_per_token: 8,
+            coreset_enabled: false,
+            coreset_top_p: 0.9,
+        };
+        let logits: Vec<f32> = (0..10).map(|expert| expert as f32).collect();
+        let plan = router.route(&logits, 1, &[true], false).unwrap();
+        assert_eq!(plan.routes[0].expert_ids, vec![9, 8, 7, 6, 5, 4, 3, 2]);
+        assert_eq!(plan.routes[0].weights.len(), 8);
+        assert!((plan.routes[0].weights.iter().sum::<f32>() - 1.0).abs() < 1e-6);
+    }
+
 }
