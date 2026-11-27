@@ -52,6 +52,27 @@ pub struct CloverGdnGeometry {
     pub kernel_width: usize,
 }
 
+/// Checkpoint view of one full-attention layer. Projection matrices remain
+/// lazy tensor names and are streamed through CloverCpuWeightStore::linear.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CloverFullAttentionWeights {
+    pub q_proj: String,
+    pub k_proj: String,
+    pub v_proj: String,
+    pub o_proj: String,
+    pub q_norm: Vec<Bf16>,
+    pub k_norm: Vec<Bf16>,
+}
+
+/// Geometry used to validate the pinned full-attention projection shapes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CloverFullAttentionGeometry {
+    pub hidden_size: usize,
+    pub query_heads: usize,
+    pub kv_heads: usize,
+    pub head_dim: usize,
+}
+
 /// Checkpoint view of one GDN layer. Large projections remain lazy tensor names
 /// and are executed through CloverCpuWeightStore::linear; only compact
 /// convolution and recurrent parameters are materialized here.
@@ -290,6 +311,66 @@ impl<'a> CloverCpuWeightStore<'a> {
         }
 
         Ok(output)
+    }
+
+
+    /// Resolve one full-attention layer's lazy projections and compact Q/K norms.
+    pub fn full_attention_weights(
+        &self,
+        layer: usize,
+        geometry: CloverFullAttentionGeometry,
+    ) -> Result<CloverFullAttentionWeights, CloverCpuWeightError> {
+        let CloverFullAttentionGeometry {
+            hidden_size,
+            query_heads,
+            kv_heads,
+            head_dim,
+        } = geometry;
+        if hidden_size == 0 || query_heads == 0 || kv_heads == 0 || head_dim == 0 {
+            return Err(CloverCpuWeightError::SizeOverflow);
+        }
+        let query_width = query_heads
+            .checked_mul(head_dim)
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let kv_width = kv_heads
+            .checked_mul(head_dim)
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let q_rows = query_width
+            .checked_mul(2)
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let prefix = format!("model.layers.{layer}.self_attn");
+        let q_proj = format!("{prefix}.q_proj.weight");
+        let k_proj = format!("{prefix}.k_proj.weight");
+        let v_proj = format!("{prefix}.v_proj.weight");
+        let o_proj = format!("{prefix}.o_proj.weight");
+        let q_norm = format!("{prefix}.q_norm.weight");
+        let k_norm = format!("{prefix}.k_norm.weight");
+        for (name, expected) in [
+            (&q_proj, vec![q_rows, hidden_size]),
+            (&k_proj, vec![kv_width, hidden_size]),
+            (&v_proj, vec![kv_width, hidden_size]),
+            (&o_proj, vec![hidden_size, query_width]),
+            (&q_norm, vec![head_dim]),
+            (&k_norm, vec![head_dim]),
+        ] {
+            let actual = self
+                .tensor_shape(name)
+                .ok_or_else(|| CloverCpuWeightError::MissingTensor(name.clone()))?;
+            if actual != expected {
+                return Err(CloverCpuWeightError::InvalidMatrixShape {
+                    tensor: name.clone(),
+                    shape: actual.to_vec(),
+                });
+            }
+        }
+        Ok(CloverFullAttentionWeights {
+            q_proj,
+            k_proj,
+            v_proj,
+            o_proj,
+            q_norm: self.read_bf16(&q_norm, 0, head_dim)?,
+            k_norm: self.read_bf16(&k_norm, 0, head_dim)?,
+        })
     }
 
     /// Resolve a GDN layer's compact parameters and lazy projection tensor names.
@@ -954,4 +1035,57 @@ mod tests {
         assert_eq!(weights.softmax_history_c[0].to_f32(), 29.0);
         fs::remove_dir_all(root).unwrap();
     }
+
+    #[test]
+    fn resolves_full_attention_projection_shapes_and_reads_qk_norms() {
+        let root = std::env::temp_dir().join(format!(
+            "claymore-clover-attention-weights-{}-{}",
+            std::process::id(),
+            NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let bits = |value: f32| (value.to_bits() >> 16) as u16;
+        let model = root.join("model-00001-of-00001.safetensors");
+        write_multi_tensor(&model, &[
+            ("model.layers.0.self_attn.q_proj.weight", &[2, 2], &[bits(1.0), bits(2.0), bits(3.0), bits(4.0)]),
+            ("model.layers.0.self_attn.k_proj.weight", &[1, 2], &[bits(5.0), bits(6.0)]),
+            ("model.layers.0.self_attn.v_proj.weight", &[1, 2], &[bits(7.0), bits(8.0)]),
+            ("model.layers.0.self_attn.o_proj.weight", &[2, 1], &[bits(9.0), bits(10.0)]),
+            ("model.layers.0.self_attn.q_norm.weight", &[1], &[bits(11.0)]),
+            ("model.layers.0.self_attn.k_norm.weight", &[1], &[bits(12.0)]),
+        ]);
+        write_tensor(&root.join("bd_gdn_conv_right_weight.safetensors"), "conv", &[2], &[0, 0, 0, 0]);
+        write_tensor(&root.join("bd_gdn_softmax_scalars.safetensors"), "scale", &[2], &[0, 0, 0, 0]);
+        fs::write(root.join("model.safetensors.index.json"), br#"{"metadata":{"total_size":32},"weight_map":{
+            "model.layers.0.self_attn.q_proj.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.self_attn.k_proj.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.self_attn.v_proj.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.self_attn.o_proj.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.self_attn.q_norm.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.self_attn.k_norm.weight":"model-00001-of-00001.safetensors",
+            "conv":"bd_gdn_conv_right_weight.safetensors",
+            "scale":"bd_gdn_softmax_scalars.safetensors"
+        }}"#).unwrap();
+
+        let inventory = CloverCheckpointInventory::inspect(&root).unwrap();
+        let weights = CloverCpuWeightStore::new(&inventory)
+            .full_attention_weights(
+                0,
+                CloverFullAttentionGeometry {
+                    hidden_size: 2,
+                    query_heads: 1,
+                    kv_heads: 1,
+                    head_dim: 1,
+                },
+            )
+            .unwrap();
+        assert_eq!(weights.q_proj, "model.layers.0.self_attn.q_proj.weight");
+        assert_eq!(weights.k_proj, "model.layers.0.self_attn.k_proj.weight");
+        assert_eq!(weights.v_proj, "model.layers.0.self_attn.v_proj.weight");
+        assert_eq!(weights.o_proj, "model.layers.0.self_attn.o_proj.weight");
+        assert_eq!(weights.q_norm[0].to_f32(), 11.0);
+        assert_eq!(weights.k_norm[0].to_f32(), 12.0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
 }
