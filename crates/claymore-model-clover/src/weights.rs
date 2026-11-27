@@ -17,10 +17,7 @@ pub enum CloverCpuWeightError {
     #[error("checkpoint tensor {0:?} is missing")]
     MissingTensor(String),
     #[error("tensor {tensor:?} must be a rank-2 matrix, got shape {shape:?}")]
-    InvalidMatrixShape {
-        tensor: String,
-        shape: Vec<usize>,
-    },
+    InvalidMatrixShape { tensor: String, shape: Vec<usize> },
     #[error("input has {actual} elements, expected {expected}")]
     InputShape { actual: usize, expected: usize },
     #[error("matrix row width {0} exceeds the bounded BF16 read capacity")]
@@ -46,7 +43,9 @@ impl<'a> CloverCpuWeightStore<'a> {
     }
 
     pub fn tensor_shape(&self, name: &str) -> Option<&[usize]> {
-        self.inventory.tensor(name).map(|tensor| tensor.shape.as_slice())
+        self.inventory
+            .tensor(name)
+            .map(|tensor| tensor.shape.as_slice())
     }
 
     /// Read a range of BF16 elements while preserving their stored bit patterns.
@@ -161,8 +160,8 @@ impl<'a> CloverCpuWeightStore<'a> {
             for token in 0..token_count {
                 let input_row = &input[token * input_width..(token + 1) * input_width];
                 for local_row in 0..rows {
-                    let weight_row = &weights
-                        [local_row * input_width..(local_row + 1) * input_width];
+                    let weight_row =
+                        &weights[local_row * input_width..(local_row + 1) * input_width];
                     let mut accumulator = 0.0f32;
                     for inner in 0..input_width {
                         accumulator = input_row[inner]
@@ -249,10 +248,7 @@ mod tests {
         ));
         let input = [Bf16::from_f32(5.0), Bf16::from_f32(6.0)];
         let output = store.linear("weight", &input, 1).unwrap();
-        assert_eq!(
-            output,
-            [Bf16::from_f32(17.0), Bf16::from_f32(39.0)]
-        );
+        assert_eq!(output, [Bf16::from_f32(17.0), Bf16::from_f32(39.0)]);
 
         fs::remove_dir_all(root).unwrap();
     }
