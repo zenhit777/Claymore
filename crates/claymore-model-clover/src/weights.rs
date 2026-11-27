@@ -496,23 +496,57 @@ mod tests {
     fn gathers_one_routed_expert_and_shared_expert_from_stacked_safetensors() {
         let root = std::env::temp_dir().join(format!(
             "claymore-clover-moe-weights-{}-{}",
-            std::process::id(), NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+            std::process::id(),
+            NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir_all(&root).unwrap();
         let bits = |value: f32| (value.to_bits() >> 16) as u16;
         let gate_up = (1..=8).map(|v| bits(v as f32)).collect::<Vec<_>>();
         let down = (9..=12).map(|v| bits(v as f32)).collect::<Vec<_>>();
         let model = root.join("model-00001-of-00001.safetensors");
-        write_multi_tensor(&model, &[
-            ("model.layers.0.mlp.experts.gate_up_proj", &[2, 2, 2], &gate_up),
-            ("model.layers.0.mlp.experts.down_proj", &[2, 2, 1], &down),
-            ("model.layers.0.mlp.shared_expert.gate_proj.weight", &[1, 2], &[bits(13.0), bits(14.0)]),
-            ("model.layers.0.mlp.shared_expert.up_proj.weight", &[1, 2], &[bits(15.0), bits(16.0)]),
-            ("model.layers.0.mlp.shared_expert.down_proj.weight", &[2, 1], &[bits(17.0), bits(18.0)]),
-            ("model.layers.0.mlp.shared_expert_gate.weight", &[1, 2], &[bits(19.0), bits(20.0)]),
-        ]);
-        write_tensor(&root.join("bd_gdn_conv_right_weight.safetensors"), "conv", &[2], &[0, 0, 0, 0]);
-        write_tensor(&root.join("bd_gdn_softmax_scalars.safetensors"), "scale", &[2], &[0, 0, 0, 0]);
+        write_multi_tensor(
+            &model,
+            &[
+                (
+                    "model.layers.0.mlp.experts.gate_up_proj",
+                    &[2, 2, 2],
+                    &gate_up,
+                ),
+                ("model.layers.0.mlp.experts.down_proj", &[2, 2, 1], &down),
+                (
+                    "model.layers.0.mlp.shared_expert.gate_proj.weight",
+                    &[1, 2],
+                    &[bits(13.0), bits(14.0)],
+                ),
+                (
+                    "model.layers.0.mlp.shared_expert.up_proj.weight",
+                    &[1, 2],
+                    &[bits(15.0), bits(16.0)],
+                ),
+                (
+                    "model.layers.0.mlp.shared_expert.down_proj.weight",
+                    &[2, 1],
+                    &[bits(17.0), bits(18.0)],
+                ),
+                (
+                    "model.layers.0.mlp.shared_expert_gate.weight",
+                    &[1, 2],
+                    &[bits(19.0), bits(20.0)],
+                ),
+            ],
+        );
+        write_tensor(
+            &root.join("bd_gdn_conv_right_weight.safetensors"),
+            "conv",
+            &[2],
+            &[0, 0, 0, 0],
+        );
+        write_tensor(
+            &root.join("bd_gdn_softmax_scalars.safetensors"),
+            "scale",
+            &[2],
+            &[0, 0, 0, 0],
+        );
         fs::write(root.join("model.safetensors.index.json"), br#"{"metadata":{"total_size":48},"weight_map":{
             "model.layers.0.mlp.experts.gate_up_proj":"model-00001-of-00001.safetensors",
             "model.layers.0.mlp.experts.down_proj":"model-00001-of-00001.safetensors",
@@ -526,14 +560,35 @@ mod tests {
         let inventory = CloverCheckpointInventory::inspect(&root).unwrap();
         let store = CloverCpuWeightStore::new(&inventory);
         let expert = store.routed_expert_weights(0, 1, 2, 2, 1).unwrap();
-        assert_eq!(expert.gate_up_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [5.0, 6.0, 7.0, 8.0]);
-        assert_eq!(expert.down_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [11.0, 12.0]);
+        assert_eq!(
+            expert.gate_up_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(),
+            [5.0, 6.0, 7.0, 8.0]
+        );
+        assert_eq!(
+            expert.down_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(),
+            [11.0, 12.0]
+        );
         let shared = store.shared_expert_weights(0, 2, 1).unwrap();
-        assert_eq!(shared.gate_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [13.0, 14.0]);
-        assert_eq!(shared.up_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [15.0, 16.0]);
-        assert_eq!(shared.down_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [17.0, 18.0]);
-        assert_eq!(shared.shared_gate.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [19.0, 20.0]);
-        assert!(matches!(store.routed_expert_weights(0, 2, 2, 2, 1), Err(CloverCpuWeightError::ExpertOutOfRange { .. })));
+        assert_eq!(
+            shared.gate_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(),
+            [13.0, 14.0]
+        );
+        assert_eq!(
+            shared.up_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(),
+            [15.0, 16.0]
+        );
+        assert_eq!(
+            shared.down_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(),
+            [17.0, 18.0]
+        );
+        assert_eq!(
+            shared.shared_gate.iter().map(|v| v.to_f32()).collect::<Vec<_>>(),
+            [19.0, 20.0]
+        );
+        assert!(matches!(
+            store.routed_expert_weights(0, 2, 2, 2, 1),
+            Err(CloverCpuWeightError::ExpertOutOfRange { .. })
+        ));
         fs::remove_dir_all(root).unwrap();
     }
 
