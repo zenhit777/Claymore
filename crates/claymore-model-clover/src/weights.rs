@@ -25,6 +25,8 @@ pub enum CloverCpuWeightError {
     InputShape { actual: usize, expected: usize },
     #[error("matrix row width {0} exceeds the bounded BF16 read capacity")]
     MatrixRowTooWide(usize),
+    #[error("token ID {token_id} is outside embedding vocabulary size {vocabulary}")]
+    TokenOutOfRange { token_id: u32, vocabulary: usize },
     #[error("matrix dimensions overflow addressable memory")]
     SizeOverflow,
 }
@@ -60,6 +62,45 @@ impl<'a> CloverCpuWeightStore<'a> {
             .into_iter()
             .map(Bf16::from_bits)
             .collect())
+    }
+
+    /// Gather BF16 token embeddings from a checkpoint matrix
+    /// [vocabulary, hidden_size], preserving the order and duplicates of IDs.
+    pub fn embed_tokens(
+        &self,
+        tensor_name: &str,
+        token_ids: &[u32],
+    ) -> Result<Vec<Bf16>, CloverCpuWeightError> {
+        let shape = self
+            .tensor_shape(tensor_name)
+            .ok_or_else(|| CloverCpuWeightError::MissingTensor(tensor_name.to_owned()))?;
+        if shape.len() != 2 || shape[0] == 0 || shape[1] == 0 {
+            return Err(CloverCpuWeightError::InvalidMatrixShape {
+                tensor: tensor_name.to_owned(),
+                shape: shape.to_vec(),
+            });
+        }
+        let (vocabulary, hidden_size) = (shape[0], shape[1]);
+        let output_len = token_ids
+            .len()
+            .checked_mul(hidden_size)
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let mut output = Vec::with_capacity(output_len);
+        for &token_id in token_ids {
+            let row = usize::try_from(token_id)
+                .ok()
+                .filter(|&id| id < vocabulary)
+                .ok_or(CloverCpuWeightError::TokenOutOfRange {
+                    token_id,
+                    vocabulary,
+                })?;
+            let offset = row
+                .checked_mul(hidden_size)
+                .and_then(|value| u64::try_from(value).ok())
+                .ok_or(CloverCpuWeightError::SizeOverflow)?;
+            output.extend(self.read_bf16(tensor_name, offset, hidden_size)?);
+        }
+        Ok(output)
     }
 
     /// Execute a bias-free BF16 linear projection with checkpoint matrix
@@ -200,6 +241,12 @@ mod tests {
         let inventory = CloverCheckpointInventory::inspect(&root).unwrap();
         let store = CloverCpuWeightStore::new(&inventory);
         assert_eq!(store.tensor_shape("weight"), Some([2, 2].as_slice()));
+        let embedding = store.embed_tokens("weight", &[1]).unwrap();
+        assert_eq!(embedding, [Bf16::from_f32(3.0), Bf16::from_f32(4.0)]);
+        assert!(matches!(
+            store.embed_tokens("weight", &[2]),
+            Err(CloverCpuWeightError::TokenOutOfRange { .. })
+        ));
         let input = [Bf16::from_f32(5.0), Bf16::from_f32(6.0)];
         let output = store.linear("weight", &input, 1).unwrap();
         assert_eq!(
