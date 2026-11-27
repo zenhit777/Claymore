@@ -1,0 +1,132 @@
+//! M11.4 integration against the pinned Clover-35B-A3B-Preview checkpoint.
+//!
+//! Requires the authentic release artifacts. Point `CLAYMORE_M11_CHECKPOINT`
+//! at a directory holding `config.json`, `model.safetensors.index.json`, the
+//! 26 model shards, and the two GDN sidecars. Nothing in this test downloads
+//! data; it never writes to the checkpoint directory.
+//!
+//! Run locally with:
+//!   CLAYMORE_M11_CHECKPOINT=/path/to/Clover-35B-A3B-Preview-4b0402b \
+//!       cargo test -p claymore-model-clover --test m11_4_pinned_checkpoint -- --ignored --nocapture
+//! Set `CLAYMORE_M11_VERIFY_SHA=1` to additionally re-hash all 28 artifacts
+//! (a full pass takes about 55 minutes on a warm cache).
+
+use std::env;
+use std::path::PathBuf;
+
+use claymore_model_clover::{
+    CloverCheckpointInventory, CloverConfig, CloverCpuBackend, CloverCpuBackendOptions,
+    CloverGraph, CONFIG_SHA256, INDEX_SHA256,
+};
+use claymore_runtime::CancellationToken;
+
+const PINNED_CONFIG_JSON: &str = include_str!("../../../docs/audits/fixtures/clover-config.json");
+const MAX_CHUNK_BYTES: usize = 8 * 1024 * 1024;
+
+fn checkpoint_root() -> Option<PathBuf> {
+    env::var_os("CLAYMORE_M11_CHECKPOINT").map(PathBuf::from)
+}
+
+#[test]
+#[ignore = "requires the authentic pinned Clover checkpoint (set CLAYMORE_M11_CHECKPOINT)"]
+fn pinned_checkpoint_preview_forward_matches_pinned_topology() {
+    let root = checkpoint_root().expect("CLAYMORE_M11_CHECKPOINT must point at the release dir");
+    let config = CloverConfig::from_json(PINNED_CONFIG_JSON).unwrap();
+    config.validate_pinned().unwrap();
+    assert_eq!(config.vocab_size, 248_320);
+
+    let inventory = CloverCheckpointInventory::inspect_pinned(&root, &config)
+        .expect("pinned inventory inspection failed");
+    inventory.validate_pinned_tensor_schema().unwrap();
+    let identity = inventory.identity();
+    assert_eq!(identity.index_sha256, INDEX_SHA256);
+    assert_eq!(identity.shard_count, 26);
+    assert_eq!(identity.sidecar_count, 2);
+    assert_eq!(identity.tensor_count, 813);
+    assert_eq!(identity.parameter_count, 34_661_350_848);
+    assert_eq!(identity.payload_bytes, 69_322_701_696);
+    assert_eq!(inventory.root(), root.as_path());
+
+    let plan = inventory.load_plan().unwrap();
+    assert_eq!(plan.shards.len(), 28);
+    assert_eq!(plan.total_payload_bytes, identity.payload_bytes);
+    assert!(plan.max_chunk_bytes <= MAX_CHUNK_BYTES);
+    let mut chunk_count = 0usize;
+    for shard in &plan.shards {
+        for tensor in &shard.tensors {
+            for chunk in &tensor.chunks {
+                assert!(chunk.length_bytes <= MAX_CHUNK_BYTES);
+                chunk_count += 1;
+            }
+        }
+    }
+    assert_eq!(chunk_count, 8_845);
+
+    // The config digest on disk must match the pinned release digest.
+    let config_bytes = std::fs::read(root.join("config.json")).unwrap();
+    let digest = {
+        use claymore_checkpoint::sha256::{hex, sha256};
+        hex(&sha256(&config_bytes))
+    };
+    assert_eq!(digest, CONFIG_SHA256);
+
+    // Backend construction must succeed with a bounded expert budget: only
+    // the routed experts of the preview tokens are ever streamed.
+    let expert_bytes = (3 * config.moe_intermediate_size * config.hidden_size) as u64 * 2;
+    let hard = expert_bytes * 32;
+    let budgets = claymore_memory::MemoryBudgets {
+        vram_soft_bytes: hard,
+        vram_hard_bytes: hard,
+        host_bytes: hard,
+        pinned_host_bytes: hard,
+        expert_cache_target_bytes: hard,
+        expert_cache_max_bytes: hard,
+    };
+    let options = CloverCpuBackendOptions {
+        expert_budgets: budgets,
+        eviction: claymore_memory::EvictionPolicy::Lru,
+        cancellation: Some(CancellationToken::new()),
+    };
+    let mut backend = CloverCpuBackend::new(&config, inventory, options).unwrap();
+
+    let first_linear = config
+        .layer_types
+        .iter()
+        .position(|kind| *kind == claymore_model_clover::LayerType::LinearAttention)
+        .unwrap();
+    let first_attention = config
+        .layer_types
+        .iter()
+        .position(|kind| *kind == claymore_model_clover::LayerType::FullAttention)
+        .unwrap();
+    let gdn_before = backend.gdn_state(first_linear).unwrap();
+    let kv_tokens_before = backend.cached_kv_tokens(first_attention);
+    assert_eq!(kv_tokens_before, 0);
+
+    let graph = CloverGraph::new(config.clone()).unwrap();
+    let prompt: Vec<u32> = vec![151_644, 872, 198, 9_707];
+    let output = graph
+        .forward_preview(&mut backend, &prompt, &[true; 4], &[], &[0, 1, 2, 3])
+        .unwrap();
+    let logits = output.logits.expect("preview mode must emit logits");
+    assert_eq!(logits.len(), 4 * config.vocab_size);
+    assert!(
+        logits.iter().all(|value| value.is_finite()),
+        "preview logits are not all finite"
+    );
+
+    // The preview must leave every clean state component bitwise identical.
+    assert_eq!(backend.gdn_state(first_linear).unwrap(), gdn_before);
+    assert_eq!(backend.gdn_committed_tokens(first_linear), 0);
+    assert_eq!(backend.cached_kv_tokens(first_attention), 0);
+    let (keys, values) = backend.kv_cache(first_attention);
+    assert!(keys.is_empty() && values.is_empty());
+
+    if env::var("CLAYMORE_M11_VERIFY_SHA").as_deref() == Ok("1") {
+        // Full-artifact SHA-256 verification (~55 min); off by default.
+        let inventory = CloverCheckpointInventory::inspect_pinned(&root, &config).unwrap();
+        inventory.verify_pinned_asset_hashes().unwrap();
+    } else {
+        eprintln!("artifact_sha256=not_requested (set CLAYMORE_M11_VERIFY_SHA=1)");
+    }
+}

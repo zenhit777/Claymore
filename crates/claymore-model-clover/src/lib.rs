@@ -5,11 +5,14 @@
 
 pub mod checkpoint;
 pub mod config;
+pub mod cpu_backend;
 pub mod executor;
 pub mod generation;
 pub mod graph;
 pub mod moe;
 pub mod residency;
+#[doc(hidden)]
+pub mod synth_checkpoint;
 pub mod weights;
 pub use checkpoint::{
     CloverCheckpointError, CloverCheckpointInventory, CloverInventoryIdentity, CloverLoadPlan,
@@ -19,6 +22,7 @@ pub use config::{
     CloverConfig, CloverConfigError, LayerType, CONFIG_REVISION, CONFIG_SHA256, INDEX_SHA256,
     MODEL_ID,
 };
+pub use cpu_backend::{CloverCpuBackend, CloverCpuBackendOptions};
 pub use executor::{CloverDiffusionExecutor, CloverExecutorError, CloverGenerationOutput};
 pub use generation::{
     CloverGenerationError, CloverGenerationOptions, CloverGenerationPlan, CloverInvalidTokenPolicy,

@@ -912,6 +912,12 @@ impl CloverCheckpointInventory {
         &self.index
     }
 
+    /// Checked checkpoint root directory. Bounded expert residency reads its
+    /// chunk ranges from this root without re-inspecting the headers.
+    pub fn root(&self) -> &std::path::Path {
+        &self.root
+    }
+
     pub fn identity(&self) -> &CloverInventoryIdentity {
         &self.identity
     }
