@@ -8,7 +8,10 @@ use claymore_checkpoint::safetensors::MAX_CHUNK_BYTES;
 use claymore_tensor::Bf16;
 use thiserror::Error;
 
-use crate::{CloverCheckpointError, CloverCheckpointInventory};
+use crate::{
+    CloverCheckpointError, CloverCheckpointInventory, CloverExpertWeights,
+    CloverSharedExpertWeights,
+};
 
 #[derive(Debug, Error)]
 pub enum CloverCpuWeightError {
@@ -34,6 +37,8 @@ pub enum CloverCpuWeightError {
     InvalidEpsilon(f32),
     #[error("matrix dimensions overflow addressable memory")]
     SizeOverflow,
+    #[error("expert index {expert} is outside the declared expert count {experts}")]
+    ExpertOutOfRange { expert: usize, experts: usize },
 }
 
 /// Read-only access to validated checkpoint weights for CPU reference kernels.
@@ -255,6 +260,90 @@ impl<'a> CloverCpuWeightStore<'a> {
 
         Ok(output)
     }
+
+    /// Materialize one routed expert from Clover's stacked checkpoint tensors.
+    /// Each tensor range is validated and read through the inventory's bounded
+    /// BF16 reader; no other expert's weights are loaded.
+    pub fn routed_expert_weights(
+        &self,
+        layer: usize,
+        expert: usize,
+        num_experts: usize,
+        hidden_size: usize,
+        intermediate_size: usize,
+    ) -> Result<CloverExpertWeights, CloverCpuWeightError> {
+        if num_experts == 0 || expert >= num_experts {
+            return Err(CloverCpuWeightError::ExpertOutOfRange { expert, experts: num_experts });
+        }
+        if hidden_size == 0 || intermediate_size == 0 {
+            return Err(CloverCpuWeightError::SizeOverflow);
+        }
+        let gate_name = format!("model.layers.{layer}.mlp.experts.gate_up_proj");
+        let down_name = format!("model.layers.{layer}.mlp.experts.down_proj");
+        let gate_rows = intermediate_size.checked_mul(2).ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let gate_elements = gate_rows.checked_mul(hidden_size).ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let down_elements = hidden_size.checked_mul(intermediate_size).ok_or(CloverCpuWeightError::SizeOverflow)?;
+        for (name, expected) in [
+            (&gate_name, vec![num_experts, gate_rows, hidden_size]),
+            (&down_name, vec![num_experts, hidden_size, intermediate_size]),
+        ] {
+            let actual = self.tensor_shape(&name).ok_or_else(|| CloverCpuWeightError::MissingTensor(name.clone()))?;
+            if actual != expected {
+                return Err(CloverCpuWeightError::InvalidMatrixShape { tensor: name, shape: actual.to_vec() });
+            }
+        }
+        let gate_offset = expert.checked_mul(gate_elements)
+            .and_then(|value| u64::try_from(value).ok())
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let down_offset = expert.checked_mul(down_elements)
+            .and_then(|value| u64::try_from(value).ok())
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        Ok(CloverExpertWeights {
+            hidden_size,
+            intermediate_size,
+            gate_up_proj: self.read_bf16(&gate_name, gate_offset, gate_elements)?,
+            down_proj: self.read_bf16(&down_name, down_offset, down_elements)?,
+        })
+    }
+
+    /// Materialize the per-layer shared SwiGLU expert and its learned gate.
+    pub fn shared_expert_weights(
+        &self,
+        layer: usize,
+        hidden_size: usize,
+        intermediate_size: usize,
+    ) -> Result<CloverSharedExpertWeights, CloverCpuWeightError> {
+        if hidden_size == 0 || intermediate_size == 0 {
+            return Err(CloverCpuWeightError::SizeOverflow);
+        }
+        let prefix = format!("model.layers.{layer}.mlp");
+        let gate_name = format!("{prefix}.shared_expert.gate_proj.weight");
+        let up_name = format!("{prefix}.shared_expert.up_proj.weight");
+        let down_name = format!("{prefix}.shared_expert.down_proj.weight");
+        let shared_gate_name = format!("{prefix}.shared_expert_gate.weight");
+        for (name, expected) in [
+            (&gate_name, vec![intermediate_size, hidden_size]),
+            (&up_name, vec![intermediate_size, hidden_size]),
+            (&down_name, vec![hidden_size, intermediate_size]),
+            (&shared_gate_name, vec![1, hidden_size]),
+        ] {
+            let actual = self.tensor_shape(&name).ok_or_else(|| CloverCpuWeightError::MissingTensor(name.clone()))?;
+            if actual != expected {
+                return Err(CloverCpuWeightError::InvalidMatrixShape { tensor: name, shape: actual.to_vec() });
+            }
+        }
+        let projection_elements = intermediate_size.checked_mul(hidden_size).ok_or(CloverCpuWeightError::SizeOverflow)?;
+        let down_elements = hidden_size.checked_mul(intermediate_size).ok_or(CloverCpuWeightError::SizeOverflow)?;
+        Ok(CloverSharedExpertWeights {
+            hidden_size,
+            intermediate_size,
+            gate_proj: self.read_bf16(&gate_name, 0, projection_elements)?,
+            up_proj: self.read_bf16(&up_name, 0, projection_elements)?,
+            down_proj: self.read_bf16(&down_name, 0, down_elements)?,
+            shared_gate: self.read_bf16(&shared_gate_name, 0, hidden_size)?,
+        })
+    }
+
 }
 
 #[cfg(test)]
@@ -379,4 +468,73 @@ mod tests {
 
         fs::remove_dir_all(root).unwrap();
     }
+
+    fn write_multi_tensor(path: &Path, tensors: &[(&str, &[usize], &[u16])]) {
+        let mut header = String::from("{");
+        let mut offset = 0usize;
+        let mut payload = Vec::new();
+        for (index, (name, shape, values)) in tensors.iter().enumerate() {
+            if index != 0 { header.push(','); }
+            let shape = shape.iter().map(usize::to_string).collect::<Vec<_>>().join(",");
+            let start = offset;
+            offset += values.len() * 2;
+            header.push_str(&format!(
+                r#""{name}":{{"dtype":"BF16","shape":[{shape}],"data_offsets":[{start},{offset}]}}"#
+            ));
+            for value in *values { payload.extend_from_slice(&value.to_le_bytes()); }
+        }
+        header.push('}');
+        let mut header = header.into_bytes();
+        while header.len() % 8 != 0 { header.push(b' '); }
+        let mut bytes = (header.len() as u64).to_le_bytes().to_vec();
+        bytes.extend_from_slice(&header);
+        bytes.extend_from_slice(&payload);
+        fs::write(path, bytes).unwrap();
+    }
+
+    #[test]
+    fn gathers_one_routed_expert_and_shared_expert_from_stacked_safetensors() {
+        let root = std::env::temp_dir().join(format!(
+            "claymore-clover-moe-weights-{}-{}",
+            std::process::id(), NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let bits = |value: f32| (value.to_bits() >> 16) as u16;
+        let gate_up = (1..=8).map(|v| bits(v as f32)).collect::<Vec<_>>();
+        let down = (9..=12).map(|v| bits(v as f32)).collect::<Vec<_>>();
+        let model = root.join("model-00001-of-00001.safetensors");
+        write_multi_tensor(&model, &[
+            ("model.layers.0.mlp.experts.gate_up_proj", &[2, 2, 2], &gate_up),
+            ("model.layers.0.mlp.experts.down_proj", &[2, 2, 1], &down),
+            ("model.layers.0.mlp.shared_expert.gate_proj.weight", &[1, 2], &[bits(13.0), bits(14.0)]),
+            ("model.layers.0.mlp.shared_expert.up_proj.weight", &[1, 2], &[bits(15.0), bits(16.0)]),
+            ("model.layers.0.mlp.shared_expert.down_proj.weight", &[2, 1], &[bits(17.0), bits(18.0)]),
+            ("model.layers.0.mlp.shared_expert_gate.weight", &[1, 2], &[bits(19.0), bits(20.0)]),
+        ]);
+        write_tensor(&root.join("bd_gdn_conv_right_weight.safetensors"), "conv", &[2], &[0, 0, 0, 0]);
+        write_tensor(&root.join("bd_gdn_softmax_scalars.safetensors"), "scale", &[2], &[0, 0, 0, 0]);
+        fs::write(root.join("model.safetensors.index.json"), br#"{"metadata":{"total_size":48},"weight_map":{
+            "model.layers.0.mlp.experts.gate_up_proj":"model-00001-of-00001.safetensors",
+            "model.layers.0.mlp.experts.down_proj":"model-00001-of-00001.safetensors",
+            "model.layers.0.mlp.shared_expert.gate_proj.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.mlp.shared_expert.up_proj.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.mlp.shared_expert.down_proj.weight":"model-00001-of-00001.safetensors",
+            "model.layers.0.mlp.shared_expert_gate.weight":"model-00001-of-00001.safetensors",
+            "conv":"bd_gdn_conv_right_weight.safetensors","scale":"bd_gdn_softmax_scalars.safetensors"
+        }}"#).unwrap();
+
+        let inventory = CloverCheckpointInventory::inspect(&root).unwrap();
+        let store = CloverCpuWeightStore::new(&inventory);
+        let expert = store.routed_expert_weights(0, 1, 2, 2, 1).unwrap();
+        assert_eq!(expert.gate_up_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [5.0, 6.0, 7.0, 8.0]);
+        assert_eq!(expert.down_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [11.0, 12.0]);
+        let shared = store.shared_expert_weights(0, 2, 1).unwrap();
+        assert_eq!(shared.gate_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [13.0, 14.0]);
+        assert_eq!(shared.up_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [15.0, 16.0]);
+        assert_eq!(shared.down_proj.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [17.0, 18.0]);
+        assert_eq!(shared.shared_gate.iter().map(|v| v.to_f32()).collect::<Vec<_>>(), [19.0, 20.0]);
+        assert!(matches!(store.routed_expert_weights(0, 2, 2, 2, 1), Err(CloverCpuWeightError::ExpertOutOfRange { .. })));
+        fs::remove_dir_all(root).unwrap();
+    }
+
 }
