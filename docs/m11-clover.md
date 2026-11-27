@@ -76,7 +76,7 @@ Le plan de chargement est **metadata-only** : il ne lit pas les payloads, n'allo
 
 ## M11.2 — références CPU et contrats numériques (en cours, PR #54)
 
-La PR #54 cible `main` après l'intégration de #53. Elle reste en draft pendant la confirmation architecturale finale ; la CI GitHub stable et MSRV 1.86 est verte sur le HEAD `c737e02` (2/2 jobs sur les événements push et pull_request).
+La PR #54 cible `main` après l'intégration de #53. Elle est prête pour la revue finale ; la CI GitHub stable et MSRV 1.86 est verte sur le HEAD source `c737e02` et sur le HEAD documentaire ultérieur `d5a1de2` (2/2 jobs sur les événements push et pull_request).
 
 Les primitives communes déjà présentes dans M8/M10 sont réutilisées : projections linéaires, RMSNorm, attention GQA, RoPE, masques, softmax, top-k et gather/scatter. Les ajouts Clover restent dans `claymore-tensor` :
 
