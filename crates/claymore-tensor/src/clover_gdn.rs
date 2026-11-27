@@ -745,7 +745,9 @@ mod tests {
             &preview[width..2 * width],
             &[0.0, f32::NEG_INFINITY, 0.0, 0.0, 0.0, f32::NEG_INFINITY]
         );
-        assert!(preview[2 * width..].iter().all(|value| value.is_infinite() && value.is_sign_negative()));
+        assert!(preview[2 * width..]
+            .iter()
+            .all(|value| value.is_infinite() && value.is_sign_negative()));
         assert_eq!(
             &commit[0..width],
             &[
