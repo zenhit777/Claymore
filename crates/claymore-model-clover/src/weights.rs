@@ -41,6 +41,17 @@ pub enum CloverCpuWeightError {
     ExpertOutOfRange { expert: usize, experts: usize },
 }
 
+/// Architecture dimensions required to resolve one GDN layer's checkpoint tensors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CloverGdnGeometry {
+    pub hidden_size: usize,
+    pub key_heads: usize,
+    pub key_dim: usize,
+    pub value_heads: usize,
+    pub value_dim: usize,
+    pub kernel_width: usize,
+}
+
 /// Checkpoint view of one GDN layer. Large projections remain lazy tensor names
 /// and are executed through CloverCpuWeightStore::linear; only compact
 /// convolution and recurrent parameters are materialized here.
@@ -285,13 +296,16 @@ impl<'a> CloverCpuWeightStore<'a> {
     pub fn gdn_weights(
         &self,
         layer: usize,
-        hidden_size: usize,
-        key_heads: usize,
-        key_dim: usize,
-        value_heads: usize,
-        value_dim: usize,
-        kernel_width: usize,
+        geometry: CloverGdnGeometry,
     ) -> Result<CloverGdnWeights, CloverCpuWeightError> {
+        let CloverGdnGeometry {
+            hidden_size,
+            key_heads,
+            key_dim,
+            value_heads,
+            value_dim,
+            kernel_width,
+        } = geometry;
         if hidden_size == 0
             || key_heads == 0
             || key_dim == 0
@@ -884,7 +898,17 @@ mod tests {
 
         let inventory = CloverCheckpointInventory::inspect(&root).unwrap();
         let weights = CloverCpuWeightStore::new(&inventory)
-            .gdn_weights(0, 2, 1, 1, 1, 1, 2)
+            .gdn_weights(
+                0,
+                CloverGdnGeometry {
+                    hidden_size: 2,
+                    key_heads: 1,
+                    key_dim: 1,
+                    value_heads: 1,
+                    value_dim: 1,
+                    kernel_width: 2,
+                },
+            )
             .unwrap();
         assert_eq!(
             weights.in_proj_qkv,
