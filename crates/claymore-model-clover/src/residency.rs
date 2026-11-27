@@ -68,7 +68,7 @@ pub enum CloverExpertScheduleError {
 /// The scheduler stores only the prefetch/compute task ids and their dependency.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CloverExpertLoadSchedule {
-    load_tasks: Vec<TaskId>,
+    load_task: TaskId,
     chunks: Vec<CloverExpertLoadTask>,
 }
 
@@ -81,8 +81,9 @@ impl CloverExpertLoadSchedule {
         Self::submit_block(scheduler, vec![chunks], priority)
     }
 
-    /// Submit one prefetch task per expert allocation. The block's compute task
-    /// will depend on every prefetch id, including the shared expert when present.
+    /// Submit one block-level prefetch task. Its external chunk descriptors may
+    /// cover several routed experts and the shared expert; the scheduler still
+    /// stores only one task id, never tensor or buffer payloads.
     pub fn submit_block(
         scheduler: &mut Scheduler,
         chunk_groups: Vec<Vec<CloverExpertLoadTask>>,
@@ -91,7 +92,6 @@ impl CloverExpertLoadSchedule {
         if chunk_groups.is_empty() {
             return Err(CloverExpertScheduleError::EmptyPlan);
         }
-        let mut load_tasks = Vec::with_capacity(chunk_groups.len());
         let mut chunks = Vec::new();
         for group in chunk_groups {
             let first = group.first().ok_or(CloverExpertScheduleError::EmptyPlan)?;
@@ -99,27 +99,20 @@ impl CloverExpertLoadSchedule {
                 .iter()
                 .any(|chunk| chunk.expert_id != first.expert_id)
             {
-                for task_id in load_tasks.iter().rev() {
-                    let _ = scheduler.cancel(*task_id);
-                }
                 return Err(CloverExpertScheduleError::MixedExpertPlan);
-            }
-            match scheduler.submit(TaskSpec::new(TaskKind::Prefetch).with_priority(priority)) {
-                Ok(task_id) => load_tasks.push(task_id),
-                Err(error) => {
-                    for task_id in load_tasks.iter().rev() {
-                        let _ = scheduler.cancel(*task_id);
-                    }
-                    return Err(error.into());
-                }
             }
             chunks.extend(group);
         }
-        Ok(Self { load_tasks, chunks })
+        if chunks.is_empty() {
+            return Err(CloverExpertScheduleError::EmptyPlan);
+        }
+        let load_task =
+            scheduler.submit(TaskSpec::new(TaskKind::Prefetch).with_priority(priority))?;
+        Ok(Self { load_task, chunks })
     }
 
-    pub fn load_tasks(&self) -> &[TaskId] {
-        &self.load_tasks
+    pub fn load_task(&self) -> TaskId {
+        self.load_task
     }
 
     pub fn chunks(&self) -> &[CloverExpertLoadTask] {
@@ -131,10 +124,9 @@ impl CloverExpertLoadSchedule {
         scheduler: &mut Scheduler,
         priority: TaskPriority,
     ) -> Result<TaskId, CloverExpertScheduleError> {
-        let mut spec = TaskSpec::new(TaskKind::Compute).with_priority(priority);
-        for &task_id in &self.load_tasks {
-            spec = spec.depends_on(task_id);
-        }
+        let spec = TaskSpec::new(TaskKind::Compute)
+            .with_priority(priority)
+            .depends_on(self.load_task);
         Ok(scheduler.submit(spec)?)
     }
 }
@@ -1549,7 +1541,7 @@ mod tests {
         let schedule =
             CloverExpertLoadSchedule::submit(&mut scheduler, chunks, TaskPriority::High).unwrap();
 
-        let load = scheduler.task(schedule.load_tasks()[0]).unwrap();
+        let load = scheduler.task(schedule.load_task()).unwrap();
         assert_eq!(load.kind, TaskKind::Prefetch);
         assert_eq!(load.state, TaskState::Ready);
         assert_eq!(schedule.chunks().len(), 2);
@@ -1670,7 +1662,7 @@ mod tests {
     }
 
     #[test]
-    fn block_compute_waits_for_every_routed_and_shared_prefetch() {
+    fn block_compute_waits_for_all_routed_and_shared_expert_chunks() {
         use claymore_scheduler::{Scheduler, SchedulerConfig, TaskKind, TaskPriority};
 
         let plan = fixture_plan("model.safetensors");
@@ -1683,19 +1675,24 @@ mod tests {
             TaskPriority::High,
         )
         .unwrap();
-        assert_eq!(schedule.load_tasks().len(), 2);
         assert_eq!(schedule.chunks().len(), 4);
+        assert!(schedule
+            .chunks()
+            .iter()
+            .any(|chunk| chunk.expert_id == "clover.layer.0.expert.0"));
+        assert!(schedule
+            .chunks()
+            .iter()
+            .any(|chunk| chunk.expert_id == "clover.layer.0.expert.1"));
 
         let compute = schedule
             .submit_compute(&mut scheduler, TaskPriority::Normal)
             .unwrap();
         let compute_snapshot = scheduler.task(compute).unwrap();
-        assert_eq!(compute_snapshot.dependencies, schedule.load_tasks());
+        assert_eq!(compute_snapshot.dependencies, vec![schedule.load_task()]);
 
-        for &load_task in schedule.load_tasks() {
-            assert_eq!(scheduler.start_next(TaskKind::Prefetch), Some(load_task));
-            scheduler.complete(load_task).unwrap();
-        }
+        assert_eq!(scheduler.start_next(TaskKind::Prefetch), Some(schedule.load_task()));
+        scheduler.complete(schedule.load_task()).unwrap();
         assert_eq!(scheduler.start_next(TaskKind::Compute), Some(compute));
     }
 
