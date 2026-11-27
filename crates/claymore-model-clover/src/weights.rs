@@ -24,6 +24,14 @@ pub enum CloverCpuWeightError {
     MatrixRowTooWide(usize),
     #[error("token ID {token_id} is outside embedding vocabulary size {vocabulary}")]
     TokenOutOfRange { token_id: u32, vocabulary: usize },
+    #[error("normalization tensor {tensor:?} must have shape [{expected}], got {actual:?}")]
+    InvalidVectorShape {
+        tensor: String,
+        expected: usize,
+        actual: Vec<usize>,
+    },
+    #[error("RMSNorm epsilon must be finite and positive, got {0}")]
+    InvalidEpsilon(f32),
     #[error("matrix dimensions overflow addressable memory")]
     SizeOverflow,
 }
@@ -100,6 +108,76 @@ impl<'a> CloverCpuWeightStore<'a> {
             output.extend(self.read_bf16(tensor_name, offset, hidden_size)?);
         }
         Ok(output)
+    }
+
+    /// Apply Clover's zero-centered RMSNorm to [tokens, hidden_size].
+    ///
+    /// The checkpoint scale is interpreted as (1 + weight), reductions run
+    /// in FP32, and output values are rounded to BF16 once.
+    pub fn rms_norm_zero_centered(
+        &self,
+        tensor_name: &str,
+        input: &[Bf16],
+        token_count: usize,
+        hidden_size: usize,
+        epsilon: f32,
+    ) -> Result<Vec<Bf16>, CloverCpuWeightError> {
+        if !epsilon.is_finite() || epsilon <= 0.0 {
+            return Err(CloverCpuWeightError::InvalidEpsilon(epsilon));
+        }
+        let shape = self
+            .tensor_shape(tensor_name)
+            .ok_or_else(|| CloverCpuWeightError::MissingTensor(tensor_name.to_owned()))?;
+        if shape != [hidden_size] {
+            return Err(CloverCpuWeightError::InvalidVectorShape {
+                tensor: tensor_name.to_owned(),
+                expected: hidden_size,
+                actual: shape.to_vec(),
+            });
+        }
+        let expected = token_count
+            .checked_mul(hidden_size)
+            .ok_or(CloverCpuWeightError::SizeOverflow)?;
+        if token_count == 0 || hidden_size == 0 || input.len() != expected {
+            return Err(CloverCpuWeightError::InputShape {
+                actual: input.len(),
+                expected,
+            });
+        }
+        let scale = self.read_bf16(tensor_name, 0, hidden_size)?;
+        let mut output = Vec::with_capacity(input.len());
+        for row in input.chunks_exact(hidden_size) {
+            let mean_square = row
+                .iter()
+                .map(|value| {
+                    let value = value.to_f32();
+                    value * value
+                })
+                .sum::<f32>()
+                / hidden_size as f32;
+            let inverse_rms = (mean_square + epsilon).sqrt().recip();
+            for (value, weight) in row.iter().zip(&scale) {
+                output.push(Bf16::from_f32(
+                    value.to_f32() * inverse_rms * (1.0 + weight.to_f32()),
+                ));
+            }
+        }
+        Ok(output)
+    }
+
+    /// Execute the bias-free BF16 router projection and widen its BF16-rounded
+    /// results to FP32, matching Clover's router input contract.
+    pub fn router_logits(
+        &self,
+        tensor_name: &str,
+        input: &[Bf16],
+        token_count: usize,
+    ) -> Result<Vec<f32>, CloverCpuWeightError> {
+        Ok(self
+            .linear(tensor_name, input, token_count)?
+            .into_iter()
+            .map(Bf16::to_f32)
+            .collect())
     }
 
     /// Execute a bias-free BF16 linear projection with checkpoint matrix
@@ -249,6 +327,27 @@ mod tests {
         let input = [Bf16::from_f32(5.0), Bf16::from_f32(6.0)];
         let output = store.linear("weight", &input, 1).unwrap();
         assert_eq!(output, [Bf16::from_f32(17.0), Bf16::from_f32(39.0)]);
+        assert_eq!(
+            store.router_logits("weight", &input, 1).unwrap(),
+            [Bf16::from_f32(17.0).to_f32(), Bf16::from_f32(39.0).to_f32()]
+        );
+        let normalized = store
+            .rms_norm_zero_centered(
+                "scale",
+                &[Bf16::from_f32(3.0), Bf16::from_f32(4.0)],
+                1,
+                2,
+                1e-6,
+            )
+            .unwrap();
+        let denominator = (12.5f32 + 1e-6).sqrt();
+        assert_eq!(
+            normalized,
+            [
+                Bf16::from_f32(3.0 / denominator),
+                Bf16::from_f32(4.0 / denominator)
+            ]
+        );
 
         fs::remove_dir_all(root).unwrap();
     }
