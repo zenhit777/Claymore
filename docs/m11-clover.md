@@ -110,7 +110,7 @@ La PR #55 implémente l'issue #50 sans créer de runtime, scheduler ou gestionna
 
 Les tests CPU/fakes couvrent les égalités, la projection BF16, le routage par batch, les lignes invalides, NaN, le calcul expert partagé, les plages de chunks, le chargement, l'annulation après transfert partiel, le rollback sur erreur de lecture, la pression mémoire, le refus d'éviction d'un expert en vol et l'ordre déterministe de préchargement.
 
-**État de validation :** la CI de la PR #55 a révélé puis permis de corriger les premières erreurs de typage, formatage et Clippy. Les derniers commits sont en cours de vérification ; cette phase ne sera pas marquée comme validée avant que les workflows stable et MSRV 1.86 soient verts sur le HEAD final. Aucun test GPU, kernel CUDA ou benchmark n'est requis pour #50.
+**État de validation :** les workflows `Format, test, and lint` et `Minimum supported Rust 1.86` sont verts sur le commit `9715292aafdc705947eb654113edc366dfce3695`. La PR #55 reste ouverte pour revue et fusion ; aucune validation matérielle n'est revendiquée. Aucun test GPU, kernel CUDA ou benchmark n'est requis pour #50.
 
 ## Contraintes d'intégration
 
