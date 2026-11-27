@@ -178,6 +178,112 @@ pub fn add(device: &dyn Device, lhs: &Tensor, rhs: &Tensor) -> Result<Tensor, Op
     write_numeric(device, &values, lhs.layout().shape().to_vec(), a.dtype())
 }
 
+/// Elementwise multiplication. Broadcasting and implicit dtype conversion are rejected.
+pub fn mul(device: &dyn Device, lhs: &Tensor, rhs: &Tensor) -> Result<Tensor, OpError> {
+    if lhs.layout().shape() != rhs.layout().shape() {
+        return Err(OpError::ShapeMismatch);
+    }
+    let a = read_numeric(device, lhs)?;
+    let b = read_numeric(device, rhs)?;
+    if a.dtype() != b.dtype() {
+        return Err(OpError::MixedDType);
+    }
+    let dtype = a.dtype();
+    let values: Vec<f32> = a
+        .to_f32()
+        .into_iter()
+        .zip(b.to_f32())
+        .map(|(x, y)| x * y)
+        .collect();
+    write_numeric(device, &values, lhs.layout().shape().to_vec(), dtype)
+}
+
+/// RMSNorm for Clover's zero-centered q/k scales: effective weight is
+/// `1 + checkpoint_weight` in FP32, with no intermediate BF16 rounding.
+pub fn rms_norm_zero_centered(
+    device: &dyn Device,
+    input: &Tensor,
+    scale: &Tensor,
+    epsilon: f32,
+) -> Result<Tensor, OpError> {
+    if !epsilon.is_finite() || epsilon < 0.0 {
+        return Err(OpError::InvalidEpsilon);
+    }
+    let shape = input.layout().shape();
+    let width = *shape.last().ok_or(OpError::InvalidRank)?;
+    if scale.layout().shape() != [width] {
+        return Err(OpError::ScaleMismatch);
+    }
+    let source = read_numeric(device, input)?;
+    let weights = read_numeric(device, scale)?;
+    if source.dtype() != weights.dtype() {
+        return Err(OpError::MixedDType);
+    }
+    let dtype = source.dtype();
+    let values = source.to_f32();
+    let weights = weights.to_f32();
+    let mut output = vec![0.0f32; values.len()];
+    for (src, dst) in values
+        .chunks_exact(width)
+        .zip(output.chunks_exact_mut(width))
+    {
+        let mean_square = src.iter().map(|x| x * x).sum::<f32>() / width as f32;
+        let inv_rms = 1.0f32 / (mean_square + epsilon).sqrt();
+        for index in 0..width {
+            dst[index] = src[index] * inv_rms * (1.0 + weights[index]);
+        }
+    }
+    write_numeric(device, &output, shape.to_vec(), dtype)
+}
+
+/// Clover GDN RMSNorm with SiLU output gate. Normalization, scaling and gate
+/// multiplication remain FP32 until the single final output conversion.
+pub fn rms_norm_silu_gate(
+    device: &dyn Device,
+    input: &Tensor,
+    scale: &Tensor,
+    gate: &Tensor,
+    epsilon: f32,
+) -> Result<Tensor, OpError> {
+    if !epsilon.is_finite() || epsilon < 0.0 {
+        return Err(OpError::InvalidEpsilon);
+    }
+    let shape = input.layout().shape();
+    let width = *shape.last().ok_or(OpError::InvalidRank)?;
+    if scale.layout().shape() != [width] {
+        return Err(OpError::ScaleMismatch);
+    }
+    if gate.layout().shape() != shape {
+        return Err(OpError::ShapeMismatch);
+    }
+    let source = read_numeric(device, input)?;
+    let weights = read_numeric(device, scale)?;
+    let gates = read_numeric(device, gate)?;
+    if source.dtype() != weights.dtype() || source.dtype() != gates.dtype() {
+        return Err(OpError::MixedDType);
+    }
+    let dtype = source.dtype();
+    let values = source.to_f32();
+    let weights = weights.to_f32();
+    let gates = gates.to_f32();
+    let mut output = vec![0.0f32; values.len()];
+    for (row_index, (src, dst)) in values
+        .chunks_exact(width)
+        .zip(output.chunks_exact_mut(width))
+        .enumerate()
+    {
+        let mean_square = src.iter().map(|x| x * x).sum::<f32>() / width as f32;
+        let inv_rms = 1.0f32 / (mean_square + epsilon).sqrt();
+        for index in 0..width {
+            let normalized = src[index] * inv_rms * weights[index];
+            let gate_value = gates[row_index * width + index];
+            let silu_gate = crate::activations::silu_scalar(gate_value);
+            dst[index] = normalized * silu_gate;
+        }
+    }
+    write_numeric(device, &output, shape.to_vec(), dtype)
+}
+
 /// Row-major matrix multiplication for rank-2 F32/BF16 tensors.
 ///
 /// Every product is accumulated in FP32 with `mul_add`, in the same index order
@@ -490,6 +596,96 @@ mod tests {
         assert_eq!(
             softmax_last_dim(&device, &strided).unwrap_err(),
             OpError::NonContiguous
+        );
+    }
+    #[test]
+    fn mul_is_elementwise_and_rejects_mixed_dtype() {
+        let device = CpuDevice::new();
+        let a = tensor(&device, vec![2, 2], &[1.0, -2.0, 3.0, 4.0]);
+        let b = tensor(&device, vec![2, 2], &[0.5, 3.0, -2.0, 0.25]);
+        assert_eq!(
+            values(&device, &mul(&device, &a, &b).unwrap()),
+            [0.5, -6.0, -6.0, 1.0]
+        );
+        let bf = bf16_tensor(&device, vec![2, 2], &bf(&[1.0, 1.0, 1.0, 1.0]));
+        assert_eq!(mul(&device, &a, &bf).unwrap_err(), OpError::MixedDType);
+    }
+    #[test]
+    fn zero_centered_rms_norm_adds_one_in_fp32() {
+        let device = CpuDevice::new();
+        let input = tensor(&device, vec![1, 2], &[3.0, 4.0]);
+        let scale = tensor(&device, vec![2], &[0.0, 0.0]);
+        let output = values(
+            &device,
+            &rms_norm_zero_centered(&device, &input, &scale, 0.0).unwrap(),
+        );
+        assert!((output[0] - 3.0 / 12.5f32.sqrt()).abs() < 1e-6);
+        assert!((output[1] - 4.0 / 12.5f32.sqrt()).abs() < 1e-6);
+    }
+
+    #[test]
+    fn gdn_rms_norm_applies_silu_gate_before_single_output_rounding() {
+        let device = CpuDevice::new();
+        let input = tensor(&device, vec![1, 2], &[3.0, 4.0]);
+        let scale = tensor(&device, vec![2], &[1.0, 1.0]);
+        let gate = tensor(&device, vec![1, 2], &[0.0, f32::NEG_INFINITY]);
+        let output = values(
+            &device,
+            &rms_norm_silu_gate(&device, &input, &scale, &gate, 0.0).unwrap(),
+        );
+        assert_eq!(output[0], 0.0);
+        assert_eq!(output[1].to_bits(), (-0.0f32).to_bits());
+    }
+    fn bf16_values(values: &[f32]) -> Vec<Bf16> {
+        values.iter().map(|value| Bf16::from_f32(*value)).collect()
+    }
+
+    /// BF16 fixtures are compared with a relative bound of 2⁻⁷ (≤ 2 BF16
+    /// ULPs of the expected value), not a single-ULP bound.
+    fn assert_bf16_within_relative_bound(actual: &[f32], expected: &[f32]) {
+        assert_eq!(actual.len(), expected.len());
+        for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+            let relative_bound = expected.abs().max(f32::MIN_POSITIVE) / 128.0;
+            assert!(
+                (actual - expected).abs() <= relative_bound,
+                "BF16 reference mismatch at {index}: actual={actual:?}, expected={expected:?}, relative_bound(2^-7)={relative_bound}"
+            );
+        }
+    }
+
+    #[test]
+    fn clover_zero_centered_rms_norm_matches_pinned_upstream_cpu_fixture() {
+        let device = CpuDevice::new();
+        let input = bf16_tensor(
+            &device,
+            vec![2, 4],
+            &bf16_values(&[0.2, -0.7, 1.1, 0.3, -0.4, 0.6, 0.1, -0.9]),
+        );
+        let weight = bf16_tensor(&device, vec![4], &bf16_values(&[-0.25, 0.5, 0.0, 0.125]));
+        let output = rms_norm_zero_centered(&device, &input, &weight, 1e-6).unwrap();
+        assert_eq!(output.layout().dtype(), DType::BF16);
+        assert_bf16_within_relative_bound(
+            &values(&device, &output),
+            crate::clover_gdn_upstream_fixtures::NORM_ZERO_OUT,
+        );
+    }
+
+    #[test]
+    fn clover_gdn_rms_norm_gate_matches_pinned_upstream_cpu_fixture() {
+        let device = CpuDevice::new();
+        let input_values = [0.2, -0.7, 1.1, 0.3, -0.4, 0.6, 0.1, -0.9];
+        let input = bf16_tensor(&device, vec![2, 4], &bf16_values(&input_values));
+        let weight = bf16_tensor(&device, vec![4], &bf16_values(&[0.5, 1.0, 1.5, 0.25]));
+        let gate = bf16_tensor(
+            &device,
+            vec![2, 4],
+            &bf16_values(&[-0.2, 0.4, 0.8, -1.0, 0.3, -0.5, 0.1, 0.7]),
+        );
+        let output = rms_norm_silu_gate(&device, &input, &weight, &gate, 1e-6).unwrap();
+        assert_eq!(output.layout().dtype(), DType::BF16);
+        assert_bf16_within_relative_bound(
+            &values(&device, &output),
+            crate::clover_gdn_upstream_fixtures::NORM_GATE_OUT,
         );
     }
 }

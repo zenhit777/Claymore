@@ -19,7 +19,8 @@
 
 use claymore_device::{DType, Device};
 
-use crate::ops::{read_numeric, write_numeric, OpError};
+use crate::activations::sigmoid;
+use crate::ops::{mul, read_numeric, write_numeric, OpError};
 use crate::Tensor;
 
 /// RoPE variants used by the pinned checkpoint.
@@ -127,6 +128,37 @@ pub fn rope_tables(
             let angle = *position as f32 * *frequency;
             cos.push(angle.cos());
             sin.push(angle.sin());
+        }
+    }
+    Ok((cos, sin))
+}
+
+/// Build Clover's partial-RoPE tables. Unlike the legacy full-head table,
+/// these tables cover only the first `floor(head_dim * partial_factor)`
+/// dimensions; the remaining head dimensions are left unchanged.
+pub fn rope_tables_partial(
+    positions: &[u32],
+    head_dim: usize,
+    theta: f64,
+    partial_factor: f64,
+) -> Result<(Vec<f32>, Vec<f32>), OpError> {
+    let rotary_dim = (head_dim as f64 * partial_factor).floor() as usize;
+    if rotary_dim == 0 || rotary_dim % 2 != 0 || rotary_dim > head_dim {
+        return Err(OpError::InvalidRopeParameter(format!(
+            "partial rotary dimension {rotary_dim} is invalid for head_dim {head_dim}"
+        )));
+    }
+    let frequencies = rope_inv_freq(RopeType::Default, head_dim, theta, partial_factor)?;
+    let active = &frequencies[..rotary_dim / 2];
+    let mut cos = Vec::with_capacity(positions.len() * rotary_dim);
+    let mut sin = Vec::with_capacity(positions.len() * rotary_dim);
+    for &position in positions {
+        for _ in 0..2 {
+            for &frequency in active {
+                let angle = position as f32 * frequency;
+                cos.push(angle.cos());
+                sin.push(angle.sin());
+            }
         }
     }
     Ok((cos, sin))
@@ -245,24 +277,103 @@ pub fn rotary_embed(
     write_numeric(device, &output, shape.to_vec(), dtype)
 }
 
+/// Apply Clover's partial rotary embedding to [tokens, heads, head_dim].
+///
+/// The cosine/sine tables have shape [tokens, rotary_dim], where rotary_dim is
+/// even and no greater than head_dim. The first and second halves of that
+/// rotary prefix are paired; the remaining head dimensions pass through
+/// unchanged. BF16 preserves the upstream product and sum rounding boundaries.
+pub fn rotary_embed_partial(
+    device: &dyn Device,
+    input: &Tensor,
+    cos: &Tensor,
+    sin: &Tensor,
+) -> Result<Tensor, OpError> {
+    let shape = input.layout().shape();
+    if shape.len() != 3 {
+        return Err(OpError::ShapeMismatch);
+    }
+    let (tokens, heads, head_dim) = (shape[0], shape[1], shape[2]);
+    let table_shape = cos.layout().shape();
+    if table_shape.len() != 2
+        || table_shape[0] != tokens
+        || table_shape[1] == 0
+        || table_shape[1] % 2 != 0
+        || table_shape[1] > head_dim
+        || sin.layout().shape() != table_shape
+    {
+        return Err(OpError::ShapeMismatch);
+    }
+    let rotary_dim = table_shape[1];
+    let source = read_numeric(device, input)?;
+    let cosines = read_numeric(device, cos)?;
+    let sines = read_numeric(device, sin)?;
+    if source.dtype() != cosines.dtype() || source.dtype() != sines.dtype() {
+        return Err(OpError::MixedDType);
+    }
+    let dtype = source.dtype();
+    let x = source.to_f32();
+    let cos_table = cosines.to_f32();
+    let sin_table = sines.to_f32();
+    let bf16 = dtype == DType::BF16;
+    let round = |value: f32| {
+        if bf16 {
+            crate::Bf16::from_f32(value).to_f32()
+        } else {
+            value
+        }
+    };
+    let half = rotary_dim / 2;
+    let mut output = x.clone();
+    for token in 0..tokens {
+        for head in 0..heads {
+            let base = (token * heads + head) * head_dim;
+            let table_base = token * rotary_dim;
+            for index in 0..half {
+                let first = x[base + index];
+                let second = x[base + half + index];
+                let first_cos = cos_table[table_base + index];
+                let first_sin = sin_table[table_base + index];
+                let second_cos = cos_table[table_base + half + index];
+                let second_sin = sin_table[table_base + half + index];
+                output[base + index] = round(round(first * first_cos) - round(second * first_sin));
+                output[base + half + index] =
+                    round(round(second * second_cos) + round(first * second_sin));
+            }
+        }
+    }
+    write_numeric(device, &output, shape.to_vec(), dtype)
+}
+
+/// Score materialization policy shared by the two attention contracts.
+///
+/// The policies differ only in where the activation dtype is materialized in
+/// the score chain; the softmax and the value reduction are identical.
+#[derive(Clone, Copy)]
+enum ScorePolicy {
+    /// M10 / Gemma historical contract: materialize the scaled score in the
+    /// activation dtype, add the mask, then materialize again before softmax.
+    MaterializeActivation,
+    /// M11 / Clover pinned-reference contract: keep the whole score chain in
+    /// FP32 (`q.float() @ k.float().transpose(-1, -2) * scale`, then
+    /// `masked_fill` with `-inf`); no activation-dtype score is materialized.
+    Fp32UntilSoftmax,
+}
+
 /// Grouped-query multi-head attention with an optional additive mask.
 ///
-/// * `q` is `[query_tokens, heads, head_dim]`;
-/// * `k`/`v` are `[key_tokens, kv_heads, head_dim]` with `heads % kv_heads == 0`;
-/// * `mask` is `[query_tokens, key_tokens]` and is added to the scores.
-///
-/// Scores, the softmax and the value reduction are evaluated in FP32. The
-/// eager pinned reference materializes BF16 scores, then rounds the softmax
-/// probabilities to BF16 before the value reduction. A fully masked query row
-/// produces a zero output row instead of NaN; mask builders reject such masks.
+/// This is the shared implementation behind [`attention`] (M10 / Gemma
+/// historical contract) and [`attention_fp32_scores`] (M11 / Clover pinned
+/// reference contract). See those functions for the exported contracts.
 #[allow(clippy::too_many_arguments)]
-pub fn attention(
+fn attention_with_score_policy(
     device: &dyn Device,
     query: &Tensor,
     key: &Tensor,
     value: &Tensor,
     mask: Option<&Tensor>,
     scale: f32,
+    policy: ScorePolicy,
 ) -> Result<Tensor, OpError> {
     if !scale.is_finite() || scale == 0.0 {
         return Err(OpError::InvalidAttentionScale);
@@ -329,16 +440,33 @@ pub fn attention(
                 for dim in 0..head_dim {
                     accumulator = q[q_base + dim].mul_add(k[k_base + dim], accumulator);
                 }
-                // The eager reference first materializes the BF16 score, then
-                // adds the attention mask, and only then upcasts for softmax.
-                let mut score = round_to_dtype(&[accumulator * scale], dtype)[0];
-                if let Some(mask_values) = &mask_values {
-                    score = round_to_dtype(
-                        &[score + mask_values[token * key_tokens + key_index]],
-                        dtype,
-                    )[0];
+                match policy {
+                    // M10 / Gemma historical contract: the eager M10 reference
+                    // first materializes the BF16 score, then adds the
+                    // attention mask, and only then upcasts for softmax.
+                    ScorePolicy::MaterializeActivation => {
+                        let mut score = round_to_dtype(&[accumulator * scale], dtype)[0];
+                        if let Some(mask_values) = &mask_values {
+                            score = round_to_dtype(
+                                &[score + mask_values[token * key_tokens + key_index]],
+                                dtype,
+                            )[0];
+                        }
+                        scores[key_index] = score;
+                    }
+                    // M11 / Clover pinned-reference contract: the whole score
+                    // chain stays FP32 (`q.float() @ k.float().transpose(-1,
+                    // -2)) * scale`, then `masked_fill` with `-inf`). The
+                    // additive FP32 mask (entries `0.0` or `-inf`) reproduces
+                    // that replacement exactly; no BF16 score is materialized.
+                    ScorePolicy::Fp32UntilSoftmax => {
+                        let mut score = accumulator * scale;
+                        if let Some(mask_values) = &mask_values {
+                            score += mask_values[token * key_tokens + key_index];
+                        }
+                        scores[key_index] = score;
+                    }
                 }
-                scores[key_index] = score;
             }
             softmax_row(&scores, &mut probabilities);
             // The eager reference casts the probabilities back to the activation
@@ -354,6 +482,96 @@ pub fn attention(
         }
     }
     write_numeric(device, &output, query_shape.to_vec(), dtype)
+}
+
+/// Grouped-query multi-head attention with an optional additive mask.
+///
+/// * `q` is `[query_tokens, heads, head_dim]`;
+/// * `k`/`v` are `[key_tokens, kv_heads, head_dim]` with `heads % kv_heads == 0`;
+/// * `mask` is `[query_tokens, key_tokens]` and is added to the scores.
+///
+/// **M10 / Gemma historical contract.** Scores, the softmax and the value
+/// reduction are evaluated in FP32. The eager pinned reference materializes
+/// BF16 scores, then rounds the softmax probabilities to BF16 before the value
+/// reduction. A fully masked query row produces a zero output row instead of
+/// NaN; mask builders reject such masks.
+///
+/// This is the contract consumed by the M10/Gemma graph and kernel parity
+/// (`claymore_attention_bf16` in `kernels/m10.cu`); it must not change. For
+/// the Clover pinned reference (scores kept in FP32 until softmax), use
+/// [`attention_fp32_scores`].
+#[allow(clippy::too_many_arguments)]
+pub fn attention(
+    device: &dyn Device,
+    query: &Tensor,
+    key: &Tensor,
+    value: &Tensor,
+    mask: Option<&Tensor>,
+    scale: f32,
+) -> Result<Tensor, OpError> {
+    attention_with_score_policy(
+        device,
+        query,
+        key,
+        value,
+        mask,
+        scale,
+        ScorePolicy::MaterializeActivation,
+    )
+}
+
+/// Grouped-query multi-head attention with an optional additive mask.
+///
+/// * `q` is `[query_tokens, heads, head_dim]`;
+/// * `k`/`v` are `[key_tokens, kv_heads, head_dim]` with `heads % kv_heads == 0`;
+/// * `mask` is `[query_tokens, key_tokens]` and is added to the scores.
+///
+/// **M11 / Clover pinned reference contract** (`modeling_clover_moe.py:443-447`).
+/// The whole score chain stays FP32 — `scores = (q.float() @
+/// k.float().transpose(-1, -2)) * scale`, then `masked_fill(~allow, -inf)`; no
+/// BF16 score is ever materialized. Only the softmax probabilities are rounded
+/// to the activation (value) dtype before the value reduction, as in
+/// `probs.to(v.dtype)`. A fully masked query row produces a zero output row
+/// instead of NaN; mask builders reject such masks.
+///
+/// This differs from the M10/Gemma [`attention`] contract: on BF16 activations
+/// the two produce different results. Clover model references must call this
+/// function, never [`attention`].
+#[allow(clippy::too_many_arguments)]
+pub fn attention_fp32_scores(
+    device: &dyn Device,
+    query: &Tensor,
+    key: &Tensor,
+    value: &Tensor,
+    mask: Option<&Tensor>,
+    scale: f32,
+) -> Result<Tensor, OpError> {
+    attention_with_score_policy(
+        device,
+        query,
+        key,
+        value,
+        mask,
+        scale,
+        ScorePolicy::Fp32UntilSoftmax,
+    )
+}
+
+/// Apply Clover full-attention's learned output gate: `attention * sigmoid(gate)`.
+///
+/// Both tensors must have the same shape and dtype. Sigmoid is rounded to the
+/// activation dtype before multiplication, matching the pinned PyTorch
+/// execution boundary; the product is then rounded once to that dtype.
+pub fn attention_output_gate(
+    device: &dyn Device,
+    attention_output: &Tensor,
+    gate: &Tensor,
+) -> Result<Tensor, OpError> {
+    if attention_output.layout().shape() != gate.layout().shape() {
+        return Err(OpError::ShapeMismatch);
+    }
+    let gate = sigmoid(device, gate)?;
+    mul(device, attention_output, &gate)
 }
 
 /// Stable softmax over one row, evaluated in FP32.
@@ -934,6 +1152,45 @@ mod tests {
     }
 
     #[test]
+    fn clover_partial_rope_rotates_only_first_quarter_of_head() {
+        let (cos_values, sin_values) =
+            rope_tables_partial(&[0, 1], 256, 10_000_000.0, 0.25).unwrap();
+        assert_eq!(cos_values.len(), 2 * 64);
+        assert_eq!(sin_values.len(), 2 * 64);
+        assert!(cos_values[..64]
+            .iter()
+            .all(|value| (*value - 1.0).abs() < 1e-6));
+        assert!(sin_values[..64].iter().all(|value| value.abs() < 1e-6));
+
+        let device = CpuDevice::new();
+        let input = tensor(
+            &device,
+            vec![1, 1, 8],
+            &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        );
+        let cos = tensor(&device, vec![1, 4], &[0.0, 0.0, 0.0, 0.0]);
+        let sin = tensor(&device, vec![1, 4], &[1.0, 1.0, 1.0, 1.0]);
+        let output = values(
+            &device,
+            &rotary_embed_partial(&device, &input, &cos, &sin).unwrap(),
+        );
+        assert_eq!(output, [-3.0, -4.0, 1.0, 2.0, 5.0, 6.0, 7.0, 8.0]);
+
+        let bf_input = bf16_tensor(
+            &device,
+            vec![1, 1, 8],
+            &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        );
+        let bf_cos = bf16_tensor(&device, vec![1, 4], &[0.0, 0.0, 0.0, 0.0]);
+        let bf_sin = bf16_tensor(&device, vec![1, 4], &[1.0, 1.0, 1.0, 1.0]);
+        let bf_output = values(
+            &device,
+            &rotary_embed_partial(&device, &bf_input, &bf_cos, &bf_sin).unwrap(),
+        );
+        assert_eq!(bf_output, [-3.0, -4.0, 1.0, 2.0, 5.0, 6.0, 7.0, 8.0]);
+    }
+
+    #[test]
     fn proportional_rope_keeps_the_full_frequency_vector_and_zeroes_the_tail() {
         let inv_freq = rope_inv_freq(RopeType::Proportional, 8, 1_000_000.0, 0.25).unwrap();
         assert_eq!(inv_freq.len(), 4);
@@ -1066,6 +1323,20 @@ mod tests {
         let v = tensor(&device, vec![1, 1, 1], &[5.0]);
         let out = values(&device, &attention(&device, &q, &k, &v, None, 1.0).unwrap());
         assert_eq!(out, [5.0, 5.0]);
+    }
+
+    #[test]
+    fn clover_full_attention_16_query_heads_map_to_two_kv_heads() {
+        let device = CpuDevice::new();
+        let q = tensor(&device, vec![1, 16, 1], &[1.0; 16]);
+        let k = tensor(&device, vec![1, 2, 1], &[1.0, 1.0]);
+        let v = tensor(&device, vec![1, 2, 1], &[3.0, 7.0]);
+        let output = values(
+            &device,
+            &attention_fp32_scores(&device, &q, &k, &v, None, 1.0).unwrap(),
+        );
+        assert_eq!(&output[..8], &[3.0; 8]);
+        assert_eq!(&output[8..], &[7.0; 8]);
     }
 
     #[test]
@@ -1374,5 +1645,242 @@ mod tests {
             &scale_bias(&device, &input, &scale, &bias).unwrap(),
         );
         assert_eq!(out, [1.0, 0.0, 5.0, 1.0]);
+    }
+    #[test]
+    fn attention_output_gate_applies_sigmoid_before_elementwise_product() {
+        let device = CpuDevice::new();
+        let attention = tensor(&device, vec![1, 3], &[2.0, -4.0, 0.5]);
+        let gate = tensor(&device, vec![1, 3], &[0.0, 100.0, -100.0]);
+        let output = values(
+            &device,
+            &attention_output_gate(&device, &attention, &gate).unwrap(),
+        );
+        assert_eq!(output[0], 1.0);
+        assert_eq!(output[1], -4.0);
+        assert!(output[2].abs() < 1e-40);
+    }
+
+    #[test]
+    fn attention_output_gate_rejects_shape_mismatch() {
+        let device = CpuDevice::new();
+        let attention = tensor(&device, vec![1, 2], &[1.0, 2.0]);
+        let gate = tensor(&device, vec![2], &[0.0, 0.0]);
+        assert_eq!(
+            attention_output_gate(&device, &attention, &gate).unwrap_err(),
+            OpError::ShapeMismatch
+        );
+    }
+    #[test]
+    fn partial_rope_matches_pinned_upstream_bf16_fixture() {
+        let device = CpuDevice::new();
+        let input = bf16_tensor(
+            &device,
+            vec![2, 2, 8],
+            &[
+                0.2, -0.7, 1.1, 0.3, -0.4, 0.6, 0.1, -0.9, 0.5, 0.2, -0.3, 0.8, 0.1, -0.6, 0.7,
+                -0.2, -0.1, 0.4, 0.6, -0.8, 0.3, 0.2, -0.5, 0.9, 0.7, -0.2, 0.1, 0.5, -0.8, 0.4,
+                0.3, -0.6,
+            ],
+        );
+        let (cos, sin) = rope_tables_partial(&[3, 7], 8, 10_000.0, 0.5).unwrap();
+        let cos = bf16_tensor(&device, vec![2, 4], &cos);
+        let sin = bf16_tensor(&device, vec![2, 4], &sin);
+        let output = rotary_embed_partial(&device, &input, &cos, &sin).unwrap();
+        assert_bf16_within_relative_bound(
+            &values(&device, &output),
+            crate::clover_gdn_upstream_fixtures::ROPE_OUTPUT,
+        );
+    }
+
+    /// Differential validation of the production RoPE configuration
+    /// (head_dim 256, partial factor 0.25, rope_theta 10^7) against the pinned
+    /// upstream transcription.
+    #[test]
+    fn clover_partial_rope_production_configuration_matches_pinned_fixture() {
+        let device = CpuDevice::new();
+        let (cos, sin) = rope_tables_partial(&[0, 1, 2], 256, 10_000_000.0, 0.25).unwrap();
+        let fixture_cos = crate::clover_gdn_upstream_fixtures::ROPE_BIG_COS;
+        let fixture_sin = crate::clover_gdn_upstream_fixtures::ROPE_BIG_SIN;
+        // The Rust table spans both rotation halves (64 = 2 * 32 frequencies);
+        // the fixture stores one value per frequency (32), like the upstream
+        // broadcast table. Round the Rust table to BF16 before comparison.
+        assert_eq!(cos.len(), 3 * 64);
+        for token in 0..3 {
+            for half in 0..2 {
+                for index in 0..32 {
+                    let table = token * 64 + half * 32 + index;
+                    let expected = token * 32 + index;
+                    let actual = crate::Bf16::from_f32(cos[table]).to_f32();
+                    assert!(
+                        (actual - fixture_cos[expected]).abs()
+                            <= fixture_cos[expected].abs().max(f32::MIN_POSITIVE) / 128.0,
+                        "cos token {token} half {half} index {index}: {actual} vs {}",
+                        fixture_cos[expected]
+                    );
+                    let actual = crate::Bf16::from_f32(sin[table]).to_f32();
+                    assert!(
+                        (actual - fixture_sin[expected]).abs()
+                            <= fixture_sin[expected].abs().max(f32::MIN_POSITIVE) / 128.0,
+                        "sin token {token} half {half} index {index}: {actual} vs {}",
+                        fixture_sin[expected]
+                    );
+                }
+            }
+        }
+        let input_values: Vec<f32> = (0..768)
+            .map(|index| ((index % 23) as f32 - 11.0) / 16.0)
+            .collect();
+        let input = bf16_tensor(&device, vec![3, 1, 256], &input_values);
+        let cos = bf16_tensor(&device, vec![3, 64], &cos);
+        let sin = bf16_tensor(&device, vec![3, 64], &sin);
+        let output = rotary_embed_partial(&device, &input, &cos, &sin).unwrap();
+        assert_bf16_within_relative_bound(
+            &values(&device, &output),
+            crate::clover_gdn_upstream_fixtures::ROPE_BIG_OUTPUT,
+        );
+    }
+
+    /// Builds the pinned Clover attention input (RMSNorm + partial RoPE chain)
+    /// and runs both attention contracts over it. BF16 activations make the
+    /// two score policies diverge on exactly 17 of the 128 outputs.
+    fn both_attention_contracts_on_pinned_bf16_input(device: &CpuDevice) -> (Vec<f32>, Vec<f32>) {
+        let q_values: Vec<f32> = (0..128)
+            .map(|index| ((index % 17) as f32 - 8.0) / 20.0)
+            .collect();
+        let k_values: Vec<f32> = (0..24)
+            .map(|index| ((index % 13) as f32 - 6.0) / 15.0)
+            .collect();
+        let v_values: Vec<f32> = (0..24)
+            .map(|index| ((index % 19) as f32 - 9.0) / 20.0)
+            .collect();
+        let mut q = bf16_tensor(device, vec![2, 16, 4], &q_values);
+        let mut k = bf16_tensor(device, vec![3, 2, 4], &k_values);
+        let v = bf16_tensor(device, vec![3, 2, 4], &v_values);
+        let q_weight = bf16_tensor(device, vec![4], &[0.0, 0.1, -0.1, 0.2]);
+        let k_weight = bf16_tensor(device, vec![4], &[0.1, -0.1, 0.2, 0.0]);
+        q = crate::ops::rms_norm_zero_centered(device, &q, &q_weight, 1e-6).unwrap();
+        k = crate::ops::rms_norm_zero_centered(device, &k, &k_weight, 1e-6).unwrap();
+        let (q_cos, q_sin) = rope_tables_partial(&[1, 2], 4, 10_000.0, 0.5).unwrap();
+        let (k_cos, k_sin) = rope_tables_partial(&[0, 1, 2], 4, 10_000.0, 0.5).unwrap();
+        let q_cos = bf16_tensor(device, vec![2, 2], &q_cos);
+        let q_sin = bf16_tensor(device, vec![2, 2], &q_sin);
+        let k_cos = bf16_tensor(device, vec![3, 2], &k_cos);
+        let k_sin = bf16_tensor(device, vec![3, 2], &k_sin);
+        q = rotary_embed_partial(device, &q, &q_cos, &q_sin).unwrap();
+        k = rotary_embed_partial(device, &k, &k_cos, &k_sin).unwrap();
+        let mask_values =
+            crate::clover_gdn::full_attention_mask(&[true], &[true, false], true).unwrap();
+        let mask = tensor(device, vec![2, 3], &mask_values);
+        let m10 = values(
+            device,
+            &attention(device, &q, &k, &v, Some(&mask), 0.5).unwrap(),
+        );
+        let m11 = values(
+            device,
+            &attention_fp32_scores(device, &q, &k, &v, Some(&mask), 0.5).unwrap(),
+        );
+        assert_ne!(
+            m10, m11,
+            "the two attention contracts must diverge on this BF16 input"
+        );
+        (m10, m11)
+    }
+
+    /// Non-regression for the M10 / Gemma contract: BF16 score
+    /// materialization changes the result on this pinned input.
+    #[test]
+    fn attention_m10_policy_materializes_bf16_scores() {
+        let device = CpuDevice::new();
+        let (m10, m11) = both_attention_contracts_on_pinned_bf16_input(&device);
+        assert_ne!(m10, m11);
+        for index in [9usize, 13, 29, 30, 47, 52, 53, 54] {
+            assert_ne!(m10[index], m11[index], "index {index} must diverge");
+        }
+        // Bit patterns produced by the M10 / Gemma materialization policy.
+        assert_eq!(m10[9].to_bits(), 0xbc92_0000);
+        assert_eq!(m10[29].to_bits(), 0xbc4c_0000);
+    }
+
+    /// Non-regression for the M11 / Clover contract: FP32 scores until
+    /// softmax keep the pinned upstream reference values on this input.
+    #[test]
+    fn attention_m11_policy_keeps_fp32_scores() {
+        let device = CpuDevice::new();
+        let (m10, m11) = both_attention_contracts_on_pinned_bf16_input(&device);
+        assert_ne!(m10, m11);
+        // Bit patterns produced by the M11 / Clover FP32-score policy; they
+        // equal the pinned golden fixture at the diverging indices.
+        assert_eq!(m11[9].to_bits(), 0xbc91_0000);
+        assert_eq!(m11[29].to_bits(), 0xbc4f_0000);
+        assert_eq!(
+            m11[9].to_bits(),
+            crate::clover_gdn_upstream_fixtures::ATTN_OUTPUT[9].to_bits()
+        );
+        assert_eq!(
+            m11[29].to_bits(),
+            crate::clover_gdn_upstream_fixtures::ATTN_OUTPUT[29].to_bits()
+        );
+    }
+
+    #[test]
+    fn clover_full_attention_pipeline_matches_pinned_upstream_cpu_fixture() {
+        let device = CpuDevice::new();
+        let q_values: Vec<f32> = (0..128)
+            .map(|index| ((index % 17) as f32 - 8.0) / 20.0)
+            .collect();
+        let k_values: Vec<f32> = (0..24)
+            .map(|index| ((index % 13) as f32 - 6.0) / 15.0)
+            .collect();
+        let v_values: Vec<f32> = (0..24)
+            .map(|index| ((index % 19) as f32 - 9.0) / 20.0)
+            .collect();
+        let gate_values: Vec<f32> = (0..128)
+            .map(|index| ((index % 11) as f32 - 5.0) / 8.0)
+            .collect();
+
+        let q = bf16_tensor(&device, vec![2, 16, 4], &q_values);
+        let k = bf16_tensor(&device, vec![3, 2, 4], &k_values);
+        let v = bf16_tensor(&device, vec![3, 2, 4], &v_values);
+        let gate = bf16_tensor(&device, vec![2, 16, 4], &gate_values);
+        let q_weight = bf16_tensor(&device, vec![4], &[0.0, 0.1, -0.1, 0.2]);
+        let k_weight = bf16_tensor(&device, vec![4], &[0.1, -0.1, 0.2, 0.0]);
+
+        let q = crate::ops::rms_norm_zero_centered(&device, &q, &q_weight, 1e-6).unwrap();
+        let k = crate::ops::rms_norm_zero_centered(&device, &k, &k_weight, 1e-6).unwrap();
+        let (q_cos, q_sin) = rope_tables_partial(&[1, 2], 4, 10_000.0, 0.5).unwrap();
+        let (k_cos, k_sin) = rope_tables_partial(&[0, 1, 2], 4, 10_000.0, 0.5).unwrap();
+        let q_cos = bf16_tensor(&device, vec![2, 2], &q_cos);
+        let q_sin = bf16_tensor(&device, vec![2, 2], &q_sin);
+        let k_cos = bf16_tensor(&device, vec![3, 2], &k_cos);
+        let k_sin = bf16_tensor(&device, vec![3, 2], &k_sin);
+        let q = rotary_embed_partial(&device, &q, &q_cos, &q_sin).unwrap();
+        let k = rotary_embed_partial(&device, &k, &k_cos, &k_sin).unwrap();
+
+        let mask_values =
+            crate::clover_gdn::full_attention_mask(&[true], &[true, false], true).unwrap();
+        let mask = tensor(&device, vec![2, 3], &mask_values);
+        let attended = attention_fp32_scores(&device, &q, &k, &v, Some(&mask), 0.5).unwrap();
+        let gated = attention_output_gate(&device, &attended, &gate).unwrap();
+
+        assert_bf16_within_relative_bound(
+            &values(&device, &attended),
+            crate::clover_gdn_upstream_fixtures::ATTN_OUTPUT,
+        );
+        assert_bf16_within_relative_bound(
+            &values(&device, &gated),
+            crate::clover_gdn_upstream_fixtures::ATTN_GATED_OUTPUT,
+        );
+    }
+    /// BF16 fixtures are compared with a relative bound of 2⁻⁷ (≤ 2 BF16
+    /// ULPs of the expected value), not a single-ULP bound.
+    fn assert_bf16_within_relative_bound(actual: &[f32], expected: &[f32]) {
+        assert_eq!(actual.len(), expected.len());
+        for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+            let relative_bound = expected.abs().max(f32::MIN_POSITIVE) / 128.0;
+            assert!(
+                (actual - expected).abs() <= relative_bound,
+                "BF16 reference mismatch at {index}: actual={actual:?}, expected={expected:?}, relative_bound(2^-7)={relative_bound}"
+            );
+        }
     }
 }
