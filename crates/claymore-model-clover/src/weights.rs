@@ -313,7 +313,6 @@ impl<'a> CloverCpuWeightStore<'a> {
         Ok(output)
     }
 
-
     /// Resolve one full-attention layer's lazy projections and compact Q/K norms.
     pub fn full_attention_weights(
         &self,
@@ -1046,17 +1045,56 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         let bits = |value: f32| (value.to_bits() >> 16) as u16;
         let model = root.join("model-00001-of-00001.safetensors");
-        write_multi_tensor(&model, &[
-            ("model.layers.0.self_attn.q_proj.weight", &[2, 2], &[bits(1.0), bits(2.0), bits(3.0), bits(4.0)]),
-            ("model.layers.0.self_attn.k_proj.weight", &[1, 2], &[bits(5.0), bits(6.0)]),
-            ("model.layers.0.self_attn.v_proj.weight", &[1, 2], &[bits(7.0), bits(8.0)]),
-            ("model.layers.0.self_attn.o_proj.weight", &[2, 1], &[bits(9.0), bits(10.0)]),
-            ("model.layers.0.self_attn.q_norm.weight", &[1], &[bits(11.0)]),
-            ("model.layers.0.self_attn.k_norm.weight", &[1], &[bits(12.0)]),
-        ]);
-        write_tensor(&root.join("bd_gdn_conv_right_weight.safetensors"), "conv", &[2], &[0, 0, 0, 0]);
-        write_tensor(&root.join("bd_gdn_softmax_scalars.safetensors"), "scale", &[2], &[0, 0, 0, 0]);
-        fs::write(root.join("model.safetensors.index.json"), br#"{"metadata":{"total_size":32},"weight_map":{
+        write_multi_tensor(
+            &model,
+            &[
+                (
+                    "model.layers.0.self_attn.q_proj.weight",
+                    &[2, 2],
+                    &[bits(1.0), bits(2.0), bits(3.0), bits(4.0)],
+                ),
+                (
+                    "model.layers.0.self_attn.k_proj.weight",
+                    &[1, 2],
+                    &[bits(5.0), bits(6.0)],
+                ),
+                (
+                    "model.layers.0.self_attn.v_proj.weight",
+                    &[1, 2],
+                    &[bits(7.0), bits(8.0)],
+                ),
+                (
+                    "model.layers.0.self_attn.o_proj.weight",
+                    &[2, 1],
+                    &[bits(9.0), bits(10.0)],
+                ),
+                (
+                    "model.layers.0.self_attn.q_norm.weight",
+                    &[1],
+                    &[bits(11.0)],
+                ),
+                (
+                    "model.layers.0.self_attn.k_norm.weight",
+                    &[1],
+                    &[bits(12.0)],
+                ),
+            ],
+        );
+        write_tensor(
+            &root.join("bd_gdn_conv_right_weight.safetensors"),
+            "conv",
+            &[2],
+            &[0, 0, 0, 0],
+        );
+        write_tensor(
+            &root.join("bd_gdn_softmax_scalars.safetensors"),
+            "scale",
+            &[2],
+            &[0, 0, 0, 0],
+        );
+        fs::write(
+            root.join("model.safetensors.index.json"),
+            br#"{"metadata":{"total_size":32},"weight_map":{
             "model.layers.0.self_attn.q_proj.weight":"model-00001-of-00001.safetensors",
             "model.layers.0.self_attn.k_proj.weight":"model-00001-of-00001.safetensors",
             "model.layers.0.self_attn.v_proj.weight":"model-00001-of-00001.safetensors",
@@ -1065,7 +1103,9 @@ mod tests {
             "model.layers.0.self_attn.k_norm.weight":"model-00001-of-00001.safetensors",
             "conv":"bd_gdn_conv_right_weight.safetensors",
             "scale":"bd_gdn_softmax_scalars.safetensors"
-        }}"#).unwrap();
+        }}"#,
+        )
+        .unwrap();
 
         let inventory = CloverCheckpointInventory::inspect(&root).unwrap();
         let weights = CloverCpuWeightStore::new(&inventory)
@@ -1087,5 +1127,4 @@ mod tests {
         assert_eq!(weights.k_norm[0].to_f32(), 12.0);
         fs::remove_dir_all(root).unwrap();
     }
-
 }
