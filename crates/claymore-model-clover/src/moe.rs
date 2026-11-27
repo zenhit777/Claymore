@@ -756,5 +756,4 @@ mod tests {
         assert_eq!(plan.routes[0].weights.len(), 8);
         assert!((plan.routes[0].weights.iter().sum::<f32>() - 1.0).abs() < 1e-6);
     }
-
 }
