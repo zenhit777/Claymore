@@ -165,7 +165,6 @@ fn pinned_checkpoint_preview_and_causal_forward_preserve_state_contracts() {
     }
 }
 
-
 #[test]
 #[ignore = "requires the authentic pinned Clover checkpoint (set CLAYMORE_M11_CHECKPOINT)"]
 fn pinned_checkpoint_runs_multiblock_lowconfidence_generation_on_real_weights() {
@@ -250,14 +249,19 @@ fn pinned_checkpoint_runs_multiblock_lowconfidence_generation_on_real_weights() 
         }
     }
 
-    assert!(observed_causal_replay, "the first resolved block was not replayed causally");
+    assert!(
+        observed_causal_replay,
+        "the first resolved block was not replayed causally"
+    );
     assert_eq!(
         orchestrator.session(session).unwrap().state,
         DiffusionSessionState::Completed
     );
     let generated = executor.generated_tokens();
     assert_eq!(generated.len(), 3);
-    assert!(generated.iter().all(|token| (*token as usize) < tokenizer_vocab_size));
+    assert!(generated
+        .iter()
+        .all(|token| (*token as usize) < tokenizer_vocab_size));
     let output = executor.output();
     assert_eq!(output.prompt_tokens, prompt);
     assert_eq!(output.sequence().len(), output.prompt_tokens.len() + 3);
