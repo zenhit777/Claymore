@@ -186,10 +186,11 @@ pub trait DiffusionExecutor {
     /// session, and is also flushed by `cancel_with_executor` for sessions
     /// cancelled before their first step.
     ///
-    /// Returning `Err` does not change the session's terminal state, but the
-    /// cleanup failure is recorded on the session snapshot and counted in
-    /// `DiffusionMetrics::cleanups_failed`, so a failed release is never
-    /// invisible to the host (M11.4 review P4).
+    /// Returning `Err` does not change the session's terminal state. The
+    /// orchestrator keeps the terminal notification pending, records the
+    /// cleanup failure, and retries this callback on the next owner-driven
+    /// `run_one`. Implementations must therefore make cleanup idempotent:
+    /// partially released resources may be encountered again (M11.4 review P4).
     fn on_session_end(
         &mut self,
         _session_id: DiffusionSessionId,
@@ -795,23 +796,74 @@ impl DiffusionOrchestrator {
         executor: DiffusionExecutorKey,
         adapter: &mut E,
     ) {
-        {
-            let Some(session) = self.sessions.get_mut(&id) else {
+        let state = {
+            let Some(session) = self.sessions.get(&id) else {
                 return;
             };
             if session.executor != executor || !session.terminal_notification_pending {
                 return;
             }
-            session.terminal_notification_pending = false;
-        }
-        let state = self.sessions[&id].snapshot.state;
-        if let Err(error) = adapter.on_session_end(id, state) {
-            self.metrics.cleanups_failed = self.metrics.cleanups_failed.saturating_add(1);
-            if let Some(session) = self.sessions.get_mut(&id) {
-                session.snapshot.error = Some(match session.snapshot.error.take() {
-                    Some(existing) => format!("{existing}; session cleanup failed: {error}"),
-                    None => format!("session cleanup failed: {error}"),
-                });
+            session.snapshot.state
+        };
+
+        // Cleanup callbacks are retried after either an ordinary error or a
+        // panic. They must be idempotent because a release may have partially
+        // succeeded before reporting failure.
+        let cleanup = catch_unwind(AssertUnwindSafe(|| adapter.on_session_end(id, state)))
+            .unwrap_or_else(|payload| {
+                let message = payload
+                    .downcast_ref::<&str>()
+                    .copied()
+                    .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                    .unwrap_or("diffusion cleanup panicked with a non-string payload");
+                Err(format!("executor cleanup panicked: {message}"))
+            });
+
+        match cleanup {
+            Ok(()) => {
+                if let Some(session) = self.sessions.get_mut(&id) {
+                    session.terminal_notification_pending = false;
+                    // Keep a generation failure, if any, but clear a cleanup
+                    // error once a retry has successfully released resources.
+                    if let Some(existing) = session.snapshot.error.take() {
+                        session.snapshot.error = if let Some((base, _)) =
+                            existing.split_once("; session cleanup failed: ")
+                        {
+                            (!base.is_empty()).then(|| base.to_owned())
+                        } else if existing.starts_with("session cleanup failed: ") {
+                            None
+                        } else {
+                            Some(existing)
+                        };
+                    }
+                }
+            }
+            Err(error) => {
+                self.metrics.cleanups_failed = self.metrics.cleanups_failed.saturating_add(1);
+                if let Some(session) = self.sessions.get_mut(&id) {
+                    // Preserve the original execution error, if present, while
+                    // replacing any previous cleanup-attempt detail.
+                    let existing = session.snapshot.error.take().unwrap_or_default();
+                    let base = existing
+                        .strip_prefix("session cleanup failed: ")
+                        .map_or_else(
+                            || {
+                                existing
+                                    .split("; session cleanup failed: ")
+                                    .next()
+                                    .unwrap_or(&existing)
+                                    .to_owned()
+                            },
+                            |_| String::new(),
+                        );
+                    session.snapshot.error = Some(if base.is_empty() {
+                        format!("session cleanup failed: {error}")
+                    } else {
+                        format!("{base}; session cleanup failed: {error}")
+                    });
+                    // Deliberately leave terminal_notification_pending=true:
+                    // reclaim_closed_sessions must defer until cleanup succeeds.
+                }
             }
         }
     }
