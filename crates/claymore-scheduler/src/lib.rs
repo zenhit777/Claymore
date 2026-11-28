@@ -305,11 +305,41 @@ impl Scheduler {
     /// tasks retain submission order. Returns None when no task is ready or
     /// when the concurrent prefetch limit has been reached.
     pub fn start_next(&mut self, kind: TaskKind) -> Option<TaskId> {
+        self.start_next_where(kind, |_| true)
+    }
+
+    /// Like [`Scheduler::start_next`], but only considers tasks accepted by
+    /// `accepts`. Rejected candidates keep their queue position and FIFO
+    /// sequence, so selection stays deterministic for every caller filter.
+    /// Used by the diffusion orchestrator to restrict selection to the tasks
+    /// of the sessions owned by the executor currently being driven.
+    pub fn start_next_where(
+        &mut self,
+        kind: TaskKind,
+        mut accepts: impl FnMut(TaskId) -> bool,
+    ) -> Option<TaskId> {
         if kind == TaskKind::Prefetch && self.running_prefetches >= self.config.max_prefetches {
             return None;
         }
-
-        let (_, _, selected) = self.ready[queue_index(kind)].pop_first()?;
+        let queue = queue_index(kind);
+        let mut deferred = Vec::new();
+        let mut selected = None;
+        while let Some(entry) = self.ready[queue].pop_first() {
+            let chosen = accepts(entry.2);
+            deferred.push(entry);
+            if chosen {
+                selected = Some(entry.2);
+                break;
+            }
+        }
+        let Some(selected) = selected else {
+            self.ready[queue].extend(deferred);
+            return None;
+        };
+        // The selected task leaves the ready queue; every other candidate is
+        // restored untouched.
+        deferred.pop();
+        self.ready[queue].extend(deferred);
         let task = self.tasks.get_mut(&selected)?;
         debug_assert_eq!(task.state, TaskState::Ready);
         task.state = TaskState::Running;
@@ -444,6 +474,32 @@ impl Scheduler {
 
     pub fn running_prefetches(&self) -> usize {
         self.running_prefetches
+    }
+
+    /// Forget terminal task records entirely (snapshots, reverse edges, and
+    /// cancellation-event entries). Active (non-terminal) tasks are never
+    /// touched. This is the bounded-retention lever for orchestration hosts:
+    /// once a closed session's metadata is no longer inspectable by contract,
+    /// its terminal task records must not stay in the graph.
+    pub fn forget_terminal_tasks(&mut self, ids: &[TaskId]) -> usize {
+        let mut removed = Vec::new();
+        for id in ids {
+            if self.tasks.contains_key(id) {
+                continue;
+            }
+            if self.terminal.remove(id).is_some() {
+                self.dependents.remove(id);
+                self.cancelled.remove(id);
+                removed.push(*id);
+            }
+        }
+        let count = removed.len();
+        if !removed.is_empty() {
+            let removed_ids: std::collections::BTreeSet<TaskId> = removed.into_iter().collect();
+            self.cancelled_events
+                .retain(|(_, id)| !removed_ids.contains(id));
+        }
+        count
     }
 
     fn task_mut(

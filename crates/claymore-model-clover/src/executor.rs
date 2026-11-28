@@ -6,6 +6,7 @@
 
 use claymore_runtime::diffusion::{
     BlockId, DiffusionExecutor, DiffusionSessionId, DiffusionSessionState, DiffusionStep,
+    DiffusionStepOutcome,
 };
 use thiserror::Error;
 
@@ -177,7 +178,10 @@ impl<B: CloverGraphBackend> CloverDiffusionExecutor<B> {
         }
     }
 
-    fn execute_step_inner(&mut self, step: DiffusionStep) -> Result<(), CloverExecutorError> {
+    fn execute_step_inner(
+        &mut self,
+        step: DiffusionStep,
+    ) -> Result<DiffusionStepOutcome, CloverExecutorError> {
         if self.closed {
             return Err(CloverExecutorError::SessionClosed);
         }
@@ -189,9 +193,15 @@ impl<B: CloverGraphBackend> CloverDiffusionExecutor<B> {
         }
     }
 
-    fn prepare_block(&mut self, block: BlockId) -> Result<(), CloverExecutorError> {
+    fn prepare_block(
+        &mut self,
+        block: BlockId,
+    ) -> Result<DiffusionStepOutcome, CloverExecutorError> {
         if self.stopped {
-            return Ok(());
+            // The adapter reached its terminal condition (EOS or the token
+            // budget) mid-plan: this nominal step performed no work and must
+            // not be accounted as a real step or a committed block (P10).
+            return Ok(DiffusionStepOutcome::Skipped);
         }
         if block.0 != self.next_block {
             return Err(CloverExecutorError::UnexpectedStep(
@@ -216,8 +226,10 @@ impl<B: CloverGraphBackend> CloverDiffusionExecutor<B> {
             .max_new_tokens
             .saturating_sub(self.generated.len());
         if remaining == 0 {
+            // Deciding to stop is real work for this step; only subsequent
+            // nominal steps are skipped.
             self.stopped = true;
-            return Ok(());
+            return Ok(DiffusionStepOutcome::Executed);
         }
         let block_size = self.options.block_size;
         self.active = Some(ActiveBlock {
@@ -227,12 +239,16 @@ impl<B: CloverGraphBackend> CloverDiffusionExecutor<B> {
             remaining_output: remaining.min(block_size),
             next_iteration: 0,
         });
-        Ok(())
+        Ok(DiffusionStepOutcome::Executed)
     }
 
-    fn denoise(&mut self, block: BlockId, iteration: u32) -> Result<(), CloverExecutorError> {
+    fn denoise(
+        &mut self,
+        block: BlockId,
+        iteration: u32,
+    ) -> Result<DiffusionStepOutcome, CloverExecutorError> {
         if self.stopped {
-            return Ok(());
+            return Ok(DiffusionStepOutcome::Skipped);
         }
         let Some(active) = self.active.as_ref() else {
             return Err(CloverExecutorError::MissingBlock(block));
@@ -250,7 +266,7 @@ impl<B: CloverGraphBackend> CloverDiffusionExecutor<B> {
             });
         }
         if !active.pending.iter().any(|pending| *pending) {
-            return Ok(());
+            return Ok(DiffusionStepOutcome::Executed);
         }
         let tokens = active.tokens.clone();
         let pending = active.pending.clone();
@@ -326,12 +342,15 @@ impl<B: CloverGraphBackend> CloverDiffusionExecutor<B> {
             .next_iteration
             .checked_add(1)
             .ok_or(CloverExecutorError::SizeOverflow)?;
-        Ok(())
+        Ok(DiffusionStepOutcome::Executed)
     }
 
-    fn validate_block(&mut self, block: BlockId) -> Result<(), CloverExecutorError> {
+    fn validate_block(
+        &mut self,
+        block: BlockId,
+    ) -> Result<DiffusionStepOutcome, CloverExecutorError> {
         if self.stopped {
-            return Ok(());
+            return Ok(DiffusionStepOutcome::Skipped);
         }
         let active = self
             .active
@@ -346,25 +365,22 @@ impl<B: CloverGraphBackend> CloverDiffusionExecutor<B> {
         if active.pending.iter().any(|pending| *pending) {
             return Err(CloverExecutorError::UnresolvedBlock(block));
         }
-        if active
+        if let Some(&token) = active
             .tokens
             .iter()
-            .any(|&token| token as usize >= self.options.tokenizer_vocab_size)
+            .find(|&&token| token as usize >= self.options.tokenizer_vocab_size)
         {
-            return Err(CloverExecutorError::UnusableOutputToken(
-                *active
-                    .tokens
-                    .iter()
-                    .find(|&&token| token as usize >= self.options.tokenizer_vocab_size)
-                    .unwrap(),
-            ));
+            return Err(CloverExecutorError::UnusableOutputToken(token));
         }
-        Ok(())
+        Ok(DiffusionStepOutcome::Executed)
     }
 
-    fn commit_block(&mut self, block: BlockId) -> Result<(), CloverExecutorError> {
+    fn commit_block(
+        &mut self,
+        block: BlockId,
+    ) -> Result<DiffusionStepOutcome, CloverExecutorError> {
         if self.stopped {
-            return Ok(());
+            return Ok(DiffusionStepOutcome::Skipped);
         }
         let active = self
             .active
@@ -428,25 +444,33 @@ impl<B: CloverGraphBackend> CloverDiffusionExecutor<B> {
             .next_block
             .checked_add(1)
             .ok_or(CloverExecutorError::SizeOverflow)?;
-        Ok(())
+        Ok(DiffusionStepOutcome::Executed)
     }
 }
 
 impl<B: CloverGraphBackend> DiffusionExecutor for CloverDiffusionExecutor<B> {
-    fn execute_step(&mut self, step: DiffusionStep) -> Result<(), String> {
+    fn execute_step(&mut self, step: DiffusionStep) -> Result<DiffusionStepOutcome, String> {
         self.execute_step_inner(step)
             .map_err(|error| error.to_string())
     }
 
-    fn on_session_end(&mut self, _session_id: DiffusionSessionId, _state: DiffusionSessionState) {
-        self.backend.reset_session();
+    fn on_session_end(
+        &mut self,
+        _session_id: DiffusionSessionId,
+        _state: DiffusionSessionState,
+    ) -> Result<(), String> {
+        // The backend release is fallible (P4): a failed expert release must
+        // reach the orchestrator so the host observes that residency was not
+        // returned. The adapter still closes: the session is terminal either
+        // way, and `output()` stays readable as the finished request's result.
+        let cleanup = self.backend.reset_session();
         self.active = None;
         // The adapter owns request-local state (prompt, prefix, penalties, RNG)
         // and serves exactly one M9 session. After a terminal state it must not
         // be driven by another plan: that would attribute this session's tokens
-        // and caches to another request. `output()` stays readable as the
-        // finished request's result; further steps are refused explicitly.
+        // and caches to another request. Further steps are refused explicitly.
         self.closed = true;
+        cleanup.map_err(|error| format!("Clover backend cleanup failed: {error}"))
     }
 }
 
@@ -478,6 +502,8 @@ mod tests {
         fail_causal_at: Option<usize>,
         causal_calls: usize,
         reset_count: usize,
+        /// Make `reset_session` report a release failure (P4).
+        reset_fails: bool,
     }
 
     impl CloverGraphBackend for SyntheticBackend {
@@ -578,8 +604,12 @@ mod tests {
             }
             Ok(logits)
         }
-        fn reset_session(&mut self) {
+        fn reset_session(&mut self) -> Result<(), String> {
             self.reset_count += 1;
+            if self.reset_fails {
+                return Err("synthetic expert release failure".to_owned());
+            }
+            Ok(())
         }
     }
 
@@ -624,11 +654,12 @@ mod tests {
             CloverDiffusionExecutor::new(tiny_graph(), backend, vec![3], options(3)).unwrap();
         let plan = executor.plan().diffusion_plan().clone();
         let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let key = orchestrator.register_executor();
         let id = orchestrator
-            .submit(plan, CancellationToken::new(), TaskPriority::Normal)
+            .submit(plan, CancellationToken::new(), TaskPriority::Normal, key)
             .unwrap();
         loop {
-            match orchestrator.run_one(&mut executor).unwrap() {
+            match orchestrator.run_one(key, &mut executor).unwrap() {
                 DiffusionRunOutcome::SessionCompleted { .. } => break,
                 DiffusionRunOutcome::StepCompleted { .. } => {}
                 other => panic!("unexpected outcome: {other:?}"),
@@ -674,11 +705,12 @@ mod tests {
             CloverDiffusionExecutor::new(tiny_graph(), backend, vec![3], opts).unwrap();
         let plan = executor.plan().diffusion_plan().clone();
         let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let key = orchestrator.register_executor();
         orchestrator
-            .submit(plan, CancellationToken::new(), TaskPriority::Normal)
+            .submit(plan, CancellationToken::new(), TaskPriority::Normal, key)
             .unwrap();
         loop {
-            match orchestrator.run_one(&mut executor).unwrap() {
+            match orchestrator.run_one(key, &mut executor).unwrap() {
                 DiffusionRunOutcome::SessionCompleted { .. } => break,
                 DiffusionRunOutcome::StepCompleted { .. } => {}
                 other => panic!("unexpected outcome: {other:?}"),
@@ -722,11 +754,14 @@ mod tests {
         .unwrap();
         let mut first_runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
         let mut second_runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let first_key = first_runtime.register_executor();
+        let second_key = second_runtime.register_executor();
         let first_id = first_runtime
             .submit(
                 first.plan().diffusion_plan().clone(),
                 CancellationToken::new(),
                 TaskPriority::Normal,
+                first_key,
             )
             .unwrap();
         let second_id = second_runtime
@@ -734,6 +769,7 @@ mod tests {
                 second.plan().diffusion_plan().clone(),
                 CancellationToken::new(),
                 TaskPriority::Normal,
+                second_key,
             )
             .unwrap();
 
@@ -741,14 +777,14 @@ mod tests {
         let mut second_done = false;
         while !first_done || !second_done {
             if !first_done {
-                match first_runtime.run_one(&mut first).unwrap() {
+                match first_runtime.run_one(first_key, &mut first).unwrap() {
                     DiffusionRunOutcome::SessionCompleted { .. } => first_done = true,
                     DiffusionRunOutcome::StepCompleted { .. } => {}
                     other => panic!("unexpected first-session outcome: {other:?}"),
                 }
             }
             if !second_done {
-                match second_runtime.run_one(&mut second).unwrap() {
+                match second_runtime.run_one(second_key, &mut second).unwrap() {
                     DiffusionRunOutcome::SessionCompleted { .. } => second_done = true,
                     DiffusionRunOutcome::StepCompleted { .. } => {}
                     other => panic!("unexpected second-session outcome: {other:?}"),
@@ -798,16 +834,18 @@ mod tests {
         let token = CancellationToken::new();
         token.cancel();
         let mut runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let key = runtime.register_executor();
         let id = runtime
             .submit(
                 executor.plan().diffusion_plan().clone(),
                 token,
                 TaskPriority::Normal,
+                key,
             )
             .unwrap();
 
         assert_eq!(
-            runtime.run_one(&mut executor).unwrap(),
+            runtime.run_one(key, &mut executor).unwrap(),
             DiffusionRunOutcome::Idle
         );
         assert_eq!(
@@ -830,20 +868,22 @@ mod tests {
         let mut executor =
             CloverDiffusionExecutor::new(tiny_graph(), backend, vec![3], options(2)).unwrap();
         let mut runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let key = runtime.register_executor();
         let id = runtime
             .submit(
                 executor.plan().diffusion_plan().clone(),
                 token,
                 TaskPriority::Normal,
+                key,
             )
             .unwrap();
 
         assert!(matches!(
-            runtime.run_one(&mut executor).unwrap(),
+            runtime.run_one(key, &mut executor).unwrap(),
             DiffusionRunOutcome::StepCompleted { .. }
         ));
         assert!(matches!(
-            runtime.run_one(&mut executor).unwrap(),
+            runtime.run_one(key, &mut executor).unwrap(),
             DiffusionRunOutcome::SessionCancelled { .. }
         ));
         assert_eq!(
@@ -868,20 +908,24 @@ mod tests {
         )
         .unwrap();
         let mut runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let key = runtime.register_executor();
         let id = runtime
             .submit(
                 executor.plan().diffusion_plan().clone(),
                 CancellationToken::new(),
                 TaskPriority::Normal,
+                key,
             )
             .unwrap();
         while executor.generated_tokens().len() < 2 {
-            match runtime.run_one(&mut executor).unwrap() {
+            match runtime.run_one(key, &mut executor).unwrap() {
                 DiffusionRunOutcome::StepCompleted { .. } => {}
                 other => panic!("unexpected outcome before block boundary: {other:?}"),
             }
         }
-        runtime.cancel_with_executor(id, &mut executor).unwrap();
+        runtime
+            .cancel_with_executor(id, key, &mut executor)
+            .unwrap();
         assert_eq!(
             runtime.session(id).unwrap().state,
             DiffusionSessionState::Cancelled
@@ -901,16 +945,18 @@ mod tests {
         let mut executor =
             CloverDiffusionExecutor::new(tiny_graph(), backend, vec![3], options(2)).unwrap();
         let mut runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let key = runtime.register_executor();
         let id = runtime
             .submit(
                 executor.plan().diffusion_plan().clone(),
                 CancellationToken::new(),
                 TaskPriority::Normal,
+                key,
             )
             .unwrap();
 
         assert!(matches!(
-            runtime.run_one(&mut executor).unwrap(),
+            runtime.run_one(key, &mut executor).unwrap(),
             DiffusionRunOutcome::StepFailed { .. }
         ));
         assert_eq!(
@@ -948,15 +994,17 @@ mod tests {
         let mut mask_executor =
             CloverDiffusionExecutor::new(tiny_graph(), backend, vec![3], mask_options).unwrap();
         let mut mask_runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let mask_key = mask_runtime.register_executor();
         let mask_id = mask_runtime
             .submit(
                 mask_executor.plan().diffusion_plan().clone(),
                 CancellationToken::new(),
                 TaskPriority::Normal,
+                mask_key,
             )
             .unwrap();
         loop {
-            match mask_runtime.run_one(&mut mask_executor).unwrap() {
+            match mask_runtime.run_one(mask_key, &mut mask_executor).unwrap() {
                 DiffusionRunOutcome::SessionCompleted { .. } => break,
                 DiffusionRunOutcome::StepCompleted { .. } => {}
                 other => panic!("unexpected masked-policy outcome: {other:?}"),
@@ -979,19 +1027,25 @@ mod tests {
         let mut reject_executor =
             CloverDiffusionExecutor::new(tiny_graph(), backend, vec![3], options(2)).unwrap();
         let mut reject_runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let reject_key = reject_runtime.register_executor();
         let reject_id = reject_runtime
             .submit(
                 reject_executor.plan().diffusion_plan().clone(),
                 CancellationToken::new(),
                 TaskPriority::Normal,
+                reject_key,
             )
             .unwrap();
         assert!(matches!(
-            reject_runtime.run_one(&mut reject_executor).unwrap(),
+            reject_runtime
+                .run_one(reject_key, &mut reject_executor)
+                .unwrap(),
             DiffusionRunOutcome::StepCompleted { .. }
         ));
         assert!(matches!(
-            reject_runtime.run_one(&mut reject_executor).unwrap(),
+            reject_runtime
+                .run_one(reject_key, &mut reject_executor)
+                .unwrap(),
             DiffusionRunOutcome::StepFailed { .. }
         ));
         assert_eq!(
@@ -1018,11 +1072,17 @@ mod tests {
         let plan = executor.plan().diffusion_plan().clone();
 
         let mut runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let first_key = runtime.register_executor();
         runtime
-            .submit(plan.clone(), CancellationToken::new(), TaskPriority::Normal)
+            .submit(
+                plan.clone(),
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                first_key,
+            )
             .unwrap();
         loop {
-            match runtime.run_one(&mut executor).unwrap() {
+            match runtime.run_one(first_key, &mut executor).unwrap() {
                 DiffusionRunOutcome::SessionCompleted { .. } => break,
                 DiffusionRunOutcome::StepCompleted { .. } => {}
                 other => panic!("unexpected first-session outcome: {other:?}"),
@@ -1033,10 +1093,16 @@ mod tests {
         assert_eq!(executor.backend().reset_count, 1);
 
         let mut runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let second_key = runtime.register_executor();
         let second = runtime
-            .submit(plan, CancellationToken::new(), TaskPriority::Normal)
+            .submit(
+                plan,
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                second_key,
+            )
             .unwrap();
-        match runtime.run_one(&mut executor).unwrap() {
+        match runtime.run_one(second_key, &mut executor).unwrap() {
             DiffusionRunOutcome::StepFailed { error, .. } => {
                 assert!(
                     error.contains("one adapter instance per session"),
@@ -1076,15 +1142,17 @@ mod tests {
         let mut executor =
             CloverDiffusionExecutor::new(tiny_graph(), backend, vec![3], options(3)).unwrap();
         let mut runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let key = runtime.register_executor();
         let id = runtime
             .submit(
                 executor.plan().diffusion_plan().clone(),
                 CancellationToken::new(),
                 TaskPriority::Normal,
+                key,
             )
             .unwrap();
         loop {
-            match runtime.run_one(&mut executor).unwrap() {
+            match runtime.run_one(key, &mut executor).unwrap() {
                 DiffusionRunOutcome::StepCompleted { .. } => {}
                 DiffusionRunOutcome::StepFailed { .. } => break,
                 other => panic!("expected a failed replay, got {other:?}"),
@@ -1098,6 +1166,64 @@ mod tests {
             executor.generated_tokens().is_empty(),
             "tokens without a causal basis must not be published: {:?}",
             executor.generated_tokens()
+        );
+    }
+
+    /// P4: a backend release failure must not be swallowed. `reset_session`
+    /// returns the error, the M9 session reports it, and the adapter stays
+    /// closed.
+    #[test]
+    fn a_backend_cleanup_failure_reaches_the_session_and_keeps_the_adapter_closed() {
+        let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let key = orchestrator.register_executor();
+        let mut executor = CloverDiffusionExecutor::new(
+            tiny_graph(),
+            SyntheticBackend {
+                hidden: 4,
+                vocab: 9,
+                reset_fails: true,
+                ..Default::default()
+            },
+            vec![3],
+            options(2),
+        )
+        .unwrap();
+        let id = orchestrator
+            .submit(
+                executor.plan().diffusion_plan().clone(),
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                key,
+            )
+            .unwrap();
+        loop {
+            match orchestrator.run_one(key, &mut executor).unwrap() {
+                DiffusionRunOutcome::SessionCompleted { .. } => break,
+                DiffusionRunOutcome::StepCompleted { .. } => {}
+                other => panic!("unexpected outcome: {other:?}"),
+            }
+        }
+        let snapshot = orchestrator.session(id).unwrap();
+        assert_eq!(snapshot.state, DiffusionSessionState::Completed);
+        let error = snapshot
+            .error
+            .expect("a failed expert release must be reported on the session");
+        assert!(
+            error.contains("Clover backend cleanup failed")
+                && error.contains("synthetic expert release failure"),
+            "unexpected cleanup error: {error}"
+        );
+        assert_eq!(orchestrator.metrics().cleanups_failed, 1);
+        assert_eq!(executor.backend().reset_count, 1);
+
+        // The failed cleanup must not reopen the adapter: the session is
+        // terminal and the adapter is single-use.
+        let refused = executor
+            .execute_step_inner(DiffusionStep::PrepareBlock { block: BlockId(0) })
+            .expect_err("a failed cleanup must not reopen the adapter");
+        assert!(
+            matches!(refused, CloverExecutorError::SessionClosed),
+            "unexpected post-cleanup step result: {refused:?}"
         );
     }
 }

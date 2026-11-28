@@ -1,6 +1,6 @@
 use claymore_runtime::{
-    BlockId, CancellationToken, DiffusionExecutor, DiffusionOrchestrator, DiffusionPlan,
-    DiffusionRunOutcome, DiffusionSessionState, DiffusionStep,
+    BlockId, CancellationToken, DiffusionExecutor, DiffusionExecutorKey, DiffusionOrchestrator,
+    DiffusionPlan, DiffusionRunOutcome, DiffusionSessionState, DiffusionStep, DiffusionStepOutcome,
 };
 use claymore_scheduler::{SchedulerConfig, TaskPriority};
 
@@ -32,19 +32,35 @@ struct RecordingExecutor {
 }
 
 impl DiffusionExecutor for RecordingExecutor {
-    fn execute_step(&mut self, step: DiffusionStep) -> Result<(), String> {
+    fn execute_step(&mut self, step: DiffusionStep) -> Result<DiffusionStepOutcome, String> {
         self.calls.push(step);
-        Ok(())
+        Ok(DiffusionStepOutcome::Executed)
     }
 }
+
+fn registered(
+    orchestrator: &mut DiffusionOrchestrator,
+    plan: DiffusionPlan,
+    token: CancellationToken,
+    priority: TaskPriority,
+) -> (DiffusionExecutorKey, DiffusionSessionId) {
+    let key = orchestrator.register_executor();
+    let id = orchestrator.submit(plan, token, priority, key).unwrap();
+    (key, id)
+}
+
+type DiffusionSessionId = claymore_runtime::DiffusionSessionId;
 
 #[test]
 fn synthetic_multiblock_session_reports_progress_and_phase_metrics() {
     let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
     let expected_steps = plan(3, 2).steps().to_vec();
-    let id = orchestrator
-        .submit(plan(3, 2), CancellationToken::new(), TaskPriority::Normal)
-        .unwrap();
+    let (key, id) = registered(
+        &mut orchestrator,
+        plan(3, 2),
+        CancellationToken::new(),
+        TaskPriority::Normal,
+    );
     let mut executor = RecordingExecutor::default();
 
     let initial = orchestrator.metrics();
@@ -55,7 +71,7 @@ fn synthetic_multiblock_session_reports_progress_and_phase_metrics() {
     // A block is complete only after its CommitBlock step succeeds.
     for _ in 0..5 {
         assert!(matches!(
-            orchestrator.run_one(&mut executor).unwrap(),
+            orchestrator.run_one(key, &mut executor).unwrap(),
             DiffusionRunOutcome::StepCompleted { .. }
         ));
     }
@@ -65,7 +81,7 @@ fn synthetic_multiblock_session_reports_progress_and_phase_metrics() {
     assert_eq!(orchestrator.session(id).unwrap().completed_steps, 5);
 
     loop {
-        match orchestrator.run_one(&mut executor).unwrap() {
+        match orchestrator.run_one(key, &mut executor).unwrap() {
             DiffusionRunOutcome::SessionCompleted { .. } => break,
             DiffusionRunOutcome::StepCompleted { .. } => {}
             other => panic!("unexpected synthetic outcome: {other:?}"),
@@ -81,6 +97,7 @@ fn synthetic_multiblock_session_reports_progress_and_phase_metrics() {
     assert_eq!(final_metrics.blocks_pending, 0);
     assert_eq!(final_metrics.steps_started, 15);
     assert_eq!(final_metrics.steps_completed, 15);
+    assert_eq!(final_metrics.steps_skipped, 0);
     assert_eq!(final_metrics.sessions_completed, 1);
     assert_eq!(executor.calls.len(), 15);
     assert_eq!(executor.calls, expected_steps);
@@ -97,21 +114,27 @@ fn synthetic_multiblock_session_reports_progress_and_phase_metrics() {
 fn synthetic_failure_isolated_and_reported_without_gpu() {
     struct FailOnFirst;
     impl DiffusionExecutor for FailOnFirst {
-        fn execute_step(&mut self, _step: DiffusionStep) -> Result<(), String> {
+        fn execute_step(&mut self, _step: DiffusionStep) -> Result<DiffusionStepOutcome, String> {
             Err("synthetic CPU failure".to_owned())
         }
     }
 
     let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
-    let failed = orchestrator
-        .submit(plan(2, 1), CancellationToken::new(), TaskPriority::High)
-        .unwrap();
-    let independent = orchestrator
-        .submit(plan(1, 1), CancellationToken::new(), TaskPriority::Low)
-        .unwrap();
+    let (key_failed, failed) = registered(
+        &mut orchestrator,
+        plan(2, 1),
+        CancellationToken::new(),
+        TaskPriority::High,
+    );
+    let (key_independent, independent) = registered(
+        &mut orchestrator,
+        plan(1, 1),
+        CancellationToken::new(),
+        TaskPriority::Low,
+    );
 
     assert!(matches!(
-        orchestrator.run_one(&mut FailOnFirst).unwrap(),
+        orchestrator.run_one(key_failed, &mut FailOnFirst).unwrap(),
         DiffusionRunOutcome::StepFailed { .. }
     ));
     assert_eq!(
@@ -126,7 +149,10 @@ fn synthetic_failure_isolated_and_reported_without_gpu() {
 
     let mut executor = RecordingExecutor::default();
     loop {
-        match orchestrator.run_one(&mut executor).unwrap() {
+        match orchestrator
+            .run_one(key_independent, &mut executor)
+            .unwrap()
+        {
             DiffusionRunOutcome::SessionCompleted { .. } => break,
             DiffusionRunOutcome::StepCompleted { .. } => {}
             other => panic!("unexpected independent-session outcome: {other:?}"),
@@ -143,20 +169,25 @@ fn synthetic_failure_isolated_and_reported_without_gpu() {
 fn synthetic_cancellation_is_observed_at_a_safe_boundary() {
     let token = CancellationToken::new();
     let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
-    let id = orchestrator
-        .submit(plan(2, 1), token.clone(), TaskPriority::Normal)
-        .unwrap();
+    let (key, id) = registered(
+        &mut orchestrator,
+        plan(2, 1),
+        token.clone(),
+        TaskPriority::Normal,
+    );
 
     struct CancelAfterOne(CancellationToken);
     impl DiffusionExecutor for CancelAfterOne {
-        fn execute_step(&mut self, _step: DiffusionStep) -> Result<(), String> {
+        fn execute_step(&mut self, _step: DiffusionStep) -> Result<DiffusionStepOutcome, String> {
             self.0.cancel();
-            Ok(())
+            Ok(DiffusionStepOutcome::Executed)
         }
     }
 
     assert!(matches!(
-        orchestrator.run_one(&mut CancelAfterOne(token)).unwrap(),
+        orchestrator
+            .run_one(key, &mut CancelAfterOne(token))
+            .unwrap(),
         DiffusionRunOutcome::SessionCancelled { .. }
     ));
     let metrics = orchestrator.metrics();
@@ -175,9 +206,7 @@ fn pre_cancelled_plan_is_visible_but_never_scheduled() {
     let token = CancellationToken::new();
     token.cancel();
     let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
-    let id = orchestrator
-        .submit(plan(2, 1), token, TaskPriority::Normal)
-        .unwrap();
+    let (key, id) = registered(&mut orchestrator, plan(2, 1), token, TaskPriority::Normal);
 
     assert_eq!(
         orchestrator.session(id).unwrap().state,
@@ -188,7 +217,7 @@ fn pre_cancelled_plan_is_visible_but_never_scheduled() {
     assert_eq!(orchestrator.metrics().steps_started, 0);
     assert!(matches!(
         orchestrator
-            .run_one(&mut RecordingExecutor::default())
+            .run_one(key, &mut RecordingExecutor::default())
             .unwrap(),
         DiffusionRunOutcome::Idle
     ));
@@ -197,23 +226,30 @@ fn pre_cancelled_plan_is_visible_but_never_scheduled() {
 #[test]
 fn retry_uses_a_new_session_instead_of_resuming_terminal_state() {
     let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
-    let cancelled = orchestrator
-        .submit(plan(1, 1), CancellationToken::new(), TaskPriority::Normal)
-        .unwrap();
+    let (key_cancelled, cancelled) = registered(
+        &mut orchestrator,
+        plan(1, 1),
+        CancellationToken::new(),
+        TaskPriority::Normal,
+    );
     orchestrator.cancel(cancelled).unwrap();
     assert_eq!(
         orchestrator.session(cancelled).unwrap().state,
         DiffusionSessionState::Cancelled
     );
 
-    // M9 does not resume a terminal session. A caller may submit a fresh plan.
-    let retry = orchestrator
-        .submit(plan(1, 1), CancellationToken::new(), TaskPriority::Normal)
-        .unwrap();
+    // M9 does not resume a terminal session. A caller may submit a fresh plan,
+    // on the adapter instance that will serve it.
+    let (key_retry, retry) = registered(
+        &mut orchestrator,
+        plan(1, 1),
+        CancellationToken::new(),
+        TaskPriority::Normal,
+    );
     assert_ne!(cancelled, retry);
     let mut executor = RecordingExecutor::default();
     loop {
-        match orchestrator.run_one(&mut executor).unwrap() {
+        match orchestrator.run_one(key_retry, &mut executor).unwrap() {
             DiffusionRunOutcome::SessionCompleted { session_id, .. } if session_id == retry => {
                 break
             }
@@ -229,4 +265,19 @@ fn retry_uses_a_new_session_instead_of_resuming_terminal_state() {
         orchestrator.session(cancelled).unwrap().state,
         DiffusionSessionState::Cancelled
     );
+    // Bounded retention: after the cancelled session's owner flushes its
+    // deferred notification, both closed sessions are reclaimable.
+    let mut flush = RecordingExecutor::default();
+    orchestrator.run_one(key_cancelled, &mut flush).unwrap();
+    let report = orchestrator.reclaim_closed_sessions();
+    assert_eq!(report.reclaimed.len(), 2);
+    assert!(report.deferred_terminal_notification.is_empty());
+    assert!(matches!(
+        orchestrator.session(cancelled),
+        Err(claymore_runtime::DiffusionError::UnknownSession(_))
+    ));
+    assert!(matches!(
+        orchestrator.session(retry),
+        Err(claymore_runtime::DiffusionError::UnknownSession(_))
+    ));
 }

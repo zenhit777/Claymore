@@ -216,13 +216,19 @@ fn pinned_checkpoint_runs_multiblock_lowconfidence_generation_on_real_weights() 
     assert_eq!(plan.block_count(), 2);
 
     let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+    let executor_key = orchestrator.register_executor();
     let session = orchestrator
-        .submit(plan, CancellationToken::new(), TaskPriority::Normal)
+        .submit(
+            plan,
+            CancellationToken::new(),
+            TaskPriority::Normal,
+            executor_key,
+        )
         .unwrap();
     let mut observed_causal_replay = false;
 
     loop {
-        match orchestrator.run_one(&mut executor).unwrap() {
+        match orchestrator.run_one(executor_key, &mut executor).unwrap() {
             DiffusionRunOutcome::StepCompleted { .. } => {
                 if !observed_causal_replay && executor.generated_tokens().len() >= 2 {
                     for (layer, kind) in config.layer_types.iter().enumerate() {

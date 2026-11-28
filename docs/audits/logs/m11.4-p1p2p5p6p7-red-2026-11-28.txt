@@ -1,0 +1,63 @@
+
+running 6 tests
+test p2_a_deferred_notification_must_not_reach_a_foreign_adapter ... FAILED
+test p1_a_step_of_session_a_must_not_run_on_adapter_b ... FAILED
+test p5_boundary_cancellation_after_a_step_counts_all_remaining_steps ... FAILED
+test p5_pre_step_cancellation_counts_every_cancelled_step ... FAILED
+test p6_one_run_flushes_all_pending_notifications_in_session_order ... FAILED
+test p7_diffusion_task_ids_must_not_reach_the_request_scheduler ... FAILED
+
+failures:
+
+---- p2_a_deferred_notification_must_not_reach_a_foreign_adapter stdout ----
+
+thread 'p2_a_deferred_notification_must_not_reach_a_foreign_adapter' (3651992) panicked at crates/claymore-runtime/tests/m11_4_review_regressions.rs:101:5:
+adapter B received terminal notification for session DiffusionSessionId(1): [DiffusionSessionId(1)]
+
+---- p1_a_step_of_session_a_must_not_run_on_adapter_b stdout ----
+
+thread 'p1_a_step_of_session_a_must_not_run_on_adapter_b' (3651991) panicked at crates/claymore-runtime/tests/m11_4_review_regressions.rs:77:5:
+assertion `left == right` failed: adapter B advanced session A: [PrepareBlock { block: BlockId(0) }]
+  left: 1
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- p5_boundary_cancellation_after_a_step_counts_all_remaining_steps stdout ----
+
+thread 'p5_boundary_cancellation_after_a_step_counts_all_remaining_steps' (3651993) panicked at crates/claymore-runtime/tests/m11_4_review_regressions.rs:147:5:
+assertion `left == right` failed
+  left: 1
+ right: 7
+
+---- p5_pre_step_cancellation_counts_every_cancelled_step stdout ----
+
+thread 'p5_pre_step_cancellation_counts_every_cancelled_step' (3651994) panicked at crates/claymore-runtime/tests/m11_4_review_regressions.rs:123:5:
+assertion `left == right` failed
+  left: 1
+ right: 8
+
+---- p6_one_run_flushes_all_pending_notifications_in_session_order stdout ----
+
+thread 'p6_one_run_flushes_all_pending_notifications_in_session_order' (3651995) panicked at crates/claymore-runtime/tests/m11_4_review_regressions.rs:169:5:
+assertion `left == right` failed
+  left: [DiffusionSessionId(1)]
+ right: [DiffusionSessionId(1), DiffusionSessionId(2)]
+
+---- p7_diffusion_task_ids_must_not_reach_the_request_scheduler stdout ----
+
+thread 'p7_diffusion_task_ids_must_not_reach_the_request_scheduler' (3651996) panicked at crates/claymore-runtime/tests/m11_4_review_regressions.rs:230:5:
+assertion `left == right` failed: a diffusion task identifier must not be able to cancel an unrelated queued request
+  left: Cancelled
+ right: Ready
+
+
+failures:
+    p1_a_step_of_session_a_must_not_run_on_adapter_b
+    p2_a_deferred_notification_must_not_reach_a_foreign_adapter
+    p5_boundary_cancellation_after_a_step_counts_all_remaining_steps
+    p5_pre_step_cancellation_counts_every_cancelled_step
+    p6_one_run_flushes_all_pending_notifications_in_session_order
+    p7_diffusion_task_ids_must_not_reach_the_request_scheduler
+
+test result: FAILED. 0 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

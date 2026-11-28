@@ -137,8 +137,16 @@ pub trait CloverGraphBackend {
     /// for block previews; causal prefill/replay avoids LM-head work.
     fn lm_head(&mut self, input: &CloverActivation) -> Result<Vec<f32>, String>;
 
-    /// Release request-local clean caches after a terminal session.
-    fn reset_session(&mut self) {}
+    /// Release request-local clean caches and expert residency after a terminal
+    /// session.
+    ///
+    /// A failed release must be reported (`Err`) and must never drop the state
+    /// needed to retry it (M11.4 review P4): the adapter propagates this error
+    /// to the M9 orchestrator, which records it on the session snapshot so the
+    /// host sees that residency or cache memory was not returned.
+    fn reset_session(&mut self) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

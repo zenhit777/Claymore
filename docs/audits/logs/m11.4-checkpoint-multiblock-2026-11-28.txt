@@ -1,0 +1,15 @@
+   Compiling claymore-scheduler v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-scheduler)
+   Compiling claymore-memory v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-memory)
+   Compiling claymore-runtime v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-runtime)
+   Compiling claymore-model-clover v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-clover)
+    Finished `release` profile [optimized] target(s) in 4.21s
+     Running tests/m11_4_pinned_checkpoint.rs (target/release/build/claymore-model-clover/92e9b936ba234fd7/out/m11_4_pinned_checkpoint-92e9b936ba234fd7)
+
+running 2 tests
+test pinned_checkpoint_preview_and_causal_forward_preserve_state_contracts ... artifact_sha256=not_requested (set CLAYMORE_M11_VERIFY_SHA=1)
+ok
+test pinned_checkpoint_runs_multiblock_lowconfidence_generation_on_real_weights ... pinned_checkpoint_generated_tokens=[198, 198, 198]
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 154.97s
+

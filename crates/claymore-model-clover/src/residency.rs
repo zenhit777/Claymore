@@ -3,7 +3,7 @@ use std::path::Path;
 
 use claymore_checkpoint::safetensors::{SafetensorsError, SafetensorsFile, WeightDType};
 use claymore_core::MemoryTier;
-use claymore_device::{CpuDevice, Device};
+use claymore_device::Device;
 use claymore_memory::{DeviceMemoryError, DeviceMemoryManager, EvictionPolicy, MemoryBudgets};
 use claymore_scheduler::{Scheduler, SchedulerError, TaskId, TaskKind, TaskPriority, TaskSpec};
 use claymore_tensor::Bf16;
@@ -926,7 +926,7 @@ fn append_tasks(
     Ok(())
 }
 
-impl CloverExpertCache<CpuDevice> {
+impl<D: Device> CloverExpertCache<D> {
     /// Materialize one already-resident routed expert for the CPU reference path.
     pub fn read_routed_weights(
         &mut self,
@@ -1057,10 +1057,144 @@ fn stream_task<D: Device>(
 }
 
 #[cfg(test)]
+pub(crate) mod release_fault {
+    //! Shared test support: a device whose every allocation fails its first
+    //! release. Used by residency rollback tests and by CPU-backend cleanup
+    //! regression tests (P4) that need a routed or shared expert release to
+    //! fail exactly once and then succeed on retry.
+
+    use super::*;
+    use claymore_device::{CpuDevice, DeviceBuffer, DeviceCapabilities, DeviceError, DeviceInfo};
+
+    pub(crate) struct FailOnceReleaseBuffer {
+        inner: Box<dyn DeviceBuffer>,
+        fail_next_release: bool,
+    }
+
+    impl DeviceBuffer for FailOnceReleaseBuffer {
+        fn device_id(&self) -> &str {
+            self.inner.device_id()
+        }
+
+        fn device_instance_id(&self) -> claymore_device::DeviceInstanceId {
+            self.inner.device_instance_id()
+        }
+
+        fn tier(&self) -> MemoryTier {
+            self.inner.tier()
+        }
+
+        fn len(&self) -> usize {
+            self.inner.len()
+        }
+
+        fn release(&mut self) -> Result<(), DeviceError> {
+            if self.fail_next_release {
+                self.fail_next_release = false;
+                return Err(DeviceError::ReleaseFailed(
+                    "injected one-shot release failure".to_owned(),
+                ));
+            }
+            self.inner.release()
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            self
+        }
+    }
+
+    pub(crate) struct FailOnceReleaseDevice {
+        pub(crate) inner: CpuDevice,
+    }
+
+    impl FailOnceReleaseDevice {
+        pub(crate) fn new() -> Self {
+            Self {
+                inner: CpuDevice::new(),
+            }
+        }
+    }
+
+    impl Device for FailOnceReleaseDevice {
+        fn info(&self) -> &DeviceInfo {
+            self.inner.info()
+        }
+
+        fn capabilities(&self) -> DeviceCapabilities {
+            self.inner.capabilities()
+        }
+
+        fn allocate(
+            &self,
+            tier: MemoryTier,
+            bytes: u64,
+        ) -> Result<Box<dyn DeviceBuffer>, DeviceError> {
+            Ok(Box::new(FailOnceReleaseBuffer {
+                inner: self.inner.allocate(tier, bytes)?,
+                fail_next_release: true,
+            }))
+        }
+
+        fn write(
+            &self,
+            buffer: &mut dyn DeviceBuffer,
+            offset: usize,
+            data: &[u8],
+        ) -> Result<(), DeviceError> {
+            let buffer = buffer
+                .as_any_mut()
+                .downcast_mut::<FailOnceReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            self.inner.write(buffer.inner.as_mut(), offset, data)
+        }
+
+        fn read(
+            &self,
+            buffer: &dyn DeviceBuffer,
+            offset: usize,
+            len: usize,
+        ) -> Result<Vec<u8>, DeviceError> {
+            let buffer = buffer
+                .as_any()
+                .downcast_ref::<FailOnceReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            self.inner.read(buffer.inner.as_ref(), offset, len)
+        }
+
+        fn copy(
+            &self,
+            source: &dyn DeviceBuffer,
+            destination: &mut dyn DeviceBuffer,
+            bytes: usize,
+        ) -> Result<(), DeviceError> {
+            let source = source
+                .as_any()
+                .downcast_ref::<FailOnceReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            let destination = destination
+                .as_any_mut()
+                .downcast_mut::<FailOnceReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            self.inner
+                .copy(source.inner.as_ref(), destination.inner.as_mut(), bytes)
+        }
+
+        fn synchronize(&self) -> Result<(), DeviceError> {
+            self.inner.synchronize()
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
+    use super::release_fault::FailOnceReleaseDevice;
     use super::*;
     use crate::{ShardLoadPlan, TensorChunkPlan};
-    use claymore_device::{CpuDevice, DeviceBuffer, DeviceCapabilities, DeviceError, DeviceInfo};
+    use claymore_device::CpuDevice;
 
     fn fixture_header(entries: &[(&str, &[usize], u64, u64)]) -> Vec<u8> {
         let tensors = entries
@@ -1211,120 +1345,6 @@ mod tests {
             num_experts: 2,
             hidden_size: 2,
             intermediate_size: 1,
-        }
-    }
-
-    struct FailOnceReleaseBuffer {
-        inner: Box<dyn DeviceBuffer>,
-        fail_next_release: bool,
-    }
-
-    impl DeviceBuffer for FailOnceReleaseBuffer {
-        fn device_id(&self) -> &str {
-            self.inner.device_id()
-        }
-
-        fn device_instance_id(&self) -> claymore_device::DeviceInstanceId {
-            self.inner.device_instance_id()
-        }
-
-        fn tier(&self) -> MemoryTier {
-            self.inner.tier()
-        }
-
-        fn len(&self) -> usize {
-            self.inner.len()
-        }
-
-        fn release(&mut self) -> Result<(), DeviceError> {
-            if self.fail_next_release {
-                self.fail_next_release = false;
-                return Err(DeviceError::ReleaseFailed(
-                    "injected one-shot release failure".to_owned(),
-                ));
-            }
-            self.inner.release()
-        }
-
-        fn as_any(&self) -> &dyn std::any::Any {
-            self
-        }
-
-        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-            self
-        }
-    }
-
-    struct FailOnceReleaseDevice {
-        inner: CpuDevice,
-    }
-
-    impl Device for FailOnceReleaseDevice {
-        fn info(&self) -> &DeviceInfo {
-            self.inner.info()
-        }
-
-        fn capabilities(&self) -> DeviceCapabilities {
-            self.inner.capabilities()
-        }
-
-        fn allocate(
-            &self,
-            tier: MemoryTier,
-            bytes: u64,
-        ) -> Result<Box<dyn DeviceBuffer>, DeviceError> {
-            Ok(Box::new(FailOnceReleaseBuffer {
-                inner: self.inner.allocate(tier, bytes)?,
-                fail_next_release: true,
-            }))
-        }
-
-        fn write(
-            &self,
-            buffer: &mut dyn DeviceBuffer,
-            offset: usize,
-            data: &[u8],
-        ) -> Result<(), DeviceError> {
-            let buffer = buffer
-                .as_any_mut()
-                .downcast_mut::<FailOnceReleaseBuffer>()
-                .ok_or(DeviceError::BufferTypeMismatch)?;
-            self.inner.write(buffer.inner.as_mut(), offset, data)
-        }
-
-        fn read(
-            &self,
-            buffer: &dyn DeviceBuffer,
-            offset: usize,
-            len: usize,
-        ) -> Result<Vec<u8>, DeviceError> {
-            let buffer = buffer
-                .as_any()
-                .downcast_ref::<FailOnceReleaseBuffer>()
-                .ok_or(DeviceError::BufferTypeMismatch)?;
-            self.inner.read(buffer.inner.as_ref(), offset, len)
-        }
-
-        fn copy(
-            &self,
-            source: &dyn DeviceBuffer,
-            destination: &mut dyn DeviceBuffer,
-            bytes: usize,
-        ) -> Result<(), DeviceError> {
-            let source = source
-                .as_any()
-                .downcast_ref::<FailOnceReleaseBuffer>()
-                .ok_or(DeviceError::BufferTypeMismatch)?;
-            let destination = destination
-                .as_any_mut()
-                .downcast_mut::<FailOnceReleaseBuffer>()
-                .ok_or(DeviceError::BufferTypeMismatch)?;
-            self.inner
-                .copy(source.inner.as_ref(), destination.inner.as_mut(), bytes)
-        }
-
-        fn synchronize(&self) -> Result<(), DeviceError> {
-            self.inner.synchronize()
         }
     }
 

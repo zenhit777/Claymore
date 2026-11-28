@@ -597,8 +597,8 @@ impl<B: CloverGraphBackend> CloverGraphBackend for Recorder<'_, B> {
         self.inner.lm_head(input)
     }
 
-    fn reset_session(&mut self) {
-        self.inner.reset_session();
+    fn reset_session(&mut self) -> Result<(), String> {
+        self.inner.reset_session()
     }
 }
 
@@ -1101,7 +1101,7 @@ fn replay(pinned: bool) {
 
     // --- Causal prefill --------------------------------------------------------
     let prefill = object(&fixture, "prefill", "fixture");
-    backend.reset_session();
+    backend.reset_session().unwrap();
     for (layer, layer_type) in config.layer_types.iter().enumerate() {
         match layer_type {
             LayerType::LinearAttention => {

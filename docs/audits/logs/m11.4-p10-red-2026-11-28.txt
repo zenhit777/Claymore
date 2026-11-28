@@ -1,0 +1,24 @@
+   Compiling claymore-model-clover v0.5.0 (/home/sjteb/projets/Claymore/crates/claymore-model-clover)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.59s
+     Running tests/m11_4_low_confidence.rs (target/debug/build/claymore-model-clover/3afc688326070a87/out/m11_4_low_confidence-3afc688326070a87)
+
+running 1 test
+test p10_blocks_completed_counts_only_effective_commits ... FAILED
+
+failures:
+
+---- p10_blocks_completed_counts_only_effective_commits stdout ----
+
+thread 'p10_blocks_completed_counts_only_effective_commits' (3652173) panicked at crates/claymore-model-clover/tests/m11_4_low_confidence.rs:199:5:
+assertion `left == right` failed: a stopped adapter must not turn nominal CommitBlock steps into committed blocks
+  left: 4
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    p10_blocks_completed_counts_only_effective_commits
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.03s
+
+error: test failed, to rerun pass `-p claymore-model-clover --test m11_4_low_confidence`

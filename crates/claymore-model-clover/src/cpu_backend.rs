@@ -80,13 +80,13 @@ enum LayerWeights {
 }
 
 /// Concrete fallible CPU backend used by generation and integration paths.
-pub struct CloverCpuBackend {
+pub struct CloverCpuBackend<D: Device = CpuDevice> {
     config: CloverConfig,
     inventory: CloverCheckpointInventory,
     plan: CloverLoadPlan,
     root: PathBuf,
     device: CpuDevice,
-    expert_cache: CloverExpertCache<CpuDevice>,
+    expert_cache: CloverExpertCache<D>,
     expert_geometry: CloverExpertGeometry,
     shared_geometry: CloverSharedExpertGeometry,
     weights: Vec<Option<LayerWeights>>,
@@ -107,14 +107,15 @@ pub struct CloverCpuBackend {
     expert_hard_bytes: u64,
 }
 
-impl CloverCpuBackend {
-    /// Open a backend over an inspected checkpoint. Every layer's compact
-    /// weights and projection shapes are resolved eagerly so a schema mismatch
-    /// fails before any forward runs.
-    pub fn new(
+impl<D: Device> CloverCpuBackend<D> {
+    /// Open a backend over an inspected checkpoint using the caller-provided
+    /// expert device. Tests inject a device whose release fails to prove that
+    /// cleanup errors are propagated and residency stays retryable (P4).
+    pub fn new_with_expert_device(
         config: &CloverConfig,
         inventory: CloverCheckpointInventory,
         options: CloverCpuBackendOptions,
+        expert_device: D,
     ) -> Result<Self, String> {
         let gdn_dims = GdnDimensions {
             key_heads: config.linear_num_key_heads,
@@ -192,7 +193,7 @@ impl CloverCpuBackend {
             }
         }
         let expert_cache =
-            CloverExpertCache::new(CpuDevice::new(), options.expert_budgets, options.eviction)
+            CloverExpertCache::new(expert_device, options.expert_budgets, options.eviction)
                 .map_err(|error| error.to_string())?;
         let root = inventory.root().to_path_buf();
         let plan = inventory.load_plan().map_err(|error| error.to_string())?;
@@ -320,7 +321,21 @@ impl CloverCpuBackend {
     }
 }
 
-impl CloverGraphBackend for CloverCpuBackend {
+impl CloverCpuBackend<CpuDevice> {
+    /// Open a backend over an inspected checkpoint with the default host
+    /// `CpuDevice` expert cache. Every layer's compact weights and projection
+    /// shapes are resolved eagerly so a schema mismatch fails before any
+    /// forward runs.
+    pub fn new(
+        config: &CloverConfig,
+        inventory: CloverCheckpointInventory,
+        options: CloverCpuBackendOptions,
+    ) -> Result<Self, String> {
+        Self::new_with_expert_device(config, inventory, options, CpuDevice::new())
+    }
+}
+
+impl<D: Device> CloverGraphBackend for CloverCpuBackend<D> {
     fn embed_tokens(&mut self, token_ids: &[u32]) -> Result<CloverActivation, String> {
         let values = self
             .store()
@@ -727,7 +742,7 @@ impl CloverGraphBackend for CloverCpuBackend {
         Ok(logits.iter().map(|value| value.to_f32()).collect())
     }
 
-    fn reset_session(&mut self) {
+    fn reset_session(&mut self) -> Result<(), String> {
         for state in self.gdn.iter_mut().flatten() {
             state.conv_history.fill(0.0);
             state.ssm_state.fill(0.0);
@@ -738,15 +753,33 @@ impl CloverGraphBackend for CloverCpuBackend {
             state.values.clear();
             state.tokens = 0;
         }
+        // Release every expert this request made resident. A failed release
+        // must keep the residency identifier so the next attempt can retry it
+        // (M11.4 review P4): dropping the id would strand the allocation with
+        // no way to free it. All failures are collected and reported.
+        let mut errors: Vec<String> = Vec::new();
         let resident = std::mem::take(&mut self.resident);
         for (layer, expert) in resident {
             let tick = self.next_tick();
-            let _ = self.expert_cache.release(layer, expert, tick);
+            if let Err(error) = self.expert_cache.release(layer, expert, tick) {
+                self.resident.insert((layer, expert));
+                errors.push(format!(
+                    "expert release layer={layer} expert={expert}: {error}"
+                ));
+            }
         }
         let shared = std::mem::take(&mut self.resident_shared);
         for layer in shared {
             let tick = self.next_tick();
-            let _ = self.expert_cache.release_shared_expert(layer, tick);
+            if let Err(error) = self.expert_cache.release_shared_expert(layer, tick) {
+                self.resident_shared.insert(layer);
+                errors.push(format!("shared expert release layer={layer}: {error}"));
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join("; "))
         }
     }
 }
@@ -2041,13 +2074,113 @@ mod tests {
             .unwrap();
         assert!(backend.cached_kv_tokens(1) > 0);
         assert!(backend.gdn_ssm_state(0).iter().any(|value| *value != 0.0));
-        backend.reset_session();
+        backend.reset_session().unwrap();
         assert_eq!(backend.cached_kv_tokens(1), 0);
         assert!(backend.gdn_ssm_state(0).iter().all(|value| *value == 0.0));
         assert!(backend
             .gdn_conv_history(0)
             .iter()
             .all(|value| *value == 0.0));
+        assert_eq!(backend.cache_metrics().resident_experts, 0);
+    }
+
+    /// P4: when an expert release fails, `reset_session` must report it and
+    /// keep the residency identifiers so the host can retry the release. The
+    /// expert weights live in host memory; only the release path can fail.
+    fn fault_release_backend(
+        label: &str,
+    ) -> (
+        PathBuf,
+        CloverCpuBackend<crate::residency::release_fault::FailOnceReleaseDevice>,
+    ) {
+        use crate::residency::release_fault::FailOnceReleaseDevice;
+        let config = tiny_clover_config();
+        let root = temp_dir(label);
+        SynthCloverCheckpoint::new(&config).write(&root);
+        let inventory = CloverCheckpointInventory::inspect(&root).unwrap();
+        let expert_bytes = ((config.moe_intermediate_size * 2 * config.hidden_size
+            + config.hidden_size * config.moe_intermediate_size)
+            * 2) as u64;
+        let shared_bytes = ((3 * config.shared_expert_intermediate_size * config.hidden_size
+            + config.hidden_size)
+            * 2) as u64;
+        let backend = CloverCpuBackend::new_with_expert_device(
+            &config,
+            inventory,
+            CloverCpuBackendOptions {
+                expert_budgets: budgets(16, expert_bytes, shared_bytes),
+                eviction: EvictionPolicy::Lru,
+                cancellation: None,
+            },
+            FailOnceReleaseDevice::new(),
+        )
+        .unwrap();
+        (root, backend)
+    }
+
+    fn route_layer0(
+        config: &CloverConfig,
+        backend: &mut CloverCpuBackend<crate::residency::release_fault::FailOnceReleaseDevice>,
+    ) -> crate::CloverRoutingPlan {
+        let input = CloverActivation::new(2, 4, vec![Bf16::from_f32(0.25); 8]).unwrap();
+        let valid = [true, true];
+        let logits = backend.router_logits(0, &input).unwrap();
+        let routing = route(config, &logits, 2, &valid, false);
+        backend
+            .forward_moe(0, &input, &routing, &valid, false)
+            .unwrap();
+        routing
+    }
+
+    #[test]
+    fn reset_session_reports_failed_releases_and_keeps_residency_retryable() {
+        let config = tiny_clover_config();
+        let (_root, mut backend) = fault_release_backend("reset-release-fault");
+        route_layer0(&config, &mut backend);
+        assert!(
+            !backend.resident.is_empty(),
+            "routed experts must be resident"
+        );
+        assert!(!backend.resident_shared.is_empty());
+        assert!(backend.expert_usage_bytes() > 0);
+
+        let error = backend
+            .reset_session()
+            .expect_err("a failing release must be reported, not swallowed");
+        assert!(
+            error.contains("expert release layer=0 expert="),
+            "routed release failure missing: {error}"
+        );
+        assert!(
+            error.contains("shared expert release layer=0:"),
+            "shared release failure missing: {error}"
+        );
+        // The failed releases keep their residency identifiers: dropping them
+        // would strand the allocation with no way to free it.
+        assert!(
+            !backend.resident.is_empty(),
+            "failed routed releases must stay retryable"
+        );
+        assert!(
+            !backend.resident_shared.is_empty(),
+            "failed shared release must stay retryable"
+        );
+        assert!(backend.expert_usage_bytes() > 0);
+    }
+
+    #[test]
+    fn retrying_reset_session_releases_every_resident_expert() {
+        let config = tiny_clover_config();
+        let (_root, mut backend) = fault_release_backend("reset-release-retry");
+        route_layer0(&config, &mut backend);
+        assert!(backend.reset_session().is_err(), "first release fails");
+
+        backend
+            .reset_session()
+            .expect("the retry must release everything");
+        assert!(backend.resident.is_empty());
+        assert!(backend.resident_shared.is_empty());
+        assert_eq!(backend.expert_usage_bytes(), 0);
         assert_eq!(backend.cache_metrics().resident_experts, 0);
     }
 

@@ -11,7 +11,7 @@
 //! the scheduler only carries step descriptors, while the canvas and the
 //! backend state stay inside this adapter.
 
-use claymore_runtime::diffusion::{DiffusionExecutor, DiffusionStep};
+use claymore_runtime::diffusion::{DiffusionExecutor, DiffusionStep, DiffusionStepOutcome};
 use claymore_runtime::CancellationToken;
 use thiserror::Error;
 
@@ -412,7 +412,7 @@ impl<B: DiffusionGemmaBackend> GemmaDiffusionExecutor<B> {
 }
 
 impl<B: DiffusionGemmaBackend> DiffusionExecutor for GemmaDiffusionExecutor<B> {
-    fn execute_step(&mut self, step: DiffusionStep) -> Result<(), String> {
+    fn execute_step(&mut self, step: DiffusionStep) -> Result<DiffusionStepOutcome, String> {
         if self.cancellation.is_cancelled() {
             let error = GemmaExecutorError::Cancelled;
             self.last_error = Some(GemmaExecutorError::Cancelled);
@@ -425,7 +425,7 @@ impl<B: DiffusionGemmaBackend> DiffusionExecutor for GemmaDiffusionExecutor<B> {
             DiffusionStep::CommitBlock { block } => self.commit(block),
         };
         match outcome {
-            Ok(()) => Ok(()),
+            Ok(()) => Ok(DiffusionStepOutcome::Executed),
             Err(error) => {
                 let message = error.to_string();
                 self.last_error = Some(error);
@@ -666,12 +666,18 @@ mod tests {
         ])
         .unwrap();
         let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let executor_key = orchestrator.register_executor();
         let session = orchestrator
-            .submit(plan, CancellationToken::new(), TaskPriority::Normal)
+            .submit(
+                plan,
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                executor_key,
+            )
             .unwrap();
         let mut outcomes = Vec::new();
         loop {
-            let outcome = orchestrator.run_one(&mut executor).unwrap();
+            let outcome = orchestrator.run_one(executor_key, &mut executor).unwrap();
             let terminal = matches!(
                 outcome,
                 claymore_runtime::diffusion::DiffusionRunOutcome::SessionCompleted { .. }

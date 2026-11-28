@@ -95,11 +95,17 @@ fn run_inner(
     let mut executor = CloverDiffusionExecutor::new(graph, backend, prompt, opts).unwrap();
     let plan = executor.plan().diffusion_plan().clone();
     let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+    let executor_key = orchestrator.register_executor();
     let session = orchestrator
-        .submit(plan, CancellationToken::new(), TaskPriority::Normal)
+        .submit(
+            plan,
+            CancellationToken::new(),
+            TaskPriority::Normal,
+            executor_key,
+        )
         .unwrap();
     loop {
-        match orchestrator.run_one(&mut executor).unwrap() {
+        match orchestrator.run_one(executor_key, &mut executor).unwrap() {
             DiffusionRunOutcome::SessionCompleted { .. } => break,
             DiffusionRunOutcome::StepCompleted { .. } => {
                 if stop_early {
@@ -153,6 +159,64 @@ fn low_confidence_accepts_the_first_block_and_eos_truncates_it() {
     assert_eq!(stopped.generated_tokens(), &[stop_token]);
     assert_eq!(stopped.output().sequence(), &[3, 4, stop_token]);
     assert!(stopped.backend().cache_metrics().cache_misses >= 1);
+}
+
+/// P10 (red-first): an adapter that reaches EOS mid-plan short-circuits its
+/// remaining nominal steps. The orchestrator must count as committed only the
+/// blocks actually committed — never the phantom ones.
+#[test]
+fn p10_blocks_completed_counts_only_effective_commits() {
+    let config = tiny_config();
+    let (_root, reference) = run(
+        "p10-ref",
+        &config,
+        vec![3, 4],
+        options(2, 0.0, Some(vec![6])),
+    );
+    let stop_token = reference.generated_tokens()[0];
+
+    let root = temp_dir("p10-eos");
+    write_checkpoint(&config, &root);
+    let graph = CloverGraph::new(config.clone()).unwrap();
+    let backend = open_backend(&config, &root, 8);
+    let mut executor = CloverDiffusionExecutor::new(
+        graph,
+        backend,
+        vec![3, 4],
+        options(8, 0.0, Some(vec![stop_token])),
+    )
+    .unwrap();
+    let plan = executor.plan().diffusion_plan().clone();
+    assert_eq!(plan.block_count(), 4);
+
+    let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+    let executor_key = orchestrator.register_executor();
+    let session = orchestrator
+        .submit(
+            plan,
+            CancellationToken::new(),
+            TaskPriority::Normal,
+            executor_key,
+        )
+        .unwrap();
+    loop {
+        match orchestrator.run_one(executor_key, &mut executor).unwrap() {
+            DiffusionRunOutcome::SessionCompleted { .. } => break,
+            DiffusionRunOutcome::StepCompleted { .. } => {}
+            other => panic!("unexpected outcome: {other:?}"),
+        }
+    }
+    assert_eq!(executor.generated_tokens(), &[stop_token]);
+    assert_eq!(
+        orchestrator.session(session).unwrap().state,
+        DiffusionSessionState::Completed
+    );
+    let metrics = orchestrator.metrics();
+    assert_eq!(metrics.blocks_submitted, 4);
+    assert_eq!(
+        metrics.blocks_completed, 1,
+        "a stopped adapter must not turn nominal CommitBlock steps into committed blocks"
+    );
 }
 
 #[test]
@@ -417,11 +481,17 @@ fn run_failure(
         CloverDiffusionExecutor::new(graph, open_backend(config, &root, 8), prompt, opts).unwrap();
     let plan = executor.plan().diffusion_plan().clone();
     let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+    let executor_key = orchestrator.register_executor();
     let session = orchestrator
-        .submit(plan, CancellationToken::new(), TaskPriority::Normal)
+        .submit(
+            plan,
+            CancellationToken::new(),
+            TaskPriority::Normal,
+            executor_key,
+        )
         .unwrap();
     for _ in 0..64 {
-        match orchestrator.run_one(&mut executor).unwrap() {
+        match orchestrator.run_one(executor_key, &mut executor).unwrap() {
             DiffusionRunOutcome::StepFailed { error, .. } => {
                 // A failed session must still release request-local state.
                 assert_eq!(
@@ -456,19 +526,25 @@ fn cancellation_during_expert_streaming_is_terminal_and_clears_state() {
     .unwrap();
     let plan = executor.plan().diffusion_plan().clone();
     let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+    let executor_key = orchestrator.register_executor();
     let session = orchestrator
-        .submit(plan, CancellationToken::new(), TaskPriority::Normal)
+        .submit(
+            plan,
+            CancellationToken::new(),
+            TaskPriority::Normal,
+            executor_key,
+        )
         .unwrap();
 
     // Let the prefill commit, then cancel the request-local expert stream.
-    let outcome = orchestrator.run_one(&mut executor).unwrap();
+    let outcome = orchestrator.run_one(executor_key, &mut executor).unwrap();
     assert!(matches!(outcome, DiffusionRunOutcome::StepCompleted { .. }));
     assert!(executor.backend().gdn_committed_tokens(0) > 0);
     token.cancel();
 
     let mut failed = None;
     for _ in 0..64 {
-        match orchestrator.run_one(&mut executor).unwrap() {
+        match orchestrator.run_one(executor_key, &mut executor).unwrap() {
             DiffusionRunOutcome::StepFailed { error, .. } => {
                 failed = Some(error);
                 break;
@@ -504,10 +580,11 @@ fn a_session_cancelled_before_its_first_step_runs_no_forward() {
     .unwrap();
     let plan = executor.plan().diffusion_plan().clone();
     let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+    let executor_key = orchestrator.register_executor();
     let token = CancellationToken::new();
     token.cancel();
     let session = orchestrator
-        .submit(plan, token, TaskPriority::Normal)
+        .submit(plan, token, TaskPriority::Normal, executor_key)
         .unwrap();
     assert_eq!(
         orchestrator.session(session).unwrap().state,
@@ -534,13 +611,19 @@ fn expert_stream_io_failure_is_terminal_and_clears_state() {
     .unwrap();
     let plan = executor.plan().diffusion_plan().clone();
     let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+    let executor_key = orchestrator.register_executor();
     let session = orchestrator
-        .submit(plan, CancellationToken::new(), TaskPriority::Normal)
+        .submit(
+            plan,
+            CancellationToken::new(),
+            TaskPriority::Normal,
+            executor_key,
+        )
         .unwrap();
 
     // Prefill commits and the routed set already exceeds the one-expert cache,
     // so later blocks cannot be served entirely from residency.
-    let outcome = orchestrator.run_one(&mut executor).unwrap();
+    let outcome = orchestrator.run_one(executor_key, &mut executor).unwrap();
     assert!(matches!(outcome, DiffusionRunOutcome::StepCompleted { .. }));
     assert!(executor.backend().gdn_committed_tokens(0) > 0);
     let misses_before = executor.backend().cache_metrics().cache_misses;
@@ -553,7 +636,7 @@ fn expert_stream_io_failure_is_terminal_and_clears_state() {
     let mut failed = None;
     for _ in 0..64 {
         let misses_before = executor.backend().cache_metrics().cache_misses;
-        match orchestrator.run_one(&mut executor).unwrap() {
+        match orchestrator.run_one(executor_key, &mut executor).unwrap() {
             DiffusionRunOutcome::StepFailed { error, .. } => {
                 failed = Some(error);
                 break;
@@ -629,11 +712,14 @@ fn concurrent_sessions_stay_isolated_with_independent_resource_budgets() {
     .unwrap();
     let mut first_runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
     let mut second_runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+    let first_key = first_runtime.register_executor();
+    let second_key = second_runtime.register_executor();
     first_runtime
         .submit(
             first.plan().diffusion_plan().clone(),
             CancellationToken::new(),
             TaskPriority::Normal,
+            first_key,
         )
         .unwrap();
     second_runtime
@@ -641,6 +727,7 @@ fn concurrent_sessions_stay_isolated_with_independent_resource_budgets() {
             second.plan().diffusion_plan().clone(),
             CancellationToken::new(),
             TaskPriority::Normal,
+            second_key,
         )
         .unwrap();
 
@@ -648,14 +735,14 @@ fn concurrent_sessions_stay_isolated_with_independent_resource_budgets() {
     let mut second_done = false;
     while !(first_done && second_done) {
         if !first_done {
-            match first_runtime.run_one(&mut first).unwrap() {
+            match first_runtime.run_one(first_key, &mut first).unwrap() {
                 DiffusionRunOutcome::SessionCompleted { .. } => first_done = true,
                 DiffusionRunOutcome::StepCompleted { .. } => {}
                 other => panic!("unexpected first-session outcome: {other:?}"),
             }
         }
         if !second_done {
-            match second_runtime.run_one(&mut second).unwrap() {
+            match second_runtime.run_one(second_key, &mut second).unwrap() {
                 DiffusionRunOutcome::SessionCompleted { .. } => second_done = true,
                 DiffusionRunOutcome::StepCompleted { .. } => {}
                 other => panic!("unexpected second-session outcome: {other:?}"),
