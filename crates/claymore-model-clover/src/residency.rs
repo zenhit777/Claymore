@@ -1088,9 +1088,24 @@ mod tests {
         entries: &[(&str, &[usize], u64, u64)],
         payload_bytes: usize,
     ) -> (u64, u64) {
+        write_safetensors_fixture_with_header_len(root, shard_name, entries, payload_bytes, None)
+    }
+
+    fn write_safetensors_fixture_with_header_len(
+        root: &Path,
+        shard_name: &str,
+        entries: &[(&str, &[usize], u64, u64)],
+        payload_bytes: usize,
+        requested_header_bytes: Option<u64>,
+    ) -> (u64, u64) {
         use std::fs;
         fs::create_dir_all(root).unwrap();
-        let header = fixture_header(entries);
+        let mut header = fixture_header(entries);
+        if let Some(requested) = requested_header_bytes {
+            assert!(requested >= header.len() as u64);
+            assert_eq!(requested % 8, 0);
+            header.resize(requested as usize, b' ');
+        }
         let header_bytes = header.len() as u64;
         let file_bytes = 8 + header_bytes + payload_bytes as u64;
         let mut bytes = Vec::with_capacity(file_bytes as usize);
@@ -1351,8 +1366,13 @@ mod tests {
             ),
             ("model.layers.0.mlp.experts.down_proj", &[2, 2, 1][..], 0, 8),
         ];
-        let (changed_header, changed_file) =
-            write_safetensors_fixture(&root, shard_name, &changed_entries, 24);
+        let (changed_header, changed_file) = write_safetensors_fixture_with_header_len(
+            &root,
+            shard_name,
+            &changed_entries,
+            24,
+            Some(plan.shards[0].header_bytes),
+        );
         assert_eq!(changed_header, plan.shards[0].header_bytes);
         assert_eq!(changed_file, plan.shards[0].file_bytes);
 
