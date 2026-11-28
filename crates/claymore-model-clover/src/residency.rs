@@ -1059,6 +1059,9 @@ fn stream_task<D: Device>(
 mod tests {
     use super::*;
     use crate::{ShardLoadPlan, TensorChunkPlan};
+    use claymore_device::{
+        CpuDevice, DeviceBuffer, DeviceCapabilities, DeviceError, DeviceInfo,
+    };
 
     fn fixture_header(entries: &[(&str, &[usize], u64, u64)]) -> Vec<u8> {
         let tensors = entries
@@ -1212,6 +1215,120 @@ mod tests {
         }
     }
 
+    struct FailOnceReleaseBuffer {
+        inner: Box<dyn DeviceBuffer>,
+        fail_next_release: bool,
+    }
+
+    impl DeviceBuffer for FailOnceReleaseBuffer {
+        fn device_id(&self) -> &str {
+            self.inner.device_id()
+        }
+
+        fn device_instance_id(&self) -> claymore_device::DeviceInstanceId {
+            self.inner.device_instance_id()
+        }
+
+        fn tier(&self) -> MemoryTier {
+            self.inner.tier()
+        }
+
+        fn len(&self) -> usize {
+            self.inner.len()
+        }
+
+        fn release(&mut self) -> Result<(), DeviceError> {
+            if self.fail_next_release {
+                self.fail_next_release = false;
+                return Err(DeviceError::ReleaseFailed(
+                    "injected one-shot release failure".to_owned(),
+                ));
+            }
+            self.inner.release()
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            self
+        }
+    }
+
+    struct FailOnceReleaseDevice {
+        inner: CpuDevice,
+    }
+
+    impl Device for FailOnceReleaseDevice {
+        fn info(&self) -> &DeviceInfo {
+            self.inner.info()
+        }
+
+        fn capabilities(&self) -> DeviceCapabilities {
+            self.inner.capabilities()
+        }
+
+        fn allocate(
+            &self,
+            tier: MemoryTier,
+            bytes: u64,
+        ) -> Result<Box<dyn DeviceBuffer>, DeviceError> {
+            Ok(Box::new(FailOnceReleaseBuffer {
+                inner: self.inner.allocate(tier, bytes)?,
+                fail_next_release: true,
+            }))
+        }
+
+        fn write(
+            &self,
+            buffer: &mut dyn DeviceBuffer,
+            offset: usize,
+            data: &[u8],
+        ) -> Result<(), DeviceError> {
+            let buffer = buffer
+                .as_any_mut()
+                .downcast_mut::<FailOnceReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            self.inner.write(buffer.inner.as_mut(), offset, data)
+        }
+
+        fn read(
+            &self,
+            buffer: &dyn DeviceBuffer,
+            offset: usize,
+            len: usize,
+        ) -> Result<Vec<u8>, DeviceError> {
+            let buffer = buffer
+                .as_any()
+                .downcast_ref::<FailOnceReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            self.inner.read(buffer.inner.as_ref(), offset, len)
+        }
+
+        fn copy(
+            &self,
+            source: &dyn DeviceBuffer,
+            destination: &mut dyn DeviceBuffer,
+            bytes: usize,
+        ) -> Result<(), DeviceError> {
+            let source = source
+                .as_any()
+                .downcast_ref::<FailOnceReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            let destination = destination
+                .as_any_mut()
+                .downcast_mut::<FailOnceReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            self.inner
+                .copy(source.inner.as_ref(), destination.inner.as_mut(), bytes)
+        }
+
+        fn synchronize(&self) -> Result<(), DeviceError> {
+            self.inner.synchronize()
+        }
+    }
+
     #[test]
     fn expert_load_tasks_intersect_tensor_chunks_without_exceeding_bound() {
         let plan = fixture_plan("model-00001-of-00001.safetensors");
@@ -1318,6 +1435,54 @@ mod tests {
         assert_eq!(cache.usage_bytes(), 0);
         assert_eq!(cache.metrics().bytes_transferred, 8);
         assert_eq!(cache.metrics().cancelled_loads, 1);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn failed_rollback_preserves_the_root_error_and_can_be_retried() {
+        let root = std::env::temp_dir().join(format!(
+            "claymore-clover-rollback-retry-{}",
+            std::process::id()
+        ));
+        let shard_name = "model.safetensors";
+        let plan = fixture_plan(shard_name);
+        let mut cache = CloverExpertCache::new(
+            FailOnceReleaseDevice {
+                inner: CpuDevice::new(),
+            },
+            fixture_budgets(24),
+            EvictionPolicy::Lru,
+        )
+        .unwrap();
+
+        let first = cache.ensure_resident(CloverExpertLoadRequest {
+            checkpoint_root: &root,
+            plan: &plan,
+            layer: 0,
+            expert: 1,
+            geometry: fixture_geometry(),
+            tick: 1,
+        });
+        assert!(matches!(
+            first,
+            Err(CloverExpertCacheError::RollbackFailed { .. })
+        ));
+        assert_eq!(cache.usage_bytes(), 12);
+        assert!(!cache.is_resident(0, 1));
+
+        write_fixture(&root, shard_name);
+        cache
+            .ensure_resident(CloverExpertLoadRequest {
+                checkpoint_root: &root,
+                plan: &plan,
+                layer: 0,
+                expert: 1,
+                geometry: fixture_geometry(),
+                tick: 2,
+            })
+            .unwrap();
+        assert!(cache.is_resident(0, 1));
+        assert_eq!(cache.usage_bytes(), 12);
         std::fs::remove_dir_all(root).unwrap();
     }
 
