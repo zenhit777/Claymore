@@ -533,11 +533,7 @@ impl<D: Device> CloverExpertCache<D> {
         Ok(loaded)
     }
 
-    fn rollback_allocation(
-        &mut self,
-        id: &str,
-        tick: u64,
-    ) -> Result<(), DeviceMemoryError> {
+    fn rollback_allocation(&mut self, id: &str, tick: u64) -> Result<(), DeviceMemoryError> {
         // DeviceMemoryManager retains the allocation and its accounting when
         // release fails. Keep the resident bookkeeping intact as well; the
         // next request retries release instead of becoming permanently stuck.
@@ -1057,7 +1053,8 @@ fn stream_task<D: Device>(
     task: &CloverExpertLoadTask,
     tick: u64,
 ) -> Result<(), CloverExpertCacheError> {
-    let bytes = shard.read_tensor_range(&task.tensor_name, task.tensor_offset, task.length_bytes)?;
+    let bytes =
+        shard.read_tensor_range(&task.tensor_name, task.tensor_offset, task.length_bytes)?;
     manager.write(id, task.target_offset, &bytes, tick)?;
     Ok(())
 }
@@ -1110,8 +1107,18 @@ mod tests {
 
     fn fixture_plan(shard_name: &str) -> CloverLoadPlan {
         let entries = [
-            ("model.layers.0.mlp.experts.gate_up_proj", &[2, 2, 2][..], 0, 16),
-            ("model.layers.0.mlp.experts.down_proj", &[2, 2, 1][..], 16, 24),
+            (
+                "model.layers.0.mlp.experts.gate_up_proj",
+                &[2, 2, 2][..],
+                0,
+                16,
+            ),
+            (
+                "model.layers.0.mlp.experts.down_proj",
+                &[2, 2, 1][..],
+                16,
+                24,
+            ),
         ];
         let header_bytes = fixture_header(&entries).len() as u64;
         CloverLoadPlan {
@@ -1330,7 +1337,12 @@ mod tests {
         let plan = fixture_plan(shard_name);
 
         let changed_entries = [
-            ("model.layers.0.mlp.experts.gate_up_proj", &[2, 2, 2][..], 8, 24),
+            (
+                "model.layers.0.mlp.experts.gate_up_proj",
+                &[2, 2, 2][..],
+                8,
+                24,
+            ),
             ("model.layers.0.mlp.experts.down_proj", &[2, 2, 1][..], 0, 8),
         ];
         let (changed_header, changed_file) =
@@ -1479,13 +1491,32 @@ mod tests {
         ));
         let shard_name = "shared.safetensors";
         let entries = [
-            ("model.layers.0.mlp.shared_expert.gate_proj.weight", &[1, 2][..], 0, 4),
-            ("model.layers.0.mlp.shared_expert.up_proj.weight", &[1, 2][..], 4, 8),
-            ("model.layers.0.mlp.shared_expert.down_proj.weight", &[2, 1][..], 8, 12),
-            ("model.layers.0.mlp.shared_expert_gate.weight", &[1, 2][..], 12, 16),
+            (
+                "model.layers.0.mlp.shared_expert.gate_proj.weight",
+                &[1, 2][..],
+                0,
+                4,
+            ),
+            (
+                "model.layers.0.mlp.shared_expert.up_proj.weight",
+                &[1, 2][..],
+                4,
+                8,
+            ),
+            (
+                "model.layers.0.mlp.shared_expert.down_proj.weight",
+                &[2, 1][..],
+                8,
+                12,
+            ),
+            (
+                "model.layers.0.mlp.shared_expert_gate.weight",
+                &[1, 2][..],
+                12,
+                16,
+            ),
         ];
-        let (header_bytes, file_bytes) =
-            write_safetensors_fixture(&root, shard_name, &entries, 16);
+        let (header_bytes, file_bytes) = write_safetensors_fixture(&root, shard_name, &entries, 16);
 
         let tensor = |name: &str, shape: Vec<usize>, offset: u64| TensorLoadPlan {
             name: name.to_owned(),
