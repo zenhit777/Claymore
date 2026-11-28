@@ -258,6 +258,7 @@ fn pinned_checkpoint_runs_multiblock_lowconfidence_generation_on_real_weights() 
         DiffusionSessionState::Completed
     );
     let generated = executor.generated_tokens();
+    eprintln!("pinned_checkpoint_generated_tokens={generated:?}");
     assert_eq!(generated.len(), 3);
     assert!(generated
         .iter()
