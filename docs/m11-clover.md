@@ -2,7 +2,7 @@
 
 ## Statut
 
-M11 est découpé en cinq incréments (#48 à #52). **M11.1 a été fusionné dans `main` via la PR #53** (merge commit `362be819`, registre A2 mis à jour dans `cb01a77`). La décision A2 est acceptée avec amendements ; A2-B reste volontairement ouverte pour M11.4 (sémantique EOS et traitement des 243 IDs excédentaires), comme consigné dans `docs/audits/m11-architect-decisions.md`. **M11.2 a été fusionné dans `main` via la PR #54** : références CPU GDN, attention, RoPE et contrats numériques dans `claymore-tensor`, sans moteur parallèle. **M11.3 est en cours de revue dans la PR #55** ; elle ajoute la référence CPU MoE, le coreset par élément de batch et le streaming/résidence bornée des experts.
+M11 est découpé en cinq incréments (#48 à #52). **M11.1 a été fusionné dans `main` via la PR #53** (merge commit `362be819`, registre A2 mis à jour dans `cb01a77`). La décision A2 est acceptée avec amendements ; A2-B reste volontairement ouverte pour M11.4 (sémantique EOS et traitement des 243 IDs excédentaires), comme consigné dans `docs/audits/m11-architect-decisions.md`. **M11.2 a été fusionné dans `main` via la PR #54** : références CPU GDN, attention, RoPE et contrats numériques dans `claymore-tensor`, sans moteur parallèle. **M11.3 est en cours de revue dans la PR #55** ; elle ajoute la référence CPU MoE, le coreset par élément de batch et le streaming/résidence bornée des experts. **M11.4 est en cours de revue dans la PR #56 (Draft, branche `feat/m11-4-clover-lowconfidence`, base #55)**. À la date du 28/11, ni #55 ni #56 n'ont reçu de revue (`reviews: []`, aucun relecteur désigné) ; #55 est verte sur CI sur son head `380fefa`, #56 est `mergeable` propre sur `main`. Le dossier [`docs/audits/m11.4-review-readiness-2026-11-28.md`](audits/m11.4-review-readiness-2026-11-28.md) fait l'inventaire exigible pour la revue : matrice exigences #51 → implémentation → tests → preuves, corrections livrées, défauts remontés non corrigés, et points d'arbitrage architecte.
 
 - PR #53 : `feat/m11-clover-foundation` → `main`, fusionnée le 2026-11-27.
 - PR #54 : `feat/m11-clover-cpu-primitives` → `main`, fusionnée le 2026-11-27.
@@ -169,7 +169,58 @@ La première tranche d'intégration ajoute le graphe Clover et l'adaptateur de g
 **Exécution sur le checkpoint authentique (27/11).** Le snapshot complet est présent en local (26 shards, 69,32 GB, sidecars GDN et sources Python) ; rien n'est téléchargé par les tests, `CLAYMORE_M11_CHECKPOINT` pointe sur le snapshot Hugging Face local et l'absence du chemin ignore proprement les tests. Trois niveaux de preuve, tous exécutés :
 
 - `tests/m11_4_pinned_checkpoint.rs` — inspection épinglée, schéma, plan de chargement, puis `forward_preview` de bout en bout sur les poids réels : **vert en 651,47 s**.
-- `tests/m11_4_low_confidence.rs` — contrat LowConfidence de bout en bout sur le backend CPU réel (`TensorBackendCpu` + graphe complet 40 couches) : 15 tests, dont le rejet d'une pénalité dont l'empreinte ne correspond pas aux tenseurs nommés, l'exécution effective de la trajectoire pénalisée (le point le plus bas de la pénalité est atteint et modifie les logits), l'annulation d'une génération par le port d'annulation, la reprise de `step_with_low_confidence` après annulation, et les chemins d'erreur backend à chaque point d'ancrage mémoire : **15/15 verts**.
+- `tests/m11_4_low_confidence.rs` — contrat LowConfidence de bout en bout sur le backend CPU réel (`CloverCpuBackend` + graphe complet 40 couches) : 15 tests, dont le rejet d'une pénalité dont l'empreinte ne correspond pas aux tenseurs nommés (`active_penalties_are_validated_and_executed_end_to_end`), l'exécution effective de la trajectoire pénalisée (le point le plus bas de la pénalité est atteint et modifie les logits), l'annulation pendant le streaming expert, terminale et nettoyée (`cancellation_during_expert_streaming_is_terminal_and_clears_state`), l'absence de tout forward quand la session est annulée avant son premier pas (`a_session_cancelled_before_its_first_step_runs_no_forward`), l'échec d'E/S expert terminal avec nettoyage (`expert_stream_io_failure_is_terminal_and_clears_state`), le refus avant tout forward d'un bloc dépassant le contexte, l'isolation de deux sessions à budgets indépendants et la égalité du rejeu causal incrémental avec un préfill en une passe : **15/15 verts**.
 - `tests/m11_4_upstream_differential.rs` + `tools/m11/gen_m114_reference.py` — différentiel de couches contre l'implémentation upstream épinglée, jouée sur CPU par PyTorch 2.12 pour le prompt `[151644, 872, 198, 9707]`, le préfill 4 tokens et la continuation d'un token, avec un échantillon stride-païen par tenseur et par couche et les agrégats de ligne complète (`absmax`, somme des carrés) : **les deux modes sont verts en 1569,14 s**. Mesures, politique de tolérance et divergences consignées dans [`docs/audits/m11.4-upstream-differential-2026-11-27.md`](audits/m11.4-upstream-differential-2026-11-27.md).
 
 **Limites assumées, mesurées plutôt que supposées.** En routage naturel, les jeux de 8 experts parmi 256 divergent de upstream à partir de la couche 3 (`preview`, `continuation`) et de la couche 1 (`prefill`) — 0 flip à la couche 0 — parce que le top-k sur des logits BF16 est discret sur des quasi-égalités ; le mode épinglé, qui injecte les identifiants et poids amont couche par couche, valide la chaîne numérique complète sur les 40 couches et reproduit le classement des logits (top-1 sur les 4 lignes de preview, recouvrement top-10 complet). L'arithmétique causale GDN (`causal_conv_silu` puis `recurrent_commit`, qui arrondissent produit et somme séparément) dérive de `causal_conv_silu` upstream, qui garde somme et activation en FP32 : c'est ce qui fait passer la passe causale de 1,7·10⁻³ à 5,2·10⁻² d'écart élémentaire relatif entre la couche 0 et la couche 39, alors que la passe bidirectionne reste à 2,9·10⁻³ sur la même profondeur. **Ce défaut d'arithmétique est mesuré, pas corrigé** : il appartient à M11.2 (#52 le met hors du périmètre M11.4), et le différentiel fournit la base de référence pour le revalider. Le code est exécuté exclusivement sur CPU ; aucun contexte CUDA et aucune VRAM ne sont initialisés. #51 reste ouverte.
+
+### Corrections de la revue technique (28/11, PR #56)
+
+Cinq défauts trouvés en revue ont été corrigés en TDD strict — test de non-régression écrit et exécuté
+en **rouge** sur le code d'avant correction, correction minimale, puis vert. Aucune référence dorée ni
+aucune tolérance n'a été modifiée pour faire passer.
+
+1. **Atomicité du commit** (`executor.rs`) : `commit_block` publiait les tokens avant le rejouement
+   causal ; un échec de `forward_causal` laissait donc des tokens publiés sans base causale sur une
+   session Failed. Le rejouement devient la dernière opération faillible, la publication suit.
+   Test : `a_failed_causal_replay_publishes_no_tokens`.
+2. **Réutilisation d'un adaptateur** (`executor.rs`) : rejouer un adaptateur dont la session était
+   terminée marquait la seconde session `Completed` sans préfill et exposait les tokens de la requête
+   précédente. Contrat « un adaptateur = une session » rendu explicite par `on_session_end` qui ferme
+   l'adaptateur ; tout pas ultérieur renvoie `CloverExecutorError::SessionClosed`, le résultat de la
+   requête terminée restant lisible. Test : `a_closed_adapter_refuses_a_second_plan_instead_of_reusing_request_state`.
+3. **Périmètre de la rampe de longueur** (`generation.rs`) : l'amont épinglé construit l'ensemble ciblé
+   comme `eos ∪ stop ∪ {pad}` (`modeling_clover_moe.py:899-901`, `sampling_clover_moe.py:79,116-120`) ;
+   la rampe ne visait que les terminaux. Le PAD n'y entre que s'il vient d'une source réelle, jamais d'un
+   repli inventé. Test : `length_penalty_ramps_the_explicit_pad_token_as_well`. Le cas épinglé masque ce
+   défaut (`pad_token_id 248044 ∈ eos [248046, 248044]`), d'où l'absence de signal jusqu'ici.
+4. **Borne de `think_end_token_id`** (`generation.rs`) : un id au-dessus du vocabulaire tokenizer était
+   accepté, ce qui rend le biais inopérant sous `Mask` (lignes à −inf) et produit une prédiction
+   inutilisable sous `Reject`. `validate` le refuse maintenant par `InvalidTokenId`.
+   Test : `rejects_a_think_end_token_outside_the_tokenizer_vocabulary`.
+5. **Containment de panique dans l'orchestrateur** (`claymore-runtime/src/diffusion.rs`) : `run_one`
+   appelait `execute_step` sans `catch_unwind` ; une panique laissait la tâche `Running` indéfiniment,
+   la session hors de l'ensemble clos, et `on_session_end` (libération de la résidence et des caches)
+   jamais appelé. La panique est convertie dans le chemin d'échec ordinaire, comme le font déjà
+   `claymore-scheduler/src/executor.rs:119-121` et `claymore-runtime/src/scheduled.rs:201-213`.
+   Test : `a_panicking_adapter_fails_the_session_instead_of_leaking_the_task`.
+
+**Revalidation après correction (28/11, CPU uniquement).** `cargo test --workspace --all-targets --locked`
+= 432 passed / 0 failed / 15 ignored (base 427, +5 tests de non-régression), vert aussi sous rustc 1.86.0 ;
+`cargo fmt --all -- --check` et `cargo clippy -p claymore-model-clover -p claymore-tensor -p claymore-runtime
+--all-targets -- -D warnings` propres ; `m11_4_pinned_checkpoint` rejoué sur le checkpoint épinglé **vert en
+664,20 s** ; `m11_4_upstream_differential` rejoué dans les deux modes : **2 tests verts en 1573,95 s,
+`routing_mismatches=0 divergences=0**.
+Les corrections C3 et C4 sont numériquement inertes sur le cas épinglé (`pad 248044 ∈ eos`) et C1/C2/C5 ne
+touchent pas à l'arithmétique — le différentiel le confirme. Détail complet dans
+[`docs/audits/m11.4-review-readiness-2026-11-28.md`](audits/m11.4-review-readiness-2026-11-28.md) §8.
+
+D'autres défauts constatés en revue **ne sont pas corrigés ici** parce qu'ils appartiennent au périmètre
+de #55 (`residency.rs` : erreur racine masquée par `rollback_allocation(..)?` avec expert durablement
+`IncompleteLoad` ; ré-ouverture de shard par chemin avec en-tête périmé) ou à l'API M9 mutualisée avec
+Gemma (absence de liaison session↔exécuteur, `on_session_end` sans canal d'erreur, métriques de blocs,
+état d'orchestration non borné). Ils sont listés, avec les tests proposés, dans
+[`docs/audits/m11.4-review-readiness-2026-11-28.md`](audits/m11.4-review-readiness-2026-11-28.md), qui
+contient aussi la matrice exigences #51 → implémentation → tests → preuves, les statuts M11.3/M11.4, les
+dépendances de PR, les limites CPU/CUDA et la liste des points d'arbitrage laissés à l'architecte
+(A2-B notamment, toujours ouverte).
