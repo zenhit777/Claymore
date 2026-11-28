@@ -388,13 +388,30 @@ impl<D: Device> CloverExpertCache<D> {
                 return Err(CloverExpertCacheError::Cancelled);
             }
             if !open_shards.contains_key(&task.shard_name) {
-                let expected = plan
+                let expected = match plan
                     .shards
                     .iter()
                     .find(|shard| shard.name == task.shard_name)
-                    .ok_or_else(|| CloverExpertCacheError::StaleShard(task.shard_name.clone()))?;
-                let opened = open_planned_shard(root, expected)?;
-                open_shards.insert(task.shard_name.clone(), opened);
+                {
+                    Some(shard) => shard,
+                    None => {
+                        self.metrics.failed_loads = self.metrics.failed_loads.saturating_add(1);
+                        self.rollback_allocation(&id, tick)?;
+                        return Err(CloverExpertCacheError::StaleShard(
+                            task.shard_name.clone(),
+                        ));
+                    }
+                };
+                match open_planned_shard(root, expected) {
+                    Ok(opened) => {
+                        open_shards.insert(task.shard_name.clone(), opened);
+                    }
+                    Err(error) => {
+                        self.metrics.failed_loads = self.metrics.failed_loads.saturating_add(1);
+                        self.rollback_allocation(&id, tick)?;
+                        return Err(error);
+                    }
+                }
             }
             let shard = open_shards
                 .get(&task.shard_name)
