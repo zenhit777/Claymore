@@ -44,6 +44,11 @@ pub enum CloverExpertCacheError {
     StaleShard(String),
     #[error("shared memory manager failed: {0}")]
     Memory(#[from] DeviceMemoryError),
+    #[error("expert load failed ({cause}) and allocation rollback also failed: {rollback}")]
+    RollbackFailed {
+        cause: String,
+        rollback: DeviceMemoryError,
+    },
 }
 
 /// Scheduler-safe task: identifiers and byte ranges only, never tensor buffers.
@@ -361,11 +366,22 @@ impl<D: Device> CloverExpertCache<D> {
 
         if self.manager.allocation(&id).is_some() {
             if !self.ready_residents.contains(&id) {
-                return Err(CloverExpertCacheError::IncompleteLoad);
+                // A previous failed rollback may have retained its allocation
+                // for safety. Retry the release before admitting a fresh load.
+                self.manager.release(&id, tick).map_err(|rollback| {
+                    CloverExpertCacheError::RollbackFailed {
+                        cause: "previous expert load left an incomplete allocation".to_owned(),
+                        rollback,
+                    }
+                })?;
+                self.known_residents.remove(&id);
+                self.ready_residents.remove(&id);
+                self.metrics.resident_experts = self.ready_residents.len() as u64;
+            } else {
+                let _ = self.manager.read(&id, 0, 1, tick)?;
+                self.metrics.cache_hits = self.metrics.cache_hits.saturating_add(1);
+                return Ok(id);
             }
-            let _ = self.manager.read(&id, 0, 1, tick)?;
-            self.metrics.cache_hits = self.metrics.cache_hits.saturating_add(1);
-            return Ok(id);
         }
 
         self.metrics.cache_misses = self.metrics.cache_misses.saturating_add(1);
@@ -384,7 +400,12 @@ impl<D: Device> CloverExpertCache<D> {
         for task in &tasks {
             if is_cancelled() {
                 self.metrics.cancelled_loads = self.metrics.cancelled_loads.saturating_add(1);
-                self.rollback_allocation(&id, tick)?;
+                if let Err(rollback) = self.rollback_allocation(&id, tick) {
+                    return Err(CloverExpertCacheError::RollbackFailed {
+                        cause: CloverExpertCacheError::Cancelled.to_string(),
+                        rollback,
+                    });
+                }
                 return Err(CloverExpertCacheError::Cancelled);
             }
             if !open_shards.contains_key(&task.shard_name) {
@@ -396,7 +417,15 @@ impl<D: Device> CloverExpertCache<D> {
                     Some(shard) => shard,
                     None => {
                         self.metrics.failed_loads = self.metrics.failed_loads.saturating_add(1);
-                        self.rollback_allocation(&id, tick)?;
+                        if let Err(rollback) = self.rollback_allocation(&id, tick) {
+                            return Err(CloverExpertCacheError::RollbackFailed {
+                                cause: CloverExpertCacheError::StaleShard(
+                                    task.shard_name.clone(),
+                                )
+                                .to_string(),
+                                rollback,
+                            });
+                        }
                         return Err(CloverExpertCacheError::StaleShard(
                             task.shard_name.clone(),
                         ));
@@ -408,7 +437,12 @@ impl<D: Device> CloverExpertCache<D> {
                     }
                     Err(error) => {
                         self.metrics.failed_loads = self.metrics.failed_loads.saturating_add(1);
-                        self.rollback_allocation(&id, tick)?;
+                        if let Err(rollback) = self.rollback_allocation(&id, tick) {
+                            return Err(CloverExpertCacheError::RollbackFailed {
+                                cause: error.to_string(),
+                                rollback,
+                            });
+                        }
                         return Err(error);
                     }
                 }
@@ -425,7 +459,12 @@ impl<D: Device> CloverExpertCache<D> {
                 }
                 Err(error) => {
                     self.metrics.failed_loads = self.metrics.failed_loads.saturating_add(1);
-                    self.rollback_allocation(&id, tick)?;
+                    if let Err(rollback) = self.rollback_allocation(&id, tick) {
+                        return Err(CloverExpertCacheError::RollbackFailed {
+                            cause: error.to_string(),
+                            rollback,
+                        });
+                    }
                     return Err(error);
                 }
             }
@@ -494,7 +533,14 @@ impl<D: Device> CloverExpertCache<D> {
         Ok(loaded)
     }
 
-    fn rollback_allocation(&mut self, id: &str, tick: u64) -> Result<(), CloverExpertCacheError> {
+    fn rollback_allocation(
+        &mut self,
+        id: &str,
+        tick: u64,
+    ) -> Result<(), DeviceMemoryError> {
+        // DeviceMemoryManager retains the allocation and its accounting when
+        // release fails. Keep the resident bookkeeping intact as well; the
+        // next request retries release instead of becoming permanently stuck.
         self.manager.release(id, tick)?;
         self.known_residents.remove(id);
         self.ready_residents.remove(id);
