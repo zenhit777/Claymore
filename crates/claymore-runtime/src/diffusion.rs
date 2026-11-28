@@ -5,7 +5,11 @@
 //! adapters provide the work for each bounded step through `DiffusionExecutor`.
 //! Cancellation is observed at step boundaries, so an in-flight backend call is
 //! never reported cancelled before the executor returns.
-use std::{collections::BTreeMap, time::Instant};
+use std::{
+    collections::BTreeMap,
+    panic::{catch_unwind, AssertUnwindSafe},
+    time::Instant,
+};
 
 use claymore_scheduler::{
     Scheduler, SchedulerConfig, SchedulerError, TaskId, TaskKind, TaskPriority, TaskSpec, TaskState,
@@ -419,7 +423,19 @@ impl DiffusionOrchestrator {
         }
 
         let started_at = Instant::now();
-        let execution = executor.execute_step(step);
+        // A panic must not strand the session task in Running forever: unwind is
+        // converted into the same failed-step path as an ordinary executor error,
+        // so the session becomes terminal and `on_session_end` still runs
+        // (residency and cache release depend on that notification).
+        let execution = catch_unwind(AssertUnwindSafe(|| executor.execute_step(step)))
+            .unwrap_or_else(|payload| {
+                let message = payload
+                    .downcast_ref::<&str>()
+                    .copied()
+                    .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                    .unwrap_or("diffusion executor panicked with a non-string payload");
+                Err(format!("executor panicked: {message}"))
+            });
         let elapsed_ns = u64::try_from(started_at.elapsed().as_nanos()).unwrap_or(u64::MAX);
         self.metrics.execution_duration_ns = self
             .metrics
@@ -1020,5 +1036,59 @@ mod tests {
             DiffusionSessionState::Cancelled
         );
         assert_eq!(executor.ended, vec![DiffusionSessionState::Cancelled]);
+    }
+
+    #[derive(Default)]
+    struct Panicking {
+        ended: Vec<DiffusionSessionState>,
+    }
+    impl DiffusionExecutor for Panicking {
+        fn execute_step(&mut self, _step: DiffusionStep) -> Result<(), String> {
+            panic!("synthetic adapter panic");
+        }
+        fn on_session_end(&mut self, _id: DiffusionSessionId, state: DiffusionSessionState) {
+            self.ended.push(state);
+        }
+    }
+
+    /// A panic inside an adapter is a bug in that adapter, not a licence to lose
+    /// the session: without containment the task stays `Running` forever, the
+    /// session never joins the closed set, and `on_session_end` (residency and
+    /// cache release) is never called.
+    #[test]
+    fn a_panicking_adapter_fails_the_session_instead_of_leaking_the_task() {
+        let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let id = orchestrator
+            .submit(plan(), CancellationToken::new(), TaskPriority::Normal)
+            .unwrap();
+        let mut adapter = Panicking::default();
+        let hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            orchestrator.run_one(&mut adapter)
+        }));
+        std::panic::set_hook(hook);
+
+        let outcome = outcome
+            .expect("run_one must not unwind out of the orchestrator")
+            .unwrap();
+        assert!(
+            matches!(outcome, DiffusionRunOutcome::StepFailed { .. }),
+            "unexpected outcome: {outcome:?}"
+        );
+        let session = orchestrator.session(id).unwrap();
+        assert_eq!(session.state, DiffusionSessionState::Failed);
+        let reason = session.error.clone().expect("a panic must be recorded");
+        assert!(reason.contains("panicked"), "unhelpful reason: {reason}");
+        // The failed session leaves no runnable task, and the terminal
+        // notification still reaches the adapter.
+        assert!(
+            matches!(
+                orchestrator.run_one(&mut adapter),
+                Ok(DiffusionRunOutcome::Idle)
+            ),
+            "the failed session must not keep a task queued"
+        );
+        assert_eq!(adapter.ended, vec![DiffusionSessionState::Failed]);
     }
 }
