@@ -1,9 +1,7 @@
-use std::collections::BTreeSet;
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use claymore_checkpoint::safetensors::WeightDType;
+use claymore_checkpoint::safetensors::{SafetensorsError, SafetensorsFile, WeightDType};
 use claymore_core::MemoryTier;
 use claymore_device::{CpuDevice, Device};
 use claymore_memory::{DeviceMemoryError, DeviceMemoryManager, EvictionPolicy, MemoryBudgets};
@@ -40,8 +38,17 @@ pub enum CloverExpertCacheError {
     SizeOverflow,
     #[error("expert stream I/O failed: {0}")]
     Io(#[from] std::io::Error),
+    #[error("expert Safetensors shard validation failed: {0}")]
+    Safetensors(#[from] SafetensorsError),
+    #[error("expert shard changed after checkpoint inspection: {0}")]
+    StaleShard(String),
     #[error("shared memory manager failed: {0}")]
     Memory(#[from] DeviceMemoryError),
+    #[error("expert load failed ({cause}) and allocation rollback also failed: {rollback}")]
+    RollbackFailed {
+        cause: String,
+        rollback: DeviceMemoryError,
+    },
 }
 
 /// Scheduler-safe task: identifiers and byte ranges only, never tensor buffers.
@@ -50,6 +57,9 @@ pub struct CloverExpertLoadTask {
     pub expert_id: String,
     pub shard_name: String,
     pub tensor_name: String,
+    /// Offset within the named tensor; never trusted without revalidating its shard.
+    pub tensor_offset: u64,
+    /// Legacy absolute offset retained for diagnostics; transfer uses tensor_offset.
     pub file_offset: u64,
     pub target_offset: usize,
     pub length_bytes: usize,
@@ -296,6 +306,7 @@ impl<D: Device> CloverExpertCache<D> {
         self.ensure_tasks_resident(
             id,
             request.checkpoint_root,
+            request.plan,
             tasks,
             bytes,
             request.tick,
@@ -329,6 +340,7 @@ impl<D: Device> CloverExpertCache<D> {
         self.ensure_tasks_resident(
             id,
             request.checkpoint_root,
+            request.plan,
             tasks,
             bytes,
             request.tick,
@@ -336,10 +348,12 @@ impl<D: Device> CloverExpertCache<D> {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn ensure_tasks_resident(
         &mut self,
         id: String,
         root: &Path,
+        plan: &CloverLoadPlan,
         tasks: Vec<CloverExpertLoadTask>,
         bytes: u64,
         tick: u64,
@@ -353,11 +367,22 @@ impl<D: Device> CloverExpertCache<D> {
 
         if self.manager.allocation(&id).is_some() {
             if !self.ready_residents.contains(&id) {
-                return Err(CloverExpertCacheError::IncompleteLoad);
+                // A previous failed rollback may have retained its allocation
+                // for safety. Retry the release before admitting a fresh load.
+                self.manager.release(&id, tick).map_err(|rollback| {
+                    CloverExpertCacheError::RollbackFailed {
+                        cause: "previous expert load left an incomplete allocation".to_owned(),
+                        rollback,
+                    }
+                })?;
+                self.known_residents.remove(&id);
+                self.ready_residents.remove(&id);
+                self.metrics.resident_experts = self.ready_residents.len() as u64;
+            } else {
+                let _ = self.manager.read(&id, 0, 1, tick)?;
+                self.metrics.cache_hits = self.metrics.cache_hits.saturating_add(1);
+                return Ok(id);
             }
-            let _ = self.manager.read(&id, 0, 1, tick)?;
-            self.metrics.cache_hits = self.metrics.cache_hits.saturating_add(1);
-            return Ok(id);
         }
 
         self.metrics.cache_misses = self.metrics.cache_misses.saturating_add(1);
@@ -372,13 +397,57 @@ impl<D: Device> CloverExpertCache<D> {
         self.known_residents.insert(id.clone());
         self.prune_evicted();
 
+        let mut open_shards = BTreeMap::new();
         for task in &tasks {
             if is_cancelled() {
                 self.metrics.cancelled_loads = self.metrics.cancelled_loads.saturating_add(1);
-                self.rollback_allocation(&id, tick)?;
+                if let Err(rollback) = self.rollback_allocation(&id, tick) {
+                    return Err(CloverExpertCacheError::RollbackFailed {
+                        cause: CloverExpertCacheError::Cancelled.to_string(),
+                        rollback,
+                    });
+                }
                 return Err(CloverExpertCacheError::Cancelled);
             }
-            match stream_task(&mut self.manager, root, &id, task, tick) {
+            if !open_shards.contains_key(&task.shard_name) {
+                let expected = match plan
+                    .shards
+                    .iter()
+                    .find(|shard| shard.name == task.shard_name)
+                {
+                    Some(shard) => shard,
+                    None => {
+                        self.metrics.failed_loads = self.metrics.failed_loads.saturating_add(1);
+                        if let Err(rollback) = self.rollback_allocation(&id, tick) {
+                            return Err(CloverExpertCacheError::RollbackFailed {
+                                cause: CloverExpertCacheError::StaleShard(task.shard_name.clone())
+                                    .to_string(),
+                                rollback,
+                            });
+                        }
+                        return Err(CloverExpertCacheError::StaleShard(task.shard_name.clone()));
+                    }
+                };
+                match open_planned_shard(root, expected) {
+                    Ok(opened) => {
+                        open_shards.insert(task.shard_name.clone(), opened);
+                    }
+                    Err(error) => {
+                        self.metrics.failed_loads = self.metrics.failed_loads.saturating_add(1);
+                        if let Err(rollback) = self.rollback_allocation(&id, tick) {
+                            return Err(CloverExpertCacheError::RollbackFailed {
+                                cause: error.to_string(),
+                                rollback,
+                            });
+                        }
+                        return Err(error);
+                    }
+                }
+            }
+            let shard = open_shards
+                .get(&task.shard_name)
+                .expect("validated shard was inserted");
+            match stream_task(&mut self.manager, shard, &id, task, tick) {
                 Ok(()) => {
                     self.metrics.bytes_transferred = self
                         .metrics
@@ -387,7 +456,12 @@ impl<D: Device> CloverExpertCache<D> {
                 }
                 Err(error) => {
                     self.metrics.failed_loads = self.metrics.failed_loads.saturating_add(1);
-                    self.rollback_allocation(&id, tick)?;
+                    if let Err(rollback) = self.rollback_allocation(&id, tick) {
+                        return Err(CloverExpertCacheError::RollbackFailed {
+                            cause: error.to_string(),
+                            rollback,
+                        });
+                    }
                     return Err(error);
                 }
             }
@@ -456,7 +530,10 @@ impl<D: Device> CloverExpertCache<D> {
         Ok(loaded)
     }
 
-    fn rollback_allocation(&mut self, id: &str, tick: u64) -> Result<(), CloverExpertCacheError> {
+    fn rollback_allocation(&mut self, id: &str, tick: u64) -> Result<(), DeviceMemoryError> {
+        // DeviceMemoryManager retains the allocation and its accounting when
+        // release fails. Keep the resident bookkeeping intact as well; the
+        // next request retries release instead of becoming permanently stuck.
         self.manager.release(id, tick)?;
         self.known_residents.remove(id);
         self.ready_residents.remove(id);
@@ -836,6 +913,7 @@ fn append_tasks(
             expert_id: id.to_owned(),
             shard_name: shard.name.clone(),
             tensor_name: tensor_name.to_owned(),
+            tensor_offset: first,
             file_offset,
             target_offset,
             length_bytes,
@@ -929,17 +1007,51 @@ fn decode_bf16(bytes: &[u8]) -> Vec<Bf16> {
         .collect()
 }
 
+fn open_planned_shard(
+    root: &Path,
+    expected: &ShardLoadPlan,
+) -> Result<SafetensorsFile, CloverExpertCacheError> {
+    let file = SafetensorsFile::open(root.join(&expected.name))?;
+    if file.file_len() != expected.file_bytes
+        || file.header_len() != expected.header_bytes
+        || file.data_len() != expected.payload_bytes
+        || file.tensor_count() != expected.tensors.len()
+    {
+        return Err(CloverExpertCacheError::StaleShard(expected.name.clone()));
+    }
+
+    for tensor in &expected.tensors {
+        let entry = file
+            .tensor(&tensor.name)
+            .ok_or_else(|| CloverExpertCacheError::StaleShard(expected.name.clone()))?;
+        if entry.dtype() != tensor.dtype
+            || entry.shape() != tensor.shape
+            || entry.byte_len() != tensor.byte_len
+        {
+            return Err(CloverExpertCacheError::StaleShard(expected.name.clone()));
+        }
+        if let Some(first_chunk) = tensor.chunks.first() {
+            let expected_start = first_chunk
+                .shard_payload_offset
+                .checked_sub(first_chunk.tensor_offset)
+                .ok_or(CloverExpertCacheError::SizeOverflow)?;
+            if entry.data_start() != expected_start {
+                return Err(CloverExpertCacheError::StaleShard(expected.name.clone()));
+            }
+        }
+    }
+    Ok(file)
+}
+
 fn stream_task<D: Device>(
     manager: &mut DeviceMemoryManager<D>,
-    root: &Path,
+    shard: &SafetensorsFile,
     id: &str,
     task: &CloverExpertLoadTask,
     tick: u64,
 ) -> Result<(), CloverExpertCacheError> {
-    let mut file = File::open(root.join(&task.shard_name))?;
-    file.seek(SeekFrom::Start(task.file_offset))?;
-    let mut bytes = vec![0u8; task.length_bytes];
-    file.read_exact(&mut bytes)?;
+    let bytes =
+        shard.read_tensor_range(&task.tensor_name, task.tensor_offset, task.length_bytes)?;
     manager.write(id, task.target_offset, &bytes, tick)?;
     Ok(())
 }
@@ -948,20 +1060,92 @@ fn stream_task<D: Device>(
 mod tests {
     use super::*;
     use crate::{ShardLoadPlan, TensorChunkPlan};
+    use claymore_device::{CpuDevice, DeviceBuffer, DeviceCapabilities, DeviceError, DeviceInfo};
+
+    fn fixture_header(entries: &[(&str, &[usize], u64, u64)]) -> Vec<u8> {
+        let tensors = entries
+            .iter()
+            .map(|(name, shape, start, end)| {
+                let shape = shape
+                    .iter()
+                    .map(|dimension| dimension.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!(
+                    r#""{name}":{{"dtype":"BF16","shape":[{shape}],"data_offsets":[{start},{end}]}}"#
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        let mut header = format!("{{{tensors}}}").into_bytes();
+        while header.len() % 8 != 0 {
+            header.push(b' ');
+        }
+        header
+    }
+
+    fn write_safetensors_fixture(
+        root: &Path,
+        shard_name: &str,
+        entries: &[(&str, &[usize], u64, u64)],
+        payload_bytes: usize,
+    ) -> (u64, u64) {
+        write_safetensors_fixture_with_header_len(root, shard_name, entries, payload_bytes, None)
+    }
+
+    fn write_safetensors_fixture_with_header_len(
+        root: &Path,
+        shard_name: &str,
+        entries: &[(&str, &[usize], u64, u64)],
+        payload_bytes: usize,
+        requested_header_bytes: Option<u64>,
+    ) -> (u64, u64) {
+        use std::fs;
+        fs::create_dir_all(root).unwrap();
+        let mut header = fixture_header(entries);
+        if let Some(requested) = requested_header_bytes {
+            assert!(requested >= header.len() as u64);
+            assert_eq!(requested % 8, 0);
+            header.resize(requested as usize, b' ');
+        }
+        let header_bytes = header.len() as u64;
+        let file_bytes = 8 + header_bytes + payload_bytes as u64;
+        let mut bytes = Vec::with_capacity(file_bytes as usize);
+        bytes.extend_from_slice(&header_bytes.to_le_bytes());
+        bytes.extend_from_slice(&header);
+        bytes.extend((0..payload_bytes).map(|value| value as u8));
+        fs::write(root.join(shard_name), bytes).unwrap();
+        (header_bytes, file_bytes)
+    }
 
     fn fixture_plan(shard_name: &str) -> CloverLoadPlan {
+        let entries = [
+            (
+                "model.layers.0.mlp.experts.gate_up_proj",
+                &[2, 2, 2][..],
+                0,
+                16,
+            ),
+            (
+                "model.layers.0.mlp.experts.down_proj",
+                &[2, 2, 1][..],
+                16,
+                24,
+            ),
+        ];
+        let header_bytes = fixture_header(&entries).len() as u64;
         CloverLoadPlan {
             max_chunk_bytes: 8,
             total_payload_bytes: 24,
             shards: vec![ShardLoadPlan {
                 name: shard_name.to_owned(),
-                file_bytes: 48,
-                header_bytes: 16,
+                file_bytes: 8 + header_bytes + 24,
+                header_bytes,
                 payload_bytes: 24,
                 tensors: vec![
                     TensorLoadPlan {
-                        name: "model.layers.0.mlp.experts.gate_up_proj".to_owned(),
-                        shape: vec![2, 2, 2],
+                        name: entries[0].0.to_owned(),
+                        shape: entries[0].1.to_vec(),
                         dtype: WeightDType::BF16,
                         byte_len: 16,
                         chunks: vec![
@@ -978,8 +1162,8 @@ mod tests {
                         ],
                     },
                     TensorLoadPlan {
-                        name: "model.layers.0.mlp.experts.down_proj".to_owned(),
-                        shape: vec![2, 2, 1],
+                        name: entries[1].0.to_owned(),
+                        shape: entries[1].1.to_vec(),
                         dtype: WeightDType::BF16,
                         byte_len: 8,
                         chunks: vec![TensorChunkPlan {
@@ -994,13 +1178,21 @@ mod tests {
     }
 
     fn write_fixture(root: &Path, shard_name: &str) {
-        use std::fs;
-        fs::create_dir_all(root).unwrap();
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(&16u64.to_le_bytes());
-        bytes.extend_from_slice(&[0u8; 16]);
-        bytes.extend(0u8..24u8);
-        fs::write(root.join(shard_name), bytes).unwrap();
+        let entries = [
+            (
+                "model.layers.0.mlp.experts.gate_up_proj",
+                &[2, 2, 2][..],
+                0,
+                16,
+            ),
+            (
+                "model.layers.0.mlp.experts.down_proj",
+                &[2, 2, 1][..],
+                16,
+                24,
+            ),
+        ];
+        write_safetensors_fixture(root, shard_name, &entries, 24);
     }
 
     fn fixture_budgets(expert_cache_max_bytes: u64) -> MemoryBudgets {
@@ -1022,56 +1214,130 @@ mod tests {
         }
     }
 
+    struct FailOnceReleaseBuffer {
+        inner: Box<dyn DeviceBuffer>,
+        fail_next_release: bool,
+    }
+
+    impl DeviceBuffer for FailOnceReleaseBuffer {
+        fn device_id(&self) -> &str {
+            self.inner.device_id()
+        }
+
+        fn device_instance_id(&self) -> claymore_device::DeviceInstanceId {
+            self.inner.device_instance_id()
+        }
+
+        fn tier(&self) -> MemoryTier {
+            self.inner.tier()
+        }
+
+        fn len(&self) -> usize {
+            self.inner.len()
+        }
+
+        fn release(&mut self) -> Result<(), DeviceError> {
+            if self.fail_next_release {
+                self.fail_next_release = false;
+                return Err(DeviceError::ReleaseFailed(
+                    "injected one-shot release failure".to_owned(),
+                ));
+            }
+            self.inner.release()
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            self
+        }
+    }
+
+    struct FailOnceReleaseDevice {
+        inner: CpuDevice,
+    }
+
+    impl Device for FailOnceReleaseDevice {
+        fn info(&self) -> &DeviceInfo {
+            self.inner.info()
+        }
+
+        fn capabilities(&self) -> DeviceCapabilities {
+            self.inner.capabilities()
+        }
+
+        fn allocate(
+            &self,
+            tier: MemoryTier,
+            bytes: u64,
+        ) -> Result<Box<dyn DeviceBuffer>, DeviceError> {
+            Ok(Box::new(FailOnceReleaseBuffer {
+                inner: self.inner.allocate(tier, bytes)?,
+                fail_next_release: true,
+            }))
+        }
+
+        fn write(
+            &self,
+            buffer: &mut dyn DeviceBuffer,
+            offset: usize,
+            data: &[u8],
+        ) -> Result<(), DeviceError> {
+            let buffer = buffer
+                .as_any_mut()
+                .downcast_mut::<FailOnceReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            self.inner.write(buffer.inner.as_mut(), offset, data)
+        }
+
+        fn read(
+            &self,
+            buffer: &dyn DeviceBuffer,
+            offset: usize,
+            len: usize,
+        ) -> Result<Vec<u8>, DeviceError> {
+            let buffer = buffer
+                .as_any()
+                .downcast_ref::<FailOnceReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            self.inner.read(buffer.inner.as_ref(), offset, len)
+        }
+
+        fn copy(
+            &self,
+            source: &dyn DeviceBuffer,
+            destination: &mut dyn DeviceBuffer,
+            bytes: usize,
+        ) -> Result<(), DeviceError> {
+            let source = source
+                .as_any()
+                .downcast_ref::<FailOnceReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            let destination = destination
+                .as_any_mut()
+                .downcast_mut::<FailOnceReleaseBuffer>()
+                .ok_or(DeviceError::BufferTypeMismatch)?;
+            self.inner
+                .copy(source.inner.as_ref(), destination.inner.as_mut(), bytes)
+        }
+
+        fn synchronize(&self) -> Result<(), DeviceError> {
+            self.inner.synchronize()
+        }
+    }
+
     #[test]
     fn expert_load_tasks_intersect_tensor_chunks_without_exceeding_bound() {
-        let plan = CloverLoadPlan {
-            max_chunk_bytes: 8,
-            total_payload_bytes: 24,
-            shards: vec![ShardLoadPlan {
-                name: "model-00001-of-00001.safetensors".to_owned(),
-                file_bytes: 48,
-                header_bytes: 16,
-                payload_bytes: 24,
-                tensors: vec![
-                    TensorLoadPlan {
-                        name: "model.layers.0.mlp.experts.gate_up_proj".to_owned(),
-                        shape: vec![2, 2, 2],
-                        dtype: WeightDType::BF16,
-                        byte_len: 16,
-                        chunks: vec![
-                            TensorChunkPlan {
-                                tensor_offset: 0,
-                                shard_payload_offset: 0,
-                                length_bytes: 8,
-                            },
-                            TensorChunkPlan {
-                                tensor_offset: 8,
-                                shard_payload_offset: 8,
-                                length_bytes: 8,
-                            },
-                        ],
-                    },
-                    TensorLoadPlan {
-                        name: "model.layers.0.mlp.experts.down_proj".to_owned(),
-                        shape: vec![2, 2, 1],
-                        dtype: WeightDType::BF16,
-                        byte_len: 8,
-                        chunks: vec![TensorChunkPlan {
-                            tensor_offset: 0,
-                            shard_payload_offset: 16,
-                            length_bytes: 8,
-                        }],
-                    },
-                ],
-            }],
-        };
+        let plan = fixture_plan("model-00001-of-00001.safetensors");
 
         let tasks = build_load_tasks(&plan, 0, 1, 2, 2, 1).unwrap();
         assert_eq!(tasks.len(), 2);
-        assert_eq!(tasks[0].file_offset, 32);
+        assert_eq!(tasks[0].file_offset, 8 + plan.shards[0].header_bytes + 8);
         assert_eq!(tasks[0].target_offset, 0);
         assert_eq!(tasks[0].length_bytes, 8);
-        assert_eq!(tasks[1].file_offset, 44);
+        assert_eq!(tasks[1].file_offset, 8 + plan.shards[0].header_bytes + 20);
         assert_eq!(tasks[1].target_offset, 8);
         assert_eq!(tasks[1].length_bytes, 4);
         assert!(tasks
@@ -1144,123 +1410,9 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
 
         let shard_name = "model-00001-of-00001.safetensors";
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(&16u64.to_le_bytes());
-        bytes.extend_from_slice(&[0u8; 16]);
-        bytes.extend(0u8..24u8);
-        fs::write(root.join(shard_name), bytes).unwrap();
-
-        let plan = CloverLoadPlan {
-            max_chunk_bytes: 8,
-            total_payload_bytes: 24,
-            shards: vec![ShardLoadPlan {
-                name: shard_name.to_owned(),
-                file_bytes: 48,
-                header_bytes: 16,
-                payload_bytes: 24,
-                tensors: vec![
-                    TensorLoadPlan {
-                        name: "model.layers.0.mlp.experts.gate_up_proj".to_owned(),
-                        shape: vec![2, 2, 2],
-                        dtype: WeightDType::BF16,
-                        byte_len: 16,
-                        chunks: vec![
-                            TensorChunkPlan {
-                                tensor_offset: 0,
-                                shard_payload_offset: 0,
-                                length_bytes: 8,
-                            },
-                            TensorChunkPlan {
-                                tensor_offset: 8,
-                                shard_payload_offset: 8,
-                                length_bytes: 8,
-                            },
-                        ],
-                    },
-                    TensorLoadPlan {
-                        name: "model.layers.0.mlp.experts.down_proj".to_owned(),
-                        shape: vec![2, 2, 1],
-                        dtype: WeightDType::BF16,
-                        byte_len: 8,
-                        chunks: vec![TensorChunkPlan {
-                            tensor_offset: 0,
-                            shard_payload_offset: 16,
-                            length_bytes: 8,
-                        }],
-                    },
-                ],
-            }],
-        };
-        let budgets = MemoryBudgets {
-            vram_soft_bytes: 12,
-            vram_hard_bytes: 24,
-            host_bytes: 128,
-            pinned_host_bytes: 0,
-            expert_cache_target_bytes: 12,
-            expert_cache_max_bytes: 24,
-        };
-        let mut cache =
-            CloverExpertCache::new(CpuDevice::new(), budgets, EvictionPolicy::Lru).unwrap();
-
-        let geometry = CloverExpertGeometry {
-            num_experts: 2,
-            hidden_size: 2,
-            intermediate_size: 1,
-        };
-        let id = cache
-            .ensure_resident(CloverExpertLoadRequest {
-                checkpoint_root: &root,
-                plan: &plan,
-                layer: 0,
-                expert: 1,
-                geometry,
-                tick: 1,
-            })
-            .unwrap();
-        assert_eq!(id, "clover.layer.0.expert.1");
-        assert!(cache.is_resident(0, 1));
-        assert_eq!(cache.usage_bytes(), 12);
-        assert_eq!(cache.metrics().bytes_transferred, 12);
-
-        cache
-            .ensure_resident(CloverExpertLoadRequest {
-                checkpoint_root: &root,
-                plan: &plan,
-                layer: 0,
-                expert: 1,
-                geometry,
-                tick: 2,
-            })
-            .unwrap();
-        assert_eq!(cache.metrics().cache_hits, 1);
-        let weights = cache.read_routed_weights(0, 1, geometry, 3).unwrap();
-        assert_eq!(weights.gate_up_proj.len(), 4);
-        assert_eq!(weights.down_proj.len(), 2);
-        cache.mark_in_flight_until(0, 1, 5, 4).unwrap();
-        assert!(cache.release(0, 1, 4).is_err());
-        cache.release(0, 1, 5).unwrap();
-        assert!(!cache.is_resident(0, 1));
-        assert_eq!(cache.usage_bytes(), 0);
-        assert!(cache.release(0, 1, 6).is_err());
-        cache.synchronize().unwrap();
-        assert_eq!(cache.metrics().wait_count, 1);
-
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn cancelled_partial_stream_releases_its_allocation() {
-        use claymore_device::CpuDevice;
-        use std::sync::atomic::{AtomicU64, Ordering};
-
-        static NEXT: AtomicU64 = AtomicU64::new(100);
-        let root = std::env::temp_dir().join(format!(
-            "claymore-clover-cancel-{}",
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
-        let shard_name = "model.safetensors";
         write_fixture(&root, shard_name);
         let plan = fixture_plan(shard_name);
+
         let mut cache =
             CloverExpertCache::new(CpuDevice::new(), fixture_budgets(24), EvictionPolicy::Lru)
                 .unwrap();
@@ -1286,6 +1438,54 @@ mod tests {
     }
 
     #[test]
+    fn failed_rollback_preserves_the_root_error_and_can_be_retried() {
+        let root = std::env::temp_dir().join(format!(
+            "claymore-clover-rollback-retry-{}",
+            std::process::id()
+        ));
+        let shard_name = "model.safetensors";
+        let plan = fixture_plan(shard_name);
+        let mut cache = CloverExpertCache::new(
+            FailOnceReleaseDevice {
+                inner: CpuDevice::new(),
+            },
+            fixture_budgets(24),
+            EvictionPolicy::Lru,
+        )
+        .unwrap();
+
+        let first = cache.ensure_resident(CloverExpertLoadRequest {
+            checkpoint_root: &root,
+            plan: &plan,
+            layer: 0,
+            expert: 1,
+            geometry: fixture_geometry(),
+            tick: 1,
+        });
+        assert!(matches!(
+            first,
+            Err(CloverExpertCacheError::RollbackFailed { .. })
+        ));
+        assert_eq!(cache.usage_bytes(), 12);
+        assert!(!cache.is_resident(0, 1));
+
+        write_fixture(&root, shard_name);
+        cache
+            .ensure_resident(CloverExpertLoadRequest {
+                checkpoint_root: &root,
+                plan: &plan,
+                layer: 0,
+                expert: 1,
+                geometry: fixture_geometry(),
+                tick: 2,
+            })
+            .unwrap();
+        assert!(cache.is_resident(0, 1));
+        assert_eq!(cache.usage_bytes(), 12);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn failed_chunk_read_rolls_back_the_admitted_expert() {
         use claymore_device::CpuDevice;
 
@@ -1302,10 +1502,59 @@ mod tests {
             geometry: fixture_geometry(),
             tick: 1,
         });
-        assert!(matches!(error, Err(CloverExpertCacheError::Io(_))));
+        assert!(matches!(error, Err(CloverExpertCacheError::Safetensors(_))));
         assert!(!cache.is_resident(0, 1));
         assert_eq!(cache.usage_bytes(), 0);
         assert_eq!(cache.metrics().failed_loads, 1);
+    }
+
+    #[test]
+    fn expert_stream_rejects_a_shard_replaced_with_different_tensor_offsets() {
+        use claymore_device::CpuDevice;
+        use std::fs;
+
+        let root = std::env::temp_dir().join(format!(
+            "claymore-clover-stale-shard-{}",
+            std::process::id()
+        ));
+        let shard_name = "model.safetensors";
+        write_fixture(&root, shard_name);
+        let plan = fixture_plan(shard_name);
+
+        let changed_entries = [
+            (
+                "model.layers.0.mlp.experts.gate_up_proj",
+                &[2, 2, 2][..],
+                8,
+                24,
+            ),
+            ("model.layers.0.mlp.experts.down_proj", &[2, 2, 1][..], 0, 8),
+        ];
+        let (changed_header, changed_file) = write_safetensors_fixture_with_header_len(
+            &root,
+            shard_name,
+            &changed_entries,
+            24,
+            Some(plan.shards[0].header_bytes),
+        );
+        assert_eq!(changed_header, plan.shards[0].header_bytes);
+        assert_eq!(changed_file, plan.shards[0].file_bytes);
+
+        let mut cache =
+            CloverExpertCache::new(CpuDevice::new(), fixture_budgets(24), EvictionPolicy::Lru)
+                .unwrap();
+        let error = cache.ensure_resident(CloverExpertLoadRequest {
+            checkpoint_root: &root,
+            plan: &plan,
+            layer: 0,
+            expert: 1,
+            geometry: fixture_geometry(),
+            tick: 1,
+        });
+        assert!(matches!(error, Err(CloverExpertCacheError::StaleShard(_))));
+        assert!(!cache.is_resident(0, 1));
+        assert_eq!(cache.usage_bytes(), 0);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1431,12 +1680,33 @@ mod tests {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         let shard_name = "shared.safetensors";
-        fs::create_dir_all(&root).unwrap();
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(&16u64.to_le_bytes());
-        bytes.extend_from_slice(&[0u8; 16]);
-        bytes.extend(0u8..16u8);
-        fs::write(root.join(shard_name), bytes).unwrap();
+        let entries = [
+            (
+                "model.layers.0.mlp.shared_expert.gate_proj.weight",
+                &[1, 2][..],
+                0,
+                4,
+            ),
+            (
+                "model.layers.0.mlp.shared_expert.up_proj.weight",
+                &[1, 2][..],
+                4,
+                8,
+            ),
+            (
+                "model.layers.0.mlp.shared_expert.down_proj.weight",
+                &[2, 1][..],
+                8,
+                12,
+            ),
+            (
+                "model.layers.0.mlp.shared_expert_gate.weight",
+                &[1, 2][..],
+                12,
+                16,
+            ),
+        ];
+        let (header_bytes, file_bytes) = write_safetensors_fixture(&root, shard_name, &entries, 16);
 
         let tensor = |name: &str, shape: Vec<usize>, offset: u64| TensorLoadPlan {
             name: name.to_owned(),
@@ -1454,8 +1724,8 @@ mod tests {
             total_payload_bytes: 16,
             shards: vec![ShardLoadPlan {
                 name: shard_name.to_owned(),
-                file_bytes: 40,
-                header_bytes: 16,
+                file_bytes,
+                header_bytes,
                 payload_bytes: 16,
                 tensors: vec![
                     tensor(
