@@ -1247,10 +1247,49 @@ mod tests {
             geometry: fixture_geometry(),
             tick: 1,
         });
-        assert!(matches!(error, Err(CloverExpertCacheError::Io(_))));
+        assert!(matches!(error, Err(CloverExpertCacheError::Safetensors(_))));
         assert!(!cache.is_resident(0, 1));
         assert_eq!(cache.usage_bytes(), 0);
         assert_eq!(cache.metrics().failed_loads, 1);
+    }
+
+    #[test]
+    fn expert_stream_rejects_a_shard_replaced_with_different_tensor_offsets() {
+        use claymore_device::CpuDevice;
+        use std::fs;
+
+        let root = std::env::temp_dir().join(format!(
+            "claymore-clover-stale-shard-{}",
+            std::process::id()
+        ));
+        let shard_name = "model.safetensors";
+        write_fixture(&root, shard_name);
+        let plan = fixture_plan(shard_name);
+
+        let changed_entries = [
+            ("model.layers.0.mlp.experts.gate_up_proj", &[2, 2, 2][..], 8, 24),
+            ("model.layers.0.mlp.experts.down_proj", &[2, 2, 1][..], 0, 8),
+        ];
+        let (changed_header, changed_file) =
+            write_safetensors_fixture(&root, shard_name, &changed_entries, 24);
+        assert_eq!(changed_header, plan.shards[0].header_bytes);
+        assert_eq!(changed_file, plan.shards[0].file_bytes);
+
+        let mut cache =
+            CloverExpertCache::new(CpuDevice::new(), fixture_budgets(24), EvictionPolicy::Lru)
+                .unwrap();
+        let error = cache.ensure_resident(CloverExpertLoadRequest {
+            checkpoint_root: &root,
+            plan: &plan,
+            layer: 0,
+            expert: 1,
+            geometry: fixture_geometry(),
+            tick: 1,
+        });
+        assert!(matches!(error, Err(CloverExpertCacheError::StaleShard(_))));
+        assert!(!cache.is_resident(0, 1));
+        assert_eq!(cache.usage_bytes(), 0);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1376,12 +1415,14 @@ mod tests {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         let shard_name = "shared.safetensors";
-        fs::create_dir_all(&root).unwrap();
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(&16u64.to_le_bytes());
-        bytes.extend_from_slice(&[0u8; 16]);
-        bytes.extend(0u8..16u8);
-        fs::write(root.join(shard_name), bytes).unwrap();
+        let entries = [
+            ("model.layers.0.mlp.shared_expert.gate_proj.weight", &[1, 2][..], 0, 4),
+            ("model.layers.0.mlp.shared_expert.up_proj.weight", &[1, 2][..], 4, 8),
+            ("model.layers.0.mlp.shared_expert.down_proj.weight", &[2, 1][..], 8, 12),
+            ("model.layers.0.mlp.shared_expert_gate.weight", &[1, 2][..], 12, 16),
+        ];
+        let (header_bytes, file_bytes) =
+            write_safetensors_fixture(&root, shard_name, &entries, 16);
 
         let tensor = |name: &str, shape: Vec<usize>, offset: u64| TensorLoadPlan {
             name: name.to_owned(),
@@ -1399,8 +1440,8 @@ mod tests {
             total_payload_bytes: 16,
             shards: vec![ShardLoadPlan {
                 name: shard_name.to_owned(),
-                file_bytes: 40,
-                header_bytes: 16,
+                file_bytes,
+                header_bytes,
                 payload_bytes: 16,
                 tensors: vec![
                     tensor(
