@@ -419,16 +419,12 @@ impl<D: Device> CloverExpertCache<D> {
                         self.metrics.failed_loads = self.metrics.failed_loads.saturating_add(1);
                         if let Err(rollback) = self.rollback_allocation(&id, tick) {
                             return Err(CloverExpertCacheError::RollbackFailed {
-                                cause: CloverExpertCacheError::StaleShard(
-                                    task.shard_name.clone(),
-                                )
-                                .to_string(),
+                                cause: CloverExpertCacheError::StaleShard(task.shard_name.clone())
+                                    .to_string(),
                                 rollback,
                             });
                         }
-                        return Err(CloverExpertCacheError::StaleShard(
-                            task.shard_name.clone(),
-                        ));
+                        return Err(CloverExpertCacheError::StaleShard(task.shard_name.clone()));
                     }
                 };
                 match open_planned_shard(root, expected) {
@@ -1166,8 +1162,18 @@ mod tests {
 
     fn write_fixture(root: &Path, shard_name: &str) {
         let entries = [
-            ("model.layers.0.mlp.experts.gate_up_proj", &[2, 2, 2][..], 0, 16),
-            ("model.layers.0.mlp.experts.down_proj", &[2, 2, 1][..], 16, 24),
+            (
+                "model.layers.0.mlp.experts.gate_up_proj",
+                &[2, 2, 2][..],
+                0,
+                16,
+            ),
+            (
+                "model.layers.0.mlp.experts.down_proj",
+                &[2, 2, 1][..],
+                16,
+                24,
+            ),
         ];
         write_safetensors_fixture(root, shard_name, &entries, 24);
     }
