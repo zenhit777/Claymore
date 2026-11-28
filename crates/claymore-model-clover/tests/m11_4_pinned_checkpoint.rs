@@ -16,9 +16,14 @@ use std::path::PathBuf;
 
 use claymore_model_clover::{
     CloverCheckpointInventory, CloverConfig, CloverCpuBackend, CloverCpuBackendOptions,
-    CloverGraph, CONFIG_SHA256, INDEX_SHA256,
+    CloverDiffusionExecutor, CloverGenerationOptions, CloverGraph, CloverInvalidTokenPolicy,
+    CONFIG_SHA256, INDEX_SHA256,
+};
+use claymore_runtime::diffusion::{
+    DiffusionOrchestrator, DiffusionRunOutcome, DiffusionSessionState,
 };
 use claymore_runtime::CancellationToken;
+use claymore_scheduler::{SchedulerConfig, TaskPriority};
 
 const PINNED_CONFIG_JSON: &str = include_str!("../../../docs/audits/fixtures/clover-config.json");
 const MAX_CHUNK_BYTES: usize = 8 * 1024 * 1024;
@@ -158,4 +163,102 @@ fn pinned_checkpoint_preview_and_causal_forward_preserve_state_contracts() {
     } else {
         eprintln!("artifact_sha256=not_requested (set CLAYMORE_M11_VERIFY_SHA=1)");
     }
+}
+
+
+#[test]
+#[ignore = "requires the authentic pinned Clover checkpoint (set CLAYMORE_M11_CHECKPOINT)"]
+fn pinned_checkpoint_runs_multiblock_lowconfidence_generation_on_real_weights() {
+    let root = checkpoint_root().expect("CLAYMORE_M11_CHECKPOINT must point at the release dir");
+    let config = CloverConfig::from_json(PINNED_CONFIG_JSON).unwrap();
+    config.validate_pinned().unwrap();
+    let inventory = CloverCheckpointInventory::inspect_pinned(&root, &config)
+        .expect("pinned inventory inspection failed");
+    inventory.validate_pinned_tensor_schema().unwrap();
+
+    let expert_bytes = (3 * config.moe_intermediate_size * config.hidden_size) as u64 * 2;
+    let hard = expert_bytes * 32;
+    let backend = CloverCpuBackend::new(
+        &config,
+        inventory,
+        CloverCpuBackendOptions {
+            expert_budgets: claymore_memory::MemoryBudgets {
+                vram_soft_bytes: hard,
+                vram_hard_bytes: hard,
+                host_bytes: hard,
+                pinned_host_bytes: hard,
+                expert_cache_target_bytes: hard,
+                expert_cache_max_bytes: hard,
+            },
+            eviction: claymore_memory::EvictionPolicy::Lru,
+            cancellation: Some(CancellationToken::new()),
+        },
+    )
+    .unwrap();
+
+    // The pinned tokenizer exposes 248,077 IDs; the remaining 243 model-head
+    // rows have no tokenizer mapping and are masked explicitly for this run.
+    let tokenizer_vocab_size = 248_077;
+    let mut generation = CloverGenerationOptions::greedy(3, tokenizer_vocab_size);
+    generation.block_size = 2;
+    generation.threshold = 0.0;
+    generation.invalid_token_policy = Some(CloverInvalidTokenPolicy::Mask);
+    generation.eos_token_ids = Some(Vec::new());
+
+    let prompt = vec![151_644, 872, 198, 9_707];
+    let mut executor = CloverDiffusionExecutor::new(
+        CloverGraph::new(config.clone()).unwrap(),
+        backend,
+        prompt.clone(),
+        generation,
+    )
+    .unwrap();
+    let plan = executor.plan().diffusion_plan().clone();
+    assert_eq!(plan.block_count(), 2);
+
+    let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+    let session = orchestrator
+        .submit(plan, CancellationToken::new(), TaskPriority::Normal)
+        .unwrap();
+    let mut observed_causal_replay = false;
+
+    loop {
+        match orchestrator.run_one(&mut executor).unwrap() {
+            DiffusionRunOutcome::StepCompleted { .. } => {
+                if !observed_causal_replay && executor.generated_tokens().len() >= 2 {
+                    for (layer, kind) in config.layer_types.iter().enumerate() {
+                        match kind {
+                            claymore_model_clover::LayerType::LinearAttention => {
+                                assert_eq!(
+                                    executor.backend().gdn_committed_tokens(layer),
+                                    prompt.len() + 2
+                                );
+                            }
+                            claymore_model_clover::LayerType::FullAttention => {
+                                assert_eq!(
+                                    executor.backend().cached_kv_tokens(layer),
+                                    prompt.len() + 2
+                                );
+                            }
+                        }
+                    }
+                    observed_causal_replay = true;
+                }
+            }
+            DiffusionRunOutcome::SessionCompleted { .. } => break,
+            other => panic!("unexpected diffusion outcome: {other:?}"),
+        }
+    }
+
+    assert!(observed_causal_replay, "the first resolved block was not replayed causally");
+    assert_eq!(
+        orchestrator.session(session).unwrap().state,
+        DiffusionSessionState::Completed
+    );
+    let generated = executor.generated_tokens();
+    assert_eq!(generated.len(), 3);
+    assert!(generated.iter().all(|token| (*token as usize) < tokenizer_vocab_size));
+    let output = executor.output();
+    assert_eq!(output.prompt_tokens, prompt);
+    assert_eq!(output.sequence().len(), output.prompt_tokens.len() + 3);
 }
