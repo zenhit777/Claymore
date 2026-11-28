@@ -1,9 +1,7 @@
 use std::collections::BTreeSet;
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
-use claymore_checkpoint::safetensors::WeightDType;
+use claymore_checkpoint::safetensors::{SafetensorsError, SafetensorsFile, WeightDType};
 use claymore_core::MemoryTier;
 use claymore_device::{CpuDevice, Device};
 use claymore_memory::{DeviceMemoryError, DeviceMemoryManager, EvictionPolicy, MemoryBudgets};
@@ -40,6 +38,10 @@ pub enum CloverExpertCacheError {
     SizeOverflow,
     #[error("expert stream I/O failed: {0}")]
     Io(#[from] std::io::Error),
+    #[error("expert Safetensors shard validation failed: {0}")]
+    Safetensors(#[from] SafetensorsError),
+    #[error("expert shard changed after checkpoint inspection: {0}")]
+    StaleShard(String),
     #[error("shared memory manager failed: {0}")]
     Memory(#[from] DeviceMemoryError),
 }
@@ -50,6 +52,9 @@ pub struct CloverExpertLoadTask {
     pub expert_id: String,
     pub shard_name: String,
     pub tensor_name: String,
+    /// Offset within the named tensor; never trusted without revalidating its shard.
+    pub tensor_offset: u64,
+    /// Legacy absolute offset retained for diagnostics; transfer uses tensor_offset.
     pub file_offset: u64,
     pub target_offset: usize,
     pub length_bytes: usize,
@@ -296,6 +301,7 @@ impl<D: Device> CloverExpertCache<D> {
         self.ensure_tasks_resident(
             id,
             request.checkpoint_root,
+            request.plan,
             tasks,
             bytes,
             request.tick,
@@ -329,6 +335,7 @@ impl<D: Device> CloverExpertCache<D> {
         self.ensure_tasks_resident(
             id,
             request.checkpoint_root,
+            request.plan,
             tasks,
             bytes,
             request.tick,
@@ -340,6 +347,7 @@ impl<D: Device> CloverExpertCache<D> {
         &mut self,
         id: String,
         root: &Path,
+        plan: &CloverLoadPlan,
         tasks: Vec<CloverExpertLoadTask>,
         bytes: u64,
         tick: u64,
@@ -372,13 +380,26 @@ impl<D: Device> CloverExpertCache<D> {
         self.known_residents.insert(id.clone());
         self.prune_evicted();
 
+        let mut open_shards = BTreeMap::new();
         for task in &tasks {
             if is_cancelled() {
                 self.metrics.cancelled_loads = self.metrics.cancelled_loads.saturating_add(1);
                 self.rollback_allocation(&id, tick)?;
                 return Err(CloverExpertCacheError::Cancelled);
             }
-            match stream_task(&mut self.manager, root, &id, task, tick) {
+            if !open_shards.contains_key(&task.shard_name) {
+                let expected = plan
+                    .shards
+                    .iter()
+                    .find(|shard| shard.name == task.shard_name)
+                    .ok_or_else(|| CloverExpertCacheError::StaleShard(task.shard_name.clone()))?;
+                let opened = open_planned_shard(root, expected)?;
+                open_shards.insert(task.shard_name.clone(), opened);
+            }
+            let shard = open_shards
+                .get(&task.shard_name)
+                .expect("validated shard was inserted");
+            match stream_task(&mut self.manager, shard, &id, task, tick) {
                 Ok(()) => {
                     self.metrics.bytes_transferred = self
                         .metrics
@@ -836,6 +857,7 @@ fn append_tasks(
             expert_id: id.to_owned(),
             shard_name: shard.name.clone(),
             tensor_name: tensor_name.to_owned(),
+            tensor_offset: first,
             file_offset,
             target_offset,
             length_bytes,
@@ -929,17 +951,50 @@ fn decode_bf16(bytes: &[u8]) -> Vec<Bf16> {
         .collect()
 }
 
+fn open_planned_shard(
+    root: &Path,
+    expected: &ShardLoadPlan,
+) -> Result<SafetensorsFile, CloverExpertCacheError> {
+    let file = SafetensorsFile::open(root.join(&expected.name))?;
+    if file.file_len() != expected.file_bytes
+        || file.header_len() != expected.header_bytes
+        || file.data_len() != expected.payload_bytes
+        || file.tensor_count() != expected.tensors.len()
+    {
+        return Err(CloverExpertCacheError::StaleShard(expected.name.clone()));
+    }
+
+    for tensor in &expected.tensors {
+        let entry = file
+            .tensor(&tensor.name)
+            .ok_or_else(|| CloverExpertCacheError::StaleShard(expected.name.clone()))?;
+        if entry.dtype() != tensor.dtype
+            || entry.shape() != tensor.shape
+            || entry.byte_len() != tensor.byte_len
+        {
+            return Err(CloverExpertCacheError::StaleShard(expected.name.clone()));
+        }
+        if let Some(first_chunk) = tensor.chunks.first() {
+            let expected_start = first_chunk
+                .shard_payload_offset
+                .checked_sub(first_chunk.tensor_offset)
+                .ok_or(CloverExpertCacheError::SizeOverflow)?;
+            if entry.data_start() != expected_start {
+                return Err(CloverExpertCacheError::StaleShard(expected.name.clone()));
+            }
+        }
+    }
+    Ok(file)
+}
+
 fn stream_task<D: Device>(
     manager: &mut DeviceMemoryManager<D>,
-    root: &Path,
+    shard: &SafetensorsFile,
     id: &str,
     task: &CloverExpertLoadTask,
     tick: u64,
 ) -> Result<(), CloverExpertCacheError> {
-    let mut file = File::open(root.join(&task.shard_name))?;
-    file.seek(SeekFrom::Start(task.file_offset))?;
-    let mut bytes = vec![0u8; task.length_bytes];
-    file.read_exact(&mut bytes)?;
+    let bytes = shard.read_tensor_range(&task.tensor_name, task.tensor_offset, task.length_bytes)?;
     manager.write(id, task.target_offset, &bytes, tick)?;
     Ok(())
 }
