@@ -68,6 +68,7 @@ dependencies = [
  "claymore-core",
  "claymore-device",
  "claymore-memory",
+ "claymore-runtime",
  "claymore-scheduler",
  "claymore-tensor",
  "serde",

@@ -5,7 +5,11 @@
 //! adapters provide the work for each bounded step through `DiffusionExecutor`.
 //! Cancellation is observed at step boundaries, so an in-flight backend call is
 //! never reported cancelled before the executor returns.
-use std::{collections::BTreeMap, time::Instant};
+use std::{
+    collections::BTreeMap,
+    panic::{catch_unwind, AssertUnwindSafe},
+    time::Instant,
+};
 
 use claymore_scheduler::{
     Scheduler, SchedulerConfig, SchedulerError, TaskId, TaskKind, TaskPriority, TaskSpec, TaskState,
@@ -126,6 +130,11 @@ impl DiffusionPlan {
 /// perform one bounded unit of work and return only after it is safe to advance.
 pub trait DiffusionExecutor {
     fn execute_step(&mut self, step: DiffusionStep) -> Result<(), String>;
+
+    /// Release adapter-owned request state after a terminal session. The
+    /// callback runs at a safe step boundary and is also flushed by
+    /// cancel_with_executor for sessions cancelled before their first step.
+    fn on_session_end(&mut self, _session_id: DiffusionSessionId, _state: DiffusionSessionState) {}
 }
 
 /// Observable lifecycle of a generation session.
@@ -231,6 +240,7 @@ struct SessionRecord {
     cancellation: CancellationToken,
     tasks: Vec<TaskId>,
     completed_blocks: usize,
+    terminal_notification_pending: bool,
 }
 
 /// Deterministic block/step orchestrator backed by Claymore's shared scheduler.
@@ -285,6 +295,7 @@ impl DiffusionOrchestrator {
                     cancellation,
                     tasks: Vec::new(),
                     completed_blocks: 0,
+                    terminal_notification_pending: true,
                 },
             );
             self.metrics.sessions_submitted = self.metrics.sessions_submitted.saturating_add(1);
@@ -336,6 +347,7 @@ impl DiffusionOrchestrator {
                 cancellation,
                 tasks,
                 completed_blocks: 0,
+                terminal_notification_pending: false,
             },
         );
         let block_count = plan.block_count();
@@ -363,6 +375,13 @@ impl DiffusionOrchestrator {
         &mut self,
         executor: &mut E,
     ) -> Result<DiffusionRunOutcome, DiffusionError> {
+        if let Some(id) = self
+            .sessions
+            .iter()
+            .find_map(|(id, session)| session.terminal_notification_pending.then_some(*id))
+        {
+            self.notify_session_end(id, executor);
+        }
         let Some(task_id) = self.scheduler.start_next(TaskKind::Compute) else {
             return Ok(DiffusionRunOutcome::Idle);
         };
@@ -395,6 +414,7 @@ impl DiffusionOrchestrator {
             self.metrics.steps_cancelled = self.metrics.steps_cancelled.saturating_add(1);
             self.cancel_pending_steps(session_id, Some(task_id))?;
             self.finish_cancelled(session_id);
+            self.notify_session_end(session_id, executor);
             return Ok(DiffusionRunOutcome::SessionCancelled {
                 session_id,
                 task_id,
@@ -403,7 +423,19 @@ impl DiffusionOrchestrator {
         }
 
         let started_at = Instant::now();
-        let execution = executor.execute_step(step);
+        // A panic must not strand the session task in Running forever: unwind is
+        // converted into the same failed-step path as an ordinary executor error,
+        // so the session becomes terminal and `on_session_end` still runs
+        // (residency and cache release depend on that notification).
+        let execution = catch_unwind(AssertUnwindSafe(|| executor.execute_step(step)))
+            .unwrap_or_else(|payload| {
+                let message = payload
+                    .downcast_ref::<&str>()
+                    .copied()
+                    .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                    .unwrap_or("diffusion executor panicked with a non-string payload");
+                Err(format!("executor panicked: {message}"))
+            });
         let elapsed_ns = u64::try_from(started_at.elapsed().as_nanos()).unwrap_or(u64::MAX);
         self.metrics.execution_duration_ns = self
             .metrics
@@ -446,8 +478,10 @@ impl DiffusionOrchestrator {
                 session.snapshot.current_step = None;
                 if session.snapshot.completed_steps == session.snapshot.total_steps {
                     session.snapshot.state = DiffusionSessionState::Completed;
+                    session.terminal_notification_pending = true;
                     self.metrics.sessions_completed =
                         self.metrics.sessions_completed.saturating_add(1);
+                    self.notify_session_end(session_id, executor);
                     Ok(DiffusionRunOutcome::SessionCompleted {
                         session_id,
                         task_id,
@@ -456,6 +490,7 @@ impl DiffusionOrchestrator {
                 } else if cancelled_after_step {
                     self.cancel_pending_steps(session_id, None)?;
                     self.finish_cancelled(session_id);
+                    self.notify_session_end(session_id, executor);
                     Ok(DiffusionRunOutcome::SessionCancelled {
                         session_id,
                         task_id,
@@ -486,7 +521,9 @@ impl DiffusionOrchestrator {
                 session.snapshot.state = DiffusionSessionState::Failed;
                 session.snapshot.current_step = None;
                 session.snapshot.error = Some(error.clone());
+                session.terminal_notification_pending = true;
                 self.metrics.sessions_failed = self.metrics.sessions_failed.saturating_add(1);
+                self.notify_session_end(session_id, executor);
                 Ok(DiffusionRunOutcome::StepFailed {
                     session_id,
                     task_id,
@@ -563,9 +600,36 @@ impl DiffusionOrchestrator {
             if !session.snapshot.state.is_terminal() {
                 session.snapshot.state = DiffusionSessionState::Cancelled;
                 session.snapshot.current_step = None;
+                session.terminal_notification_pending = true;
                 self.metrics.sessions_cancelled = self.metrics.sessions_cancelled.saturating_add(1);
             }
         }
+    }
+
+    fn notify_session_end<E: DiffusionExecutor>(
+        &mut self,
+        id: DiffusionSessionId,
+        executor: &mut E,
+    ) {
+        if let Some(session) = self.sessions.get_mut(&id) {
+            if session.terminal_notification_pending {
+                session.terminal_notification_pending = false;
+                executor.on_session_end(id, session.snapshot.state);
+            }
+        }
+    }
+
+    /// Cancel a session and synchronously notify the adapter when cancellation
+    /// reaches a terminal state immediately. Running work remains cooperative;
+    /// its callback is issued by run_one after the in-flight step returns.
+    pub fn cancel_with_executor<E: DiffusionExecutor>(
+        &mut self,
+        id: DiffusionSessionId,
+        executor: &mut E,
+    ) -> Result<(), DiffusionError> {
+        self.cancel(id)?;
+        self.notify_session_end(id, executor);
+        Ok(())
     }
 
     pub fn session(
@@ -888,5 +952,143 @@ mod tests {
             orchestrator.session(id).unwrap().state,
             DiffusionSessionState::Cancelled
         );
+    }
+
+    #[derive(Default)]
+    struct CleanupRecorder {
+        ended: Vec<(DiffusionSessionId, DiffusionSessionState)>,
+    }
+
+    impl DiffusionExecutor for CleanupRecorder {
+        fn execute_step(&mut self, _step: DiffusionStep) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn on_session_end(&mut self, id: DiffusionSessionId, state: DiffusionSessionState) {
+            self.ended.push((id, state));
+        }
+    }
+
+    #[test]
+    fn queued_cancel_flushes_adapter_cleanup_on_next_safe_runtime_call() {
+        let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let id = orchestrator
+            .submit(plan(), CancellationToken::new(), TaskPriority::Normal)
+            .unwrap();
+        orchestrator.cancel(id).unwrap();
+        assert_eq!(
+            orchestrator.session(id).unwrap().state,
+            DiffusionSessionState::Cancelled
+        );
+
+        let mut recorder = CleanupRecorder::default();
+        assert_eq!(
+            orchestrator.run_one(&mut recorder).unwrap(),
+            DiffusionRunOutcome::Idle
+        );
+        assert_eq!(recorder.ended, vec![(id, DiffusionSessionState::Cancelled)]);
+    }
+
+    #[test]
+    fn cancel_with_executor_flushes_cleanup_immediately_at_a_safe_boundary() {
+        let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let id = orchestrator
+            .submit(plan(), CancellationToken::new(), TaskPriority::Normal)
+            .unwrap();
+        let mut recorder = CleanupRecorder::default();
+        orchestrator
+            .cancel_with_executor(id, &mut recorder)
+            .unwrap();
+        assert_eq!(recorder.ended, vec![(id, DiffusionSessionState::Cancelled)]);
+    }
+
+    #[test]
+    fn cancellation_during_a_step_notifies_adapter_after_the_step_returns() {
+        struct CancelDuringStep {
+            token: CancellationToken,
+            ended: Vec<DiffusionSessionState>,
+        }
+        impl DiffusionExecutor for CancelDuringStep {
+            fn execute_step(&mut self, _step: DiffusionStep) -> Result<(), String> {
+                self.token.cancel();
+                Ok(())
+            }
+            fn on_session_end(&mut self, _id: DiffusionSessionId, state: DiffusionSessionState) {
+                self.ended.push(state);
+            }
+        }
+
+        let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let token = CancellationToken::new();
+        let id = orchestrator
+            .submit(plan(), token.clone(), TaskPriority::Normal)
+            .unwrap();
+        let mut executor = CancelDuringStep {
+            token,
+            ended: Vec::new(),
+        };
+        assert!(matches!(
+            orchestrator.run_one(&mut executor).unwrap(),
+            DiffusionRunOutcome::SessionCancelled { .. }
+        ));
+        assert_eq!(
+            orchestrator.session(id).unwrap().state,
+            DiffusionSessionState::Cancelled
+        );
+        assert_eq!(executor.ended, vec![DiffusionSessionState::Cancelled]);
+    }
+
+    #[derive(Default)]
+    struct Panicking {
+        ended: Vec<DiffusionSessionState>,
+    }
+    impl DiffusionExecutor for Panicking {
+        fn execute_step(&mut self, _step: DiffusionStep) -> Result<(), String> {
+            panic!("synthetic adapter panic");
+        }
+        fn on_session_end(&mut self, _id: DiffusionSessionId, state: DiffusionSessionState) {
+            self.ended.push(state);
+        }
+    }
+
+    /// A panic inside an adapter is a bug in that adapter, not a licence to lose
+    /// the session: without containment the task stays `Running` forever, the
+    /// session never joins the closed set, and `on_session_end` (residency and
+    /// cache release) is never called.
+    #[test]
+    fn a_panicking_adapter_fails_the_session_instead_of_leaking_the_task() {
+        let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let id = orchestrator
+            .submit(plan(), CancellationToken::new(), TaskPriority::Normal)
+            .unwrap();
+        let mut adapter = Panicking::default();
+        let hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            orchestrator.run_one(&mut adapter)
+        }));
+        std::panic::set_hook(hook);
+
+        let outcome = outcome
+            .expect("run_one must not unwind out of the orchestrator")
+            .unwrap();
+        assert!(
+            matches!(outcome, DiffusionRunOutcome::StepFailed { .. }),
+            "unexpected outcome: {outcome:?}"
+        );
+        let session = orchestrator.session(id).unwrap();
+        assert_eq!(session.state, DiffusionSessionState::Failed);
+        let reason = session.error.clone().expect("a panic must be recorded");
+        assert!(reason.contains("panicked"), "unhelpful reason: {reason}");
+        // The failed session leaves no runnable task, and the terminal
+        // notification still reaches the adapter.
+        assert!(
+            matches!(
+                orchestrator.run_one(&mut adapter),
+                Ok(DiffusionRunOutcome::Idle)
+            ),
+            "the failed session must not keep a task queued"
+        );
+        assert_eq!(adapter.ended, vec![DiffusionSessionState::Failed]);
     }
 }
