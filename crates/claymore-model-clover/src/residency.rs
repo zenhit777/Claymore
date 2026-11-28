@@ -1059,9 +1059,7 @@ fn stream_task<D: Device>(
 mod tests {
     use super::*;
     use crate::{ShardLoadPlan, TensorChunkPlan};
-    use claymore_device::{
-        CpuDevice, DeviceBuffer, DeviceCapabilities, DeviceError, DeviceInfo,
-    };
+    use claymore_device::{CpuDevice, DeviceBuffer, DeviceCapabilities, DeviceError, DeviceInfo};
 
     fn fixture_header(entries: &[(&str, &[usize], u64, u64)]) -> Vec<u8> {
         let tensors = entries
