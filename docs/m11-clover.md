@@ -2,11 +2,13 @@
 
 ## Statut
 
-M11 est découpé en cinq incréments (#48 à #52). **M11.1 a été fusionné dans `main` via la PR #53** (merge commit `362be819`, registre A2 mis à jour dans `cb01a77`). La décision A2 est acceptée avec amendements ; A2-B reste volontairement ouverte pour M11.4 (sémantique EOS et traitement des 243 IDs excédentaires), comme consigné dans `docs/audits/m11-architect-decisions.md`. **M11.2 est développé dans la PR #54**, désormais basée directement sur `main` : références CPU GDN, attention, RoPE et contrats numériques dans `claymore-tensor`, sans moteur parallèle. Aucune compatibilité Clover exécutable n'est revendiquée et aucun forward pass n'est lancé.
+M11 est découpé en cinq incréments (#48 à #52). **M11.1 a été fusionné dans `main` via la PR #53** (merge commit `362be819`, registre A2 mis à jour dans `cb01a77`). La décision A2 est acceptée avec amendements ; A2-B reste volontairement ouverte pour M11.4 (sémantique EOS et traitement des 243 IDs excédentaires), comme consigné dans `docs/audits/m11-architect-decisions.md`. **M11.2 a été fusionné dans `main` via la PR #54** : références CPU GDN, attention, RoPE et contrats numériques dans `claymore-tensor`, sans moteur parallèle. **M11.3 est en cours de revue dans la PR #55** ; elle ajoute la référence CPU MoE, le coreset par élément de batch et le streaming/résidence bornée des experts.
 
-- PR #53 : `feat/m11-clover-foundation` → `main`, **fusionnée** le 2026-11-27 ; la branche M11.2 n'est plus empilée dessus.
-- Issue de suivi M11.1 : #48.
-- Aucun payload de tenseur n'est chargé ; aucune VRAM n'est consommée.
+- PR #53 : `feat/m11-clover-foundation` → `main`, fusionnée le 2026-11-27.
+- PR #54 : `feat/m11-clover-cpu-primitives` → `main`, fusionnée le 2026-11-27.
+- PR #55 : `feat/m11-3-clover-moe` → `main`, ouverte ; CI et revue encore obligatoires.
+- Issues de suivi M11.1 à M11.3 : #48 à #50.
+- Les tests M11.3 utilisent le backend CPU simulé ; aucun contexte CUDA ni aucune VRAM physique n'est initialisé.
 
 ## Référence upstream
 
@@ -74,7 +76,7 @@ Le socle Clover comprend :
 
 Le plan de chargement est **metadata-only** : il ne lit pas les payloads, n'alloue aucun tenseur, ne réserve aucune mémoire et n'initialise aucun device. Il n'est pas encore un ordonnanceur de lecture, un transfert asynchrone ou une intégration au MemoryOrchestrator. Ces responsabilités appartiennent aux incréments suivants.
 
-## M11.2 — références CPU et contrats numériques (en cours, PR #54)
+## M11.2 — références CPU et contrats numériques (fusionnée, PR #54)
 
 La PR #54 cible `main` après l'intégration de #53. Elle est prête pour la revue finale ; la CI GitHub stable et MSRV 1.86 est verte sur le HEAD source `c737e02` et sur le HEAD documentaire ultérieur `d5a1de2` (2/2 jobs sur les événements push et pull_request).
 
@@ -93,11 +95,28 @@ Le crate `claymore-model-clover` n'introduit pas de dépendance vers le crate te
 
 Source d'implémentation : `modeling_clover_moe.py` à la révision `4b0402b65e523d0183a14c431955438714cb16ff`. Aucun kernel CUDA, benchmark ni accès VRAM n'est inclus.
 
+## M11.3 — routage MoE, coreset et résidence (PR #55 en revue)
+
+La PR #55 implémente l'issue #50 sans créer de runtime, scheduler ou gestionnaire mémoire parallèle.
+
+- `project_router_logits_cpu` reproduit la projection BF16 sans biais, puis élargit les logits BF16 en FP32 pour le softmax et le routage.
+- `CloverMoeRouter::route_batched` préserve le périmètre du coreset par élément de batch. Le top-k est stable (égalité départagée par l'index expert), le top-p sélectionne le préfixe minimal couvrant la masse, les tokens invalides ne contribuent pas au coreset et ne sont pas masqués.
+- Le coreset est appliqué uniquement en preview. Le top-k du routeur par token reste inchangé ; les experts exclus restent présents dans le top-k avec un poids nul, comme après masquage des logits par `-inf` dans la référence.
+- `execute_moe_cpu` fournit la référence BF16 du calcul SwiGLU, de la réduction FP32 des contributions routées et de la combinaison avec l'expert partagé.
+- `CloverExpertCache` utilise le `DeviceMemoryManager` commun, donc les budgets, l'admission/éviction et les gardes IN_FLIGHT du `MemoryOrchestrator` existant. Les poids des experts routés **et de l'expert partagé** sont lus à partir du `CloverLoadPlan` par intersections de chunks Safetensors bornés ; aucune allocation de payload complet du modèle n'est créée. Le backend CPU peut matérialiser un seul expert résident en BF16 pour la référence numérique.
+- `prefetch_requests_for_routing` déduplique les experts issus du coreset et les routes actives des tokens invalides ; les experts masqués à poids nul ne sont pas préchargés. `CloverExpertPrefetchRequest` ordonne le préchargement par priorité décroissante, puis couche/expert croissants.
+- `CloverExpertLoadSchedule` soumet au scheduler commun un identifiant de tâche Prefetch puis une tâche Compute qui en dépend. Les plages/chunks restent dans les descripteurs du transfert, hors du graphe scheduler ; aucun tenseur ou buffer n'est stocké dans les tâches.
+- Les compteurs exposent requêtes, hits/misses, résidents, évictions, octets transférés, échecs, annulations, admissions refusées, synchronisations et protections IN_FLIGHT. Les écritures de ce chemin sont synchrones ; il n'ajoute pas d'attente asynchrone artificielle.
+
+Les tests CPU/fakes couvrent les égalités, la projection BF16, le routage par batch, les lignes invalides, NaN, le calcul expert partagé, les plages de chunks, le chargement, l'annulation après transfert partiel, le rollback sur erreur de lecture, la pression mémoire, le refus d'éviction d'un expert en vol et l'ordre déterministe de préchargement.
+
+**État de validation :** les workflows `Format, test, and lint` et `Minimum supported Rust 1.86` sont verts sur le HEAD `176efad315e7e64e6e3a7ba053200d16eab8a015` (run Rust CI #46152142329, deux jobs `success`). La revue de code Tech-Lead est terminée sans défaut bloquant propre au périmètre M11.3 identifié ; l'approbation finale de l'architecte reste attendue. Aucune validation matérielle n'est revendiquée. Aucun test GPU, kernel CUDA ou benchmark n'est requis pour #50.
+
 ## Contraintes d'intégration
 
 - Le seul runtime et orchestrateur de génération restent ceux de Claymore.
 - Les tenseurs et buffers restent possédés par les couches d'exécution et de mémoire ; le scheduler ne transporte que des identifiants.
-- Le streaming effectif des poids par shards/chunks, l'admission via MemoryOrchestrator et la résidence/éviction des experts seront implémentés dans les phases suivantes.
+- Le streaming par shards/chunks, l'admission et la résidence/éviction des experts sont implémentés dans la PR #55 ; ils restent soumis à sa validation complète et à sa fusion avant d'être considérés comme livrés.
 - Pas de fallback CPU implicite, cast implicite, FP16, quantification, multi-GPU ou benchmark M12 sans décision architecturale.
 - Toute opération CUDA sur RTX 5090 requiert un préflight, un budget annoncé et une autorisation explicite ponctuelle de l'utilisateur. Aucun agent ne peut consommer de VRAM sans cette autorisation.
 

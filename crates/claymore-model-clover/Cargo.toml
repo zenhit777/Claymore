@@ -7,6 +7,11 @@ license.workspace = true
 
 [dependencies]
 claymore-checkpoint = { path = "../claymore-checkpoint" }
+claymore-core = { path = "../claymore-core" }
+claymore-device = { path = "../claymore-device" }
+claymore-memory = { path = "../claymore-memory" }
+claymore-scheduler = { path = "../claymore-scheduler" }
+claymore-tensor = { path = "../claymore-tensor" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
