@@ -15,10 +15,11 @@ use claymore_scheduler::{
 use thiserror::Error;
 
 use crate::{
-    CancellationToken, DiffusionError, DiffusionExecutor, DiffusionMetrics, DiffusionOrchestrator,
-    DiffusionPlan, DiffusionRunOutcome, DiffusionSessionId, DiffusionSessionSnapshot,
-    ExecutionReport, GenerationStrategy, HardwareProfile, HardwareProfileError, RequestInput,
-    RequestState, Runtime, RuntimeConfig, RuntimeError,
+    CancellationToken, DiffusionError, DiffusionExecutor, DiffusionExecutorKey, DiffusionMetrics,
+    DiffusionOrchestrator, DiffusionPlan, DiffusionReclaimReport, DiffusionRunOutcome,
+    DiffusionSessionId, DiffusionSessionSnapshot, ExecutionReport, GenerationStrategy,
+    HardwareProfile, HardwareProfileError, RequestInput, RequestState, Runtime, RuntimeConfig,
+    RuntimeError,
 };
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -143,27 +144,41 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
         Ok(task_id)
     }
 
+    /// Declare one diffusion adapter instance usable with the embedded
+    /// diffusion orchestrator. Issue one key per adapter instance.
+    pub fn register_diffusion_executor(&mut self) -> DiffusionExecutorKey {
+        self.diffusion.register_executor()
+    }
+
     /// Admit a block-based diffusion plan through the ScheduledRuntime facade.
     ///
     /// Diffusion steps use a dedicated scheduler instance with the same
     /// validated configuration as request/transfer scheduling. This keeps
     /// diffusion's multi-step lifecycle independent from opaque request
     /// payloads while preserving the same deterministic scheduler semantics.
+    /// The diffusion scheduler's task identities are typed separately
+    /// (`DiffusionTaskId`), so they can never be routed into the request-side
+    /// `cancel_queued`/`task` API (M11.4 review P7).
     pub fn submit_diffusion(
         &mut self,
         plan: DiffusionPlan,
         cancellation: CancellationToken,
         priority: TaskPriority,
+        executor: DiffusionExecutorKey,
     ) -> Result<DiffusionSessionId, ScheduledRuntimeError> {
-        Ok(self.diffusion.submit(plan, cancellation, priority)?)
+        Ok(self
+            .diffusion
+            .submit(plan, cancellation, priority, executor)?)
     }
 
-    /// Execute at most one ready diffusion step on the caller/owner thread.
+    /// Execute at most one ready diffusion step of a session bound to
+    /// `executor`, on the adapter paired with that key.
     pub fn run_diffusion_one<E: DiffusionExecutor>(
         &mut self,
-        executor: &mut E,
+        executor: DiffusionExecutorKey,
+        adapter: &mut E,
     ) -> Result<DiffusionRunOutcome, ScheduledRuntimeError> {
-        Ok(self.diffusion.run_one(executor)?)
+        Ok(self.diffusion.run_one(executor, adapter)?)
     }
 
     pub fn diffusion_session(
@@ -184,6 +199,11 @@ impl<S: GenerationStrategy> ScheduledRuntime<S> {
     ) -> Result<(), ScheduledRuntimeError> {
         self.diffusion.cancel(id)?;
         Ok(())
+    }
+
+    /// Reclaim closed diffusion sessions (bounded retention, P8).
+    pub fn reclaim_diffusion_sessions(&mut self) -> DiffusionReclaimReport {
+        self.diffusion.reclaim_closed_sessions()
     }
 
     /// Execute at most one ready Compute request. Blocked requests remain
@@ -646,13 +666,17 @@ mod tests {
     fn scheduled_runtime_facade_drives_diffusion_sessions() {
         use crate::{
             BlockId, DiffusionExecutor, DiffusionPlan, DiffusionRunOutcome, DiffusionStep,
+            DiffusionStepOutcome,
         };
 
         struct StepCounter(Cell<usize>);
         impl DiffusionExecutor for StepCounter {
-            fn execute_step(&mut self, _step: DiffusionStep) -> Result<(), String> {
+            fn execute_step(
+                &mut self,
+                _step: DiffusionStep,
+            ) -> Result<DiffusionStepOutcome, String> {
                 self.0.set(self.0.get() + 1);
-                Ok(())
+                Ok(DiffusionStepOutcome::Executed)
             }
         }
 
@@ -667,12 +691,13 @@ mod tests {
             DiffusionStep::CommitBlock { block: BlockId(0) },
         ])
         .unwrap();
+        let key = runtime.register_diffusion_executor();
         let id = runtime
-            .submit_diffusion(plan, CancellationToken::new(), TaskPriority::Normal)
+            .submit_diffusion(plan, CancellationToken::new(), TaskPriority::Normal, key)
             .unwrap();
         let mut executor = StepCounter(Cell::new(0));
         loop {
-            match runtime.run_diffusion_one(&mut executor).unwrap() {
+            match runtime.run_diffusion_one(key, &mut executor).unwrap() {
                 DiffusionRunOutcome::StepCompleted { .. } => {}
                 DiffusionRunOutcome::SessionCompleted { .. } => break,
                 other => panic!("unexpected diffusion outcome: {other:?}"),
@@ -684,5 +709,80 @@ mod tests {
             crate::DiffusionSessionState::Completed
         );
         assert_eq!(runtime.diffusion_metrics().steps_completed, 4);
+    }
+
+    /// P7: the request scheduler and the diffusion scheduler allocate opaque
+    /// ids from colliding counters, so identity separation must be typed. A
+    /// diffusion step task is reported as `DiffusionTaskId`, which the
+    /// request-side API (`cancel_queued`, `task`) does not accept — attempting
+    /// to pass one is a compile error. The runtime assertion below proves the
+    /// live request task survives request-side operations while diffusion runs
+    /// on its own scheduler with the numerically identical raw id.
+    #[test]
+    fn diffusion_and_request_task_identifier_spaces_cannot_be_confused() {
+        use crate::{
+            BlockId, DiffusionExecutor, DiffusionPlan, DiffusionRunOutcome, DiffusionStep,
+            DiffusionStepOutcome,
+        };
+
+        struct Nop;
+        impl DiffusionExecutor for Nop {
+            fn execute_step(
+                &mut self,
+                _step: DiffusionStep,
+            ) -> Result<DiffusionStepOutcome, String> {
+                Ok(DiffusionStepOutcome::Executed)
+            }
+        }
+
+        let mut runtime = runtime(Echo);
+        let request = runtime
+            .submit_request(
+                RequestInput::new([7_u8, 7]),
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                [],
+            )
+            .unwrap();
+        let key = runtime.register_diffusion_executor();
+        let _session = runtime
+            .submit_diffusion(
+                DiffusionPlan::new(vec![
+                    DiffusionStep::PrepareBlock { block: BlockId(0) },
+                    DiffusionStep::Denoise {
+                        block: BlockId(0),
+                        iteration: 0,
+                    },
+                    DiffusionStep::ValidateBlock { block: BlockId(0) },
+                    DiffusionStep::CommitBlock { block: BlockId(0) },
+                ])
+                .unwrap(),
+                CancellationToken::new(),
+                TaskPriority::Normal,
+                key,
+            )
+            .unwrap();
+        // Both schedulers allocate from independent opaque counters, so their
+        // raw id spaces overlap by construction (each starts at 1); the type
+        // separation below is what makes the overlap unexploitable.
+
+        let mut nop = Nop;
+        let outcome = runtime.run_diffusion_one(key, &mut nop).unwrap();
+        let task_id = match outcome {
+            DiffusionRunOutcome::StepCompleted { task_id, .. } => task_id,
+            other => panic!("unexpected diffusion outcome: {other:?}"),
+        };
+        // `task_id: DiffusionTaskId` — distinct from `claymore_scheduler::TaskId`.
+        // `runtime.cancel_queued(task_id)` does not compile, so the collision
+        // above can never be exploited through the public API.
+        let _: crate::DiffusionTaskId = task_id;
+
+        // Cancelling the request task by its own id leaves diffusion running.
+        runtime.cancel_queued(request).unwrap();
+        assert_eq!(runtime.task(request).unwrap().state, TaskState::Cancelled);
+        assert!(matches!(
+            runtime.run_diffusion_one(key, &mut nop).unwrap(),
+            DiffusionRunOutcome::StepCompleted { .. }
+        ));
     }
 }

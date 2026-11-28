@@ -11,6 +11,7 @@ claymore-core = { path = "../claymore-core" }
 claymore-device = { path = "../claymore-device" }
 claymore-memory = { path = "../claymore-memory" }
 claymore-scheduler = { path = "../claymore-scheduler" }
+claymore-runtime = { path = "../claymore-runtime" }
 claymore-tensor = { path = "../claymore-tensor" }
 serde = { workspace = true }
 serde_json = { workspace = true }

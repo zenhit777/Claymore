@@ -614,7 +614,8 @@ pub use profile::{
 /// Shared block-based diffusion generation orchestration.
 pub mod diffusion;
 pub use diffusion::{
-    BlockId, DiffusionError, DiffusionExecutor, DiffusionMetrics, DiffusionOrchestrator,
-    DiffusionPlan, DiffusionRunOutcome, DiffusionSessionId, DiffusionSessionSnapshot,
-    DiffusionSessionState, DiffusionStep,
+    BlockId, DiffusionError, DiffusionExecutor, DiffusionExecutorKey, DiffusionMetrics,
+    DiffusionOrchestrator, DiffusionPlan, DiffusionReclaimReport, DiffusionRunOutcome,
+    DiffusionSessionId, DiffusionSessionSnapshot, DiffusionSessionState, DiffusionStep,
+    DiffusionStepOutcome, DiffusionTaskId,
 };
