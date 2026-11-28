@@ -110,7 +110,7 @@ La PR #55 implémente l'issue #50 sans créer de runtime, scheduler ou gestionna
 
 Les tests CPU/fakes couvrent les égalités, la projection BF16, le routage par batch, les lignes invalides, NaN, le calcul expert partagé, les plages de chunks, le chargement, l'annulation après transfert partiel, le rollback sur erreur de lecture, la pression mémoire, le refus d'éviction d'un expert en vol et l'ordre déterministe de préchargement.
 
-**État de validation :** les workflows `Format, test, and lint` et `Minimum supported Rust 1.86` sont verts sur le HEAD `eeedd7d98b86c489cb56e05b3473770f6b3861af` (run Rust CI #46151670620, deux jobs `success`). La revue Tech-Lead est en cours ; aucune validation matérielle n'est revendiquée. Aucun test GPU, kernel CUDA ou benchmark n'est requis pour #50.
+**État de validation :** les workflows `Format, test, and lint` et `Minimum supported Rust 1.86` sont verts sur le HEAD `176efad315e7e64e6e3a7ba053200d16eab8a015` (run Rust CI #46152142329, deux jobs `success`). La revue de code Tech-Lead est terminée sans défaut bloquant propre au périmètre M11.3 identifié ; l'approbation finale de l'architecte reste attendue. Aucune validation matérielle n'est revendiquée. Aucun test GPU, kernel CUDA ou benchmark n'est requis pour #50.
 
 ## Contraintes d'intégration
 
