@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use claymore_checkpoint::safetensors::{SafetensorsError, SafetensorsFile, WeightDType};
