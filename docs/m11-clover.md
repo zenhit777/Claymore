@@ -2,7 +2,7 @@
 
 ## Statut
 
-M11 est découpé en cinq incréments (#48 à #52). **M11.1 a été fusionné dans `main` via la PR #53** (merge commit `362be819`, registre A2 mis à jour dans `cb01a77`). La décision A2 est acceptée avec amendements ; A2-B reste volontairement ouverte pour M11.4 (sémantique EOS et traitement des 243 IDs excédentaires), comme consigné dans `docs/audits/m11-architect-decisions.md`. **M11.2 a été fusionné dans `main` via la PR #54** : références CPU GDN, attention, RoPE et contrats numériques dans `claymore-tensor`, sans moteur parallèle. **M11.3 est en cours de revue dans la PR #55** ; elle ajoute la référence CPU MoE, le coreset par élément de batch et le streaming/résidence bornée des experts.
+M11 est découpé en cinq incréments (#48 à #52). **M11.1 a été fusionné dans `main` via la PR #53** (merge commit `362be819`, registre A2 mis à jour dans `cb01a77`). La décision A2 est acceptée avec amendements ; A2-B reste volontairement ouverte pour M11.4 (sémantique EOS et traitement des 243 IDs excédentaires), comme consigné dans `docs/audits/m11-architect-decisions.md`. **M11.2 a été fusionné dans `main` via la PR #54** : références CPU GDN, attention, RoPE et contrats numériques dans `claymore-tensor`, sans moteur parallèle. **M11.3 est en cours de revue dans la PR #55** ; elle ajoute la référence CPU MoE, le coreset par élément de batch et le streaming/résidence bornée des experts. **M11.4 est en cours de revue dans la PR #56 (Draft, branche `feat/m11-4-clover-lowconfidence`, base #55)**. État vérifié le 28/11 après prise en charge Tech-Lead : une revue COMMENT initiale a été publiée sur #55 (non approbative, audit approfondi en cours) et une revue COMMENT initiale sur #56 (non approbative). #55 est verte sur son HEAD `6d56e63b71d25725f646cdbf8076a68a14196869` (run #46133255162). #56 reste Draft, empilée sur `feat/m11-3-clover-moe` (PR #55), HEAD `29b7dcc896529f643a89f8a87186c70939a169b3`, CI Rust #46134061308 verte. Le dossier [`docs/audits/m11.4-review-readiness-2026-11-28.md`](audits/m11.4-review-readiness-2026-11-28.md) fait l'inventaire exigible pour la revue : matrice exigences #51 → implémentation → tests → preuves, corrections livrées, défauts remontés non corrigés, et points d'arbitrage architecte.
 
 - PR #53 : `feat/m11-clover-foundation` → `main`, fusionnée le 2026-11-27.
 - PR #54 : `feat/m11-clover-cpu-primitives` → `main`, fusionnée le 2026-11-27.
@@ -110,7 +110,7 @@ La PR #55 implémente l'issue #50 sans créer de runtime, scheduler ou gestionna
 
 Les tests CPU/fakes couvrent les égalités, la projection BF16, le routage par batch, les lignes invalides, NaN, le calcul expert partagé, les plages de chunks, le chargement, l'annulation après transfert partiel, le rollback sur erreur de lecture, la pression mémoire, le refus d'éviction d'un expert en vol et l'ordre déterministe de préchargement.
 
-**État de validation :** les workflows `Format, test, and lint` et `Minimum supported Rust 1.86` sont verts sur le HEAD `6d56e63b71d25725f646cdbf8076a68a14196869` (run Rust CI #46133255162, conclusion `success`). La revue Tech-Lead est en cours ; aucune validation matérielle n'est revendiquée. Aucun test GPU, kernel CUDA ou benchmark n'est requis pour #50.
+**État de validation :** les workflows `Format, test, and lint` et `Minimum supported Rust 1.86` sont verts sur le HEAD de la PR #55 `6d56e63b71d25725f646cdbf8076a68a14196869` (run #46133255162). La PR #55 reste ouverte pour revue et fusion ; aucune validation matérielle n'est revendiquée. Aucun test GPU, kernel CUDA ou benchmark n'est requis pour #50.
 
 ## Contraintes d'intégration
 
@@ -132,3 +132,91 @@ Items de validation du rafraîchissement CPU-only (`docs/audits/prompts/m11.1-cp
 4. **fait** : la PR #53 a été fusionnée et la décision A2 acceptée avec amendements ; A2-B reste ouverte pour M11.4, conformément au registre architectural.
 
 Aucun forward pass, aucune génération, aucun kernel CUDA ni aucune validation RTX 5090 n'est requis pour M11.1. La campagne RTX appartient à #52, après les incréments CPU. Voir `docs/audits/m11.1-final-replay-2026-11-26.md`, `docs/audits/m11.1-audit-corrections-2026-11-26.md` et `docs/audits/prompts/m11.1-cpu-evidence-refresh-agent.md`.
+
+
+## M11.4 — graphe et LowConfidence (en cours, branche `feat/m11-4-clover-lowconfidence`)
+
+La première tranche d'intégration ajoute le graphe Clover et l'adaptateur de génération au-dessus de l'API M9 existante, sans créer de runtime ou d'orchestrateur modèle parallèle.
+
+- `CloverGraph` construit l'ordre exact à partir de `config.layer_types`. Pour chaque couche, il exécute la normalisation d'entrée, GDN ou full-attention, le résiduel, la normalisation post-attention, la projection routeur, le top-k/coreset de #50, le MoE incluant l'expert partagé, puis le résiduel. La normalisation finale et la projection LM head same-position sont exécutées pour le preview seulement.
+- `CloverGraphBackend` est le contrat de calcul : les poids, tenseurs, caches GDN/KV et la résidence des experts restent détenus par le backend et les services mémoire communs. Un preview doit être strictement read-only sur les états propres ; le préfill et le replay causal sont les seuls chemins qui les avancent.
+- `CloverDiffusionExecutor` implémente `DiffusionExecutor` de M9. Il prépare un bloc complet de tokens masque, lance les previews same-position, applique LowConfidence strict (`confidence > threshold`), remplit toutes les positions admissibles ou la plus confiante si aucune ne passe, valide le bloc, puis ne rejoue causalement que le préfixe émis lorsqu'un bloc suivant est nécessaire.
+- Les blocs de sortie incomplets sont tout de même débruités à leur taille de preview complète, conformément à l'upstream. EOS est évalué en ordre positionnel après résolution complète du bloc ; les positions antérieures à l'EOS sont conservées.
+- La sémantique EOS suit le code pinned : liste EOS de génération si fournie, sinon repli sur `config.eos_token_id`, union avec `stop_token_ids`, déduplication et tri ; PAD suit `generation_config.pad_token_id`, puis `config.pad_token_id`, puis le premier terminal, puis zéro.
+- Les pénalités présence/fréquence/répétition et les biais longueur/think-end ne comptent que les tokens de réponse déjà committés. Les tokens non committés du bloc ne se pénalisent pas mutuellement. La confiance reste calculée sur les logits FP32 non divisés par la température, même en mode sampling.
+- M9 notifie désormais l'adaptateur à la fin d'une session ; l'annulation d'une session encore en file peut être vidée via `cancel_with_executor`. Le backend peut ainsi libérer les états propres sans placer de buffers dans le scheduler.
+- La politique concernant les 243 lignes de tête sans ID tokenizer reste ouverte (A2-B) : `CloverGenerationOptions` exige un choix explicite `Reject` ou `Mask`, sans valeur par défaut.
+
+**Couverture CPU ajoutée :** parcours layer-by-layer avec résidus et logits same-position dorés, motif pinned 30 GDN / 10 full-attention, top-8 sur 256 experts, LowConfidence multi-blocs et bloc final incomplet, fallback strict, EOS/stop/PAD, répétition/présence/fréquence, length/think-end, politiques Reject/Mask explicites, replay causal, annulation avant/pendant/après bloc, échec MoE, limite de contexte et isolation par exécuteurs/orchestrateurs indépendants.
+
+**Première brique de chargement réel (commit `78c6918`) :** `CloverCheckpointInventory::read_bf16_range()` lit une plage d'éléments BF16 d'un tenseur indexé en s'appuyant sur les offsets Safetensors déjà validés. Chaque lecture est limitée à 8 MiB, vérifie le dtype et les bornes en éléments, et n'alloue ni le shard complet ni le tenseur complet. L'API retourne les motifs BF16 stockés sans conversion numérique ; le consommateur peut ainsi construire des lecteurs de matrices et des opérateurs en streaming. Les tests couvrent la lecture d'une plage, une plage hors limites et un nom de tenseur absent. Cette API ne constitue pas encore le backend d'exécution. Le nouveau `CloverCpuWeightStore` s'appuie sur ce lecteur pour effectuer le gather d'embeddings et les projections linéaires BF16 bias-free. Les projections accumulent en FP32, arrondissent en BF16 en sortie et lisent les matrices par tuiles de 8 MiB maximum. Les tests de fixture Safetensors vérifient l'embedding, la projection dense, la projection routeur (sortie BF16 élargie en FP32), RMSNorm zero-centered, les IDs hors vocabulaire ainsi que les erreurs de forme et de tenseur absent.
+
+**Limite actuelle :** ce commit établit la composition du graphe et le contrat du backend, avec une implémentation backend synthétique dans les tests. Il ne prétend pas encore charger le checkpoint réel ni fournir un backend complet de matérialisation/exécution des poids Clover. La génération réelle à partir des 69,3 GB reste bloquée tant que ce backend n'est pas relié aux poids et aux opérations CPU de référence. #51 reste ouverte : aucune validation complète ni clôture d'issue ne sera revendiquée sur la seule base du graphe synthétique. Aucun contexte CUDA ou VRAM n'est initialisé.
+
+### Backend CPU concret et boucle LowConfidence de bout en bout (M11.4)
+
+`CloverCpuBackend` (`crates/claymore-model-clover/src/cpu_backend.rs`) implémente `CloverGraphBackend` en composant strictement les primitives CPU épinglées de `claymore-tensor` et les services M9/M10 existants : aucune arithmétique propre.
+
+- GDN : dérivation des portes (decay FP32, beta arrondi en BF16 comme l'upstream), convolution causale avec historique propre avancé seulement après le dernier read faillible de la couche (`out_proj`), convolution bidirectionnelle de preview avec poids de contexte droit distincts, `recurrent_commit` causale ou `preview` lecture seule, RMSNorm non centré sur la largeur de tête de valeur × `silu(z)` en un seul arrondi, puis `out_proj`. Les tokens invalides sont remis à zéro avant toute projection, comme `CloverGatedDeltaNet.forward`.
+- Full-attention : dé-interleassage `[tête | gate]` de `q_proj`, RMSNorm zéro-centrés Q/K, RoPE partiel avec cos/sin arrondis en BF16 avant rotation (production du `theta` et du `partial_rotary_factor` épinglés), masque additif `full_attention_mask(prefix, block, preview)`, scores FP32 à l'échelle `1/sqrt(head_dim)`, GQA, gate de sortie, puis `o_proj`. La clé est stockée après norm+RoPE, la valeur brute ; l'état KV est FP32, arrondi BF16 uniquement aux points d'activation épinglés — documenté dans le code.
+- Résidence : ordre de prefetch déterministe identique à `prefetch_ordered` (priorité décroissante, puis couche et expert croissants), puis pour chaque expert routé à poids non nul un `ensure_resident` immédiatement suivi du read — sous budget plus petit que l'ensemble routé, le LRU ne peut pas strandé un expert entre son chargement et son usage. Les experts à poids nul (tokens invalides masqués) ne sont jamais chargés ; l'expert partagé est chargé après les routés.
+- Le cache KV n'est avancé qu'après succès complet de l'opération causale ; une erreur en cours de calcul (shard tronqué après construction, test `attention_rollback_on_io_failure_keeps_cache` et son équivalent GDN) laisse tous les états bit à bit identiques. La politique d'annulation est transmise à `ensure_resident_with_cancel` et comptée dans les métriques de résidence.
+
+`tests/m11_4_low_confidence.rs` exécute la boucle complète : `CloverDiffusionExecutor` + `CloverCpuBackend` + `DiffusionOrchestrator`/`Scheduler` sur un checkpoint synthétique à topologie épinglée (générateur `synth_checkpoint`, aucun téléchargement). Vérifié : acceptation LowConfidence du premier bloc puis coupure stricte à l'EOS ; threshold 1.0 → fallback sur toutes les itérations du bloc avec longueur complète ; trajectoire gloutonne reproductible entre deux backends neufs ; préfill commité (compteurs GDN/KV = prompt) et previews postérieurs laissant tout l'état propre bit à bit identique ; nettoyage des états et de la résidence des experts à la fin de session. Le checkpoint réel n'est pas requis par ces tests.
+
+`tests/m11_4_pinned_checkpoint.rs` (ignoré, `CLAYMORE_M11_CHECKPOINT` obligatoire, `CLAYMORE_M11_VERIFY_SHA=1` optionnel pour le re-hash complet des 28 artefacts) couvre sur le checkpoint authentique : inspection épinglée (813 tenseurs, 26 shards, 2 sidecars, 34 661 350 848 paramètres, payload 69 322 701 696 octets), schéma épinglé, plan de chargement 28 shards / 8 845 chunks ≤ 8 MiB, preview read-only et préfill causal, plus un scénario LowConfidence multi-blocs (3 tokens générés, bloc 2) sur les vrais poids. Ce dernier vérifie le rejeu causal du premier bloc, les états GDN/KV avant le second bloc et l'adressabilité tokenizer des tokens produits. Ces tests nécessitent `CLAYMORE_M11_CHECKPOINT` et sont ignorés en CI.
+
+**Exécution sur le checkpoint authentique (27/11).** Le snapshot complet est présent en local (26 shards, 69,32 GB, sidecars GDN et sources Python) ; rien n'est téléchargé par les tests, `CLAYMORE_M11_CHECKPOINT` pointe sur le snapshot Hugging Face local et l'absence du chemin ignore proprement les tests. Trois niveaux de preuve, tous exécutés :
+
+- `tests/m11_4_pinned_checkpoint.rs` — inspection épinglée, schéma, plan de chargement, puis `forward_preview` de bout en bout sur les poids réels : **vert en 651,47 s**.
+- `tests/m11_4_low_confidence.rs` — contrat LowConfidence de bout en bout sur le backend CPU réel (`CloverCpuBackend` + graphe complet 40 couches) : 15 tests, dont le rejet d'une pénalité dont l'empreinte ne correspond pas aux tenseurs nommés (`active_penalties_are_validated_and_executed_end_to_end`), l'exécution effective de la trajectoire pénalisée (le point le plus bas de la pénalité est atteint et modifie les logits), l'annulation pendant le streaming expert, terminale et nettoyée (`cancellation_during_expert_streaming_is_terminal_and_clears_state`), l'absence de tout forward quand la session est annulée avant son premier pas (`a_session_cancelled_before_its_first_step_runs_no_forward`), l'échec d'E/S expert terminal avec nettoyage (`expert_stream_io_failure_is_terminal_and_clears_state`), le refus avant tout forward d'un bloc dépassant le contexte, l'isolation de deux sessions à budgets indépendants et la égalité du rejeu causal incrémental avec un préfill en une passe : **15/15 verts**.
+- `tests/m11_4_upstream_differential.rs` + `tools/m11/gen_m114_reference.py` — différentiel de couches contre l'implémentation upstream épinglée, jouée sur CPU par PyTorch 2.12 pour le prompt `[151644, 872, 198, 9707]`, le préfill 4 tokens et la continuation d'un token, avec un échantillon stride-païen par tenseur et par couche et les agrégats de ligne complète (`absmax`, somme des carrés) : **les deux modes sont verts en 1569,14 s**. Mesures, politique de tolérance et divergences consignées dans [`docs/audits/m11.4-upstream-differential-2026-11-27.md`](audits/m11.4-upstream-differential-2026-11-27.md).
+
+**Limites assumées, mesurées plutôt que supposées.** En routage naturel, les jeux de 8 experts parmi 256 divergent de upstream à partir de la couche 3 (`preview`, `continuation`) et de la couche 1 (`prefill`) — 0 flip à la couche 0 — parce que le top-k sur des logits BF16 est discret sur des quasi-égalités ; le mode épinglé, qui injecte les identifiants et poids amont couche par couche, valide la chaîne numérique complète sur les 40 couches et reproduit le classement des logits (top-1 sur les 4 lignes de preview, recouvrement top-10 complet). La passe causale GDN dérive de l'upstream à mesure que l'état récurrent avance : l'écart élémentaire relatif passe de 1,7·10⁻³ à 5,2·10⁻² entre les couches 0 et 39, alors que la passe bidirectionnelle reste à 2,9·10⁻³ sur la même profondeur. La relecture du code épinglé montre que `causal_conv_silu` upstream utilise des produits dans le dtype d'entrée, une somme FP32, une SiLU FP32 et un cast final, ce que reproduit le chemin Rust ; l'explication initiale par un arrondi séparé de la somme était incorrecte. La cause résiduelle est à isoler dans la récurrence FP32 (`l2_normalize`, réductions `einsum`/`dot`, exponentielle et ordre d'accumulation). **La dérive est mesurée, pas corrigée** : elle reste un point de travail M11.2 (#52), et les tolérances du différentiel ne constituent pas une parité bit à bit. Le code est exécuté exclusivement sur CPU ; aucun contexte CUDA et aucune VRAM ne sont initialisés. #51 reste ouverte.
+
+### Corrections de la revue technique (28/11, PR #56)
+
+Cinq défauts trouvés en revue ont été corrigés en TDD strict — test de non-régression écrit et exécuté
+en **rouge** sur le code d'avant correction, correction minimale, puis vert. Aucune référence dorée ni
+aucune tolérance n'a été modifiée pour faire passer.
+
+1. **Atomicité du commit** (`executor.rs`) : `commit_block` publiait les tokens avant le rejouement
+   causal ; un échec de `forward_causal` laissait donc des tokens publiés sans base causale sur une
+   session Failed. Le rejouement devient la dernière opération faillible, la publication suit.
+   Test : `a_failed_causal_replay_publishes_no_tokens`.
+2. **Réutilisation d'un adaptateur** (`executor.rs`) : rejouer un adaptateur dont la session était
+   terminée marquait la seconde session `Completed` sans préfill et exposait les tokens de la requête
+   précédente. Contrat « un adaptateur = une session » rendu explicite par `on_session_end` qui ferme
+   l'adaptateur ; tout pas ultérieur renvoie `CloverExecutorError::SessionClosed`, le résultat de la
+   requête terminée restant lisible. Test : `a_closed_adapter_refuses_a_second_plan_instead_of_reusing_request_state`.
+3. **Périmètre de la rampe de longueur** (`generation.rs`) : l'amont épinglé construit l'ensemble ciblé
+   comme `eos ∪ stop ∪ {pad}` (`modeling_clover_moe.py:899-901`, `sampling_clover_moe.py:79,116-120`) ;
+   la rampe ne visait que les terminaux. Le PAD n'y entre que s'il vient d'une source réelle, jamais d'un
+   repli inventé. Test : `length_penalty_ramps_the_explicit_pad_token_as_well`. Le cas épinglé masque ce
+   défaut (`pad_token_id 248044 ∈ eos [248046, 248044]`), d'où l'absence de signal jusqu'ici.
+4. **Borne de `think_end_token_id`** (`generation.rs`) : un id au-dessus du vocabulaire tokenizer était
+   accepté, ce qui rend le biais inopérant sous `Mask` (lignes à −inf) et produit une prédiction
+   inutilisable sous `Reject`. `validate` le refuse maintenant par `InvalidTokenId`.
+   Test : `rejects_a_think_end_token_outside_the_tokenizer_vocabulary`.
+5. **Containment de panique dans l'orchestrateur** (`claymore-runtime/src/diffusion.rs`) : `run_one`
+   appelait `execute_step` sans `catch_unwind` ; une panique laissait la tâche `Running` indéfiniment,
+   la session hors de l'ensemble clos, et `on_session_end` (libération de la résidence et des caches)
+   jamais appelé. La panique est convertie dans le chemin d'échec ordinaire, comme le font déjà
+   `claymore-scheduler/src/executor.rs:119-121` et `claymore-runtime/src/scheduled.rs:201-213`.
+   Test : `a_panicking_adapter_fails_the_session_instead_of_leaking_the_task`.
+
+**Revalidation après correction (28/11, CPU uniquement).** `cargo test --workspace --all-targets --locked`
+= 432 passed / 0 failed / 15 ignored (base 427, +5 tests de non-régression), vert aussi sous rustc 1.86.0 ;
+`cargo fmt --all -- --check` et `cargo clippy -p claymore-model-clover -p claymore-tensor -p claymore-runtime
+--all-targets -- -D warnings` propres ; `m11_4_pinned_checkpoint` rejoué sur le checkpoint épinglé **vert en
+664,20 s** ; `m11_4_upstream_differential` rejoué dans les deux modes : **2 tests verts en 1573,95 s,
+`routing_mismatches=0 divergences=0**.
+Les corrections C3 et C4 sont numériquement inertes sur le cas épinglé (`pad 248044 ∈ eos`) et C1/C2/C5 ne
+touchent pas à l'arithmétique — le différentiel le confirme. Détail complet dans
+[`docs/audits/m11.4-review-readiness-2026-11-28.md`](audits/m11.4-review-readiness-2026-11-28.md) §8.
+
+Les défauts R1/R2 de résidence des experts relevés en revue ont été corrigés sur la branche de base M11.3 `feat/m11-3-clover-moe` (commit `6d56e63b71d25725f646cdbf8076a68a14196869`, CI #46133255162) : rollback de libération retentable avec erreur racine conservée, et validation complète du shard Safetensors avant streaming sur le handle conservé. Les points M9 mutualisés avec Gemma (liaison session↔exécuteur, `on_session_end` sans canal d'erreur, métriques de blocs, état d'orchestration non borné) restent ouverts et sont listés, avec les tests proposés, dans
+[`docs/audits/m11.4-review-readiness-2026-11-28.md`](audits/m11.4-review-readiness-2026-11-28.md), qui
+contient aussi la matrice exigences #51 → implémentation → tests → preuves, les statuts M11.3/M11.4, les
+dépendances de PR, les limites CPU/CUDA et la liste des points d'arbitrage laissés à l'architecte
+(A2-B notamment, toujours ouverte).
