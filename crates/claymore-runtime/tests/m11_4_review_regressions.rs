@@ -316,3 +316,74 @@ fn p7_diffusion_task_ids_must_not_reach_the_request_scheduler() {
         DiffusionRunOutcome::StepCompleted { .. }
     ));
 }
+
+/// P4 — a failed terminal cleanup remains pending, blocks reclamation, and is
+/// retried on the next owner-driven run. The adapter callback must be
+/// idempotent because a partial release can fail after releasing some entries.
+#[derive(Default)]
+struct RetryCleanupRecorder {
+    cleanup_calls: usize,
+}
+
+impl DiffusionExecutor for RetryCleanupRecorder {
+    fn execute_step(&mut self, _step: DiffusionStep) -> Result<DiffusionStepOutcome, String> {
+        Ok(DiffusionStepOutcome::Executed)
+    }
+
+    fn on_session_end(
+        &mut self,
+        _id: claymore_runtime::DiffusionSessionId,
+        _state: DiffusionSessionState,
+    ) -> Result<(), String> {
+        self.cleanup_calls += 1;
+        if self.cleanup_calls == 1 {
+            Err("transient release failure".to_owned())
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[test]
+fn p4_failed_cleanup_stays_pending_until_owner_retry_succeeds() {
+    let mut orchestrator = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+    let key = orchestrator.register_executor();
+    let session = orchestrator
+        .submit(plan(), CancellationToken::new(), TaskPriority::Normal, key)
+        .unwrap();
+    let mut adapter = RetryCleanupRecorder::default();
+
+    loop {
+        match orchestrator.run_one(key, &mut adapter).unwrap() {
+            DiffusionRunOutcome::SessionCompleted { .. } => break,
+            DiffusionRunOutcome::StepCompleted { .. } => {}
+            other => panic!("unexpected outcome: {other:?}"),
+        }
+    }
+
+    assert_eq!(adapter.cleanup_calls, 1);
+    assert_eq!(orchestrator.metrics().cleanups_failed, 1);
+    let first_reclaim = orchestrator.reclaim_closed_sessions();
+    assert!(
+        first_reclaim.reclaimed.is_empty(),
+        "a session with failed cleanup must not be reclaimed"
+    );
+    assert_eq!(first_reclaim.deferred_terminal_notification, vec![session]);
+
+    assert!(matches!(
+        orchestrator.run_one(key, &mut adapter).unwrap(),
+        DiffusionRunOutcome::Idle
+    ));
+    assert_eq!(adapter.cleanup_calls, 2, "cleanup must be retried");
+    assert_eq!(
+        orchestrator.session(session).unwrap().error,
+        None,
+        "a successful retry must clear the outstanding cleanup error"
+    );
+
+    let second_reclaim = orchestrator.reclaim_closed_sessions();
+    assert_eq!(second_reclaim.reclaimed, vec![session]);
+    assert!(second_reclaim.deferred_terminal_notification.is_empty());
+    orchestrator.run_one(key, &mut adapter).unwrap();
+    assert_eq!(adapter.cleanup_calls, 2, "cleanup must not be duplicated");
+}
