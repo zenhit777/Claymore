@@ -181,6 +181,14 @@ impl CloverGenerationOptions {
                 return Err(CloverGenerationError::InvalidTokenId(id));
             }
         }
+        // A2-B: the engine must not assume that every id below the model
+        // vocabulary is a token. A think-end id in the unmapped head rows would
+        // be a silent no-op under Mask and an unusable prediction under Reject.
+        if let Some(token) = self.penalties.think_end_token_id {
+            if token as usize >= self.tokenizer_vocab_size {
+                return Err(CloverGenerationError::InvalidTokenId(token));
+            }
+        }
         let pad = self
             .pad_token_id
             .or(config.pad_token_id)
@@ -350,6 +358,16 @@ impl CloverPenaltyState {
         }
         let seen: Vec<bool> = self.counts.iter().map(|&count| count > 0).collect();
         let penalties = &options.penalties;
+        // The length ramp targets the whole termination set upstream uses,
+        // `eos + stop + [pad]` (modeling_clover_moe.py builds the state with
+        // `eos + [pad]`; sampling_clover_moe.py ramps `self.stop_ids`). A PAD
+        // joins only when a real source supplied it, never an invented one.
+        let mut ramp_ids: Vec<u32> = terminal_ids.to_vec();
+        if let Some(pad) = options.pad_token_id {
+            if (pad as usize) < vocab && !ramp_ids.contains(&pad) {
+                ramp_ids.push(pad);
+            }
+        }
         let think_close = penalties.think_end_token_id.map(|id| id as usize);
         let visible_close = think_close
             .map(|close| {
@@ -397,7 +415,7 @@ impl CloverPenaltyState {
                     penalties.length_penalty_window,
                     penalties.length_penalty,
                 );
-                for &id in terminal_ids {
+                for &id in &ramp_ids {
                     row[id as usize] += ramp;
                 }
             }
@@ -721,5 +739,50 @@ mod tests {
         let mut second = vec![0.0; 8];
         state.apply(&mut second, &[7], 7, &options, &[2]).unwrap();
         assert_eq!(second[2], 1.5);
+    }
+
+    /// Upstream builds the length-ramp target as `eos + [pad]`
+    /// (`modeling_clover_moe.py` `CloverPenaltyState(gen, vocab, device, eos + [pad])`,
+    /// `sampling_clover_moe.py` `self.stop_ids`), so a request-level PAD outside
+    /// the EOS set must ramp too.
+    #[test]
+    fn length_penalty_ramps_the_explicit_pad_token_as_well() {
+        let options = CloverGenerationOptions {
+            pad_token_id: Some(5),
+            penalties: CloverPenaltyConfig {
+                length_penalty: 2.0,
+                length_penalty_start: 0,
+                length_penalty_window: 4,
+                ..CloverPenaltyConfig::default()
+            },
+            ..CloverGenerationOptions::greedy(4, 8)
+        };
+        let state = CloverPenaltyState::new(8);
+        let mut logits = vec![0.0; 8];
+        state.apply(&mut logits, &[7], 7, &options, &[2]).unwrap();
+        assert_eq!(logits[2], 0.5, "the EOS id must ramp");
+        assert_eq!(logits[5], 0.5, "the explicitly sourced PAD id must ramp");
+        assert_eq!(logits[3], 0.0, "untargeted ids stay untouched");
+    }
+
+    /// A2-B forbids assuming that every id below the model vocabulary is a real
+    /// token: a think-end id in the unmapped head rows can never take effect
+    /// (Mask sets those rows to -inf) and can surface as an unusable prediction
+    /// (Reject), so the request must be refused at validation.
+    #[test]
+    fn rejects_a_think_end_token_outside_the_tokenizer_vocabulary() {
+        let mut config = tiny_config();
+        config.vocab_size = 16;
+        config.validate().unwrap();
+        let mut options = CloverGenerationOptions::greedy(4, 8);
+        options.block_size = 4;
+        options.invalid_token_policy = Some(CloverInvalidTokenPolicy::Reject);
+        options.penalties.think_end_token_id = Some(9);
+        options.penalties.think_end_bias = 3.0;
+        let error = options.validate(&config);
+        assert!(
+            matches!(error, Err(CloverGenerationError::InvalidTokenId(9))),
+            "unexpected validation result: {error:?}"
+        );
     }
 }
