@@ -348,6 +348,7 @@ impl<D: Device> CloverExpertCache<D> {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn ensure_tasks_resident(
         &mut self,
         id: String,
