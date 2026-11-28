@@ -58,6 +58,8 @@ pub enum CloverExecutorError {
     UnusableOutputToken(u32),
     #[error("executor state arithmetic overflow")]
     SizeOverflow,
+    #[error("this adapter already served a session; use one adapter instance per session")]
+    SessionClosed,
 }
 
 /// One request-local denoising block. The entire configured block is always
@@ -73,7 +75,10 @@ struct ActiveBlock {
 /// Clover adapter for the shared M9 DiffusionOrchestrator.
 ///
 /// Use one adapter instance per M9 session. Its backend and clean caches are
-/// request-local; concurrent requests must use distinct instances.
+/// request-local; concurrent requests must use distinct instances. After
+/// `on_session_end` the adapter refuses further steps: a `DiffusionStep` carries
+/// no session identity, so a second plan driven through this instance would
+/// attribute one request's tokens and caches to another.
 pub struct CloverDiffusionExecutor<B: CloverGraphBackend> {
     graph: CloverGraph,
     backend: B,
@@ -89,6 +94,7 @@ pub struct CloverDiffusionExecutor<B: CloverGraphBackend> {
     next_block: u32,
     prefilled: bool,
     stopped: bool,
+    closed: bool,
     active: Option<ActiveBlock>,
 }
 
@@ -145,6 +151,7 @@ impl<B: CloverGraphBackend> CloverDiffusionExecutor<B> {
             next_block: 0,
             prefilled: false,
             stopped: false,
+            closed: false,
             active: None,
         })
     }
@@ -171,6 +178,9 @@ impl<B: CloverGraphBackend> CloverDiffusionExecutor<B> {
     }
 
     fn execute_step_inner(&mut self, step: DiffusionStep) -> Result<(), CloverExecutorError> {
+        if self.closed {
+            return Err(CloverExecutorError::SessionClosed);
+        }
         match step {
             DiffusionStep::PrepareBlock { block } => self.prepare_block(block),
             DiffusionStep::Denoise { block, iteration } => self.denoise(block, iteration),
@@ -374,19 +384,26 @@ impl<B: CloverGraphBackend> CloverDiffusionExecutor<B> {
         }
 
         let mut emitted = Vec::with_capacity(active.remaining_output);
+        let mut terminal = false;
         for &token in active.tokens.iter().take(active.remaining_output) {
             emitted.push(token);
-            self.generated.push(token);
             if self.terminal_ids.binary_search(&token).is_ok() {
-                self.stopped = true;
+                terminal = true;
                 break;
             }
         }
-        self.penalties.commit(&emitted);
 
         // Only a fully emitted, nonterminal block becomes the causal prefix for
         // another preview. A final partial block or EOS block needs no replay.
-        if !self.stopped && self.generated.len() < self.options.max_new_tokens {
+        // The replay is the last fallible operation of the commit: while it has
+        // not succeeded, the block has no causal basis, so no token of it is
+        // published and no penalty history is updated.
+        let published_len = self
+            .generated
+            .len()
+            .checked_add(emitted.len())
+            .ok_or(CloverExecutorError::SizeOverflow)?;
+        if !terminal && published_len < self.options.max_new_tokens {
             let prefix_valid = vec![true; self.committed_prefix_len];
             let valid = vec![true; emitted.len()];
             let positions: Vec<usize> = (0..emitted.len())
@@ -404,6 +421,9 @@ impl<B: CloverGraphBackend> CloverDiffusionExecutor<B> {
                 .checked_add(emitted.len())
                 .ok_or(CloverExecutorError::SizeOverflow)?;
         }
+        self.generated.extend(emitted.iter().copied());
+        self.penalties.commit(&emitted);
+        self.stopped = terminal;
         self.next_block = self
             .next_block
             .checked_add(1)
@@ -421,6 +441,12 @@ impl<B: CloverGraphBackend> DiffusionExecutor for CloverDiffusionExecutor<B> {
     fn on_session_end(&mut self, _session_id: DiffusionSessionId, _state: DiffusionSessionState) {
         self.backend.reset_session();
         self.active = None;
+        // The adapter owns request-local state (prompt, prefix, penalties, RNG)
+        // and serves exactly one M9 session. After a terminal state it must not
+        // be driven by another plan: that would attribute this session's tokens
+        // and caches to another request. `output()` stays readable as the
+        // finished request's result; further steps are refused explicitly.
+        self.closed = true;
     }
 }
 
@@ -448,6 +474,9 @@ mod tests {
         terminal_logit: Option<(usize, f32)>,
         cancel_on_lm_head: Option<CancellationToken>,
         fail_moe_at: Option<usize>,
+        /// Fail the Nth causal forward (1 = prefill, 2 = first replay).
+        fail_causal_at: Option<usize>,
+        causal_calls: usize,
         reset_count: usize,
     }
 
@@ -476,6 +505,12 @@ mod tests {
             _valid: &[bool],
             preview: bool,
         ) -> Result<CloverActivation, String> {
+            if !preview {
+                self.causal_calls += 1;
+                if self.fail_causal_at == Some(self.causal_calls) {
+                    return Err("synthetic causal replay failure".to_owned());
+                }
+            }
             self.events.push(format!("gdn:{layer}:{preview}"));
             CloverActivation::new(
                 input.tokens(),
@@ -962,6 +997,107 @@ mod tests {
         assert_eq!(
             reject_runtime.session(reject_id).unwrap().state,
             DiffusionSessionState::Failed
+        );
+    }
+
+    /// A `DiffusionStep` carries no session identity, so an adapter that already
+    /// served a session must refuse a second plan rather than silently attributing
+    /// the first request's tokens and caches to it.
+    #[test]
+    fn a_closed_adapter_refuses_a_second_plan_instead_of_reusing_request_state() {
+        let backend = SyntheticBackend {
+            hidden: 4,
+            vocab: 9,
+            terminal_logit: Some((2, 9.0)),
+            ..Default::default()
+        };
+        let mut opts = options(6);
+        opts.eos_token_ids = Some(vec![2]);
+        let mut executor =
+            CloverDiffusionExecutor::new(tiny_graph(), backend, vec![3], opts).unwrap();
+        let plan = executor.plan().diffusion_plan().clone();
+
+        let mut runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        runtime
+            .submit(plan.clone(), CancellationToken::new(), TaskPriority::Normal)
+            .unwrap();
+        loop {
+            match runtime.run_one(&mut executor).unwrap() {
+                DiffusionRunOutcome::SessionCompleted { .. } => break,
+                DiffusionRunOutcome::StepCompleted { .. } => {}
+                other => panic!("unexpected first-session outcome: {other:?}"),
+            }
+        }
+        assert_eq!(executor.generated_tokens(), &[2]);
+        assert_eq!(prefills(&executor), 1);
+        assert_eq!(executor.backend().reset_count, 1);
+
+        let mut runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let second = runtime
+            .submit(plan, CancellationToken::new(), TaskPriority::Normal)
+            .unwrap();
+        match runtime.run_one(&mut executor).unwrap() {
+            DiffusionRunOutcome::StepFailed { error, .. } => {
+                assert!(
+                    error.contains("one adapter instance per session"),
+                    "unexpected refusal: {error}"
+                );
+            }
+            other => panic!("a reused adapter must fail explicitly, got {other:?}"),
+        }
+        assert_eq!(
+            runtime.session(second).unwrap().state,
+            DiffusionSessionState::Failed
+        );
+        // The finished request keeps its result readable.
+        assert_eq!(executor.generated_tokens(), &[2]);
+        assert_eq!(prefills(&executor), 1);
+    }
+
+    fn prefills(executor: &CloverDiffusionExecutor<SyntheticBackend>) -> usize {
+        executor
+            .backend()
+            .events
+            .iter()
+            .filter(|event| event.as_str() == "prefill:1")
+            .count()
+    }
+
+    /// A block whose causal replay failed was never causally committed, so it
+    /// must not appear in the published output either.
+    #[test]
+    fn a_failed_causal_replay_publishes_no_tokens() {
+        let backend = SyntheticBackend {
+            hidden: 4,
+            vocab: 9,
+            fail_causal_at: Some(2),
+            ..Default::default()
+        };
+        let mut executor =
+            CloverDiffusionExecutor::new(tiny_graph(), backend, vec![3], options(3)).unwrap();
+        let mut runtime = DiffusionOrchestrator::new(SchedulerConfig::default()).unwrap();
+        let id = runtime
+            .submit(
+                executor.plan().diffusion_plan().clone(),
+                CancellationToken::new(),
+                TaskPriority::Normal,
+            )
+            .unwrap();
+        loop {
+            match runtime.run_one(&mut executor).unwrap() {
+                DiffusionRunOutcome::StepCompleted { .. } => {}
+                DiffusionRunOutcome::StepFailed { .. } => break,
+                other => panic!("expected a failed replay, got {other:?}"),
+            }
+        }
+        assert_eq!(
+            runtime.session(id).unwrap().state,
+            DiffusionSessionState::Failed
+        );
+        assert!(
+            executor.generated_tokens().is_empty(),
+            "tokens without a causal basis must not be published: {:?}",
+            executor.generated_tokens()
         );
     }
 }
